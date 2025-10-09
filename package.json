@@ -120,7 +120,7 @@
     "claude-monitor": "./scripts/monitor-repo.js"
   },
   "devDependencies": {
-    "@eslint/js": "^9.33.0",
+    "@eslint/js": "^9.37.0",
     "eslint": "^9.33.0",
     "husky": "^9.1.7",
     "remark": "^15.0.1",
