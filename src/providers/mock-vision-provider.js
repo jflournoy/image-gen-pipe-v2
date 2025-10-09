@@ -5,6 +5,8 @@
  * Simulates vision model behavior for testing the orchestrator.
  */
 
+/* global URL */
+
 class MockVisionProvider {
   constructor() {
     this.name = 'mock-vision-provider';
@@ -156,11 +158,12 @@ class MockVisionProvider {
    * Calculate token usage (text + image tokens)
    * @private
    */
-  _calculateTokenUsage(analysis, imageUrl) {
+  _calculateTokenUsage(analysis, _imageUrl) {
     // Text tokens (~4 chars per token)
     const textTokens = Math.floor(analysis.length / 4);
 
     // Image tokens (vision models use fixed tokens for images, roughly 85-170 for standard images)
+    // imageUrl could be used to estimate size, but mock provider uses fixed value
     const imageTokens = 100;
 
     return textTokens + imageTokens + 50; // + overhead
