@@ -5,7 +5,7 @@
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
 [![TypeScript](https://img.shields.io/badge/typescript-5.3%2B-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
-[![Status](https://img.shields.io/badge/status-in%20development-yellow)]()
+[![Status](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/jflournoy/image-gen-pipe-v2)
 
 ## Overview
 
@@ -103,13 +103,16 @@ Refinement alternates between expanding WHAT and HOW dimensions.
 
 ## Project Status
 
-🚧 **Currently in development** - Core features being implemented:
+🚧 **Currently in development** - Provider layer complete, orchestrator next:
 
-- [ ] Provider abstraction layer
-- [ ] Mock providers for testing
-- [ ] Beam search orchestrator
-- [ ] Scoring algorithms
-- [ ] OpenAI provider implementation
+- [x] Provider abstraction layer (100% ✅)
+  - [x] ImageGenerationProvider (13 tests)
+  - [x] LLMProvider (24 tests)
+  - [x] VisionProvider (26 tests)
+  - [x] ScoringProvider (25 tests)
+- [x] Mock providers for testing (88 tests passing)
+- [ ] Beam search orchestrator (Issue #3)
+- [ ] OpenAI provider implementation (Issue #4)
 - [ ] CLI interface
 - [ ] Web UI
 
