@@ -95,4 +95,5 @@ ENV/
 # - session-history/ (learning system)
 # - archive/ (archived workflow files)
 # - internal/ (project decisions)
-# - plans/ (project planning)
+# - plans/ (project planning).history/
+.tdd-session-*.md
