@@ -18,7 +18,7 @@ describe('Image Provider Local Storage', () => {
     // Clean up test output directory
     try {
       await fs.rm(testOutputDir, { recursive: true, force: true });
-    } catch (err) {
+    } catch {
       // Directory might not exist, that's ok
     }
   });
@@ -27,7 +27,7 @@ describe('Image Provider Local Storage', () => {
     // Clean up after tests
     try {
       await fs.rm(testOutputDir, { recursive: true, force: true });
-    } catch (err) {
+    } catch {
       // Ignore cleanup errors
     }
   });
