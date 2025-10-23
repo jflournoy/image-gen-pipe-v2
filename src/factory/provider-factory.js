@@ -15,8 +15,8 @@ const MockScoringProvider = require('../providers/mock-scoring-provider');
 
 // Real providers
 const OpenAILLMProvider = require('../providers/openai-llm-provider');
+const OpenAIImageProvider = require('../providers/openai-image-provider');
 // TODO: Add more real providers as they're implemented
-// const OpenAIImageProvider = require('../providers/openai-image-provider');
 // const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 
 /**
@@ -58,12 +58,26 @@ function createLLMProvider(options = {}) {
 function createImageProvider(options = {}) {
   const mode = options.mode || config.mode;
 
-  // Always use mock for now - real provider not yet implemented
-  // TODO: Implement OpenAIImageProvider
-  if (mode === 'real') {
-    console.warn('⚠️  Image provider: Using mock (real provider not yet implemented)');
+  if (mode === 'mock') {
+    return new MockImageProvider();
   }
-  return new MockImageProvider();
+
+  // Real provider
+  const provider = options.provider || config.image.provider;
+
+  switch (provider) {
+    case 'dalle':
+    case 'openai':
+      if (!config.image.apiKey) {
+        throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
+      }
+      return new OpenAIImageProvider(config.image.apiKey, {
+        model: config.image.model
+      });
+
+    default:
+      throw new Error(`Unknown image provider: ${provider}`);
+  }
 }
 
 /**
