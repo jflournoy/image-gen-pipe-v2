@@ -66,10 +66,10 @@
     "monitor:clear": "node scripts/monitor-repo.js clear",
     "monitor:config": "node scripts/monitor-repo.js config",
     "// Testing": "=== Testing commands ===",
-    "test": "SKIP_SESSION_SAVE=1 node --test test/*.test.js",
-    "test:verbose": "node --test --test-reporter=spec test/*.test.js",
-    "test:coverage": "node --test --experimental-test-coverage test/*.test.js",
-    "test:watch": "node --test --watch test/*.test.js",
+    "test": "SKIP_SESSION_SAVE=1 node --test test/*.test.js test/**/*.test.js",
+    "test:verbose": "node --test --test-reporter=spec test/*.test.js test/**/*.test.js",
+    "test:coverage": "node --test --experimental-test-coverage test/*.test.js test/**/*.test.js",
+    "test:watch": "node --test --watch test/*.test.js test/**/*.test.js",
     "// CI/CD": "=== Continuous Integration commands ===",
     "quality:ci": "npm run lint:check && npm test && npm run docs validate",
     "ci:pre-push": "npm run quality:ci && npm run git:unpushed",
@@ -145,5 +145,9 @@
     "remark-preset-lint-consistent": "^6.0.1",
     "remark-preset-lint-recommended": "^7.0.1",
     "remark-validate-links": "^13.1.0"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.3",
+    "openai": "^6.6.0"
   }
 }
