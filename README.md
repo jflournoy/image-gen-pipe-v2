@@ -6,6 +6,7 @@
 [![TypeScript](https://img.shields.io/badge/typescript-5.3%2B-blue)](https://www.typescriptlang.org/)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
 [![Status](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/jflournoy/image-gen-pipe-v2)
+[![Commands](https://img.shields.io/badge/commands-14-orange)](.claude/commands/)
 
 ## Overview
 
