@@ -137,10 +137,10 @@ This is a TypeScript rewrite of the original Python implementation:
 
 ## Documentation
 
-- [Software Requirements Specification](docs/SRS.md) - Complete technical spec
-- [Architecture Guide](docs/ARCHITECTURE.md) - System design details
-- [API Documentation](docs/API.md) - REST + WebSocket API reference
 - [Development Guide](CLAUDE.md) - AI-assisted development workflow
+- Software Requirements Specification (Coming Soon) - Complete technical spec
+- Architecture Guide (Coming Soon) - System design details
+- API Documentation (Coming Soon) - REST + WebSocket API reference
 
 ## Contributing
 
@@ -149,7 +149,7 @@ Contributions welcome! This project uses:
 - **Atomic commits** - Small, focused commits
 - **Claude Code workflow** - AI-assisted development
 
-See [Contributing Guide](CONTRIBUTING.md) for details.
+See [CLAUDE.md](CLAUDE.md) for development guidelines.
 
 ## License
 
