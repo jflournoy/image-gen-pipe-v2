@@ -2,24 +2,42 @@
 
 /**
  * Demo script showing all 4 provider interfaces in action
- * Run with: node demo.js
+ *
+ * Usage:
+ *   node demo.js           # Use mock providers (default)
+ *   node demo.js --real    # Use real providers (requires API keys)
+ *   PROVIDER_MODE=real node demo.js  # Use env var
  */
 
-const MockImageProvider = require('./src/providers/mock-image-provider.js');
-const MockLLMProvider = require('./src/providers/mock-llm-provider.js');
-const MockVisionProvider = require('./src/providers/mock-vision-provider.js');
-const MockScoringProvider = require('./src/providers/mock-scoring-provider.js');
+const { createProviders } = require('./src/factory/provider-factory.js');
 
 async function demo() {
+  // Determine provider mode from CLI args or env
+  const useRealProviders = process.argv.includes('--real');
+  const mode = useRealProviders ? 'real' : 'mock';
+
   console.log('🎨 Image Generation Pipeline - Provider Demo\n');
   console.log('='.repeat(60));
+  console.log(`Provider Mode: ${mode.toUpperCase()}`);
+  console.log('='.repeat(60));
   console.log();
+
+  // Create providers based on mode
+  let providers;
+  try {
+    providers = createProviders({ mode });
+  } catch (error) {
+    console.error(`❌ Error creating providers: ${error.message}`);
+    console.error('\nHint: For real providers, set OPENAI_API_KEY in .env file');
+    process.exit(1);
+  }
+
+  const { llm, image, vision, scoring } = providers;
 
   // Step 1: Refine a prompt using LLM
   console.log('📝 Step 1: Refining prompt with LLM Provider');
   console.log('-'.repeat(60));
 
-  const llm = new MockLLMProvider();
   const originalPrompt = 'a mountain landscape';
 
   console.log(`Original prompt: "${originalPrompt}"`);
@@ -42,12 +60,11 @@ async function demo() {
   console.log('🖼️  Step 2: Generating image with refined prompt');
   console.log('-'.repeat(60));
 
-  const imageGen = new MockImageProvider();
   const combinedPrompt = whatRefinement.refinedPrompt;
 
   console.log(`Using prompt: "${combinedPrompt.substring(0, 50)}..."`);
 
-  const generatedImage = await imageGen.generateImage(combinedPrompt, {
+  const generatedImage = await image.generateImage(combinedPrompt, {
     size: '1024x1024',
     quality: 'hd',
     style: 'vivid'
@@ -68,8 +85,6 @@ async function demo() {
   console.log('👁️  Step 3: Analyzing image with Vision Provider');
   console.log('-'.repeat(60));
 
-  const vision = new MockVisionProvider();
-
   const analysis = await vision.analyzeImage(
     generatedImage.url,
     originalPrompt,
@@ -89,15 +104,13 @@ async function demo() {
   console.log('⭐ Step 4: Scoring candidate with Scoring Provider');
   console.log('-'.repeat(60));
 
-  const scorer = new MockScoringProvider();
-
   const candidate = {
     prompt: combinedPrompt,
     imageUrl: generatedImage.url,
     alignmentScore: analysis.alignmentScore
   };
 
-  const score = await scorer.scoreCandidate(candidate, { alpha: 0.7 });
+  const score = await scoring.scoreCandidate(candidate, { alpha: 0.7 });
 
   console.log('Breakdown:');
   console.log(`  Alignment score: ${score.breakdown.alignment}/100`);
@@ -124,7 +137,7 @@ async function demo() {
 
   const scores = await Promise.all(
     candidates.map(async (c, i) => {
-      const s = await scorer.scoreCandidate(c);
+      const s = await scoring.scoreCandidate(c);
       return { index: i + 1, ...s };
     })
   );
