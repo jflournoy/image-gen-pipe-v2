@@ -7,6 +7,11 @@
  *   node demo.js           # Use mock providers (default)
  *   node demo.js --real    # Use real providers (requires API keys)
  *   PROVIDER_MODE=real node demo.js  # Use env var
+ *
+ * Features:
+ *   - Real providers save images locally with beam search structure
+ *   - Images saved to: ./output/YYYY-MM-DD/session-HHMMSS/iter-00/candidate-00-what/
+ *   - Mock providers skip local storage (no beam search context)
  */
 
 const { createProviders } = require('./src/factory/provider-factory.js');
@@ -67,11 +72,18 @@ async function demo() {
   const generatedImage = await image.generateImage(combinedPrompt, {
     size: '1024x1024',
     quality: 'hd',
-    style: 'vivid'
+    style: 'vivid',
+    // Beam search context for local storage
+    iteration: 0,
+    candidateId: 0,
+    dimension: 'what'
   });
 
   console.log('\nGenerated image:');
   console.log(`  URL: ${generatedImage.url}`);
+  if (generatedImage.localPath) {
+    console.log(`  💾 Saved locally: ${generatedImage.localPath}`);
+  }
   console.log(`  Revised prompt: "${generatedImage.revisedPrompt.substring(0, 60)}..."`);
   console.log(`  Model: ${generatedImage.metadata.model}`);
   console.log(`  Size: ${generatedImage.metadata.size}`);
