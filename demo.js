@@ -25,12 +25,12 @@ async function demo() {
   console.log(`Original prompt: "${originalPrompt}"`);
 
   const whatRefinement = await llm.refinePrompt(originalPrompt, { dimension: 'what' });
-  console.log(`\nWHAT refinement (content):`);
+  console.log('\nWHAT refinement (content):');
   console.log(`  → "${whatRefinement.refinedPrompt}"`);
   console.log(`  Tokens used: ${whatRefinement.metadata.tokensUsed}`);
 
   const howRefinement = await llm.refinePrompt(originalPrompt, { dimension: 'how' });
-  console.log(`\nHOW refinement (style):`);
+  console.log('\nHOW refinement (style):');
   console.log(`  → "${howRefinement.refinedPrompt}"`);
   console.log(`  Tokens used: ${howRefinement.metadata.tokensUsed}`);
 
@@ -53,7 +53,7 @@ async function demo() {
     style: 'vivid'
   });
 
-  console.log(`\nGenerated image:`);
+  console.log('\nGenerated image:');
   console.log(`  URL: ${generatedImage.url}`);
   console.log(`  Revised prompt: "${generatedImage.revisedPrompt.substring(0, 60)}..."`);
   console.log(`  Model: ${generatedImage.metadata.model}`);
@@ -99,7 +99,7 @@ async function demo() {
 
   const score = await scorer.scoreCandidate(candidate, { alpha: 0.7 });
 
-  console.log(`Breakdown:`);
+  console.log('Breakdown:');
   console.log(`  Alignment score: ${score.breakdown.alignment}/100`);
   console.log(`  Aesthetic score: ${score.breakdown.aesthetic}/10`);
   console.log(`\nTotal Score: ${score.totalScore}/100`);
