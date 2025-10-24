@@ -95,7 +95,14 @@ Maintains top-k candidate prompts across refinement rounds, exploring promising 
 - **WHAT**: Content-focused (subjects, objects, actions)
 - **HOW**: Style-focused (lighting, composition, atmosphere)
 
-Refinement alternates between expanding WHAT and HOW dimensions.
+WHAT and HOW are refined **separately** throughout the pipeline:
+- Both start with the same user prompt
+- Each gets independently expanded and refined
+- They're **combined only at image generation time**
+- Refinement alternates: odd rounds refine WHAT, even rounds refine HOW
+- Different scoring: CLIP for WHAT, aesthetic for HOW
+
+See [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) for complete workflow.
 
 ### Scoring System
 - **Alignment Score**: Text-image semantic similarity (0-100)
@@ -138,6 +145,8 @@ This is a TypeScript rewrite of the original Python implementation:
 ## Documentation
 
 - [Development Guide](CLAUDE.md) - AI-assisted development workflow
+- [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) - Complete WHAT/HOW refinement workflow
+- [Provider Storage Spec](docs/PROVIDER_STORAGE_SPEC.md) - Local storage structure and conventions
 - Software Requirements Specification (Coming Soon) - Complete technical spec
 - Architecture Guide (Coming Soon) - System design details
 - API Documentation (Coming Soon) - REST + WebSocket API reference
