@@ -32,11 +32,11 @@ class OpenAIVisionProvider {
   }
 
   /**
-   * Analyze an image and calculate alignment with prompt
+   * Analyze an image and calculate alignment with prompt and aesthetic quality
    * @param {string} imageUrl - URL of the image to analyze
    * @param {string} prompt - The prompt that was used to generate the image
    * @param {Object} options - Analysis options
-   * @returns {Promise<Object>} Analysis result with alignment score (0-100) and detailed feedback
+   * @returns {Promise<Object>} Analysis result with alignment score (0-100), aesthetic score (0-10), and detailed feedback
    */
   async analyzeImage(imageUrl, prompt, options = {}) {
     // Validate imageUrl
@@ -50,23 +50,26 @@ class OpenAIVisionProvider {
     }
 
     // Build evaluation prompt
-    const systemPrompt = `You are an expert image evaluator. Your task is to analyze how well an image matches a given prompt.
+    const systemPrompt = `You are an expert image evaluator. Your task is to analyze how well an image matches a given prompt AND evaluate its aesthetic quality.
 
 Evaluate the image based on:
 1. Content accuracy - Does the image contain the elements described in the prompt?
 2. Style execution - Does the visual style match what was requested?
 3. Overall fidelity - How faithfully does the image represent the prompt?
+4. Aesthetic quality - Visual appeal, composition, color harmony, technical execution
 
 Provide:
 - A prompt fidelity score from 0.0 to 1.0 (where 1.0 is perfect match)
-- A brief analysis explaining your score
+- An aesthetic score from 0.0 to 10.0 (where 10.0 is exceptional visual quality)
+- A brief analysis explaining your scores
 - Strengths: What the image does well
 - Weaknesses: What could be improved
 
 Respond in this exact JSON format:
 {
   "promptFidelity": 0.85,
-  "analysis": "Brief explanation of the score",
+  "aestheticScore": 7.5,
+  "analysis": "Brief explanation of the scores",
   "strengths": ["strength 1", "strength 2"],
   "weaknesses": ["weakness 1", "weakness 2"]
 }`;
@@ -112,6 +115,7 @@ Provide your evaluation in the JSON format specified.`;
         // If JSON parsing fails, create a default response
         evaluation = {
           promptFidelity: 0.5,
+          aestheticScore: 5.0,
           analysis: responseText,
           strengths: [],
           weaknesses: ['Unable to parse structured evaluation']
@@ -126,6 +130,12 @@ Provide your evaluation in the JSON format specified.`;
       // Convert to 0-100 scale
       alignmentScore = Math.round(alignmentScore * 100);
 
+      // Validate aestheticScore (0-10 scale)
+      let aestheticScore = evaluation.aestheticScore || 5.0;
+      if (typeof aestheticScore !== 'number' || aestheticScore < 0 || aestheticScore > 10) {
+        aestheticScore = 5.0;
+      }
+
       // Ensure arrays exist
       evaluation.strengths = evaluation.strengths || [];
       evaluation.weaknesses = evaluation.weaknesses || [];
@@ -133,6 +143,7 @@ Provide your evaluation in the JSON format specified.`;
       return {
         analysis: evaluation.analysis || 'No analysis provided',
         alignmentScore: alignmentScore,
+        aestheticScore: aestheticScore,
         strengths: evaluation.strengths,
         weaknesses: evaluation.weaknesses,
         metadata: {
