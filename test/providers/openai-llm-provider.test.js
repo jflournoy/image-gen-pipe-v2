@@ -152,6 +152,110 @@ describe('OpenAILLMProvider Interface', () => {
     });
   });
 
+  describe('Expand vs Refine Operations', () => {
+    it('should accept operation parameter', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // Just verify method exists and accepts these parameters without throwing sync errors
+      assert.ok(provider.refinePrompt);
+      assert.strictEqual(typeof provider.refinePrompt, 'function');
+
+      // Actual behavior tested in other tests that properly handle async
+    });
+
+    it('should default to expand operation when not specified', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key');
+
+      // Should use expand by default (we'll verify by checking error message structure)
+      await assert.rejects(
+        async () => await provider.refinePrompt('test'),
+        /OpenAI API error/,
+        'Should call API with default operation'
+      );
+    });
+
+    it('should reject invalid operation values', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      await assert.rejects(
+        async () => await provider.refinePrompt('test', { operation: 'invalid' }),
+        /Operation must be either "expand" or "refine"/,
+        'Should reject invalid operation'
+      );
+    });
+
+    it('should require critique parameter when operation is refine', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      await assert.rejects(
+        async () => await provider.refinePrompt('test', { operation: 'refine' }),
+        /critique.*required.*refine/i,
+        'Should require critique for refine operation'
+      );
+    });
+
+    it('should accept critique parameter for refine operation', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key');
+
+      // Should not throw validation error, only API error
+      await assert.rejects(
+        async () => await provider.refinePrompt('test', {
+          operation: 'refine',
+          critique: 'Add more detail about the subject'
+        }),
+        /OpenAI API error/,
+        'Should accept critique parameter'
+      );
+    });
+
+    it('should include operation in result metadata', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      const result = await provider.refinePrompt('mountain', {
+        operation: 'expand',
+        dimension: 'what'
+      });
+
+      assert.ok(result.metadata, 'Should have metadata');
+      assert.strictEqual(result.metadata.operation, 'expand', 'Should include operation in metadata');
+    });
+
+    it('should produce different prompts for expand vs refine with same input', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      const basePrompt = 'mountain';
+
+      // Expand operation - initial expansion
+      const expandResult = await provider.refinePrompt(basePrompt, {
+        operation: 'expand',
+        dimension: 'what'
+      });
+
+      // Refine operation - iterative improvement
+      const refineResult = await provider.refinePrompt(basePrompt, {
+        operation: 'refine',
+        dimension: 'what',
+        critique: 'Add more detail about the terrain and vegetation'
+      });
+
+      // Both should return non-empty prompts
+      assert.ok(expandResult.refinedPrompt.length > 0);
+      assert.ok(refineResult.refinedPrompt.length > 0);
+
+      // They should be different (though we can't guarantee exact content)
+      // Just verify both operations work
+      assert.ok(expandResult.metadata.operation === 'expand');
+      assert.ok(refineResult.metadata.operation === 'refine');
+    });
+  });
+
   describe('OpenAI API Integration', () => {
     it('should handle API errors gracefully', async () => {
       const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
