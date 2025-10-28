@@ -32,13 +32,13 @@ class OpenAIVisionProvider {
   }
 
   /**
-   * Evaluate an image for prompt fidelity
-   * @param {string} imageUrl - URL of the image to evaluate
+   * Analyze an image and calculate alignment with prompt
+   * @param {string} imageUrl - URL of the image to analyze
    * @param {string} prompt - The prompt that was used to generate the image
-   * @param {Object} options - Evaluation options
-   * @returns {Promise<Object>} Evaluation result with fidelity score and analysis
+   * @param {Object} options - Analysis options
+   * @returns {Promise<Object>} Analysis result with alignment score (0-100) and detailed feedback
    */
-  async evaluateImage(imageUrl, prompt, options = {}) {
+  async analyzeImage(imageUrl, prompt, options = {}) {
     // Validate imageUrl
     if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
       throw new Error('imageUrl is required and cannot be empty');
@@ -118,20 +118,21 @@ Provide your evaluation in the JSON format specified.`;
         };
       }
 
-      // Validate and clamp promptFidelity score
-      if (typeof evaluation.promptFidelity !== 'number' ||
-          evaluation.promptFidelity < 0 ||
-          evaluation.promptFidelity > 1) {
-        evaluation.promptFidelity = Math.max(0, Math.min(1, evaluation.promptFidelity || 0.5));
+      // Validate and convert promptFidelity (0-1) to alignmentScore (0-100)
+      let alignmentScore = evaluation.promptFidelity || 0.5;
+      if (typeof alignmentScore !== 'number' || alignmentScore < 0 || alignmentScore > 1) {
+        alignmentScore = 0.5;
       }
+      // Convert to 0-100 scale
+      alignmentScore = Math.round(alignmentScore * 100);
 
       // Ensure arrays exist
       evaluation.strengths = evaluation.strengths || [];
       evaluation.weaknesses = evaluation.weaknesses || [];
 
       return {
-        promptFidelity: evaluation.promptFidelity,
         analysis: evaluation.analysis || 'No analysis provided',
+        alignmentScore: alignmentScore,
         strengths: evaluation.strengths,
         weaknesses: evaluation.weaknesses,
         metadata: {
