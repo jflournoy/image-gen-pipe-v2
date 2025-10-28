@@ -172,4 +172,120 @@ describe('OpenAILLMProvider Interface', () => {
       assert.ok(expectedModel);
     });
   });
+
+  describe('combinePrompts method', () => {
+    it('should have a combinePrompts method', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      assert.ok(provider.combinePrompts, 'Provider must have combinePrompts method');
+      assert.strictEqual(typeof provider.combinePrompts, 'function');
+    });
+
+    it('should require both whatPrompt and howPrompt parameters', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      await assert.rejects(
+        async () => await provider.combinePrompts(),
+        /whatPrompt.*required/i,
+        'Should throw error when whatPrompt is missing'
+      );
+
+      await assert.rejects(
+        async () => await provider.combinePrompts('some what'),
+        /howPrompt.*required/i,
+        'Should throw error when howPrompt is missing'
+      );
+    });
+
+    it('should reject empty prompts', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      await assert.rejects(
+        async () => await provider.combinePrompts('', 'some how'),
+        /empty/i,
+        'Should reject empty whatPrompt'
+      );
+
+      await assert.rejects(
+        async () => await provider.combinePrompts('some what', ''),
+        /empty/i,
+        'Should reject empty howPrompt'
+      );
+    });
+
+    it('should return a non-empty string', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      const whatPrompt = 'Towering world-tree with roots piercing starlit sky';
+      const howPrompt = 'Cinematic digital painting style, dramatic rim lighting';
+
+      const result = await provider.combinePrompts(whatPrompt, howPrompt);
+
+      assert.strictEqual(typeof result, 'string', 'Result should be a string');
+      assert.ok(result.length > 0, 'Combined prompt should not be empty');
+      assert.ok(result.trim().length > 0, 'Combined prompt should not be just whitespace');
+    });
+
+    it('should return a reasonably sized combined prompt', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      const whatPrompt = 'Ancient temple ruins covered in mystical vines';
+      const howPrompt = 'Soft golden hour lighting, shallow depth of field';
+
+      const combined = await provider.combinePrompts(whatPrompt, howPrompt);
+
+      // Should be longer than either input alone (LLM typically expands)
+      assert.ok(combined.length >= whatPrompt.length * 0.5, 'Should be substantial');
+
+      // But not absurdly long (sanity check)
+      assert.ok(combined.length < 1000, 'Should be reasonable length for image generation');
+    });
+
+    it('should work with different prompt lengths', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      // Short prompts
+      const result1 = await provider.combinePrompts('tree', 'sunset light');
+      assert.ok(result1.length > 0, 'Should handle short prompts');
+
+      // Long prompts
+      const longWhat = 'A massive ancient oak tree with gnarled branches reaching toward the sky, its thick trunk covered in moss and lichen, roots spreading across a forest floor carpeted with fallen leaves';
+      const longHow = 'Dramatic cinematic lighting with rays of golden sunlight piercing through the canopy, rich color saturation, shallow depth of field with bokeh effect, professional nature photography style';
+      const result2 = await provider.combinePrompts(longWhat, longHow);
+      assert.ok(result2.length > 0, 'Should handle long prompts');
+    });
+
+    it('should handle special characters and punctuation', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
+
+      const whatPrompt = 'Red-haired mage (female) holding a crystal orb';
+      const howPrompt = 'Dramatic lighting: rim-lit, glowing highlights @ 50%';
+
+      // Should not crash with special characters
+      const result = await provider.combinePrompts(whatPrompt, howPrompt);
+      assert.ok(result.length > 0, 'Should handle special characters gracefully');
+    });
+
+    it('should call OpenAI API when combining prompts', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key');
+
+      const whatPrompt = 'Mountain landscape';
+      const howPrompt = 'Dramatic lighting';
+
+      // Should fail with API error since we used invalid key
+      await assert.rejects(
+        async () => await provider.combinePrompts(whatPrompt, howPrompt),
+        /OpenAI API error/,
+        'Should actually call OpenAI API (not just concatenate)'
+      );
+    });
+  });
 });
