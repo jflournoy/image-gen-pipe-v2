@@ -88,9 +88,13 @@ __pycache__/
 venv/
 ENV/
 
+# Image generation outputs
+output/
+test-storage-output/
+
 # Note: We intentionally DO NOT ignore:
 # - .claude/commands/ (core product)
-# - .claude/agents/ (core product)  
+# - .claude/agents/ (core product)
 # - .claude/metrics.json (self-tracking)
 # - session-history/ (learning system)
 # - archive/ (archived workflow files)
