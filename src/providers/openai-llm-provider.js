@@ -101,6 +101,62 @@ class OpenAILLMProvider {
   }
 
   /**
+   * Combine WHAT and HOW prompts into a unified prompt for image generation
+   * @param {string} whatPrompt - Content description (what is in the image)
+   * @param {string} howPrompt - Style description (how it looks)
+   * @returns {Promise<string>} Combined prompt suitable for image generation
+   */
+  async combinePrompts(whatPrompt, howPrompt) {
+    // Validate whatPrompt
+    if (whatPrompt === null || whatPrompt === undefined) {
+      throw new Error('whatPrompt is required and cannot be null or undefined');
+    }
+    if (typeof whatPrompt !== 'string' || whatPrompt.trim() === '') {
+      throw new Error('whatPrompt is required and cannot be empty');
+    }
+
+    // Validate howPrompt
+    if (howPrompt === null || howPrompt === undefined) {
+      throw new Error('howPrompt is required and cannot be null or undefined');
+    }
+    if (typeof howPrompt !== 'string' || howPrompt.trim() === '') {
+      throw new Error('howPrompt is required and cannot be empty');
+    }
+
+    const systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style.
+
+Do not lose any important details from either prompt. Maintain a richly detailed and concise prompt that fully captures both prompts' meaning and intent.
+
+Output only the combined prompt, with no preamble, explanations, or commentary.`;
+
+    const userPrompt = `WHAT prompt: ${whatPrompt}
+
+HOW prompt: ${howPrompt}
+
+Combined prompt:`;
+
+    try {
+      // Call OpenAI API with lower temperature for more consistent combination
+      const completion = await this.client.chat.completions.create({
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        temperature: 0.5, // Lower temperature for more deterministic combination
+        max_tokens: 500
+      });
+
+      const combinedPrompt = completion.choices[0].message.content.trim();
+
+      return combinedPrompt;
+    } catch (error) {
+      // Wrap OpenAI errors with more context
+      throw new Error(`OpenAI API error: ${error.message}`);
+    }
+  }
+
+  /**
    * Build system prompt based on refinement dimension
    * @private
    */
