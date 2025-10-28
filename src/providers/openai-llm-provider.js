@@ -70,9 +70,19 @@ class OpenAILLMProvider {
       throw new Error('Operation must be either "expand" or "refine"');
     }
 
-    // Validate critique for refine operation
-    if (operation === 'refine' && (!critique || typeof critique !== 'string' || critique.trim() === '')) {
-      throw new Error('Critique is required for refine operation');
+    // Validate and format critique for refine operation
+    if (operation === 'refine') {
+      if (!critique) {
+        throw new Error('Critique is required for refine operation');
+      }
+
+      // Accept either string or structured critique object
+      if (typeof critique === 'string' && critique.trim() === '') {
+        throw new Error('Critique is required for refine operation');
+      }
+      if (typeof critique === 'object' && (!critique.critique || !critique.recommendation)) {
+        throw new Error('Structured critique must have critique and recommendation fields');
+      }
     }
 
     // Validate temperature
@@ -84,9 +94,24 @@ class OpenAILLMProvider {
     const systemPrompt = this._buildSystemPrompt(dimension, operation);
 
     // Build user message based on operation
-    const userMessage = operation === 'expand'
-      ? prompt
-      : `Current prompt: ${prompt}\n\nCritique: ${critique}\n\nRefined prompt:`;
+    let userMessage;
+    if (operation === 'expand') {
+      userMessage = prompt;
+    } else {
+      // Handle both string and structured critique
+      if (typeof critique === 'string') {
+        userMessage = `Current prompt: ${prompt}\n\nCritique: ${critique}\n\nRefined prompt:`;
+      } else {
+        // Structured critique object
+        userMessage = `Current ${dimension.toUpperCase()} prompt: ${prompt}
+
+Critique: ${critique.critique}
+Recommendation: ${critique.recommendation}
+Reason: ${critique.reason}
+
+Please refine the ${dimension.toUpperCase()} prompt based on the above feedback. Output only the refined prompt, no explanation.`;
+      }
+    }
 
     try {
       // Call OpenAI API

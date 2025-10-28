@@ -213,6 +213,49 @@ describe('OpenAILLMProvider Interface', () => {
       );
     });
 
+    it('should accept structured critique object for refine operation', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key');
+
+      // Structured critique from CritiqueGenerator
+      const structuredCritique = {
+        critique: 'The mountain lacks specific details about terrain features',
+        recommendation: 'Add details about snow-capped peaks, rocky outcrops, and alpine vegetation',
+        reason: 'Specific terrain features will improve the content alignment and visual clarity',
+        dimension: 'what'
+      };
+
+      // Should not throw validation error, only API error
+      await assert.rejects(
+        async () => await provider.refinePrompt('mountain landscape', {
+          operation: 'refine',
+          dimension: 'what',
+          critique: structuredCritique
+        }),
+        /OpenAI API error/,
+        'Should accept structured critique object'
+      );
+    });
+
+    it('should reject structured critique without required fields', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-key');
+
+      // Missing recommendation field
+      const incompleteCritique = {
+        critique: 'Something is wrong'
+      };
+
+      await assert.rejects(
+        async () => await provider.refinePrompt('test', {
+          operation: 'refine',
+          critique: incompleteCritique
+        }),
+        /critique must have critique and recommendation fields/i,
+        'Should reject incomplete structured critique'
+      );
+    });
+
     it('should include operation in result metadata', { skip: !process.env.OPENAI_API_KEY }, async () => {
       const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
       const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
