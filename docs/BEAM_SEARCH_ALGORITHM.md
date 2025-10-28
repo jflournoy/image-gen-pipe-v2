@@ -458,31 +458,50 @@ The `metadata.json` should track both WHAT and HOW:
 To implement this algorithm, you need:
 
 ### LLM Provider
-- [ ] Add `combinePrompts(what, how)` method
-- [ ] Update `refinePrompt()` to support `operation` parameter ('expand' vs 'refine')
-- [ ] Add critique-based refinement support
-- [ ] Implement WHAT vs HOW system prompts
+- [x] Add `combinePrompts(what, how)` method ✅ (completed 2025-10-28)
+- [x] Update `refinePrompt()` to support `operation` parameter ('expand' vs 'refine') ✅
+- [x] Add critique-based refinement support ✅
+- [x] Implement WHAT vs HOW system prompts ✅
+
+**Implementation**: [src/providers/openai-llm-provider.js](../src/providers/openai-llm-provider.js)
 
 ### Image Provider
-- [ ] Already supports beam search context ✅
+- [x] Already supports beam search context ✅
 - [ ] Update to save `what.txt` and `how.txt` alongside `prompt.txt`
 
-### Vision Provider
-- [ ] Already provides alignment scores ✅
-- [ ] May need separate critique generation methods
+**Implementation**: [src/providers/openai-image-provider.js](../src/providers/openai-image-provider.js)
+
+### Vision Provider (IMAGE EVALUATION)
+- [ ] **NOT YET IMPLEMENTED** - This is the next critical component
+- [ ] Implement image evaluation/scoring service
+- [ ] Options to consider:
+  - GPT-4 Vision API (most flexible, detailed critique)
+  - CLIP score (fast, objective)
+  - Hybrid approach
+- [ ] Generate dimension-specific critiques (WHAT vs HOW)
+
+**Status**: ❌ **BLOCKING** - Required for feedback loop
 
 ### Scoring Provider
-- [ ] Already combines CLIP + aesthetic ✅
+- [ ] Depends on Vision Provider implementation
+- [ ] Should combine CLIP + aesthetic scores
+- [ ] Weight with configurable alpha/beta parameters
+
+**Status**: ❌ **BLOCKED** by Vision Provider
 
 ### Orchestrator (NEW)
+- [ ] **NOT YET IMPLEMENTED** - Main coordination logic
 - [ ] Implement beam search loop
 - [ ] Manage (WHAT, HOW) pairs
 - [ ] Alternate refinement dimensions
 - [ ] Track lineage and metadata
 - [ ] Coordinate all providers
+- [ ] Integrate critique generation (may be part of Vision Provider)
+
+**Status**: ❌ Ready to implement once Vision Provider complete
 
 ### Demo/CLI
-- [ ] Fix `demo.js` to use `combinePrompts()`
+- [ ] Update `demo.js` to use new `combinePrompts()` method
 - [ ] Show both WHAT and HOW components in output
 - [ ] Display which dimension is being refined each round
 

@@ -111,20 +111,38 @@ See [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) for complete workflow
 
 ## Project Status
 
-🚧 **Currently in development** - Provider layer complete, orchestrator next:
+🚧 **Currently in development** - Real providers in progress, orchestrator next:
 
+### Completed (✅)
 - [x] Provider abstraction layer (100% ✅)
-  - [x] ImageGenerationProvider (13 tests)
-  - [x] LLMProvider (24 tests)
-  - [x] VisionProvider (26 tests)
-  - [x] ScoringProvider (25 tests)
+  - [x] ImageGenerationProvider interface (13 tests)
+  - [x] LLMProvider interface (24 tests)
+  - [x] VisionProvider interface (26 tests)
+  - [x] ScoringProvider interface (25 tests)
 - [x] Mock providers for testing (88 tests passing)
-- [ ] Beam search orchestrator (Issue #3)
-- [ ] OpenAI provider implementation (Issue #4)
+- [x] **OpenAI LLM Provider** - Expand, refine, combine prompts ✅
+- [x] **OpenAI Image Provider** - DALL-E 3 with local storage ✅
+
+### In Progress (🚧)
+- [ ] **Vision/Evaluation Provider** - ⚠️ **BLOCKING** - Required for feedback loop
+  - Options: GPT-4 Vision, CLIP score, or hybrid
+  - Needs image scoring + critique generation
+- [ ] **Beam Search Orchestrator** (Issue #3)
+  - Blocked by Vision Provider
+  - Will coordinate full 8-step pipeline
 - [ ] CLI interface
 - [ ] Web UI
 
-See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for current work.
+### Component Status
+| Component | Status | Notes |
+|-----------|--------|-------|
+| LLM Provider (OpenAI) | ✅ Complete | Expand, refine, combine |
+| Image Provider (OpenAI) | ✅ Complete | DALL-E 3 + storage |
+| Vision Provider | ❌ Not started | **Next priority** |
+| Scoring Provider | ❌ Blocked | Needs Vision Provider |
+| Orchestrator | ❌ Blocked | Needs Vision Provider |
+
+See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for detailed tracking.
 
 ## Technology Stack
 
