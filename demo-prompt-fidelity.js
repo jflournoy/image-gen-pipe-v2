@@ -104,15 +104,15 @@ async function demo() {
   console.log('-'.repeat(70));
 
   console.log('Analyzing image with GPT-4o Vision...');
-  const evaluation = await vision.evaluateImage(
+  const evaluation = await vision.analyzeImage(
     generatedImage.url,
     combinedPrompt
   );
 
   console.log('\n📊 Evaluation Results:');
   console.log('─'.repeat(70));
-  console.log(`\n🎯 Prompt Fidelity Score: ${(evaluation.promptFidelity * 100).toFixed(1)}%`);
-  console.log(`   (${evaluation.promptFidelity.toFixed(3)} on 0-1 scale)`);
+  console.log(`\n🎯 Alignment Score: ${evaluation.alignmentScore}/100`);
+  console.log(`   (${(evaluation.alignmentScore / 100).toFixed(3)} on 0-1 scale)`);
 
   console.log(`\n💭 Analysis:`);
   console.log(`   ${evaluation.analysis}`);
@@ -147,17 +147,17 @@ async function demo() {
   console.log('\n💡 The evaluation provides actionable feedback for refinement:');
   console.log();
 
-  if (evaluation.promptFidelity < 0.8) {
-    console.log('Since fidelity < 80%, we could:');
+  if (evaluation.alignmentScore < 80) {
+    console.log('Since alignment < 80%, we could:');
     console.log('  1. Use weaknesses to generate critique');
     console.log('  2. Refine the prompt with: llm.refinePrompt(prompt, {');
     console.log('       operation: "refine",');
     console.log('       critique: "Address: ' + (evaluation.weaknesses[0] || 'improve alignment') + '"');
     console.log('     })');
     console.log('  3. Generate new image and re-evaluate');
-    console.log('  4. Repeat until fidelity > 80%');
+    console.log('  4. Repeat until alignment > 80%');
   } else {
-    console.log('✨ High fidelity score! This prompt-image pair is well-aligned.');
+    console.log('✨ High alignment score! This prompt-image pair is well-aligned.');
     console.log('   In beam search, this candidate would be kept for the next round.');
   }
 
