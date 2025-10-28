@@ -59,12 +59,21 @@ npm install
 cp .env.example .env
 # Edit .env with your API keys
 
-# Run development server
-npm run dev
+# Run complete single iteration demo (recommended!)
+node demo-single-iteration.js
 
-# Or use CLI
-npm run cli -- generate --prompt "a serene mountain landscape"
+# Or run original multi-provider demo
+node demo.js --real
+
+# Or run prompt fidelity evaluation demo
+node demo-prompt-fidelity.js
 ```
+
+### Demos
+
+- **`demo-single-iteration.js`** ⭐ - Complete single iteration showing all 7 steps working together
+- **`demo.js`** - Original multi-provider demo (mock or real)
+- **`demo-prompt-fidelity.js`** - Focused demo of vision evaluation
 
 ## Development Workflow
 
