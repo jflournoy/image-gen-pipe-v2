@@ -27,12 +27,12 @@ describe('OpenAIVisionProvider Interface', () => {
       assert.ok(provider.name.includes('openai'), 'Name should indicate OpenAI provider');
     });
 
-    it('should have an evaluateImage method', () => {
+    it('should have an analyzeImage method', () => {
       const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
       const provider = new OpenAIVisionProvider('fake-api-key');
 
-      assert.ok(provider.evaluateImage, 'Provider must have evaluateImage method');
-      assert.strictEqual(typeof provider.evaluateImage, 'function');
+      assert.ok(provider.analyzeImage, 'Provider must have analyzeImage method');
+      assert.strictEqual(typeof provider.analyzeImage, 'function');
     });
 
     it('should require an API key in constructor', () => {
@@ -57,7 +57,7 @@ describe('OpenAIVisionProvider Interface', () => {
     });
   });
 
-  describe('evaluateImage method - Prompt Fidelity', () => {
+  describe('analyzeImage method - Alignment Scoring', () => {
     let provider;
 
     beforeEach(() => {
@@ -67,12 +67,12 @@ describe('OpenAIVisionProvider Interface', () => {
 
     it('should accept imageUrl and prompt parameters', async () => {
       // Just verify the method exists
-      assert.ok(provider.evaluateImage);
+      assert.ok(provider.analyzeImage);
     });
 
     it('should require imageUrl parameter', async () => {
       await assert.rejects(
-        async () => await provider.evaluateImage(),
+        async () => await provider.analyzeImage(),
         /imageUrl.*required/i,
         'Should reject when imageUrl is missing'
       );
@@ -80,7 +80,7 @@ describe('OpenAIVisionProvider Interface', () => {
 
     it('should require prompt parameter', async () => {
       await assert.rejects(
-        async () => await provider.evaluateImage('https://example.com/image.png'),
+        async () => await provider.analyzeImage('https://example.com/image.png'),
         /prompt.*required/i,
         'Should reject when prompt is missing'
       );
@@ -88,7 +88,7 @@ describe('OpenAIVisionProvider Interface', () => {
 
     it('should reject empty imageUrl', async () => {
       await assert.rejects(
-        async () => await provider.evaluateImage('', 'some prompt'),
+        async () => await provider.analyzeImage('', 'some prompt'),
         /imageUrl.*empty/i,
         'Should reject empty imageUrl'
       );
@@ -96,7 +96,7 @@ describe('OpenAIVisionProvider Interface', () => {
 
     it('should reject empty prompt', async () => {
       await assert.rejects(
-        async () => await provider.evaluateImage('https://example.com/image.png', ''),
+        async () => await provider.analyzeImage('https://example.com/image.png', ''),
         /prompt.*empty/i,
         'Should reject empty prompt'
       );
@@ -104,10 +104,9 @@ describe('OpenAIVisionProvider Interface', () => {
 
     it('should return expected result structure', async () => {
       // This test defines the expected contract
-      // It will fail until we implement the provider
       const result = {
-        promptFidelity: 0.85, // 0-1 scale
         analysis: 'string describing how well image matches prompt',
+        alignmentScore: 85, // 0-100 scale
         strengths: ['array', 'of', 'strengths'],
         weaknesses: ['array', 'of', 'weaknesses'],
         metadata: {
@@ -117,18 +116,17 @@ describe('OpenAIVisionProvider Interface', () => {
         }
       };
 
-      assert.ok(typeof result.promptFidelity === 'number');
       assert.ok(typeof result.analysis === 'string');
+      assert.ok(typeof result.alignmentScore === 'number');
       assert.ok(Array.isArray(result.strengths));
       assert.ok(Array.isArray(result.weaknesses));
       assert.ok(result.metadata);
     });
 
-    it('should validate promptFidelity is between 0 and 1', async () => {
+    it('should validate alignmentScore is between 0 and 100', async () => {
       // This test will verify the actual returned value
-      // For now, it just defines the expected behavior
-      const validScore = 0.75;
-      assert.ok(validScore >= 0 && validScore <= 1, 'Score must be between 0 and 1');
+      const validScore = 75;
+      assert.ok(validScore >= 0 && validScore <= 100, 'Score must be between 0 and 100');
     });
   });
 
@@ -139,7 +137,7 @@ describe('OpenAIVisionProvider Interface', () => {
 
       // Should throw a descriptive error when API call fails
       await assert.rejects(
-        async () => await provider.evaluateImage(
+        async () => await provider.analyzeImage(
           'https://example.com/image.png',
           'test prompt'
         ),
@@ -159,7 +157,7 @@ describe('OpenAIVisionProvider Interface', () => {
   });
 
   describe('Real API Integration Tests', () => {
-    it('should evaluate a real image for prompt fidelity', { skip: !process.env.OPENAI_API_KEY }, async () => {
+    it('should analyze a real image and return alignment score', { skip: !process.env.OPENAI_API_KEY }, async () => {
       const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
       const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
 
@@ -167,12 +165,12 @@ describe('OpenAIVisionProvider Interface', () => {
       const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
       const prompt = 'a placeholder image with geometric shapes';
 
-      const result = await provider.evaluateImage(imageUrl, prompt);
+      const result = await provider.analyzeImage(imageUrl, prompt);
 
       // Verify result structure
       assert.ok(result, 'Result should not be null');
-      assert.ok(typeof result.promptFidelity === 'number', 'Should have promptFidelity score');
-      assert.ok(result.promptFidelity >= 0 && result.promptFidelity <= 1, 'Score should be 0-1');
+      assert.ok(typeof result.alignmentScore === 'number', 'Should have alignmentScore');
+      assert.ok(result.alignmentScore >= 0 && result.alignmentScore <= 100, 'Score should be 0-100');
       assert.ok(typeof result.analysis === 'string', 'Should have analysis text');
       assert.ok(result.analysis.length > 0, 'Analysis should not be empty');
       assert.ok(Array.isArray(result.strengths), 'Should have strengths array');
@@ -191,7 +189,7 @@ describe('OpenAIVisionProvider Interface', () => {
 
       // Should either reject or return an error in the result
       await assert.rejects(
-        async () => await provider.evaluateImage(invalidUrl, prompt),
+        async () => await provider.analyzeImage(invalidUrl, prompt),
         /error|failed|invalid/i,
         'Should handle invalid image URL'
       );
