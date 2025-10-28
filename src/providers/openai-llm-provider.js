@@ -35,6 +35,8 @@ class OpenAILLMProvider {
    * @param {string} prompt - The original prompt to refine
    * @param {Object} options - Refinement options
    * @param {string} options.dimension - 'what' (content) or 'how' (style)
+   * @param {string} options.operation - 'expand' (initial) or 'refine' (iterative)
+   * @param {string} options.critique - Feedback for refine operation (required for 'refine')
    * @param {number} options.temperature - Randomness (0.0-1.0)
    * @param {number} options.maxTokens - Maximum tokens to generate
    * @returns {Promise<Object>} Refined prompt with metadata
@@ -52,6 +54,8 @@ class OpenAILLMProvider {
     // Validate and default options
     const {
       dimension = 'what',
+      operation = 'expand',
+      critique,
       temperature = 0.7,
       maxTokens = 500
     } = options;
@@ -61,13 +65,28 @@ class OpenAILLMProvider {
       throw new Error('Dimension must be either "what" or "how"');
     }
 
+    // Validate operation
+    if (operation !== 'expand' && operation !== 'refine') {
+      throw new Error('Operation must be either "expand" or "refine"');
+    }
+
+    // Validate critique for refine operation
+    if (operation === 'refine' && (!critique || typeof critique !== 'string' || critique.trim() === '')) {
+      throw new Error('Critique is required for refine operation');
+    }
+
     // Validate temperature
     if (typeof temperature !== 'number' || temperature < 0 || temperature > 1) {
       throw new Error('Temperature out of range: must be between 0.0 and 1.0');
     }
 
-    // Build system prompt based on dimension
-    const systemPrompt = this._buildSystemPrompt(dimension);
+    // Build system prompt based on dimension and operation
+    const systemPrompt = this._buildSystemPrompt(dimension, operation);
+
+    // Build user message based on operation
+    const userMessage = operation === 'expand'
+      ? prompt
+      : `Current prompt: ${prompt}\n\nCritique: ${critique}\n\nRefined prompt:`;
 
     try {
       // Call OpenAI API
@@ -75,7 +94,7 @@ class OpenAILLMProvider {
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt }
+          { role: 'user', content: userMessage }
         ],
         temperature,
         max_tokens: maxTokens
@@ -85,10 +104,11 @@ class OpenAILLMProvider {
 
       return {
         refinedPrompt,
-        explanation: `Refined prompt for ${dimension} dimension using ${this.model}`,
+        explanation: `${operation === 'expand' ? 'Expanded' : 'Refined'} prompt for ${dimension} dimension using ${this.model}`,
         metadata: {
           model: completion.model,
           dimension,
+          operation,
           tokensUsed: completion.usage.total_tokens,
           temperature,
           timestamp: new Date().toISOString()
@@ -157,20 +177,75 @@ Combined prompt:`;
   }
 
   /**
-   * Build system prompt based on refinement dimension
+   * Build system prompt based on refinement dimension and operation
    * @private
    */
-  _buildSystemPrompt(dimension) {
-    if (dimension === 'what') {
-      return `You are an expert at refining image generation prompts by expanding CONTENT details.
-Focus on: subjects, objects, actions, scenes, and specific elements.
-Take the user's prompt and expand it with rich content details while preserving the original intent.
-Return ONLY the refined prompt, no explanations or commentary.`;
+  _buildSystemPrompt(dimension, operation = 'expand') {
+    if (operation === 'expand') {
+      // Initial expansion from terse to detailed
+      if (dimension === 'what') {
+        return `You are an expert at expanding image generation prompts with rich CONTENT details.
+
+Your task: Take a terse prompt and expand it into a detailed description of WHAT is in the scene.
+
+Focus on:
+- Subjects and characters (who/what)
+- Objects and elements (physical things)
+- Actions and activities (what's happening)
+- Setting and environment (where)
+- Mood and atmosphere (emotional content)
+
+Use immersive, sensory-rich prose. Preserve the original intent while adding vivid detail.
+
+Output ONLY the expanded prompt, no preamble or commentary.`;
+      } else {
+        return `You are an expert at expanding image generation prompts with rich STYLE details.
+
+Your task: Take a terse prompt and expand it into a detailed description of HOW the image should look.
+
+Focus on:
+- Lighting (direction, quality, color temperature)
+- Composition (framing, perspective, rule of thirds)
+- Atmosphere (mood, depth, weather effects)
+- Artistic style (photography, painting, digital art)
+- Color palette and saturation
+- Visual techniques (bokeh, HDR, long exposure)
+
+Use concrete, descriptive language referencing photographic or cinematic techniques.
+
+Output ONLY the expanded prompt, no preamble or commentary.`;
+      }
     } else {
-      return `You are an expert at refining image generation prompts by expanding STYLE details.
-Focus on: lighting, composition, atmosphere, artistic style, color palette, and visual techniques.
-Take the user's prompt and expand it with rich stylistic details while preserving the original intent.
-Return ONLY the refined prompt, no explanations or commentary.`;
+      // Iterative refinement based on critique
+      if (dimension === 'what') {
+        return `You are an expert at refining image generation prompts based on feedback about CONTENT.
+
+Your task: Given a current prompt and a critique about its content, produce an improved version that addresses the feedback.
+
+The critique may suggest:
+- Missing or unclear content elements
+- Subjects that need better description
+- Actions or settings that need clarification
+- Elements to emphasize or de-emphasize
+
+Focus on content (WHAT) not style (HOW). Make targeted improvements based on the specific critique.
+
+Output ONLY the refined prompt, no preamble or commentary.`;
+      } else {
+        return `You are an expert at refining image generation prompts based on feedback about STYLE.
+
+Your task: Given a current prompt and a critique about its visual style, produce an improved version that addresses the feedback.
+
+The critique may suggest:
+- Lighting or composition adjustments
+- Changes to artistic style or techniques
+- Color palette modifications
+- Atmosphere or mood enhancements
+
+Focus on style (HOW) not content (WHAT). Make targeted improvements based on the specific critique.
+
+Output ONLY the refined prompt, no preamble or commentary.`;
+      }
     }
   }
 }
