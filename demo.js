@@ -61,11 +61,27 @@ async function demo() {
   console.log('='.repeat(60));
   console.log();
 
-  // Step 2: Generate an image
-  console.log('🖼️  Step 2: Generating image with refined prompt');
+  // Step 1.5: Combine WHAT and HOW prompts
+  console.log('🔗 Step 1.5: Combining WHAT and HOW prompts');
   console.log('-'.repeat(60));
 
-  const combinedPrompt = whatRefinement.refinedPrompt;
+  const combinedPrompt = mode === 'real'
+    ? await llm.combinePrompts(whatRefinement.refinedPrompt, howRefinement.refinedPrompt)
+    : whatRefinement.refinedPrompt; // Mock provider doesn't have combinePrompts yet
+
+  if (mode === 'real') {
+    console.log('Combined prompt created by LLM');
+  } else {
+    console.log('Using WHAT prompt only (mock mode)');
+  }
+
+  console.log();
+  console.log('='.repeat(60));
+  console.log();
+
+  // Step 2: Generate an image
+  console.log('🖼️  Step 2: Generating image with combined prompt');
+  console.log('-'.repeat(60));
 
   console.log(`Using prompt: "${combinedPrompt.substring(0, 50)}..."`);
 
