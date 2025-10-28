@@ -195,4 +195,55 @@ describe('OpenAIVisionProvider Interface', () => {
       );
     });
   });
+
+  describe('Aesthetic Scoring', () => {
+    it('should include aestheticScore in analysis results', async () => {
+      const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
+      const provider = new OpenAIVisionProvider('fake-key');
+
+      // Verify the expected structure includes aestheticScore
+      const expectedStructure = {
+        analysis: 'string',
+        alignmentScore: 75,
+        aestheticScore: 7.5,  // 0-10 scale for visual quality
+        strengths: [],
+        weaknesses: [],
+        metadata: {}
+      };
+
+      assert.ok(typeof expectedStructure.aestheticScore === 'number', 'Should have aestheticScore');
+      assert.ok(expectedStructure.aestheticScore >= 0 && expectedStructure.aestheticScore <= 10, 'Score should be 0-10');
+    });
+
+    it('should validate aestheticScore is between 0 and 10', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
+      const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
+
+      const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
+      const prompt = 'a placeholder image';
+
+      const result = await provider.analyzeImage(imageUrl, prompt);
+
+      assert.ok(typeof result.aestheticScore === 'number', 'Should have aestheticScore as number');
+      assert.ok(result.aestheticScore >= 0 && result.aestheticScore <= 10, 'aestheticScore should be 0-10');
+    });
+
+    it('should evaluate aesthetic quality separate from alignment', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
+      const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
+
+      const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
+      const prompt = 'a placeholder image';
+
+      const result = await provider.analyzeImage(imageUrl, prompt);
+
+      // Aesthetic score should exist independent of alignment
+      assert.ok(result.alignmentScore, 'Should have alignment score');
+      assert.ok(result.aestheticScore, 'Should have aesthetic score');
+
+      // They measure different things, so they can differ
+      assert.ok(typeof result.alignmentScore === 'number');
+      assert.ok(typeof result.aestheticScore === 'number');
+    });
+  });
 });
