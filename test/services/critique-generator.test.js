@@ -390,4 +390,180 @@ describe('CritiqueGenerator', () => {
       assert.ok(result.reason, 'Should have reason');
     });
   });
+
+  describe('Aesthetic score integration', () => {
+    let generator;
+
+    beforeEach(() => {
+      const CritiqueGenerator = require('../../src/services/critique-generator.js');
+      generator = new CritiqueGenerator();
+    });
+
+    it('should accept aestheticScore in evaluation parameter', async () => {
+      const evaluation = {
+        alignmentScore: 85,
+        aestheticScore: 7.5,
+        analysis: 'Good content match with decent visual quality',
+        strengths: ['Correct subject'],
+        weaknesses: ['Minor composition issues']
+      };
+      const prompts = {
+        what: 'Mountain landscape',
+        how: 'Dramatic lighting',
+        combined: 'Mountain landscape with dramatic lighting'
+      };
+      const options = { dimension: 'how' };
+
+      const result = await generator.generateCritique(evaluation, prompts, options);
+
+      // Should successfully process evaluation with aestheticScore
+      assert.ok(result, 'Should return result');
+      assert.ok(result.critique, 'Should have critique');
+      assert.ok(result.metadata, 'Should have metadata');
+    });
+
+    it('should store aestheticScore in metadata when provided', async () => {
+      const evaluation = {
+        alignmentScore: 75,
+        aestheticScore: 6.2,
+        analysis: 'Test evaluation',
+        strengths: [],
+        weaknesses: []
+      };
+      const prompts = {
+        what: 'Forest scene',
+        how: 'Soft lighting',
+        combined: 'Forest scene with soft lighting'
+      };
+      const options = { dimension: 'how' };
+
+      const result = await generator.generateCritique(evaluation, prompts, options);
+
+      assert.ok(result.metadata, 'Should have metadata');
+      assert.strictEqual(result.metadata.aestheticScore, 6.2, 'Should store aesthetic score in metadata');
+      assert.strictEqual(result.metadata.alignmentScore, 75, 'Should also store alignment score');
+    });
+
+    it('should use aestheticScore for HOW dimension critique intensity', async () => {
+      const evaluationPoorAesthetic = {
+        alignmentScore: 85, // High alignment
+        aestheticScore: 3.0, // Low aesthetic
+        analysis: 'Content matches but visual quality is poor',
+        strengths: ['Correct elements'],
+        weaknesses: ['Poor composition', 'Ugly colors', 'Bad lighting execution']
+      };
+      const prompts = {
+        what: 'Sunset over ocean',
+        how: 'Cinematic golden hour lighting with vibrant colors',
+        combined: 'Sunset over ocean with cinematic golden hour lighting and vibrant colors'
+      };
+      const options = { dimension: 'how' };
+
+      const result = await generator.generateCritique(evaluationPoorAesthetic, prompts, options);
+
+      // For HOW dimension with low aesthetic score, should provide significant style improvements
+      // even if alignment is high
+      assert.ok(result.critique, 'Should have critique');
+      assert.ok(result.recommendation, 'Should have recommendation');
+      assert.ok(result.reason, 'Should have reason');
+      assert.strictEqual(result.dimension, 'how', 'Should be HOW dimension');
+
+      // Verify it's using aesthetic score (low = 3.0) not alignment score (high = 85)
+      // by checking the critique suggests significant changes
+      const critique = result.critique.toLowerCase();
+      const recommendation = result.recommendation.toLowerCase();
+
+      // Should indicate need for style improvement since aesthetic is low
+      assert.ok(
+        critique.length > 20 || recommendation.length > 20,
+        'Should provide substantial feedback for poor aesthetic quality'
+      );
+    });
+
+    it('should use alignmentScore for WHAT dimension critique intensity', async () => {
+      const evaluationPoorAlignment = {
+        alignmentScore: 40, // Low alignment
+        aestheticScore: 8.5, // High aesthetic
+        analysis: 'Beautiful image but wrong content',
+        strengths: ['Great visual quality', 'Excellent composition'],
+        weaknesses: ['Missing key subjects', 'Wrong setting']
+      };
+      const prompts = {
+        what: 'Ancient temple with mystical vines and glowing runes',
+        how: 'Photorealistic rendering',
+        combined: 'Ancient temple with mystical vines and glowing runes in photorealistic rendering'
+      };
+      const options = { dimension: 'what' };
+
+      const result = await generator.generateCritique(evaluationPoorAlignment, prompts, options);
+
+      // For WHAT dimension with low alignment, should provide significant content changes
+      // even if aesthetic is high
+      assert.ok(result.critique, 'Should have critique');
+      assert.ok(result.recommendation, 'Should have recommendation');
+      assert.strictEqual(result.dimension, 'what', 'Should be WHAT dimension');
+
+      // Verify it's using alignment score (low = 40) not aesthetic score (high = 8.5)
+      const critique = result.critique.toLowerCase();
+      const recommendation = result.recommendation.toLowerCase();
+
+      assert.ok(
+        critique.length > 20 && recommendation.length > 20,
+        'Should provide substantial feedback for poor content alignment'
+      );
+    });
+
+    it('should handle missing aestheticScore gracefully', async () => {
+      const evaluationNoAesthetic = {
+        alignmentScore: 70,
+        // aestheticScore not provided
+        analysis: 'Decent match',
+        strengths: ['Some strengths'],
+        weaknesses: ['Some weaknesses']
+      };
+      const prompts = {
+        what: 'City street',
+        how: 'Night photography',
+        combined: 'City street at night photography style'
+      };
+      const options = { dimension: 'how' };
+
+      const result = await generator.generateCritique(evaluationNoAesthetic, prompts, options);
+
+      // Should still work without aestheticScore (backwards compatibility)
+      assert.ok(result, 'Should return result even without aesthetic score');
+      assert.ok(result.critique, 'Should have critique');
+      assert.ok(result.recommendation, 'Should have recommendation');
+    });
+
+    it('should prefer aestheticScore over alignmentScore for HOW dimension with both scores', async () => {
+      const evaluation = {
+        alignmentScore: 90, // High alignment (content is right)
+        aestheticScore: 4.0, // Low aesthetic (but ugly)
+        analysis: 'Right content but poor visual execution',
+        strengths: ['Correct elements present'],
+        weaknesses: ['Harsh lighting', 'Muddy colors', 'Poor composition']
+      };
+      const prompts = {
+        what: 'Garden with flowers',
+        how: 'Soft dreamy lighting with pastel colors',
+        combined: 'Garden with flowers in soft dreamy lighting with pastel colors'
+      };
+      const options = { dimension: 'how' };
+
+      const result = await generator.generateCritique(evaluation, prompts, options);
+
+      // Should focus on style issues (low aesthetic) not content issues (high alignment)
+      assert.ok(result.critique, 'Should have critique');
+      assert.ok(result.recommendation, 'Should have recommendation');
+      assert.strictEqual(result.dimension, 'how');
+
+      // The critique should be substantial because aesthetic is low,
+      // even though alignment is high
+      assert.ok(
+        result.critique.length > 15 && result.recommendation.length > 15,
+        'Should provide meaningful feedback based on aesthetic score for HOW dimension'
+      );
+    });
+  });
 });

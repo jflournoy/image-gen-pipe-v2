@@ -28,7 +28,8 @@ class CritiqueGenerator {
   /**
    * Generate structured critique for prompt refinement
    * @param {Object} evaluation - Vision provider evaluation results
-   * @param {number} evaluation.alignmentScore - Score 0-100
+   * @param {number} evaluation.alignmentScore - Score 0-100 (content match)
+   * @param {number} [evaluation.aestheticScore] - Score 0-10 (visual quality)
    * @param {string} evaluation.analysis - Vision analysis text
    * @param {string[]} evaluation.strengths - What worked well
    * @param {string[]} evaluation.weaknesses - What needs improvement
@@ -78,7 +79,18 @@ class CritiqueGenerator {
    */
   async _generateLLMCritique(evaluation, prompts, options) {
     const { dimension, iteration, parentScore } = options;
-    const { alignmentScore, analysis, strengths, weaknesses } = evaluation;
+    const { alignmentScore, aestheticScore, analysis, strengths, weaknesses } = evaluation;
+
+    // Determine which score to use for critique intensity
+    // WHAT dimension: use alignmentScore (content match)
+    // HOW dimension: use aestheticScore if available, otherwise alignmentScore
+    let relevantScore = alignmentScore;
+    let scoreType = 'alignment';
+
+    if (dimension === 'how' && aestheticScore !== undefined) {
+      relevantScore = aestheticScore * 10; // Convert 0-10 to 0-100 scale for comparison
+      scoreType = 'aesthetic';
+    }
 
     // Build system prompt
     const systemPrompt = `You are an expert at analyzing image generation results and providing actionable feedback for prompt refinement.
@@ -89,25 +101,31 @@ You will receive:
 - The WHAT prompt (content description)
 - The HOW prompt (visual style description)
 - The COMBINED prompt (what was actually used)
-- Alignment score (0-100, where 100 is perfect)
+- Alignment score (0-100, where 100 is perfect content match)
+${aestheticScore !== undefined ? '- Aesthetic score (0-10, where 10 is exceptional visual quality)' : ''}
 - Analysis of what worked and what didn't
 
 You must provide feedback for ${dimension === 'what' ? 'WHAT (content)' : 'HOW (style)'} dimension only.
+
+${dimension === 'how' && aestheticScore !== undefined ?
+  'IMPORTANT: For HOW dimension, focus primarily on the aesthetic score (visual quality) rather than alignment score (content match).' :
+  dimension === 'what' ?
+  'IMPORTANT: For WHAT dimension, focus primarily on the alignment score (content match).' : ''}
 
 Output format (JSON):
 {
   "critique": "Clear statement of the main issue with current result",
   "recommendation": "Specific change to the ${dimension.toUpperCase()} prompt",
-  "reason": "Why this change will address the critique and improve alignment"
+  "reason": "Why this change will address the critique and improve ${dimension === 'how' ? 'visual quality' : 'content alignment'}"
 }
 
 Guidelines:
 - Be specific and actionable
 - Focus ONLY on ${dimension === 'what' ? 'content elements (subjects, objects, actions, setting)' : 'style elements (lighting, composition, color, atmosphere, artistic techniques)'}
 - Consider how the WHAT and HOW interact in the combined prompt
-- For high scores (>80): suggest minor refinements
-- For medium scores (60-80): suggest moderate improvements
-- For low scores (<60): suggest significant revisions`;
+- For high scores (>80 or >8/10): suggest minor refinements
+- For medium scores (60-80 or 6-8/10): suggest moderate improvements
+- For low scores (<60 or <6/10): suggest significant revisions`;
 
     const userPrompt = `Current Prompts:
 WHAT: "${prompts.what}"
@@ -115,7 +133,8 @@ HOW: "${prompts.how}"
 COMBINED: "${prompts.combined}"
 
 Evaluation Results:
-- Alignment Score: ${alignmentScore}/100
+- Alignment Score: ${alignmentScore}/100 (content match)
+${aestheticScore !== undefined ? `- Aesthetic Score: ${aestheticScore}/10 (visual quality)` : ''}
 - Analysis: ${analysis}
 - Strengths: ${strengths.length > 0 ? strengths.join(', ') : 'None identified'}
 - Weaknesses: ${weaknesses.length > 0 ? weaknesses.join(', ') : 'None identified'}
@@ -123,7 +142,7 @@ Evaluation Results:
 ${iteration !== undefined ? `Iteration: ${iteration}` : ''}
 ${parentScore !== undefined ? `Previous score: ${parentScore}/100` : ''}
 
-Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt.`;
+Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt${dimension === 'how' && aestheticScore !== undefined ? ' (focus on visual quality/aesthetic score)' : dimension === 'what' ? ' (focus on content/alignment score)' : ''}.`;
 
     try {
       const completion = await this.client.chat.completions.create({
@@ -147,6 +166,9 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         dimension,
         metadata: {
           alignmentScore,
+          aestheticScore,
+          relevantScore: dimension === 'how' && aestheticScore !== undefined ? aestheticScore : alignmentScore,
+          scoreType,
           iteration,
           parentScore,
           model: completion.model,
@@ -167,25 +189,36 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
    */
   _generateSimpleCritique(evaluation, prompts, options) {
     const { dimension } = options;
-    const { alignmentScore, weaknesses } = evaluation;
+    const { alignmentScore, aestheticScore, weaknesses } = evaluation;
+
+    // Choose relevant score based on dimension
+    // WHAT dimension: use alignmentScore (content match)
+    // HOW dimension: use aestheticScore if available, otherwise alignmentScore
+    let relevantScore = alignmentScore;
+    let scoreType = 'alignment';
+
+    if (dimension === 'how' && aestheticScore !== undefined) {
+      relevantScore = aestheticScore * 10; // Convert 0-10 to 0-100 scale for comparison
+      scoreType = 'aesthetic';
+    }
 
     let critique, recommendation, reason;
 
-    // Determine severity based on score
-    if (alignmentScore >= 80) {
+    // Determine severity based on relevant score
+    if (relevantScore >= 80) {
       critique = `The ${dimension} prompt is performing well with minor room for improvement.`;
       recommendation = `Add subtle refinements to the ${dimension.toUpperCase()} prompt to enhance specific details.`;
       reason = 'Minor refinements can push a good result toward excellence.';
-    } else if (alignmentScore >= 60) {
+    } else if (relevantScore >= 60) {
       const weakness = weaknesses.length > 0 ? weaknesses[0] : 'some aspects need improvement';
       critique = `The ${dimension} prompt needs moderate improvement. Issue: ${weakness}`;
       recommendation = `Revise the ${dimension.toUpperCase()} prompt to address: ${weakness}`;
-      reason = `Addressing this weakness will improve alignment and move closer to the target.`;
+      reason = `Addressing this weakness will improve ${dimension === 'how' ? 'visual quality' : 'content alignment'}.`;
     } else {
       const issues = weaknesses.length > 0 ? weaknesses.join(', ') : 'multiple significant issues';
       critique = `The ${dimension} prompt requires significant revision. Issues: ${issues}`;
       recommendation = `Completely rework the ${dimension.toUpperCase()} prompt to address: ${issues}`;
-      reason = 'Major revisions are needed to achieve acceptable alignment with the target.';
+      reason = `Major revisions are needed to achieve acceptable ${dimension === 'how' ? 'visual quality' : 'content alignment'}.`;
     }
 
     return {
@@ -195,6 +228,9 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
       dimension,
       metadata: {
         alignmentScore,
+        aestheticScore,
+        relevantScore: dimension === 'how' && aestheticScore !== undefined ? aestheticScore : alignmentScore,
+        scoreType,
         method: 'rule-based',
         timestamp: new Date().toISOString()
       }
