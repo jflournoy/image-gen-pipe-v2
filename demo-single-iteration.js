@@ -8,8 +8,8 @@
  * 2. Expand into WHAT (content) and HOW (style) prompts
  * 3. Combine WHAT + HOW into unified prompt
  * 4. Generate image with DALL-E 3
- * 5. Evaluate image with GPT-4o Vision (alignment score)
- * 6. Generate structured critique based on evaluation
+ * 5. Evaluate image with GPT-4o Vision (alignment + aesthetic scores)
+ * 6. Generate structured critique based on evaluation (dimension-aware)
  * 7. Refine prompt using critique (WHAT or HOW depending on iteration)
  * 8. Ready for next iteration!
  *
@@ -128,7 +128,8 @@ async function demo() {
     generatedImage.url,
     combinedPrompt
   );
-  console.log(`✅ Alignment Score: ${evaluation.alignmentScore}/100`);
+  console.log(`✅ Alignment Score: ${evaluation.alignmentScore}/100 (content match)`);
+  console.log(`✨ Aesthetic Score: ${evaluation.aestheticScore}/10 (visual quality)`);
   console.log(`📊 Analysis: ${evaluation.analysis}`);
   if (evaluation.strengths.length > 0) {
     console.log(`💪 Strengths: ${evaluation.strengths.join(', ')}`);
@@ -166,6 +167,7 @@ async function demo() {
   console.log(`   📌 Critique: ${critiqueResult.critique}`);
   console.log(`   💡 Recommendation: ${critiqueResult.recommendation}`);
   console.log(`   🎯 Reason: ${critiqueResult.reason}`);
+  console.log(`   📊 Score used: ${critiqueResult.metadata.scoreType} (${dimension === 'what' ? 'alignment' : 'aesthetic'})`);
   console.log(`   🔢 Tokens used: ${critiqueResult.metadata.tokensUsed}`);
   console.log();
 
@@ -199,7 +201,8 @@ async function demo() {
   console.log('State for next iteration:');
   console.log(`   WHAT prompt: "${dimension === 'what' ? refinedPrompt.refinedPrompt : whatExpansion.refinedPrompt}"`);
   console.log(`   HOW prompt: "${dimension === 'how' ? refinedPrompt.refinedPrompt : howExpansion.refinedPrompt}"`);
-  console.log(`   Previous score: ${evaluation.alignmentScore}/100`);
+  console.log(`   Previous alignment score: ${evaluation.alignmentScore}/100`);
+  console.log(`   Previous aesthetic score: ${evaluation.aestheticScore}/10`);
   console.log(`   Next dimension to refine: ${dimension === 'what' ? 'HOW (style)' : 'WHAT (content)'}`);
   console.log();
 
@@ -212,13 +215,15 @@ async function demo() {
   console.log('   ✓ Expanded terse prompt into rich WHAT/HOW prompts');
   console.log('   ✓ Combined prompts for unified image generation');
   console.log('   ✓ Generated image with DALL-E 3');
-  console.log('   ✓ Evaluated prompt-image alignment with GPT-4o Vision');
-  console.log('   ✓ Generated structured critique (critique/recommendation/reason)');
+  console.log('   ✓ Evaluated with dual scoring: alignment (content) + aesthetic (visual)');
+  console.log('   ✓ Generated dimension-aware critique (uses relevant score)');
   console.log('   ✓ Refined prompt using structured critique');
   console.log('   ✓ Ready to repeat cycle with improved prompts');
   console.log();
   console.log('🔄 This process repeats for multiple iterations (beam search)');
   console.log('   - Alternate between refining WHAT (odd) and HOW (even) iterations');
+  console.log('   - WHAT dimension: uses alignment score (content match)');
+  console.log('   - HOW dimension: uses aesthetic score (visual quality)');
   console.log('   - Keep top candidates (beam width)');
   console.log('   - Track lineage and scores');
   console.log('   - Continue until max iterations or convergence');
