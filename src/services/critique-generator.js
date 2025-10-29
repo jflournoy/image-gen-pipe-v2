@@ -81,14 +81,12 @@ class CritiqueGenerator {
     const { dimension, iteration, parentScore } = options;
     const { alignmentScore, aestheticScore, analysis, strengths, weaknesses } = evaluation;
 
-    // Determine which score to use for critique intensity
+    // Determine which score type to use for critique intensity
     // WHAT dimension: use alignmentScore (content match)
     // HOW dimension: use aestheticScore if available, otherwise alignmentScore
-    let relevantScore = alignmentScore;
     let scoreType = 'alignment';
 
     if (dimension === 'how' && aestheticScore !== undefined) {
-      relevantScore = aestheticScore * 10; // Convert 0-10 to 0-100 scale for comparison
       scoreType = 'aesthetic';
     }
 
