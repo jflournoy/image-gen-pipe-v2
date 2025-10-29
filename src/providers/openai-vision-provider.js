@@ -38,7 +38,7 @@ class OpenAIVisionProvider {
    * @param {Object} options - Analysis options
    * @returns {Promise<Object>} Analysis result with alignment score (0-100), aesthetic score (0-10), and detailed feedback
    */
-  async analyzeImage(imageUrl, prompt, options = {}) {
+  async analyzeImage(imageUrl, prompt, _options = {}) {
     // Validate imageUrl
     if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
       throw new Error('imageUrl is required and cannot be empty');
@@ -111,7 +111,7 @@ Provide your evaluation in the JSON format specified.`;
                          responseText.match(/```\n([\s\S]*?)\n```/) ||
                          [null, responseText];
         evaluation = JSON.parse(jsonMatch[1] || responseText);
-      } catch (parseError) {
+      } catch {
         // If JSON parsing fails, create a default response
         evaluation = {
           promptFidelity: 0.5,

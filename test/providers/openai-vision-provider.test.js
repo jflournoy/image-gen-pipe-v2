@@ -198,9 +198,6 @@ describe('OpenAIVisionProvider Interface', () => {
 
   describe('Aesthetic Scoring', () => {
     it('should include aestheticScore in analysis results', async () => {
-      const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
-      const provider = new OpenAIVisionProvider('fake-key');
-
       // Verify the expected structure includes aestheticScore
       const expectedStructure = {
         analysis: 'string',

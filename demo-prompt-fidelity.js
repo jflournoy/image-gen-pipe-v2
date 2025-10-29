@@ -114,24 +114,24 @@ async function demo() {
   console.log(`\n🎯 Alignment Score: ${evaluation.alignmentScore}/100`);
   console.log(`   (${(evaluation.alignmentScore / 100).toFixed(3)} on 0-1 scale)`);
 
-  console.log(`\n💭 Analysis:`);
+  console.log('\n💭 Analysis:');
   console.log(`   ${evaluation.analysis}`);
 
   if (evaluation.strengths.length > 0) {
-    console.log(`\n✅ Strengths:`);
+    console.log('\n✅ Strengths:');
     evaluation.strengths.forEach(strength => {
       console.log(`   • ${strength}`);
     });
   }
 
   if (evaluation.weaknesses.length > 0) {
-    console.log(`\n⚠️  Areas for Improvement:`);
+    console.log('\n⚠️  Areas for Improvement:');
     evaluation.weaknesses.forEach(weakness => {
       console.log(`   • ${weakness}`);
     });
   }
 
-  console.log(`\n📈 Metadata:`);
+  console.log('\n📈 Metadata:');
   console.log(`   Model: ${evaluation.metadata.model}`);
   console.log(`   Tokens used: ${evaluation.metadata.tokensUsed}`);
   console.log(`   Timestamp: ${evaluation.metadata.timestamp}`);
