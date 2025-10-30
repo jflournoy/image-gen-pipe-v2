@@ -349,11 +349,19 @@ async function refinementIteration(parents, config, iteration) {
 
 ### Complete Beam Search Loop
 
+> **⚠️ IMPORTANT DESIGN DECISION**: Iteration 0 is deliberately special-cased rather than abstracted into the main loop.
+>
+> **Rationale**: Iteration 0 has a fundamentally different entry point:
+> - **Iteration 0**: Starts at expansion/combine (no critique, no parent)
+> - **Iteration 1+**: Starts at critique stage (has parents with scores)
+>
+> This is not a DRY violation - it reflects the actual algorithm structure. Both paths use the same building blocks (`processCandidateStream`, `llm.refinePrompt`, `rankAndSelect`) but have legitimately different control flow.
+
 ```javascript
 async function beamSearch(userPrompt, config) {
   const { maxIterations, keepTop: M } = config;
 
-  // Zone 1: Initial expansion
+  // Zone 1: Initial expansion (Iteration 0 - special case)
   let candidates = await initialExpansion(userPrompt, config);
 
   // BARRIER: Rank and select
@@ -361,7 +369,7 @@ async function beamSearch(userPrompt, config) {
 
   // Iterate until convergence or max iterations
   for (let iteration = 1; iteration < maxIterations; iteration++) {
-    // Zone 2: Refinement
+    // Zone 2: Refinement (Iteration 1+ - normal flow)
     candidates = await refinementIteration(topCandidates, config, iteration);
 
     // BARRIER: Rank and select
