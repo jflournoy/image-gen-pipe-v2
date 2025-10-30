@@ -36,7 +36,67 @@ function calculateTotalScore(alignmentScore, aestheticScore, alpha = 0.7) {
   return totalScore;
 }
 
+/**
+ * Process a single candidate through the streaming pipeline
+ * @param {string} whatPrompt - Content prompt
+ * @param {string} howPrompt - Style prompt
+ * @param {Object} llmProvider - LLM provider instance
+ * @param {Object} imageGenProvider - Image generation provider instance
+ * @param {Object} visionProvider - Vision provider instance
+ * @param {Object} options - Processing options
+ * @param {number} options.iteration - Current iteration number
+ * @param {number} options.candidateId - Candidate identifier
+ * @param {string} options.dimension - 'what' or 'how'
+ * @param {number} [options.alpha=0.7] - Scoring weight for alignment
+ * @param {number} [options.parentId] - Parent candidate ID (for tracking lineage)
+ * @param {string} [options.size] - Image size
+ * @param {string} [options.quality] - Image quality
+ * @returns {Promise<Object>} Candidate with all processing results
+ */
+async function processCandidateStream(
+  whatPrompt,
+  howPrompt,
+  llmProvider,
+  imageGenProvider,
+  visionProvider,
+  options = {}
+) {
+  // Stage 1: Combine prompts
+  const combined = await llmProvider.combinePrompts(whatPrompt, howPrompt);
+
+  // Stage 2: Generate image (starts as soon as combine finishes)
+  const image = await imageGenProvider.generateImage(combined, options);
+
+  // Stage 3: Evaluate image (starts as soon as image finishes)
+  const evaluation = await visionProvider.analyzeImage(image.url, combined);
+
+  // Calculate total score
+  const alpha = options.alpha !== undefined ? options.alpha : 0.7;
+  const totalScore = calculateTotalScore(
+    evaluation.alignmentScore,
+    evaluation.aestheticScore,
+    alpha
+  );
+
+  // Return complete candidate object
+  return {
+    whatPrompt,
+    howPrompt,
+    combined,
+    image,
+    evaluation,
+    totalScore,
+    metadata: {
+      iteration: options.iteration,
+      candidateId: options.candidateId,
+      dimension: options.dimension,
+      parentId: options.parentId
+    }
+  };
+}
+
 module.exports = {
   rankAndSelect,
-  calculateTotalScore
+  calculateTotalScore,
+  processCandidateStream
 };
