@@ -298,4 +298,196 @@ describe('Beam Search Orchestrator', () => {
       assert.strictEqual(result.metadata.parentId, 0, 'Should include parentId in metadata');
     });
   });
+
+  describe('initialExpansion', () => {
+    test('should generate N WHAT+HOW pairs in parallel', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let whatCalls = 0;
+      let howCalls = 0;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          if (options.dimension === 'what') {
+            whatCalls++;
+            return { refinedPrompt: `WHAT_${whatCalls}`, metadata: {} };
+          } else {
+            howCalls++;
+            return { refinedPrompt: `HOW_${howCalls}`, metadata: {} };
+          }
+        },
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const userPrompt = 'a mountain landscape';
+      const config = { beamWidth: 3 };
+
+      const results = await initialExpansion(
+        userPrompt,
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        config
+      );
+
+      // Should generate N candidates
+      assert.strictEqual(results.length, 3, 'Should generate beamWidth candidates');
+
+      // Should call refinePrompt N times for WHAT and N times for HOW
+      assert.strictEqual(whatCalls, 3, 'Should refine WHAT 3 times');
+      assert.strictEqual(howCalls, 3, 'Should refine HOW 3 times');
+
+      // Each result should have proper structure
+      results.forEach((result, i) => {
+        assert.ok(result.whatPrompt, 'Should have whatPrompt');
+        assert.ok(result.howPrompt, 'Should have howPrompt');
+        assert.ok(result.combined, 'Should have combined prompt');
+        assert.ok(result.image, 'Should have image');
+        assert.ok(result.evaluation, 'Should have evaluation');
+        assert.ok(typeof result.totalScore === 'number', 'Should have totalScore');
+        assert.strictEqual(result.metadata.iteration, 0, 'Should be iteration 0');
+        assert.strictEqual(result.metadata.candidateId, i, 'Should have correct candidateId');
+      });
+    });
+
+    test('should use expand operation for both dimensions', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedOptions = [];
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          capturedOptions.push(options);
+          return { refinedPrompt: `refined_${options.dimension}`, metadata: {} };
+        },
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        { beamWidth: 2 }
+      );
+
+      // Should use 'expand' operation for all refine calls
+      capturedOptions.forEach(opt => {
+        assert.strictEqual(opt.operation, 'expand', 'Should use expand operation');
+      });
+    });
+
+    test('should pass stochastic temperature for variation', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedOptions = [];
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          capturedOptions.push(options);
+          return { refinedPrompt: 'refined', metadata: {} };
+        },
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        { beamWidth: 2, temperature: 0.8 }
+      );
+
+      // Should pass temperature to enable variation
+      capturedOptions.forEach(opt => {
+        assert.strictEqual(opt.temperature, 0.8, 'Should pass temperature for variation');
+      });
+    });
+
+    test('should process all candidates through streaming pipeline', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let combineCallCount = 0;
+      let imageGenCallCount = 0;
+      let visionCallCount = 0;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => ({
+          refinedPrompt: `refined_${options.dimension}`,
+          metadata: {}
+        }),
+        combinePrompts: async (what, how) => {
+          combineCallCount++;
+          return `${what} + ${how}`;
+        }
+      };
+
+      const mockImageGen = {
+        generateImage: async () => {
+          imageGenCallCount++;
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => {
+          visionCallCount++;
+          return {
+            alignmentScore: 80, aestheticScore: 7,
+            analysis: '', strengths: [], weaknesses: [], metadata: {}
+          };
+        }
+      };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        { beamWidth: 3 }
+      );
+
+      // Each candidate should go through full pipeline
+      assert.strictEqual(combineCallCount, 3, 'Should combine 3 times');
+      assert.strictEqual(imageGenCallCount, 3, 'Should generate 3 images');
+      assert.strictEqual(visionCallCount, 3, 'Should evaluate 3 images');
+    });
+  });
 });
