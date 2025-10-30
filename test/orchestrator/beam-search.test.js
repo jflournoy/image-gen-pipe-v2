@@ -144,4 +144,158 @@ describe('Beam Search Orchestrator', () => {
       );
     });
   });
+
+  describe('processCandidateStream', () => {
+    test('should combine, generate image, and score in sequence', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      // Mock providers
+      const mockLLM = {
+        combinePrompts: async (what, how) => `${what} with ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => ({
+          url: 'https://example.com/image.png',
+          localPath: '/tmp/image.png',
+          revisedPrompt: prompt,
+          metadata: { model: 'dall-e-3', size: options.size }
+        })
+      };
+
+      const mockVision = {
+        analyzeImage: async (imageUrl, prompt) => ({
+          alignmentScore: 85,
+          aestheticScore: 7.5,
+          analysis: 'Good image',
+          strengths: ['composition'],
+          weaknesses: ['lighting'],
+          metadata: { tokensUsed: 100 }
+        })
+      };
+
+      const whatPrompt = 'a mountain landscape';
+      const howPrompt = 'oil painting style';
+      const options = {
+        iteration: 0,
+        candidateId: 0,
+        dimension: 'what'
+      };
+
+      const result = await processCandidateStream(
+        whatPrompt,
+        howPrompt,
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        options
+      );
+
+      // Verify result structure
+      assert.strictEqual(result.whatPrompt, whatPrompt, 'Should preserve whatPrompt');
+      assert.strictEqual(result.howPrompt, howPrompt, 'Should preserve howPrompt');
+      assert.strictEqual(result.combined, 'a mountain landscape with oil painting style', 'Should combine prompts');
+      assert.strictEqual(result.image.url, 'https://example.com/image.png', 'Should generate image');
+      assert.strictEqual(result.evaluation.alignmentScore, 85, 'Should evaluate alignment');
+      assert.strictEqual(result.evaluation.aestheticScore, 7.5, 'Should evaluate aesthetic');
+      assert.ok(result.totalScore, 'Should calculate total score');
+
+      // Verify totalScore calculation
+      const expectedScore = 0.7 * 85 + 0.3 * (7.5 * 10); // 59.5 + 22.5 = 82
+      assert.strictEqual(result.totalScore, expectedScore, 'Should calculate correct total score');
+    });
+
+    test('should use custom alpha for total score calculation', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      const mockLLM = { combinePrompts: async (w, h) => `${w} ${h}` };
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80,
+          aestheticScore: 8,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const result = await processCandidateStream(
+        'what', 'how', mockLLM, mockImageGen, mockVision,
+        { iteration: 0, candidateId: 0, alpha: 0.5 } // Custom alpha
+      );
+
+      // Expected: 0.5 * 80 + 0.5 * 80 = 80
+      assert.strictEqual(result.totalScore, 80, 'Should use custom alpha');
+    });
+
+    test('should pass options to image generation', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedOptions;
+      const mockLLM = { combinePrompts: async (w, h) => `${w} ${h}` };
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          capturedOptions = options;
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 8,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const options = {
+        iteration: 2,
+        candidateId: 5,
+        dimension: 'how',
+        size: '1024x1024',
+        quality: 'hd'
+      };
+
+      await processCandidateStream(
+        'what', 'how', mockLLM, mockImageGen, mockVision, options
+      );
+
+      assert.strictEqual(capturedOptions.iteration, 2, 'Should pass iteration');
+      assert.strictEqual(capturedOptions.candidateId, 5, 'Should pass candidateId');
+      assert.strictEqual(capturedOptions.dimension, 'how', 'Should pass dimension');
+      assert.strictEqual(capturedOptions.size, '1024x1024', 'Should pass size');
+      assert.strictEqual(capturedOptions.quality, 'hd', 'Should pass quality');
+    });
+
+    test('should include metadata in result', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      const mockLLM = { combinePrompts: async (w, h) => `${w} ${h}` };
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 8,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const options = {
+        iteration: 1,
+        candidateId: 3,
+        dimension: 'what',
+        parentId: 0
+      };
+
+      const result = await processCandidateStream(
+        'what', 'how', mockLLM, mockImageGen, mockVision, options
+      );
+
+      assert.ok(result.metadata, 'Should have metadata');
+      assert.strictEqual(result.metadata.iteration, 1, 'Should include iteration in metadata');
+      assert.strictEqual(result.metadata.candidateId, 3, 'Should include candidateId in metadata');
+      assert.strictEqual(result.metadata.dimension, 'what', 'Should include dimension in metadata');
+      assert.strictEqual(result.metadata.parentId, 0, 'Should include parentId in metadata');
+    });
+  });
 });
