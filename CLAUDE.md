@@ -104,6 +104,13 @@ Examples of honest responses:
 - Prefer functional programming patterns
 - Avoid mutation where possible
 
+### Key Architecture Documents
+- **[Streaming Parallel Architecture](docs/streaming-parallel-architecture.md)** - CRITICAL for implementing orchestrator
+  - Defines streaming parallel execution model
+  - Shows how to maximize async throughput
+  - Provides code patterns for Zone 1 & Zone 2 streaming
+  - Must reference when building beam search orchestrator
+
 ## Claude Usage Guidelines
 - Use `/estimate` before starting any non-trivial task
 - Track actual Claude interactions vs estimates
