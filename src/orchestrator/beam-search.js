@@ -95,8 +95,75 @@ async function processCandidateStream(
   };
 }
 
+/**
+ * Initial expansion (Iteration 0) - Generate N WHAT+HOW pairs with variation
+ * @param {string} userPrompt - Initial user prompt
+ * @param {Object} llmProvider - LLM provider instance
+ * @param {Object} imageGenProvider - Image generation provider instance
+ * @param {Object} visionProvider - Vision provider instance
+ * @param {Object} config - Configuration
+ * @param {number} config.beamWidth - Number of candidates to generate (N)
+ * @param {number} [config.temperature=0.7] - Temperature for stochastic variation
+ * @param {number} [config.alpha=0.7] - Scoring weight for alignment
+ * @returns {Promise<Array>} Array of N candidates
+ */
+async function initialExpansion(
+  userPrompt,
+  llmProvider,
+  imageGenProvider,
+  visionProvider,
+  config
+) {
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7 } = config;
+
+  // Generate N WHAT+HOW pairs in parallel with stochastic variation
+  const whatHowPairs = await Promise.all(
+    Array(N).fill().map(async () => {
+      // Generate WHAT and HOW in parallel for each candidate
+      const [what, how] = await Promise.all([
+        llmProvider.refinePrompt(userPrompt, {
+          dimension: 'what',
+          operation: 'expand',
+          temperature
+        }),
+        llmProvider.refinePrompt(userPrompt, {
+          dimension: 'how',
+          operation: 'expand',
+          temperature
+        })
+      ]);
+      return {
+        what: what.refinedPrompt,
+        how: how.refinedPrompt
+      };
+    })
+  );
+
+  // Stream all N candidates through the pipeline in parallel
+  const candidates = await Promise.all(
+    whatHowPairs.map(({ what, how }, i) =>
+      processCandidateStream(
+        what,
+        how,
+        llmProvider,
+        imageGenProvider,
+        visionProvider,
+        {
+          iteration: 0,
+          candidateId: i,
+          dimension: 'what', // First iteration refines WHAT
+          alpha
+        }
+      )
+    )
+  );
+
+  return candidates;
+}
+
 module.exports = {
   rankAndSelect,
   calculateTotalScore,
-  processCandidateStream
+  processCandidateStream,
+  initialExpansion
 };
