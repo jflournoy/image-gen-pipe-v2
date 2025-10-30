@@ -161,9 +161,102 @@ async function initialExpansion(
   return candidates;
 }
 
+/**
+ * Refinement iteration (Iteration 1+) - Generate children from top parents
+ * @param {Array} parents - Top M parent candidates from previous iteration
+ * @param {Object} llmProvider - LLM provider instance
+ * @param {Object} imageGenProvider - Image generation provider instance
+ * @param {Object} visionProvider - Vision provider instance
+ * @param {Object} critiqueGenProvider - Critique generator instance
+ * @param {Object} config - Configuration
+ * @param {number} config.beamWidth - Total candidates to generate (N)
+ * @param {number} config.keepTop - Number of parents (M)
+ * @param {number} [config.alpha=0.7] - Scoring weight for alignment
+ * @param {number} iteration - Current iteration number
+ * @returns {Promise<Array>} Array of N child candidates
+ */
+async function refinementIteration(
+  parents,
+  llmProvider,
+  imageGenProvider,
+  visionProvider,
+  critiqueGenProvider,
+  config,
+  iteration
+) {
+  const { beamWidth: N, keepTop: M, alpha = 0.7 } = config;
+  const expansionRatio = N / M;
+
+  // Determine dimension: odd iterations refine WHAT, even refine HOW
+  const dimension = iteration % 2 === 1 ? 'what' : 'how';
+
+  // Generate M critiques in parallel (one per parent)
+  const parentsWithCritiques = await Promise.all(
+    parents.map(async (parent) => {
+      const critique = await critiqueGenProvider.generateCritique(
+        parent.evaluation,
+        {
+          what: parent.whatPrompt,
+          how: parent.howPrompt,
+          combined: parent.combined
+        },
+        {
+          dimension,
+          iteration
+        }
+      );
+      return { ...parent, critique };
+    })
+  );
+
+  // Generate N total children (each parent generates expansionRatio children)
+  const allChildren = await Promise.all(
+    parentsWithCritiques.flatMap((parent, parentIdx) =>
+      Array(expansionRatio).fill().map(async (_, childIdx) => {
+        // Refine the selected dimension using critique
+        const refinedResult = await llmProvider.refinePrompt(
+          dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
+          {
+            operation: 'refine',
+            dimension,
+            critique: parent.critique
+          }
+        );
+
+        // Construct new prompts: refine selected dimension, inherit other
+        const whatPrompt = dimension === 'what'
+          ? refinedResult.refinedPrompt
+          : parent.whatPrompt;
+        const howPrompt = dimension === 'how'
+          ? refinedResult.refinedPrompt
+          : parent.howPrompt;
+
+        // Stream child through pipeline
+        return processCandidateStream(
+          whatPrompt,
+          howPrompt,
+          llmProvider,
+          imageGenProvider,
+          visionProvider,
+          {
+            iteration,
+            candidateId: parentIdx * expansionRatio + childIdx,
+            dimension,
+            parentId: parent.metadata.candidateId,
+            alpha
+          }
+        );
+      })
+    )
+  );
+
+  return allChildren;
+}
+
 module.exports = {
   rankAndSelect,
   calculateTotalScore,
   processCandidateStream,
-  initialExpansion
+  initialExpansion,
+  refinementIteration
 };

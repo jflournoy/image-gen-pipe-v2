@@ -490,4 +490,250 @@ describe('Beam Search Orchestrator', () => {
       assert.strictEqual(visionCallCount, 3, 'Should evaluate 3 images');
     });
   });
+
+  describe('refinementIteration', () => {
+    test('should generate critique for each parent in parallel', async () => {
+      const { refinementIteration } = require('../../src/orchestrator/beam-search.js');
+
+      let critiqueCallCount = 0;
+
+      const mockCritiqueGen = {
+        generateCritique: async (evaluation, prompts, options) => {
+          critiqueCallCount++;
+          return {
+            critique: `Critique ${critiqueCallCount}`,
+            recommendation: 'Improve this',
+            reason: 'Because',
+            dimension: options.dimension,
+            metadata: {}
+          };
+        }
+      };
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const parents = [
+        { whatPrompt: 'w1', howPrompt: 'h1', evaluation: {}, combined: 'c1', metadata: { candidateId: 0 } },
+        { whatPrompt: 'w2', howPrompt: 'h2', evaluation: {}, combined: 'c2', metadata: { candidateId: 1 } },
+        { whatPrompt: 'w3', howPrompt: 'h3', evaluation: {}, combined: 'c3', metadata: { candidateId: 2 } }
+      ];
+
+      const config = { beamWidth: 9, keepTop: 3 };
+
+      await refinementIteration(
+        parents,
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        mockCritiqueGen,
+        config,
+        1 // iteration
+      );
+
+      assert.strictEqual(critiqueCallCount, 3, 'Should generate critique for each parent');
+    });
+
+    test('should generate N/M children per parent', async () => {
+      const { refinementIteration } = require('../../src/orchestrator/beam-search.js');
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix this',
+          recommendation: 'Do that',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const parents = [
+        { whatPrompt: 'w1', howPrompt: 'h1', evaluation: {}, combined: 'c1', metadata: { candidateId: 0 } },
+        { whatPrompt: 'w2', howPrompt: 'h2', evaluation: {}, combined: 'c2', metadata: { candidateId: 1 } },
+        { whatPrompt: 'w3', howPrompt: 'h3', evaluation: {}, combined: 'c3', metadata: { candidateId: 2 } }
+      ];
+
+      const config = { beamWidth: 9, keepTop: 3 }; // expansionRatio = 9/3 = 3
+
+      const results = await refinementIteration(
+        parents,
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        mockCritiqueGen,
+        config,
+        1
+      );
+
+      assert.strictEqual(results.length, 9, 'Should generate N=9 total children');
+    });
+
+    test('should alternate dimensions (odd=WHAT, even=HOW)', async () => {
+      const { refinementIteration } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedDimensions = [];
+
+      const mockCritiqueGen = {
+        generateCritique: async (evaluation, prompts, options) => {
+          capturedDimensions.push(options.dimension);
+          return {
+            critique: 'Fix', recommendation: 'Do', reason: 'Because',
+            dimension: options.dimension, metadata: {}
+          };
+        }
+      };
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const parents = [
+        { whatPrompt: 'w', howPrompt: 'h', evaluation: {}, combined: 'c', metadata: { candidateId: 0 } }
+      ];
+
+      const config = { beamWidth: 3, keepTop: 1 };
+
+      // Iteration 1 (odd) should refine WHAT
+      await refinementIteration(parents, mockLLM, mockImageGen, mockVision, mockCritiqueGen, config, 1);
+      assert.strictEqual(capturedDimensions[0], 'what', 'Odd iteration should refine WHAT');
+
+      capturedDimensions = [];
+
+      // Iteration 2 (even) should refine HOW
+      await refinementIteration(parents, mockLLM, mockImageGen, mockVision, mockCritiqueGen, config, 2);
+      assert.strictEqual(capturedDimensions[0], 'how', 'Even iteration should refine HOW');
+    });
+
+    test('should inherit non-refined dimension from parent', async () => {
+      const { refinementIteration } = require('../../src/orchestrator/beam-search.js');
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix', recommendation: 'Do', reason: 'Because',
+          dimension: 'what', metadata: {}
+        })
+      };
+
+      let refineCallCount = 0;
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          refineCallCount++;
+          return { refinedPrompt: `refined_${refineCallCount}`, metadata: {} };
+        },
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const parents = [
+        { whatPrompt: 'original_what', howPrompt: 'original_how', evaluation: {}, combined: 'c', metadata: { candidateId: 0 } }
+      ];
+
+      const config = { beamWidth: 2, keepTop: 1 };
+
+      const results = await refinementIteration(
+        parents, mockLLM, mockImageGen, mockVision, mockCritiqueGen, config, 1 // Refine WHAT
+      );
+
+      // Children should have refined WHAT but inherit parent's HOW
+      results.forEach(child => {
+        assert.ok(child.whatPrompt.startsWith('refined_'), 'WHAT should be refined');
+        assert.strictEqual(child.howPrompt, 'original_how', 'HOW should be inherited from parent');
+      });
+    });
+
+    test('should track parentId in metadata', async () => {
+      const { refinementIteration } = require('../../src/orchestrator/beam-search.js');
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix', recommendation: 'Do', reason: 'Because',
+          dimension: 'what', metadata: {}
+        })
+      };
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80, aestheticScore: 7,
+          analysis: '', strengths: [], weaknesses: [], metadata: {}
+        })
+      };
+
+      const parents = [
+        { whatPrompt: 'w1', howPrompt: 'h1', evaluation: {}, combined: 'c1', metadata: { candidateId: 10 } },
+        { whatPrompt: 'w2', howPrompt: 'h2', evaluation: {}, combined: 'c2', metadata: { candidateId: 20 } }
+      ];
+
+      const config = { beamWidth: 4, keepTop: 2 }; // 2 children per parent
+
+      const results = await refinementIteration(
+        parents, mockLLM, mockImageGen, mockVision, mockCritiqueGen, config, 1
+      );
+
+      // First 2 children should have parent 10, next 2 should have parent 20
+      assert.strictEqual(results[0].metadata.parentId, 10, 'Child 0 parent should be 10');
+      assert.strictEqual(results[1].metadata.parentId, 10, 'Child 1 parent should be 10');
+      assert.strictEqual(results[2].metadata.parentId, 20, 'Child 2 parent should be 20');
+      assert.strictEqual(results[3].metadata.parentId, 20, 'Child 3 parent should be 20');
+    });
+  });
 });
