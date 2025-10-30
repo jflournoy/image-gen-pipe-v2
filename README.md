@@ -173,6 +173,7 @@ This is a TypeScript rewrite of the original Python implementation:
 
 - [Development Guide](CLAUDE.md) - AI-assisted development workflow
 - [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) - Complete WHAT/HOW refinement workflow
+- [Streaming Parallel Architecture](docs/streaming-parallel-architecture.md) - Performance-optimized execution model for orchestrator
 - [Provider Storage Spec](docs/PROVIDER_STORAGE_SPEC.md) - Local storage structure and conventions
 - Software Requirements Specification (Coming Soon) - Complete technical spec
 - Architecture Guide (Coming Soon) - System design details
