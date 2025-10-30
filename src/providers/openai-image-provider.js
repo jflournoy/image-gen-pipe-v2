@@ -3,7 +3,16 @@
  *
  * Real OpenAI API implementation for image generation.
  * Uses DALL-E 3 to generate images from text prompts.
- * Supports local storage with beam search directory structure.
+ * Supports local storage with flat session directory structure.
+ *
+ * Storage Structure (flat):
+ *   output/sessions/<sessionId>/
+ *     iter0-cand0.png
+ *     iter0-cand1.png
+ *     iter1-cand0.png
+ *     metadata.json
+ *
+ * Related: Issue #9 - Flat image storage refactoring
  */
 
 const OpenAI = require('openai');
@@ -67,13 +76,14 @@ class OpenAIImageProvider {
   }
 
   /**
-   * Build the directory path for a candidate
+   * Build the directory path for a candidate (DEPRECATED - use _buildFlatSessionPath)
    * @param {Object} beamSearch - Beam search context
    * @param {number} beamSearch.iteration - Zero-indexed iteration number
    * @param {number} beamSearch.candidateId - Zero-indexed candidate ID
    * @param {string} beamSearch.dimension - Refinement dimension (what/how)
    * @returns {string} Full directory path
    * @private
+   * @deprecated Use _buildFlatSessionPath for flat storage structure
    */
   _buildCandidatePath(beamSearch) {
     const { iteration, candidateId, dimension } = beamSearch;
@@ -81,6 +91,49 @@ class OpenAIImageProvider {
     const iterDir = `iter-${String(iteration).padStart(2, '0')}`;
     const candDir = `candidate-${String(candidateId).padStart(2, '0')}-${dimension}`;
     return path.join(this.outputDir, date, this.sessionId, iterDir, candDir);
+  }
+
+  /**
+   * Build flat filename for image: iter{N}-cand{M}.png
+   * @param {number} iteration - Iteration number
+   * @param {number} candidateId - Candidate ID
+   * @returns {string} Filename (e.g., "iter0-cand0.png")
+   * @private
+   */
+  _buildFlatImageFilename(iteration, candidateId) {
+    return `iter${iteration}-cand${candidateId}.png`;
+  }
+
+  /**
+   * Build flat session directory path (no iteration subdirectories)
+   * @param {Object} beamSearch - Beam search context
+   * @returns {string} Session directory path
+   * @private
+   */
+  _buildFlatSessionPath(beamSearch) {
+    return path.join(this.outputDir, 'sessions', this.sessionId);
+  }
+
+  /**
+   * Build full path to flat image file
+   * @param {Object} beamSearch - Beam search context
+   * @returns {Promise<string>} Full path to image file
+   * @private
+   */
+  async _buildFlatImagePath(beamSearch) {
+    const { iteration, candidateId } = beamSearch;
+    const sessionDir = this._buildFlatSessionPath(beamSearch);
+    const filename = this._buildFlatImageFilename(iteration, candidateId);
+    return path.join(sessionDir, filename);
+  }
+
+  /**
+   * Build path to metadata.json file
+   * @returns {string} Path to metadata.json
+   * @private
+   */
+  _buildMetadataPath() {
+    return path.join(this.outputDir, 'sessions', this.sessionId, 'metadata.json');
   }
 
   /**
@@ -114,13 +167,14 @@ class OpenAIImageProvider {
   }
 
   /**
-   * Save candidate files to disk
+   * Save candidate files to disk (DEPRECATED - use _saveFlatImage)
    * @param {string} candidatePath - Directory path for candidate
    * @param {string} url - Image URL
    * @param {string} prompt - Text prompt
    * @param {Object} score - Scoring data (optional)
    * @returns {Promise<string>} Local path to saved image
    * @private
+   * @deprecated Use _saveFlatImage for flat storage structure
    */
   async _saveCandidateFiles(candidatePath, url, prompt, score = null) {
     // Create directory
@@ -139,6 +193,28 @@ class OpenAIImageProvider {
       const scorePath = path.join(candidatePath, 'score.json');
       await fs.writeFile(scorePath, JSON.stringify(score, null, 2), 'utf8');
     }
+
+    return imagePath;
+  }
+
+  /**
+   * Save image to flat storage structure
+   * @param {Object} beamSearch - Beam search context
+   * @param {string} url - Image URL
+   * @param {string} prompt - Text prompt
+   * @returns {Promise<string>} Local path to saved image
+   * @private
+   */
+  async _saveFlatImage(beamSearch, url, prompt) {
+    // Build paths
+    const sessionDir = this._buildFlatSessionPath(beamSearch);
+    const imagePath = await this._buildFlatImagePath(beamSearch);
+
+    // Create session directory
+    await fs.mkdir(sessionDir, { recursive: true });
+
+    // Download and save image with flat filename
+    await this._downloadImage(url, imagePath);
 
     return imagePath;
   }
@@ -222,8 +298,8 @@ class OpenAIImageProvider {
       if (this.saveLocally && iteration !== undefined && candidateId !== undefined && dimension) {
         try {
           const beamSearch = { iteration, candidateId, dimension };
-          const candidatePath = this._buildCandidatePath(beamSearch);
-          const localPath = await this._saveCandidateFiles(candidatePath, url, revisedPrompt);
+          // Use flat storage structure (new default)
+          const localPath = await this._saveFlatImage(beamSearch, url, revisedPrompt);
 
           // Add local path and beam search context to result
           result.localPath = localPath;
