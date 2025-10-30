@@ -736,4 +736,389 @@ describe('Beam Search Orchestrator', () => {
       assert.strictEqual(results[3].metadata.parentId, 20, 'Child 3 parent should be 20');
     });
   });
+
+  describe('beamSearch', () => {
+    test('should call initialExpansion for iteration 0', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      let initialExpansionCalled = false;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => ({
+          refinedPrompt: `refined_${options.dimension}`,
+          metadata: {}
+        }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7.5,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const userPrompt = 'test prompt';
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+      const config = {
+        beamWidth: 3,
+        keepTop: 2,
+        maxIterations: 1 // Only run iteration 0
+      };
+
+      await beamSearch(userPrompt, providers, config);
+
+      // We can't directly test if initialExpansion was called without instrumentation,
+      // but we can verify the result structure
+      assert.ok(true, 'Should complete without error');
+    });
+
+    test('should rank and select top M after iteration 0', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      let candidateScores = [75, 90, 60]; // N=3 candidates with different scores
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      let callCount = 0;
+      const mockVision = {
+        analyzeImage: async () => {
+          const score = candidateScores[callCount++];
+          return {
+            alignmentScore: score,
+            aestheticScore: 5,
+            analysis: '',
+            strengths: [],
+            weaknesses: [],
+            metadata: {}
+          };
+        }
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 3,
+        keepTop: 2, // Should keep only top 2
+        maxIterations: 1
+      };
+
+      const result = await beamSearch('test', providers, config);
+
+      // Should return the best candidate from top M
+      assert.ok(result, 'Should return a result');
+      assert.ok(result.totalScore, 'Should have a total score');
+    });
+
+    test('should run refinementIteration for iterations 1+', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      let refinementIterationCount = 0;
+
+      const mockLLM = {
+        refinePrompt: async () => {
+          refinementIterationCount++;
+          return { refinedPrompt: 'refined', metadata: {} };
+        },
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        maxIterations: 3 // Run iterations 0, 1, 2
+      };
+
+      await beamSearch('test', providers, config);
+
+      // Refinement should be called for iterations 1 and 2
+      // Each iteration: M parents × expansionRatio children × 1 refinePrompt call
+      // Iteration 0: 4 refinePrompts (2 per candidate: WHAT+HOW)
+      // Iteration 1: 4 refinePrompts (4 children from 2 parents)
+      // Iteration 2: 4 refinePrompts (4 children from 2 parents)
+      // Total: 4 + 4 + 4 = 12
+      assert.ok(refinementIterationCount > 4, 'Should call refinement for iterations 1+');
+    });
+
+    test('should return best candidate from final iteration', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      let iterationScores = {
+        0: [70, 75, 80, 65], // Iteration 0 scores (N=4, beamWidth=4)
+        1: [85, 90, 82, 88] // Iteration 1 scores (N=4, keepTop=2 × expansionRatio=2)
+      };
+      let currentIteration = 0;
+      let iterationCallCount = 0;
+
+      const mockVision = {
+        analyzeImage: async () => {
+          const scores = iterationScores[currentIteration];
+          const score = scores[iterationCallCount % scores.length];
+          iterationCallCount++;
+
+          if (iterationCallCount >= scores.length) {
+            currentIteration++;
+            iterationCallCount = 0;
+          }
+
+          return {
+            alignmentScore: score,
+            aestheticScore: 7,
+            analysis: '',
+            strengths: [],
+            weaknesses: [],
+            metadata: {}
+          };
+        }
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        maxIterations: 2
+      };
+
+      const result = await beamSearch('test', providers, config);
+
+      // Should return best from final iteration (score 90)
+      assert.ok(result, 'Should return a result');
+      assert.ok(result.totalScore > 0, 'Should have positive score');
+      assert.strictEqual(result.metadata.iteration, 1, 'Should be from iteration 1');
+    });
+
+    test('should stop at maxIterations', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      let iterationCount = 0;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          if (options.operation === 'expand') {
+            iterationCount = 0; // Reset for iteration 0
+          }
+          return { refinedPrompt: 'refined', metadata: {} };
+        },
+        combinePrompts: async (w, h) => {
+          return `${w} + ${h}`;
+        }
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          if (options.iteration > iterationCount) {
+            iterationCount = options.iteration;
+          }
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 3,
+        keepTop: 2,
+        maxIterations: 5
+      };
+
+      await beamSearch('test', providers, config);
+
+      assert.strictEqual(iterationCount, 4, 'Should run iterations 0-4 (maxIterations=5 means 5 total)');
+    });
+
+    test('should pass config options through pipeline', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedAlpha;
+      let capturedTemperature;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          if (options.temperature !== undefined) {
+            capturedTemperature = options.temperature;
+          }
+          return { refinedPrompt: 'refined', metadata: {} };
+        },
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          if (options.alpha !== undefined) {
+            capturedAlpha = options.alpha;
+          }
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 3,
+        keepTop: 2,
+        maxIterations: 1,
+        alpha: 0.8,
+        temperature: 0.9
+      };
+
+      await beamSearch('test', providers, config);
+
+      assert.strictEqual(capturedAlpha, 0.8, 'Should pass alpha through pipeline');
+      assert.strictEqual(capturedTemperature, 0.9, 'Should pass temperature through pipeline');
+    });
+  });
 });

@@ -185,7 +185,7 @@ async function refinementIteration(
   iteration
 ) {
   const { beamWidth: N, keepTop: M, alpha = 0.7 } = config;
-  const expansionRatio = N / M;
+  const expansionRatio = Math.floor(N / M);
 
   // Determine dimension: odd iterations refine WHAT, even refine HOW
   const dimension = iteration % 2 === 1 ? 'what' : 'how';
@@ -253,10 +253,64 @@ async function refinementIteration(
   return allChildren;
 }
 
+/**
+ * Main beam search orchestrator
+ * @param {string} userPrompt - Initial user prompt
+ * @param {Object} providers - Provider instances
+ * @param {Object} providers.llm - LLM provider instance
+ * @param {Object} providers.imageGen - Image generation provider instance
+ * @param {Object} providers.vision - Vision provider instance
+ * @param {Object} providers.critiqueGen - Critique generator instance
+ * @param {Object} config - Configuration
+ * @param {number} config.beamWidth - Number of candidates per iteration (N)
+ * @param {number} config.keepTop - Number of top candidates to keep (M)
+ * @param {number} config.maxIterations - Maximum number of iterations to run
+ * @param {number} [config.alpha=0.7] - Scoring weight for alignment
+ * @param {number} [config.temperature=0.7] - Temperature for stochastic variation
+ * @returns {Promise<Object>} Best candidate after all iterations
+ */
+async function beamSearch(userPrompt, providers, config) {
+  const { llm, imageGen, vision, critiqueGen } = providers;
+  const { maxIterations, beamWidth, keepTop } = config;
+
+  // Iteration 0: Initial expansion
+  let candidates = await initialExpansion(
+    userPrompt,
+    llm,
+    imageGen,
+    vision,
+    config
+  );
+
+  // Rank and select top M candidates
+  let topCandidates = rankAndSelect(candidates, keepTop);
+
+  // Iterations 1+: Refinement
+  for (let iteration = 1; iteration < maxIterations; iteration++) {
+    // Generate N children from M parents
+    candidates = await refinementIteration(
+      topCandidates,
+      llm,
+      imageGen,
+      vision,
+      critiqueGen,
+      config,
+      iteration
+    );
+
+    // Rank and select top M for next iteration
+    topCandidates = rankAndSelect(candidates, keepTop);
+  }
+
+  // Return best candidate from final iteration
+  return topCandidates[0];
+}
+
 module.exports = {
   rankAndSelect,
   calculateTotalScore,
   processCandidateStream,
   initialExpansion,
-  refinementIteration
+  refinementIteration,
+  beamSearch
 };
