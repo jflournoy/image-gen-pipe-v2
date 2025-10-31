@@ -31,6 +31,8 @@ const OpenAILLMProvider = require('./src/providers/openai-llm-provider.js');
 const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
 const CritiqueGenerator = require('./src/services/critique-generator.js');
+const MetadataTracker = require('./src/services/metadata-tracker.js');
+const crypto = require('crypto');
 
 /**
  * Custom logging wrapper to track beam search progress
@@ -143,12 +145,31 @@ async function demo() {
 
   // Configuration
   const userPrompt = 'a serene mountain landscape at sunset';
+  const sessionId = crypto.randomUUID();
+
+  // Initialize metadata tracker
+  console.log(`📊 Initializing metadata tracker (session: ${sessionId})...`);
+  const metadataTracker = new MetadataTracker({
+    sessionId,
+    userPrompt,
+    config: {
+      beamWidth: 4,
+      keepTop: 2,
+      maxIterations: 3,
+      alpha: 0.7,
+      temperature: 0.8
+    }
+  });
+  await metadataTracker.initialize();
+  console.log('✅ Metadata tracker ready');
+
   const config = {
     beamWidth: 4,        // N = 4 candidates
     keepTop: 2,          // M = 2 survivors
     maxIterations: 3,    // Run 3 iterations (0, 1, 2)
     alpha: 0.7,          // 70% alignment, 30% aesthetic
-    temperature: 0.8     // Stochastic variation for diversity
+    temperature: 0.8,    // Stochastic variation for diversity
+    metadataTracker      // Add tracker to config
   };
 
   console.log('\n📝 User Prompt: "' + userPrompt + '"');
@@ -202,6 +223,21 @@ async function demo() {
   console.log('\n⏱️  Performance:');
   console.log(`   • Total time: ${duration}s`);
 
+  console.log('\n📊 Session Metadata:');
+  console.log(`   • Session ID: ${sessionId}`);
+  console.log(`   • Metadata saved to: output/sessions/${sessionId}/metadata.json`);
+  console.log(`   • Images saved to: output/sessions/${sessionId}/`);
+
+  // Display lineage info
+  const metadata = await metadataTracker.getMetadata();
+  if (metadata.lineage) {
+    console.log('\n🌳 Winner Lineage (evolution path):');
+    metadata.lineage.forEach((node, idx) => {
+      const prefix = idx === 0 ? '   ├─' : '   └─';
+      console.log(`${prefix} Iteration ${node.iteration}, Candidate ${node.candidateId}`);
+    });
+  }
+
   console.log('\n' + '='.repeat(80));
   console.log('✅ Beam search completed successfully!');
   console.log('\n💡 Key Observations:');
@@ -209,6 +245,7 @@ async function demo() {
   console.log('   • Iteration 1: Refined WHAT (content), kept top 2');
   console.log('   • Iteration 2: Refined HOW (style), kept top 2');
   console.log('   • Winner emerged through iterative refinement + selection pressure');
+  console.log('   • Complete metadata and lineage tracked in metadata.json');
   console.log('='.repeat(80));
   console.log();
 }
