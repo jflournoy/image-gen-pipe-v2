@@ -267,11 +267,12 @@ async function refinementIteration(
  * @param {number} config.maxIterations - Maximum number of iterations to run
  * @param {number} [config.alpha=0.7] - Scoring weight for alignment
  * @param {number} [config.temperature=0.7] - Temperature for stochastic variation
+ * @param {Object} [config.metadataTracker] - Optional metadata tracker instance
  * @returns {Promise<Object>} Best candidate after all iterations
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen } = providers;
-  const { maxIterations, keepTop } = config;
+  const { maxIterations, keepTop, metadataTracker } = config;
 
   // Iteration 0: Initial expansion
   let candidates = await initialExpansion(
@@ -284,6 +285,15 @@ async function beamSearch(userPrompt, providers, config) {
 
   // Rank and select top M candidates
   let topCandidates = rankAndSelect(candidates, keepTop);
+
+  // Record iteration 0 candidates if tracker provided
+  if (metadataTracker) {
+    await Promise.all(candidates.map(candidate =>
+      metadataTracker.recordCandidate(candidate, {
+        survived: topCandidates.includes(candidate)
+      })
+    ));
+  }
 
   // Iterations 1+: Refinement
   for (let iteration = 1; iteration < maxIterations; iteration++) {
@@ -300,10 +310,29 @@ async function beamSearch(userPrompt, providers, config) {
 
     // Rank and select top M for next iteration
     topCandidates = rankAndSelect(candidates, keepTop);
+
+    // Record iteration candidates if tracker provided
+    if (metadataTracker) {
+      await Promise.all(candidates.map(candidate =>
+        metadataTracker.recordCandidate(candidate, {
+          survived: topCandidates.includes(candidate)
+        })
+      ));
+    }
+  }
+
+  // Mark final winner if tracker provided
+  const winner = topCandidates[0];
+  if (metadataTracker) {
+    await metadataTracker.markFinalWinner({
+      iteration: winner.metadata.iteration,
+      candidateId: winner.metadata.candidateId,
+      totalScore: winner.totalScore
+    });
   }
 
   // Return best candidate from final iteration
-  return topCandidates[0];
+  return winner;
 }
 
 module.exports = {
