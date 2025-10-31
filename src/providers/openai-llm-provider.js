@@ -170,7 +170,13 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
 
     const systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style.
 
-Do not lose any important details from either prompt. Maintain a richly detailed and concise prompt that fully captures both prompts' meaning and intent.
+Important guidelines:
+- Do NOT lose any important details from either prompt
+- Preserve ALL semantic content from both WHAT and HOW
+- Create a natural, flowing description that integrates content and style seamlessly
+- Maintain specificity - don't generalize or abstract the details
+- Ensure the combined prompt would generate an image matching both inputs
+- Keep the prompt richly detailed yet concise
 
 Output only the combined prompt, with no preamble, explanations, or commentary.`;
 
@@ -220,7 +226,12 @@ Focus on:
 - Setting and environment (where)
 - Mood and atmosphere (emotional content)
 
-Use immersive, sensory-rich prose. Preserve the original intent while adding vivid detail.
+Important guidelines:
+- Use immersive, sensory-rich prose
+- Preserve the original intent while adding vivid detail
+- When generating multiple expansions, introduce VARIETY in your interpretations
+- Explore different aspects, angles, or moments that honor the core concept
+- Be specific and concrete rather than generic
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       } else {
@@ -236,7 +247,12 @@ Focus on:
 - Color palette and saturation
 - Visual techniques (bokeh, HDR, long exposure)
 
-Use concrete, descriptive language referencing photographic or cinematic techniques.
+Important guidelines:
+- Use concrete, descriptive language referencing photographic or cinematic techniques
+- When generating multiple expansions, introduce VARIETY in your style choices
+- Explore different lighting scenarios, compositions, or artistic approaches
+- Be specific about technical choices rather than using vague terms
+- Consider how style choices interact with and enhance the content
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       }
@@ -253,7 +269,12 @@ The critique may suggest:
 - Actions or settings that need clarification
 - Elements to emphasize or de-emphasize
 
-Focus on content (WHAT) not style (HOW). Make targeted improvements based on the specific critique.
+Important guidelines:
+- DIRECTLY ADDRESS the specific issues raised in the critique
+- Focus on content (WHAT) not style (HOW)
+- Make measurable improvements that would increase alignment scores
+- Preserve effective elements from the original prompt
+- Be specific about what changed and why it addresses the critique
 
 Output ONLY the refined prompt, no preamble or commentary.`;
       } else {
@@ -267,7 +288,12 @@ The critique may suggest:
 - Color palette modifications
 - Atmosphere or mood enhancements
 
-Focus on style (HOW) not content (WHAT). Make targeted improvements based on the specific critique.
+Important guidelines:
+- DIRECTLY ADDRESS the specific issues raised in the critique
+- Focus on style (HOW) not content (WHAT)
+- Make measurable improvements that would increase aesthetic scores
+- Preserve effective style elements from the original prompt
+- Be specific about technical changes (e.g., "golden hour lighting" not just "better lighting")
 
 Output ONLY the refined prompt, no preamble or commentary.`;
       }
