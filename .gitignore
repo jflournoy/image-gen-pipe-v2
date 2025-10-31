@@ -101,3 +101,4 @@ test-storage-output/
 # - internal/ (project decisions)
 # - plans/ (project planning).history/
 .tdd-session-*.md
+.history/

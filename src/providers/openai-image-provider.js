@@ -106,11 +106,11 @@ class OpenAIImageProvider {
 
   /**
    * Build flat session directory path (no iteration subdirectories)
-   * @param {Object} beamSearch - Beam search context
+   * @param {Object} _beamSearch - Beam search context (not used)
    * @returns {string} Session directory path
    * @private
    */
-  _buildFlatSessionPath(beamSearch) {
+  _buildFlatSessionPath(_beamSearch) {
     return path.join(this.outputDir, 'sessions', this.sessionId);
   }
 
@@ -201,11 +201,11 @@ class OpenAIImageProvider {
    * Save image to flat storage structure
    * @param {Object} beamSearch - Beam search context
    * @param {string} url - Image URL
-   * @param {string} prompt - Text prompt
+   * @param {string} _prompt - Text prompt (not currently used)
    * @returns {Promise<string>} Local path to saved image
    * @private
    */
-  async _saveFlatImage(beamSearch, url, prompt) {
+  async _saveFlatImage(beamSearch, url, _prompt) {
     // Build paths
     const sessionDir = this._buildFlatSessionPath(beamSearch);
     const imagePath = await this._buildFlatImagePath(beamSearch);

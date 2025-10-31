@@ -164,7 +164,7 @@ describe('Beam Search Orchestrator', () => {
       };
 
       const mockVision = {
-        analyzeImage: async (imageUrl, prompt) => ({
+        analyzeImage: async (_imageUrl, _prompt) => ({
           alignmentScore: 85,
           aestheticScore: 7.5,
           analysis: 'Good image',
@@ -657,7 +657,7 @@ describe('Beam Search Orchestrator', () => {
 
       let refineCallCount = 0;
       const mockLLM = {
-        refinePrompt: async (prompt, options) => {
+        refinePrompt: async (_prompt, _options) => {
           refineCallCount++;
           return { refinedPrompt: `refined_${refineCallCount}`, metadata: {} };
         },
@@ -740,8 +740,6 @@ describe('Beam Search Orchestrator', () => {
   describe('beamSearch', () => {
     test('should call initialExpansion for iteration 0', async () => {
       const { beamSearch } = require('../../src/orchestrator/beam-search.js');
-
-      let initialExpansionCalled = false;
 
       const mockLLM = {
         refinePrompt: async (prompt, options) => ({

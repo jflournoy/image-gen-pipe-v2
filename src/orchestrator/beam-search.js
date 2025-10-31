@@ -271,7 +271,7 @@ async function refinementIteration(
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen } = providers;
-  const { maxIterations, beamWidth, keepTop } = config;
+  const { maxIterations, keepTop } = config;
 
   // Iteration 0: Initial expansion
   let candidates = await initialExpansion(
