@@ -46,7 +46,6 @@ describe('Flat Image Storage', () => {
 
       // Expected structure: output/sessions/test-session/
       // NOT: output/sessions/test-session/iteration-0/candidate-0/
-      const expectedSessionPath = path.join(testOutputDir, 'sessions', 'test-session');
 
       // For now, just verify provider is configured correctly
       assert.strictEqual(provider.sessionId, 'test-session');
