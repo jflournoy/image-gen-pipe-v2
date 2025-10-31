@@ -32,7 +32,6 @@ const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
 const CritiqueGenerator = require('./src/services/critique-generator.js');
 const MetadataTracker = require('./src/services/metadata-tracker.js');
-const crypto = require('crypto');
 
 /**
  * Custom logging wrapper to track beam search progress
@@ -129,11 +128,22 @@ async function demo() {
     process.exit(1);
   }
 
+  // Generate session ID with date and time
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const sessionId = `${dateStr}-${hours}${minutes}${seconds}`;
+
+  // Configuration
+  const userPrompt = 'a serene mountain landscape at sunset';
+
   // Initialize providers
   console.log('\n🔧 Initializing providers...');
   const providers = {
     llm: new OpenAILLMProvider(process.env.OPENAI_API_KEY),
-    imageGen: new OpenAIImageProvider(process.env.OPENAI_API_KEY),
+    imageGen: new OpenAIImageProvider(process.env.OPENAI_API_KEY, { sessionId }),
     vision: new OpenAIVisionProvider(process.env.OPENAI_API_KEY),
     critiqueGen: new CritiqueGenerator({ apiKey: process.env.OPENAI_API_KEY })
   };
@@ -142,10 +152,6 @@ async function demo() {
   // Wrap providers with logging
   const logger = new BeamSearchLogger(providers);
   const wrappedProviders = logger.wrapProviders();
-
-  // Configuration
-  const userPrompt = 'a serene mountain landscape at sunset';
-  const sessionId = crypto.randomUUID();
 
   // Initialize metadata tracker
   console.log(`📊 Initializing metadata tracker (session: ${sessionId})...`);
