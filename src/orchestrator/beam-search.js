@@ -268,11 +268,13 @@ async function refinementIteration(
  * @param {number} [config.alpha=0.7] - Scoring weight for alignment
  * @param {number} [config.temperature=0.7] - Temperature for stochastic variation
  * @param {Object} [config.metadataTracker] - Optional metadata tracker instance
+ * @param {Function} [config.onIterationComplete] - Optional callback after each iteration
+ * @param {Function} [config.onCandidateProcessed] - Optional callback for each candidate
  * @returns {Promise<Object>} Best candidate after all iterations
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen } = providers;
-  const { maxIterations, keepTop, metadataTracker } = config;
+  const { maxIterations, keepTop, metadataTracker, onIterationComplete, onCandidateProcessed } = config;
 
   // Iteration 0: Initial expansion
   let candidates = await initialExpansion(
@@ -282,6 +284,11 @@ async function beamSearch(userPrompt, providers, config) {
     vision,
     config
   );
+
+  // Notify about processed candidates (optional callback)
+  if (onCandidateProcessed) {
+    candidates.forEach(candidate => onCandidateProcessed(candidate));
+  }
 
   // Rank and select top M candidates
   let topCandidates = rankAndSelect(candidates, keepTop);
@@ -293,6 +300,15 @@ async function beamSearch(userPrompt, providers, config) {
         survived: topCandidates.includes(candidate)
       })
     ));
+  }
+
+  // Notify iteration complete (optional callback)
+  if (onIterationComplete) {
+    onIterationComplete({
+      iteration: 0,
+      candidates,
+      topCandidates
+    });
   }
 
   // Iterations 1+: Refinement
@@ -308,6 +324,11 @@ async function beamSearch(userPrompt, providers, config) {
       iteration
     );
 
+    // Notify about processed candidates (optional callback)
+    if (onCandidateProcessed) {
+      candidates.forEach(candidate => onCandidateProcessed(candidate));
+    }
+
     // Rank and select top M for next iteration
     topCandidates = rankAndSelect(candidates, keepTop);
 
@@ -318,6 +339,15 @@ async function beamSearch(userPrompt, providers, config) {
           survived: topCandidates.includes(candidate)
         })
       ));
+    }
+
+    // Notify iteration complete (optional callback)
+    if (onIterationComplete) {
+      onIterationComplete({
+        iteration,
+        candidates,
+        topCandidates
+      });
     }
   }
 
