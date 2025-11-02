@@ -5,6 +5,24 @@
 
 import express from 'express';
 import { randomUUID } from 'node:crypto';
+import { WebSocketServer } from 'ws';
+
+// Store WebSocket connections by jobId
+let jobSubscriptions = new Map();
+let wss = null;
+
+/**
+ * Reset WebSocket state (useful for testing)
+ * @private
+ */
+export function _resetWebSocketState() {
+  jobSubscriptions.clear();
+  if (wss) {
+    wss.clients.forEach(client => client.close());
+    wss.close();
+    wss = null;
+  }
+}
 
 /**
  * Create and configure Express application
@@ -45,6 +63,81 @@ export function createApp() {
   });
 
   return app;
+}
+
+/**
+ * Attach WebSocket server to existing HTTP server
+ * @param {import('http').Server} server - HTTP server instance
+ * @returns {WebSocketServer} WebSocket server instance
+ */
+export function attachWebSocket(server) {
+  // Close existing WebSocket server if any
+  if (wss) {
+    wss.clients.forEach(client => client.terminate());
+    wss.close();
+  }
+
+  wss = new WebSocketServer({ server });
+
+  wss.on('connection', (ws) => {
+    let currentJobId = null;
+
+    ws.on('message', (data) => {
+      try {
+        const message = JSON.parse(data.toString());
+
+        if (message.type === 'subscribe' && message.jobId) {
+          currentJobId = message.jobId;
+
+          // Add this connection to the job's subscription list
+          if (!jobSubscriptions.has(currentJobId)) {
+            jobSubscriptions.set(currentJobId, new Set());
+          }
+          jobSubscriptions.get(currentJobId).add(ws);
+
+          // Send confirmation
+          ws.send(JSON.stringify({
+            type: 'subscribed',
+            jobId: currentJobId
+          }));
+        }
+      } catch (error) {
+        console.error('Error parsing WebSocket message:', error);
+      }
+    });
+
+    ws.on('close', () => {
+      // Clean up subscription when connection closes
+      if (currentJobId && jobSubscriptions.has(currentJobId)) {
+        jobSubscriptions.get(currentJobId).delete(ws);
+        if (jobSubscriptions.get(currentJobId).size === 0) {
+          jobSubscriptions.delete(currentJobId);
+        }
+      }
+    });
+  });
+
+  return wss;
+}
+
+/**
+ * Emit progress update to all subscribers of a job
+ * @param {string} jobId - Job identifier
+ * @param {object} progressData - Progress data to send
+ */
+export function emitProgress(jobId, progressData) {
+  if (!jobSubscriptions.has(jobId)) {
+    return; // No subscribers for this job
+  }
+
+  const subscribers = jobSubscriptions.get(jobId);
+  const message = JSON.stringify(progressData);
+
+  subscribers.forEach((ws) => {
+    if (ws.readyState === 1) { // WebSocket.OPEN = 1
+      ws.send(message);
+    }
+  });
 }
 
 /**
