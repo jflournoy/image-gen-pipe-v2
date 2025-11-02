@@ -6,6 +6,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
+import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
 
 // Store WebSocket connections by jobId
 let jobSubscriptions = new Map();
@@ -41,7 +42,7 @@ export function createApp() {
 
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature } = req.body;
 
     // Validate required parameters
     if (!prompt) {
@@ -53,13 +54,38 @@ export function createApp() {
     // Generate unique job ID
     const jobId = randomUUID();
 
-    // TODO: Actually start beam search job in background
-    // For now, just return job ID and status
+    // Start beam search job in background (non-blocking)
+    startBeamSearchJob(jobId, {
+      prompt,
+      n,
+      m,
+      iterations,
+      alpha,
+      temperature
+    }).catch(error => {
+      console.error(`Error in beam search job ${jobId}:`, error);
+    });
+
+    // Return immediately with job ID
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha }
+      params: { prompt, n, m, iterations, alpha, temperature }
     });
+  });
+
+  // Job status endpoint
+  app.get('/api/job/:jobId', (req, res) => {
+    const { jobId } = req.params;
+    const status = getJobStatus(jobId);
+
+    if (!status) {
+      return res.status(404).json({
+        error: 'Job not found'
+      });
+    }
+
+    res.status(200).json(status);
   });
 
   return app;
