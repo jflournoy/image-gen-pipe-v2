@@ -23,6 +23,10 @@ TDD helps Claude produce more focused, correct code by clarifying requirements u
 
 Consider TDD especially for complex features or when requirements are unclear.
 
+### Attribution
+
+The TDD workflow approach with AI pair programming is inspired by [Rebecca Murphey's work on LLM-driven development](https://rmurphey.com). Her insights on using Test-Driven Development to guide AI assistants toward better code quality have been foundational to this project's development methodology.
+
 ## Critical Instructions
 
 **ALWAYS use `date` command for dates** - Never assume or guess dates. Always run `date "+%Y-%m-%d"` when you need the current date for documentation, commits, or any other purpose.
