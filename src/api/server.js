@@ -6,6 +6,8 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
+import { readFile } from 'node:fs/promises';
+import { join, normalize } from 'node:path';
 import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
 
 // Store WebSocket connections by jobId
@@ -86,6 +88,44 @@ export function createApp() {
     }
 
     res.status(200).json(status);
+  });
+
+  // Image serving endpoint
+  app.get('/api/images/:imageId', async (req, res) => {
+    const { imageId } = req.params;
+
+    // Validate imageId to prevent path traversal attacks
+    const normalizedId = normalize(imageId);
+    if (normalizedId.includes('..') || normalizedId.includes('/') || normalizedId.includes('\\')) {
+      return res.status(400).json({
+        error: 'Invalid image ID'
+      });
+    }
+
+    // Construct safe image path
+    const imagePath = join(process.cwd(), 'output', 'test', `${imageId}.png`);
+
+    try {
+      // Read the image file
+      const imageBuffer = await readFile(imagePath);
+
+      // Set appropriate headers and send image
+      res.setHeader('Content-Type', 'image/png');
+      res.status(200).send(imageBuffer);
+    } catch (error) {
+      // Handle file not found or read errors
+      if (error.code === 'ENOENT') {
+        return res.status(404).json({
+          error: 'Image not found'
+        });
+      }
+
+      // Handle other errors
+      console.error('Error serving image:', error);
+      return res.status(500).json({
+        error: 'Failed to serve image'
+      });
+    }
   });
 
   return app;
