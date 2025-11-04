@@ -25,21 +25,6 @@ test('🔴 RED: Express server setup', async (t) => {
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
 
-    // Mock request/response for testing
-    const req = { method: 'GET', url: '/health' };
-    const res = {
-      statusCode: null,
-      body: null,
-      json: function(data) {
-        this.body = data;
-        return this;
-      },
-      status: function(code) {
-        this.statusCode = code;
-        return this;
-      }
-    };
-
     // We need a way to test the endpoint - for now just check it exists
     assert.ok(app, 'App should exist to add routes');
   });
