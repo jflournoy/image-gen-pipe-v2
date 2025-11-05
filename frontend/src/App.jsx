@@ -5,6 +5,7 @@
 
 import { useState } from 'react'
 import BeamSearchForm from './components/BeamSearchForm'
+import ImageGallery from './components/ImageGallery'
 import useWebSocket from './hooks/useWebSocket'
 import './App.css'
 
@@ -12,10 +13,14 @@ const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
 
 function App() {
   const [currentJobId, setCurrentJobId] = useState(null)
+  const [images, setImages] = useState([])
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL)
 
   const handleFormSubmit = async (formData) => {
     try {
+      // Reset images for new job
+      setImages([])
+
       // Call the beam search API
       const response = await fetch('http://localhost:3000/api/beam-search', {
         method: 'POST',
@@ -40,6 +45,19 @@ function App() {
   }
 
   const progressMessages = getMessagesByType('progress')
+  const completeMessages = getMessagesByType('complete')
+
+  // Extract images from complete messages
+  if (completeMessages.length > 0 && images.length === 0) {
+    const latestComplete = completeMessages[completeMessages.length - 1]
+    if (latestComplete.results && Array.isArray(latestComplete.results)) {
+      setImages(latestComplete.results.map((result, index) => ({
+        id: result.imageId || `image-${index}`,
+        url: `http://localhost:3000/api/images/${result.imageId || `image-${index}`}`,
+        score: result.score || 0
+      })))
+    }
+  }
 
   return (
     <div className="app">
@@ -77,6 +95,10 @@ function App() {
             )}
           </section>
         )}
+
+        <section className="gallery-section">
+          <ImageGallery images={images} />
+        </section>
       </main>
     </div>
   )
