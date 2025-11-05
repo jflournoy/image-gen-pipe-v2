@@ -3,6 +3,8 @@
   "version": "2.0.0",
   "description": "Professional command templates and tools for structured AI-assisted development with Claude Code",
   "scripts": {
+    "dev": "node server.mjs",
+    "start": "node server.mjs",
     "validate": "echo 'Validating command templates...' && find .claude/commands -name '*.md' -exec echo 'Checking {}' \\; -exec head -5 {} \\;",
     "list-commands": "ls -1 .claude/commands/*.md | sed 's|.claude/commands/||' | sed 's|\\.md$||' | sort",
     "// Core Workflow": "=== Core workflow commands ===",
