@@ -39,13 +39,18 @@ export async function startBeamSearchJob(jobId, params) {
 
   try {
     // Create providers using factory (CommonJS module)
-    const { createProviderFactory } = require('../factory/provider-factory.js');
-    const factory = createProviderFactory();
+    const {
+      createLLMProvider,
+      createImageProvider,
+      createVisionProvider,
+      createCritiqueGenerator
+    } = require('../factory/provider-factory.js');
+
     const providers = {
-      llm: factory.createLLMProvider(),
-      imageGen: factory.createImageProvider(),
-      vision: factory.createVisionProvider(),
-      critiqueGen: factory.createCritiqueGenerator()
+      llm: createLLMProvider(),
+      imageGen: createImageProvider(),
+      vision: createVisionProvider(),
+      critiqueGen: createCritiqueGenerator()
     };
 
     // Emit start event
