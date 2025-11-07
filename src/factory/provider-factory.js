@@ -12,10 +12,12 @@ const MockLLMProvider = require('../providers/mock-llm-provider');
 const MockImageProvider = require('../providers/mock-image-provider');
 const MockVisionProvider = require('../providers/mock-vision-provider');
 const MockScoringProvider = require('../providers/mock-scoring-provider');
+const MockCritiqueGenerator = require('../providers/mock-critique-generator');
 
 // Real providers
 const OpenAILLMProvider = require('../providers/openai-llm-provider');
 const OpenAIImageProvider = require('../providers/openai-image-provider');
+const CritiqueGenerator = require('../services/critique-generator');
 // TODO: Add more real providers as they're implemented
 // const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 
@@ -109,6 +111,29 @@ function createScoringProvider(options = {}) {
 }
 
 /**
+ * Create a Critique Generator instance
+ * @param {Object} options - Override configuration options
+ * @returns {CritiqueGenerator} Critique generator instance
+ */
+function createCritiqueGenerator(options = {}) {
+  const mode = options.mode || config.mode;
+
+  if (mode === 'mock') {
+    return new MockCritiqueGenerator(options);
+  }
+
+  // Real critique generator (uses OpenAI for LLM-based critique)
+  // Use explicit undefined check to allow passing undefined to override config
+  const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
+  return new CritiqueGenerator({
+    apiKey,
+    model: options.model || 'gpt-4o-mini',
+    maxRetries: options.maxRetries || config.llm.maxRetries,
+    timeout: options.timeout || config.llm.timeout
+  });
+}
+
+/**
  * Create all providers at once
  * @param {Object} options - Override configuration options
  * @returns {Object} Object with all provider instances
@@ -127,5 +152,6 @@ module.exports = {
   createImageProvider,
   createVisionProvider,
   createScoringProvider,
+  createCritiqueGenerator,
   createProviders
 };
