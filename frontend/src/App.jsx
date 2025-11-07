@@ -189,7 +189,11 @@ function App() {
         )}
 
         <section className="gallery-section">
-          <ImageGallery images={images} />
+          <ImageGallery
+            images={images}
+            loading={currentStatus === 'running'}
+            expectedCount={lastFormData?.n || 4}
+          />
         </section>
       </main>
     </div>
