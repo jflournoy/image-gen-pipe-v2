@@ -3,14 +3,33 @@
  * Displays a gallery of generated images with scores
  */
 
-export default function ImageGallery({ images }) {
+import LoadingSkeleton from './LoadingSkeleton';
+import PropTypes from 'prop-types';
+
+export default function ImageGallery({ images, loading = false, expectedCount = 4 }) {
+  // Show loading skeletons while generating
+  if (loading) {
+    return (
+      <div className="image-gallery">
+        <LoadingSkeleton
+          type="image-card"
+          count={expectedCount}
+          showGrid={true}
+          gridColumns={2}
+          showText={true}
+          loadingText="Generating images..."
+        />
+      </div>
+    );
+  }
+
   // Show empty state if no images
   if (!images || images.length === 0) {
     return (
       <div className="image-gallery-empty">
         <p>No images to display yet.</p>
       </div>
-    )
+    );
   }
 
   // Sort images by score descending (highest first)
@@ -35,3 +54,9 @@ export default function ImageGallery({ images }) {
     </div>
   )
 }
+
+ImageGallery.propTypes = {
+  images: PropTypes.array,
+  loading: PropTypes.bool,
+  expectedCount: PropTypes.number
+};
