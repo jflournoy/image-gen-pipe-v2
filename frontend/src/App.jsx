@@ -3,23 +3,28 @@
  * Main application component integrating BeamSearchForm and WebSocket
  */
 
-import { useState } from 'react'
-import BeamSearchForm from './components/BeamSearchForm'
-import ImageGallery from './components/ImageGallery'
-import useWebSocket from './hooks/useWebSocket'
-import './App.css'
+import { useState, useEffect } from 'react';
+import BeamSearchForm from './components/BeamSearchForm';
+import ImageGallery from './components/ImageGallery';
+import ProgressVisualization from './components/ProgressVisualization';
+import useWebSocket from './hooks/useWebSocket';
+import './App.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
 
 function App() {
-  const [currentJobId, setCurrentJobId] = useState(null)
-  const [images, setImages] = useState([])
-  const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL)
+  const [currentJobId, setCurrentJobId] = useState(null);
+  const [jobStartTime, setJobStartTime] = useState(null);
+  const [currentStatus, setCurrentStatus] = useState(null);
+  const [images, setImages] = useState([]);
+  const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = async (formData) => {
     try {
-      // Reset images for new job
-      setImages([])
+      // Reset state for new job
+      setImages([]);
+      setCurrentStatus('starting');
+      setJobStartTime(Date.now());
 
       // Call the beam search API
       const response = await fetch('http://localhost:3000/api/beam-search', {
@@ -28,36 +33,73 @@ function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(formData)
-      })
+      });
 
       if (!response.ok) {
-        throw new Error('Failed to start beam search')
+        throw new Error('Failed to start beam search');
       }
 
-      const data = await response.json()
-      setCurrentJobId(data.jobId)
+      const data = await response.json();
+      setCurrentJobId(data.jobId);
+      setCurrentStatus('running');
 
       // Subscribe to WebSocket updates for this job
-      subscribe(data.jobId)
+      subscribe(data.jobId);
     } catch (err) {
-      console.error('Error starting beam search:', err)
+      console.error('Error starting beam search:', err);
+      setCurrentStatus('error');
     }
-  }
+  };
 
-  const progressMessages = getMessagesByType('progress')
-  const completeMessages = getMessagesByType('complete')
+  // Get messages by type
+  const startedMessages = getMessagesByType('started');
+  const iterationMessages = getMessagesByType('iteration');
+  const candidateMessages = getMessagesByType('candidate');
+  const completeMessages = getMessagesByType('complete');
+  const errorMessages = getMessagesByType('error');
 
-  // Extract images from complete messages
-  if (completeMessages.length > 0 && images.length === 0) {
-    const latestComplete = completeMessages[completeMessages.length - 1]
-    if (latestComplete.results && Array.isArray(latestComplete.results)) {
-      setImages(latestComplete.results.map((result, index) => ({
-        id: result.imageId || `image-${index}`,
-        url: `http://localhost:3000/api/images/${result.imageId || `image-${index}`}`,
-        score: result.score || 0
-      })))
+  // Calculate progress data from messages
+  const latestIteration = iterationMessages[iterationMessages.length - 1];
+  const currentIteration = latestIteration?.iteration || 0;
+  const totalIterations = latestIteration?.totalIterations || 0;
+  const bestScore = latestIteration?.bestScore || 0;
+
+  // Calculate elapsed time
+  const [elapsedTime, setElapsedTime] = useState(0);
+
+  useEffect(() => {
+    if (currentStatus === 'running' && jobStartTime) {
+      const interval = setInterval(() => {
+        setElapsedTime(Date.now() - jobStartTime);
+      }, 1000);
+
+      return () => clearInterval(interval);
     }
-  }
+  }, [currentStatus, jobStartTime]);
+
+  // Handle completion messages
+  useEffect(() => {
+    if (completeMessages.length > 0 && images.length === 0) {
+      const latestComplete = completeMessages[completeMessages.length - 1];
+      setCurrentStatus('completed');
+
+      if (latestComplete.result && latestComplete.result.bestCandidate) {
+        const { bestCandidate } = latestComplete.result;
+        setImages([{
+          id: 'best-candidate',
+          url: bestCandidate.imageUrl,
+          score: bestCandidate.totalScore
+        }]);
+      }
+    }
+  }, [completeMessages, images.length]);
+
+  // Handle error messages
+  useEffect(() => {
+    if (errorMessages.length > 0) {
+      setCurrentStatus('error');
+    }
+  }, [errorMessages]);
 
   return (
     <div className="app">
@@ -81,18 +123,15 @@ function App() {
 
         {currentJobId && (
           <section className="status-section">
-            <h2>Job started: {currentJobId}</h2>
-
-            {progressMessages.length > 0 && (
-              <div className="progress-updates">
-                <h3>Progress Updates:</h3>
-                {progressMessages.map((msg, index) => (
-                  <div key={index} className="progress-item">
-                    Iteration {msg.iteration}: {msg.progress}%
-                  </div>
-                ))}
-              </div>
-            )}
+            <ProgressVisualization
+              jobId={currentJobId}
+              status={currentStatus}
+              currentIteration={currentIteration}
+              totalIterations={totalIterations}
+              bestScore={bestScore}
+              elapsedTime={elapsedTime}
+              error={error}
+            />
           </section>
         )}
 

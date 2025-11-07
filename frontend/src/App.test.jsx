@@ -97,8 +97,8 @@ describe('🔴 RED: App Component Integration', () => {
     })
   })
 
-  it('should show "Job started" message after form submission', async () => {
-    const mockUseWebSocket = await import('./hooks/useWebSocket')
+  it('should show "Job" ID after form submission', async () => {
+    const mockUseWebSocket = await import('./hooks/useWebSocket');
 
     mockUseWebSocket.default.mockReturnValue({
       isConnected: true,
@@ -108,53 +108,58 @@ describe('🔴 RED: App Component Integration', () => {
       getMessagesByType: vi.fn(() => []),
       clearMessages: vi.fn(),
       ws: {}
-    })
+    });
 
-    const user = userEvent.setup()
-    render(<App />)
+    const user = userEvent.setup();
+    render(<App />);
 
     // Fill and submit form
-    await user.type(screen.getByLabelText(/prompt/i), 'test prompt')
-    await user.click(screen.getByRole('button', { name: /start beam search/i }))
+    await user.type(screen.getByLabelText(/prompt/i), 'test prompt');
+    await user.click(screen.getByRole('button', { name: /start beam search/i }));
 
-    // Should show job started message
+    // Should show job ID in ProgressVisualization
     await waitFor(() => {
-      expect(screen.getByText(/job started/i)).toBeInTheDocument()
-    })
+      expect(screen.getByText(/job:/i)).toBeInTheDocument();
+      expect(screen.getByText(/test-job-123/i)).toBeInTheDocument();
+    });
   })
 
   it('should display progress messages', async () => {
-    const mockUseWebSocket = await import('./hooks/useWebSocket')
+    const mockUseWebSocket = await import('./hooks/useWebSocket');
 
-    const progressMessages = [
-      { type: 'progress', iteration: 1, progress: 33 },
-      { type: 'progress', iteration: 2, progress: 66 }
-    ]
+    // Use correct message type from backend: 'iteration' not 'progress'
+    const iterationMessages = [
+      { type: 'iteration', iteration: 1, totalIterations: 3, bestScore: 75 },
+      { type: 'iteration', iteration: 2, totalIterations: 3, bestScore: 82 }
+    ];
 
     mockUseWebSocket.default.mockReturnValue({
       isConnected: true,
-      messages: progressMessages,
+      messages: iterationMessages,
       error: null,
       subscribe: vi.fn(),
-      getMessagesByType: vi.fn((type) =>
-        type === 'progress' ? progressMessages : []
-      ),
+      getMessagesByType: vi.fn((type) => {
+        if (type === 'iteration') return iterationMessages;
+        return [];
+      }),
       clearMessages: vi.fn(),
       ws: {}
-    })
+    });
 
-    const user = userEvent.setup()
-    render(<App />)
+    const user = userEvent.setup();
+    render(<App />);
 
     // Submit form to create a job
-    await user.type(screen.getByLabelText(/prompt/i), 'test prompt')
-    await user.click(screen.getByRole('button', { name: /start beam search/i }))
+    await user.type(screen.getByLabelText(/prompt/i), 'test prompt');
+    await user.click(screen.getByRole('button', { name: /start beam search/i }));
 
-    // Should display progress updates
+    // Should display progress with iteration info
     await waitFor(() => {
-      expect(screen.getByText(/iteration 1/i)).toBeInTheDocument()
-      expect(screen.getByText(/iteration 2/i)).toBeInTheDocument()
-    })
+      // Should show "Iteration 2 of 3" (latest iteration)
+      expect(screen.getByText(/iteration 2 of 3/i)).toBeInTheDocument();
+      // Should show best score
+      expect(screen.getByText(/best score: 82/i)).toBeInTheDocument();
+    });
   })
 
   it('should show error message when WebSocket has error', async () => {
