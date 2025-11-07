@@ -3,10 +3,11 @@
  * Main application component integrating BeamSearchForm and WebSocket
  */
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import BeamSearchForm from './components/BeamSearchForm';
 import ImageGallery from './components/ImageGallery';
 import ProgressVisualization from './components/ProgressVisualization';
+import ErrorDisplay from './components/ErrorDisplay';
 import useWebSocket from './hooks/useWebSocket';
 import './App.css';
 
@@ -17,14 +18,22 @@ function App() {
   const [jobStartTime, setJobStartTime] = useState(null);
   const [currentStatus, setCurrentStatus] = useState(null);
   const [images, setImages] = useState([]);
+  const [lastFormData, setLastFormData] = useState(null);
+  const [apiError, setApiError] = useState(null);
+  const [retrying, setRetrying] = useState(false);
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
-  const handleFormSubmit = async (formData) => {
+  const handleFormSubmit = useCallback(async (formData) => {
     try {
+      // Clear previous errors
+      setApiError(null);
+      setRetrying(false);
+
       // Reset state for new job
       setImages([]);
       setCurrentStatus('starting');
       setJobStartTime(Date.now());
+      setLastFormData(formData); // Save for retry
 
       // Call the beam search API
       const response = await fetch('http://localhost:3000/api/beam-search', {
@@ -36,7 +45,8 @@ function App() {
       });
 
       if (!response.ok) {
-        throw new Error('Failed to start beam search');
+        const errorText = await response.text();
+        throw new Error(`API error (${response.status}): ${errorText || 'Failed to start beam search'}`);
       }
 
       const data = await response.json();
@@ -48,8 +58,23 @@ function App() {
     } catch (err) {
       console.error('Error starting beam search:', err);
       setCurrentStatus('error');
+      setApiError({
+        message: err.message || 'Failed to start beam search',
+        type: err.name === 'TypeError' ? 'network' : 'api',
+        details: err.stack
+      });
+    } finally {
+      setRetrying(false);
     }
-  };
+  }, [subscribe]);
+
+  // Retry functionality
+  const handleRetry = useCallback(() => {
+    if (lastFormData) {
+      setRetrying(true);
+      handleFormSubmit(lastFormData);
+    }
+  }, [lastFormData, handleFormSubmit]);
 
   // Get messages by type
   const startedMessages = getMessagesByType('started');
@@ -111,10 +136,38 @@ function App() {
       </header>
 
       <main className="app-main">
+        {/* WebSocket connection error */}
         {error && (
-          <div className="error-message" role="alert">
-            ❌ {error}
-          </div>
+          <ErrorDisplay
+            error={error}
+            type="websocket"
+            critical={!isConnected}
+            onDismiss={() => {}} // WebSocket errors auto-clear when reconnected
+          />
+        )}
+
+        {/* API/Job error */}
+        {apiError && (
+          <ErrorDisplay
+            error={apiError.message}
+            type={apiError.type}
+            details={apiError.details}
+            onRetry={lastFormData ? handleRetry : undefined}
+            retrying={retrying}
+            onDismiss={() => setApiError(null)}
+          />
+        )}
+
+        {/* Job execution errors from backend */}
+        {errorMessages.length > 0 && (
+          <ErrorDisplay
+            error={errorMessages[errorMessages.length - 1].error || 'Job execution failed'}
+            type="api"
+            details={errorMessages[errorMessages.length - 1].details}
+            onRetry={lastFormData ? handleRetry : undefined}
+            retrying={retrying}
+            onDismiss={() => setCurrentStatus(null)}
+          />
         )}
 
         <section className="form-section">
