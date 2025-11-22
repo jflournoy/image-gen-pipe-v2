@@ -161,9 +161,9 @@ describe('OpenAIVisionProvider Interface', () => {
       const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
       const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
 
-      // Use a publicly accessible test image
-      const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
-      const prompt = 'a placeholder image with geometric shapes';
+      // Use a publicly accessible test image (picsum.photos is reliable for testing)
+      const imageUrl = 'https://picsum.photos/id/237/300/300';
+      const prompt = 'a black dog looking at the camera';
 
       const result = await provider.analyzeImage(imageUrl, prompt);
 
@@ -216,8 +216,8 @@ describe('OpenAIVisionProvider Interface', () => {
       const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
       const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
 
-      const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
-      const prompt = 'a placeholder image';
+      const imageUrl = 'https://picsum.photos/id/237/300/300';
+      const prompt = 'a black dog';
 
       const result = await provider.analyzeImage(imageUrl, prompt);
 
@@ -229,8 +229,8 @@ describe('OpenAIVisionProvider Interface', () => {
       const OpenAIVisionProvider = require('../../src/providers/openai-vision-provider.js');
       const provider = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
 
-      const imageUrl = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Placeholder_view_vector.svg/310px-Placeholder_view_vector.svg.png';
-      const prompt = 'a placeholder image';
+      const imageUrl = 'https://picsum.photos/id/237/300/300';
+      const prompt = 'a black dog';
 
       const result = await provider.analyzeImage(imageUrl, prompt);
 
