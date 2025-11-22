@@ -130,11 +130,13 @@ flowchart TD
 ### Iteration Flow
 
 **Iteration 0:**
+
 - Input: 1 user prompt
 - Output: N=9 candidates → Keep top M=3
 - Dimension: WHAT (content)
 
 **Iteration 1+:**
+
 - Input: M=3 parents
 - Each parent → N/M=3 children
 - Output: N=9 candidates → Keep top M=3
@@ -155,6 +157,7 @@ InitExpand ──┬─> (WHAT1, HOW1) ─> Combine1 ─> Img1 ─> Score1 ─�
 ```
 
 Each candidate flows through its pipeline independently:
+
 1. As soon as WHAT+HOW pair is generated → Combine starts
 2. As soon as Combine finishes → Image generation starts
 3. As soon as Image is ready → Scoring starts (alignment + aesthetic in parallel)
@@ -182,6 +185,7 @@ Parent3 ─> Critique3 ─┬─> RefineWHAT_3a ─> Combine ─> Img ─> Score
 ```
 
 After ranking:
+
 1. Top M parents start critique generation in parallel
 2. As soon as each critique finishes → Generate N/M children refinements
 3. Each child flows through combine→image→score independently
@@ -352,6 +356,7 @@ async function refinementIteration(parents, config, iteration) {
 > **⚠️ IMPORTANT DESIGN DECISION**: Iteration 0 is deliberately special-cased rather than abstracted into the main loop.
 >
 > **Rationale**: Iteration 0 has a fundamentally different entry point:
+>
 > - **Iteration 0**: Starts at expansion/combine (no critique, no parent)
 > - **Iteration 1+**: Starts at critique stage (has parents with scores)
 >
@@ -391,6 +396,7 @@ async function beamSearch(userPrompt, config) {
 ### Streaming vs Batched
 
 **Batched approach (slower):**
+
 ```javascript
 // Wait for all combines
 const combines = await Promise.all(pairs.map(p => combine(p)));
@@ -401,6 +407,7 @@ const scores = await Promise.all(images.map(i => score(i)));
 ```
 
 **Streaming approach (faster):**
+
 ```javascript
 // Each candidate flows through independently
 const results = await Promise.all(
@@ -416,6 +423,7 @@ const results = await Promise.all(
 ### Throughput Analysis
 
 With N=9 candidates and assuming:
+
 - Combine: 2s
 - Image gen: 10s
 - Score: 3s
@@ -426,6 +434,7 @@ With N=9 candidates and assuming:
 **Streaming:** All 9 running in parallel = **15s per iteration** (same wall clock time, but candidates complete progressively)
 
 The advantage of streaming is:
+
 1. First candidate can be analyzed while others are still processing
 2. Failures can be detected earlier
 3. Resource utilization is smoother (not bursty)
@@ -453,6 +462,7 @@ There are exactly **two types of barriers** where streaming must stop:
 2. **Iteration barrier**: Must complete one full iteration before starting the next
 
 These barriers are **unavoidable** due to algorithm requirements:
+
 - Can't rank until all scores are known
 - Can't refine until parents are selected
 
@@ -460,13 +470,13 @@ These barriers are **unavoidable** due to algorithm requirements:
 
 When implementing the orchestrator:
 
-- [ ] Use `Promise.all()` for parallel operations within a zone
-- [ ] Use async pipelines (not batched stages) for streaming
-- [ ] Ensure alignment + aesthetic scoring happens in parallel
-- [ ] Critique generation happens in parallel for all M parents
-- [ ] Each parent's N/M children start processing as soon as critique is ready
-- [ ] Only wait at barrier points (ranking)
-- [ ] Log progressive completion for monitoring
+- \[ ] Use `Promise.all()` for parallel operations within a zone
+- \[ ] Use async pipelines (not batched stages) for streaming
+- \[ ] Ensure alignment + aesthetic scoring happens in parallel
+- \[ ] Critique generation happens in parallel for all M parents
+- \[ ] Each parent's N/M children start processing as soon as critique is ready
+- \[ ] Only wait at barrier points (ranking)
+- \[ ] Log progressive completion for monitoring
 
 ## Benefits
 

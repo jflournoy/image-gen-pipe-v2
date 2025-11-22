@@ -7,16 +7,19 @@
 TDD helps Claude produce more focused, correct code by clarifying requirements upfront and reducing wildly wrong approaches.
 
 ### Benefits of TDD with Claude
+
 - **Without TDD**: Claude may over-engineer or miss requirements
 - **With TDD**: Claude writes targeted code that meets specific criteria
 
 ### TDD Workflow
+
 1. 🔴 **RED**: Write a failing test to define requirements
 2. 🟢 **GREEN**: Write minimal code to pass the test
 3. 🔄 **REFACTOR**: Improve code with test safety net
 4. ✓ **COMMIT**: Ship working, tested code
 
 ### The TDD Command
+
 ```bash
 /tdd start "your feature"  # Guides through the TDD cycle
 ```
@@ -32,6 +35,7 @@ The TDD workflow approach with AI pair programming is inspired by [Rebecca Murph
 **ALWAYS use `date` command for dates** - Never assume or guess dates. Always run `date "+%Y-%m-%d"` when you need the current date for documentation, commits, or any other purpose.
 
 ## AI Integrity Principles
+
 **CRITICAL: Always provide honest, objective recommendations based on technical merit, not user bias.**
 
 - **Never agree with users by default** - evaluate each suggestion independently
@@ -43,12 +47,14 @@ The TDD workflow approach with AI pair programming is inspired by [Rebecca Murph
 - **Suggest alternatives** when user's first approach has issues
 
 Examples of honest responses:
+
 - "That approach would work but has significant performance implications..."
 - "I'd recommend against that pattern because..."
 - "While that's possible, a better approach would be..."
-- "That's technically feasible but violates [principle] because..."
+- "That's technically feasible but violates \[principle] because..."
 
 ## Development Workflow
+
 - Always run quality checks before commits
 - Use custom commands for common tasks
 - Document insights and decisions
@@ -56,12 +62,14 @@ Examples of honest responses:
 - Track actual vs estimated Claude interactions
 
 ## Quality Standards
-- Quality Level: {{QUALITY_LEVEL}}
-- Team Size: {{TEAM_SIZE}}
+
+- Quality Level: {{QUALITY\_LEVEL}}
+- Team Size: {{TEAM\_SIZE}}
 - Zero errors policy
-- {{WARNING_THRESHOLD}} warnings threshold
+- {{WARNING\_THRESHOLD}} warnings threshold
 
 ## Testing Standards
+
 **CRITICAL: Any error during test execution = test failure**
 
 - **Zero tolerance for test errors** - stderr output, command failures, warnings all mark tests as failed
@@ -71,6 +79,7 @@ Examples of honest responses:
 - **Performance budgets** - enforce time limits to prevent hanging tests
 
 ## Markdown Standards
+
 **All markdown files must pass validation before commit**
 
 - **Syntax validation** - Uses remark-lint to ensure valid markdown syntax
@@ -79,12 +88,14 @@ Examples of honest responses:
 - **Auto-fix available** - Run `npm run markdown:fix` to auto-correct formatting issues
 
 ### Markdown Quality Checks
+
 - `npm run markdown:lint` - Validate all markdown files
 - `npm run markdown:fix` - Auto-fix formatting issues
 - Included in `hygiene:quick` and `commit:check` scripts
 - CI validates markdown on every push/PR
 
 ### Markdown Style Guidelines
+
 - Use `-` for unordered lists
 - Use `*` for emphasis, `**` for strong emphasis
 - Use fenced code blocks with language tags
@@ -92,6 +103,7 @@ Examples of honest responses:
 - Ensure all internal links are valid
 
 ## Commands
+
 - `/hygiene` - Project health check
 - `/todo` - Task management
 - `/commit` - Quality-checked commits
@@ -102,6 +114,7 @@ Examples of honest responses:
 - `/docs` - Update documentation
 
 ## Architecture Principles
+
 - Keep functions under 15 complexity
 - Code files under 400 lines
 - Comprehensive error handling
@@ -109,6 +122,7 @@ Examples of honest responses:
 - Avoid mutation where possible
 
 ### Key Architecture Documents
+
 - **[Streaming Parallel Architecture](docs/streaming-parallel-architecture.md)** - CRITICAL for implementing orchestrator
   - Defines streaming parallel execution model
   - Shows how to maximize async throughput
@@ -116,18 +130,21 @@ Examples of honest responses:
   - Must reference when building beam search orchestrator
 
 ## Claude Usage Guidelines
+
 - Use `/estimate` before starting any non-trivial task
 - Track actual Claude interactions vs estimates
 - Optimize for message efficiency in complex tasks
 - Budget Claude usage for different project phases
 
 **Typical Usage Patterns**:
+
 - **Bug Fix**: 10-30 messages
-- **Small Feature**: 30-80 messages  
+- **Small Feature**: 30-80 messages
 - **Major Feature**: 100-300 messages
 - **Architecture Change**: 200-500 messages
 
 ## Collaboration Guidelines
+
 - Always add Claude as co-author on commits
 - Run `/hygiene` before asking for help
 - Use `/todo` for quick task capture
@@ -135,6 +152,7 @@ Examples of honest responses:
 - Regular `/reflect` sessions for insights
 
 ## Project Standards
+
 - Test coverage: 60% minimum
 - Documentation: All features documented
 - Error handling: Graceful failures with clear messages
