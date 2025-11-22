@@ -11,6 +11,7 @@ This document specifies the beam search algorithm used for iterative prompt refi
 The system separates prompts into two orthogonal dimensions:
 
 #### WHAT - Content Dimension
+
 - **Purpose**: Describes the semantic content of the image
 - **Focus**: Characters, objects, actions, setting, mood
 - **Style**: Immersive, sensory-rich prose
@@ -18,6 +19,7 @@ The system separates prompts into two orthogonal dimensions:
 - **Example**: "Towering world-tree with roots piercing starlit sky, branches cradling fragments of glowing cities"
 
 #### HOW - Visual Style Dimension
+
 - **Purpose**: Describes the visual execution and artistic style
 - **Focus**: Lighting, composition, color palette, texture, atmosphere
 - **Style**: Concrete photographic/cinematic terminology
@@ -29,6 +31,7 @@ The system separates prompts into two orthogonal dimensions:
 **WHAT and HOW are maintained separately throughout the pipeline and only combined at image generation time.**
 
 This separation allows:
+
 - Independent refinement of content vs style
 - Different scoring metrics for each dimension
 - Targeted improvements without coupling
@@ -83,6 +86,7 @@ for (const candidate of candidates) {
 #### LLM Instructions for Expansion
 
 **WHAT Expansion Prompt**:
+
 ```
 You are a prompt expander. Write a concise description (2-4 sentences)
 that vividly describes WHAT is in the scene: characters, objects, actions,
@@ -92,6 +96,7 @@ Expand this idea into a detailed description: "{originalPrompt}"
 ```
 
 **HOW Expansion Prompt**:
+
 ```
 You are a visual style describer. Describe the visual style, including
 lighting, composition, color palette, texture, and atmosphere. Use concrete,
@@ -211,6 +216,7 @@ for (let round = 1; round <= MAX_ITERATIONS; round++) {
 #### Critique Generation
 
 **WHAT Critique** (based on CLIP score):
+
 ```javascript
 function generateWhatCritique(candidate) {
   return `
@@ -225,6 +231,7 @@ with the user's intent.
 ```
 
 **HOW Critique** (based on aesthetic score):
+
 ```javascript
 function generateHowCritique(candidate) {
   return `
@@ -276,6 +283,7 @@ To support this algorithm, the LLM Provider must implement:
 ```
 
 **Operations**:
+
 - `expand`: Initial expansion from terse to detailed
 - `refine`: Iterative improvement based on critique
 
@@ -291,6 +299,7 @@ To support this algorithm, the LLM Provider must implement:
 ```
 
 **System Prompt**:
+
 ```
 You are an image prompt combiner. Given a WHAT prompt (describing content)
 and a HOW prompt (describing visual style), combine them into a single,
@@ -303,6 +312,7 @@ Output only the combined prompt.
 ```
 
 **Example Input**:
+
 ```
 WHAT: Towering world-tree with roots piercing starlit sky, branches cradling
       fragments of glowing cities
@@ -310,6 +320,7 @@ HOW: Cinematic digital painting style, dramatic rim lighting, glowing highlights
 ```
 
 **Example Output**:
+
 ```
 Towering world-tree with roots piercing starlit sky, branches cradling fragments
 of glowing cities, cinematic digital painting style, dramatic rim lighting,
@@ -357,9 +368,11 @@ output/
 Each candidate directory should now include:
 
 #### `what.txt`
+
 The WHAT component (content description) for this candidate.
 
 #### `how.txt`
+
 The HOW component (style description) for this candidate.
 
 These allow reconstructing the refinement history and understanding what changed between iterations.
@@ -458,67 +471,76 @@ The `metadata.json` should track both WHAT and HOW:
 To implement this algorithm, you need:
 
 ### LLM Provider
-- [x] Add `combinePrompts(what, how)` method ✅ (completed 2025-10-28)
-- [x] Update `refinePrompt()` to support `operation` parameter ('expand' vs 'refine') ✅
-- [x] Add critique-based refinement support ✅
-- [x] Implement WHAT vs HOW system prompts ✅
+
+- \[x] Add `combinePrompts(what, how)` method ✅ (completed 2025-10-28)
+- \[x] Update `refinePrompt()` to support `operation` parameter ('expand' vs 'refine') ✅
+- \[x] Add critique-based refinement support ✅
+- \[x] Implement WHAT vs HOW system prompts ✅
 
 **Implementation**: [src/providers/openai-llm-provider.js](../src/providers/openai-llm-provider.js)
 
 ### Image Provider
-- [x] Already supports beam search context ✅
-- [ ] Update to save `what.txt` and `how.txt` alongside `prompt.txt`
+
+- \[x] Already supports beam search context ✅
+- \[ ] Update to save `what.txt` and `how.txt` alongside `prompt.txt`
 
 **Implementation**: [src/providers/openai-image-provider.js](../src/providers/openai-image-provider.js)
 
 ### Vision Provider (IMAGE EVALUATION)
-- [ ] **NOT YET IMPLEMENTED** - This is the next critical component
-- [ ] Implement image evaluation/scoring service
-- [ ] Options to consider:
+
+- \[ ] **NOT YET IMPLEMENTED** - This is the next critical component
+- \[ ] Implement image evaluation/scoring service
+- \[ ] Options to consider:
   - GPT-4 Vision API (most flexible, detailed critique)
   - CLIP score (fast, objective)
   - Hybrid approach
-- [ ] Generate dimension-specific critiques (WHAT vs HOW)
+- \[ ] Generate dimension-specific critiques (WHAT vs HOW)
 
 **Status**: ❌ **BLOCKING** - Required for feedback loop
 
 ### Scoring Provider
-- [ ] Depends on Vision Provider implementation
-- [ ] Should combine CLIP + aesthetic scores
-- [ ] Weight with configurable alpha/beta parameters
+
+- \[ ] Depends on Vision Provider implementation
+- \[ ] Should combine CLIP + aesthetic scores
+- \[ ] Weight with configurable alpha/beta parameters
 
 **Status**: ❌ **BLOCKED** by Vision Provider
 
 ### Orchestrator (NEW)
-- [ ] **NOT YET IMPLEMENTED** - Main coordination logic
-- [ ] Implement beam search loop
-- [ ] Manage (WHAT, HOW) pairs
-- [ ] Alternate refinement dimensions
-- [ ] Track lineage and metadata
-- [ ] Coordinate all providers
-- [ ] Integrate critique generation (may be part of Vision Provider)
+
+- \[ ] **NOT YET IMPLEMENTED** - Main coordination logic
+- \[ ] Implement beam search loop
+- \[ ] Manage (WHAT, HOW) pairs
+- \[ ] Alternate refinement dimensions
+- \[ ] Track lineage and metadata
+- \[ ] Coordinate all providers
+- \[ ] Integrate critique generation (may be part of Vision Provider)
 
 **Status**: ❌ Ready to implement once Vision Provider complete
 
 ### Demo/CLI
-- [ ] Update `demo.js` to use new `combinePrompts()` method
-- [ ] Show both WHAT and HOW components in output
-- [ ] Display which dimension is being refined each round
+
+- \[ ] Update `demo.js` to use new `combinePrompts()` method
+- \[ ] Show both WHAT and HOW components in output
+- \[ ] Display which dimension is being refined each round
 
 ## Testing Strategy
 
 ### Unit Tests
+
 - Test `combinePrompts()` with various WHAT/HOW pairs
 - Test expansion vs refinement operations
 - Test critique generation for both dimensions
 
 ### Integration Tests
+
 - Full beam search with mock providers
 - Verify alternating refinement pattern
 - Verify lineage tracking
 - Verify storage structure with what.txt/how.txt
 
 ### End-to-End Tests
+
 - Run full pipeline with real OpenAI providers
 - Verify scores improve across iterations
 - Verify WHAT refinement improves CLIP score
@@ -535,7 +557,7 @@ To implement this algorithm, you need:
 ## References
 
 - Original Python Implementation: [jflournoy/sdxl-prompt-gen-eval](https://github.com/jflournoy/sdxl-prompt-gen-eval)
-- Provider Storage Specification: [PROVIDER_STORAGE_SPEC.md](./PROVIDER_STORAGE_SPEC.md)
+- Provider Storage Specification: [PROVIDER\_STORAGE\_SPEC.md](./PROVIDER_STORAGE_SPEC.md)
 - CLIP Paper: [Learning Transferable Visual Models From Natural Language Supervision](https://arxiv.org/abs/2103.00020)
 
 ## Version
