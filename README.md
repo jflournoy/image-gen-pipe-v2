@@ -98,13 +98,16 @@ See [CLAUDE.md](CLAUDE.md) for full development guidelines.
 ## Core Concepts
 
 ### Beam Search
+
 Maintains top-k candidate prompts across refinement rounds, exploring promising variations while pruning poor performers.
 
 ### WHAT vs HOW Prompts
+
 - **WHAT**: Content-focused (subjects, objects, actions)
 - **HOW**: Style-focused (lighting, composition, atmosphere)
 
 WHAT and HOW are refined **separately** throughout the pipeline:
+
 - Both start with the same user prompt
 - Each gets independently expanded and refined
 - They're **combined only at image generation time**
@@ -114,6 +117,7 @@ WHAT and HOW are refined **separately** throughout the pipeline:
 See [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) for complete workflow.
 
 ### Scoring System
+
 - **Alignment Score**: Text-image semantic similarity (0-100)
 - **Aesthetic Score**: Visual quality evaluation (0-10)
 - **Combined Score**: Weighted combination (configurable alpha)
@@ -123,26 +127,29 @@ See [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) for complete workflow
 🚧 **Currently in development** - Real providers in progress, orchestrator next:
 
 ### Completed (✅)
-- [x] Provider abstraction layer (100% ✅)
-  - [x] ImageGenerationProvider interface (13 tests)
-  - [x] LLMProvider interface (24 tests)
-  - [x] VisionProvider interface (26 tests)
-  - [x] ScoringProvider interface (25 tests)
-- [x] Mock providers for testing (88 tests passing)
-- [x] **OpenAI LLM Provider** - Expand, refine, combine prompts ✅
-- [x] **OpenAI Image Provider** - DALL-E 3 with local storage ✅
+
+- \[x] Provider abstraction layer (100% ✅)
+  - \[x] ImageGenerationProvider interface (13 tests)
+  - \[x] LLMProvider interface (24 tests)
+  - \[x] VisionProvider interface (26 tests)
+  - \[x] ScoringProvider interface (25 tests)
+- \[x] Mock providers for testing (88 tests passing)
+- \[x] **OpenAI LLM Provider** - Expand, refine, combine prompts ✅
+- \[x] **OpenAI Image Provider** - DALL-E 3 with local storage ✅
 
 ### In Progress (🚧)
-- [ ] **Vision/Evaluation Provider** - ⚠️ **BLOCKING** - Required for feedback loop
+
+- \[ ] **Vision/Evaluation Provider** - ⚠️ **BLOCKING** - Required for feedback loop
   - Options: GPT-4 Vision, CLIP score, or hybrid
   - Needs image scoring + critique generation
-- [ ] **Beam Search Orchestrator** (Issue #3)
+- \[ ] **Beam Search Orchestrator** (Issue #3)
   - Blocked by Vision Provider
   - Will coordinate full 8-step pipeline
-- [ ] CLI interface
-- [ ] Web UI
+- \[ ] CLI interface
+- \[ ] Web UI
 
 ### Component Status
+
 | Component | Status | Notes |
 |-----------|--------|-------|
 | LLM Provider (OpenAI) | ✅ Complete | Expand, refine, combine |
@@ -166,6 +173,7 @@ See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for d
 ## Python Version
 
 This is a TypeScript rewrite of the original Python implementation:
+
 - **Original**: [jflournoy/sdxl-prompt-gen-eval](https://github.com/jflournoy/sdxl-prompt-gen-eval)
 - **Why rewrite?**: Better web UI support, easier deployment, stronger typing
 
@@ -182,6 +190,7 @@ This is a TypeScript rewrite of the original Python implementation:
 ## Contributing
 
 Contributions welcome! This project uses:
+
 - **TDD methodology** - Write tests first
 - **Atomic commits** - Small, focused commits
 - **Claude Code workflow** - AI-assisted development

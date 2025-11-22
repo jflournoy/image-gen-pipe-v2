@@ -25,6 +25,7 @@ node --test test/providers/scoring-provider.test.js
 **Purpose**: Wraps image generation APIs like DALL-E 3
 
 **What it does**:
+
 ```javascript
 const provider = new MockImageProvider();
 
@@ -48,6 +49,7 @@ const result = await provider.generateImage('a mountain sunset', {
 ```
 
 **Tests verify**:
+
 - ✅ Accepts prompts and options (size, quality, style)
 - ✅ Returns valid image URLs and metadata
 - ✅ Validates inputs (rejects empty prompts)
@@ -55,6 +57,7 @@ const result = await provider.generateImage('a mountain sunset', {
 - ✅ Supports all DALL-E 3 options
 
 **Try it yourself**:
+
 ```javascript
 const MockImageProvider = require('./src/providers/mock-image-provider.js');
 const provider = new MockImageProvider();
@@ -72,6 +75,7 @@ const provider = new MockImageProvider();
 **Purpose**: Refines prompts by expanding content (WHAT) or style (HOW) dimensions
 
 **What it does**:
+
 ```javascript
 const provider = new MockLLMProvider();
 
@@ -89,6 +93,7 @@ const how = await provider.refinePrompt('a cat', {
 ```
 
 **Tests verify**:
+
 - ✅ Refines prompts in both WHAT and HOW dimensions
 - ✅ WHAT adds content details (subjects, objects)
 - ✅ HOW adds style details (lighting, composition)
@@ -99,6 +104,7 @@ const how = await provider.refinePrompt('a cat', {
 - ✅ Deterministic for testing
 
 **Try it yourself**:
+
 ```javascript
 const MockLLMProvider = require('./src/providers/mock-llm-provider.js');
 const provider = new MockLLMProvider();
@@ -122,6 +128,7 @@ const provider = new MockLLMProvider();
 **Purpose**: Analyzes generated images and calculates alignment with original prompt
 
 **What it does**:
+
 ```javascript
 const provider = new MockVisionProvider();
 
@@ -144,6 +151,7 @@ const result = await provider.analyzeImage(
 ```
 
 **Tests verify**:
+
 - ✅ Analyzes images and returns descriptive text
 - ✅ Calculates alignment scores (0-100)
 - ✅ Supports focus areas (composition, lighting, color, etc.)
@@ -154,6 +162,7 @@ const result = await provider.analyzeImage(
 - ✅ Deterministic for testing
 
 **Try it yourself**:
+
 ```javascript
 const MockVisionProvider = require('./src/providers/mock-vision-provider.js');
 const provider = new MockVisionProvider();
@@ -183,6 +192,7 @@ const provider = new MockVisionProvider();
 **Purpose**: Combines alignment and aesthetic scores to rank candidates
 
 **What it does**:
+
 ```javascript
 const provider = new MockScoringProvider();
 
@@ -213,6 +223,7 @@ const result = await provider.scoreCandidate(candidate, {
 **Formula**: `totalScore = alpha × alignment + (1 - alpha) × (aesthetic × 10)`
 
 **Tests verify**:
+
 - ✅ Combines alignment and aesthetic scores
 - ✅ Respects alpha weighting (0.0-1.0)
 - ✅ Alignment score stays 0-100
@@ -223,6 +234,7 @@ const result = await provider.scoreCandidate(candidate, {
 - ✅ Different alphas produce different scores
 
 **Try it yourself**:
+
 ```javascript
 const MockScoringProvider = require('./src/providers/mock-scoring-provider.js');
 const provider = new MockScoringProvider();
@@ -303,6 +315,7 @@ User Prompt: "a serene mountain lake"
 ## Next Steps
 
 When we build the **Core Orchestrator** (Issue #3), it will:
+
 - Use ALL 4 of these providers
 - Implement beam search (keep top-K candidates)
 - Run multiple refinement rounds
@@ -312,6 +325,7 @@ When we build the **Core Orchestrator** (Issue #3), it will:
 The orchestrator tests will verify the providers work together correctly.
 
 When we implement **Real Providers** (Issue #4), we can:
+
 - Swap `MockImageProvider` → `OpenAIImageProvider`
 - Swap `MockLLMProvider` → `OpenAILLMProvider` or `AnthropicLLMProvider`
 - Tests stay the same (interface compliance)

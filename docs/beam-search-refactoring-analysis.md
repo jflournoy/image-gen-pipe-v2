@@ -10,6 +10,7 @@
 ### Rationale
 
 Iteration 0 has a fundamentally different entry point:
+
 - **Iteration 0**: Starts at expansion/combine (no critique, no parent)
 - **Iteration 1+**: Starts at critique stage (has parents with scores)
 
@@ -32,11 +33,13 @@ All existing provider functions are **already compatible** with the beam search 
 **Location**: `src/providers/openai-llm-provider.js:44-146`
 
 **Current Signature**:
+
 ```javascript
 async refinePrompt(prompt, options = {})
 ```
 
 **Supports**:
+
 - ✅ `operation: 'expand'` - Used in iteration 0 for initial expansion
 - ✅ `operation: 'refine'` - Used in iteration 1+ for critique-based refinement
 - ✅ `dimension: 'what' | 'how'` - Dimension targeting
@@ -44,6 +47,7 @@ async refinePrompt(prompt, options = {})
 - ✅ `temperature` - Configurable for stochastic variation in beam expansion
 
 **Orchestrator Usage**:
+
 - **Iteration 0**: `llm.refinePrompt(userPrompt, { dimension: 'what', operation: 'expand', temperature: 0.7 })`
 - **Iteration 1+**: `llm.refinePrompt(parentPrompt, { dimension: 'what', operation: 'refine', critique: critiqueObj })`
 
@@ -56,16 +60,19 @@ async refinePrompt(prompt, options = {})
 **Location**: `src/providers/openai-llm-provider.js:154-200`
 
 **Current Signature**:
+
 ```javascript
 async combinePrompts(whatPrompt, howPrompt)
 ```
 
 **Supports**:
+
 - ✅ Combines WHAT and HOW prompts into unified prompt
 - ✅ Uses lower temperature (0.5) for deterministic combination
 - ✅ Returns simple string (no complex object)
 
 **Orchestrator Usage**:
+
 - Used in `processCandidateStream()` for all candidates
 - Same for iteration 0 and iteration 1+
 
@@ -78,11 +85,13 @@ async combinePrompts(whatPrompt, howPrompt)
 **Location**: `src/providers/openai-vision-provider.js:41-120`
 
 **Current Signature**:
+
 ```javascript
 async analyzeImage(imageUrl, prompt, options = {})
 ```
 
 **Returns**:
+
 ```javascript
 {
   alignmentScore: number,    // 0-100 (prompt fidelity)
@@ -96,11 +105,13 @@ async analyzeImage(imageUrl, prompt, options = {})
 ```
 
 **Supports**:
+
 - ✅ Returns both alignment and aesthetic scores
 - ✅ Provides detailed analysis for critique generation
 - ✅ Single API call returns all needed data
 
 **Orchestrator Usage**:
+
 ```javascript
 const evaluation = await vision.analyzeImage(image.url, combinedPrompt);
 // Use evaluation.alignmentScore and evaluation.aestheticScore in parallel
@@ -115,16 +126,19 @@ const evaluation = await vision.analyzeImage(image.url, combinedPrompt);
 **Location**: `src/services/critique-generator.js:46-74`
 
 **Current Signature**:
+
 ```javascript
 async generateCritique(evaluation, prompts, options)
 ```
 
 **Parameters**:
+
 - `evaluation` - Vision analysis result
 - `prompts` - Object with `what`, `how`, `combined`
 - `options` - Object with `dimension`, `iteration`, `parentScore`
 
 **Returns**:
+
 ```javascript
 {
   critique: string,
@@ -144,11 +158,13 @@ async generateCritique(evaluation, prompts, options)
 ```
 
 **Supports**:
+
 - ✅ Dimension-aware (uses alignmentScore for WHAT, aestheticScore for HOW)
 - ✅ Returns structured critique object compatible with `refinePrompt()`
 - ✅ Includes metadata for tracking
 
 **Orchestrator Usage**:
+
 ```javascript
 const critique = await critiqueGen.generateCritique(
   evaluation,
@@ -173,16 +189,19 @@ const refined = await llm.refinePrompt(parent.whatPrompt, {
 **Location**: `src/providers/openai-image-provider.js`
 
 **Current Signature**:
+
 ```javascript
 async generateImage(prompt, options = {})
 ```
 
 **Supports**:
+
 - ✅ Takes combined prompt
 - ✅ Saves locally with beam search context (iteration, candidateId, dimension)
 - ✅ Returns image URL and local path
 
 **Orchestrator Usage**:
+
 ```javascript
 const image = await imageGen.generateImage(combinedPrompt, {
   size: '1024x1024',
