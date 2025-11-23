@@ -3,30 +3,29 @@
 **AI-powered iterative image generation with intelligent prompt refinement**
 
 [![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
-[![TypeScript](https://img.shields.io/badge/typescript-5.3%2B-blue)](https://www.typescriptlang.org/)
+[![JavaScript](https://img.shields.io/badge/javascript-ES2022-yellow)](https://nodejs.org/)
 [![License](https://img.shields.io/badge/license-MIT-purple)](LICENSE)
-[![Status](https://img.shields.io/badge/status-in%20development-yellow)](https://github.com/jflournoy/image-gen-pipe-v2)
+[![Tests](https://img.shields.io/badge/tests-410%2B%20passing-green)](https://github.com/jflournoy/image-gen-pipe-v2)
 [![Commands](https://img.shields.io/badge/commands-14-orange)](.claude/commands/)
 
 ## Overview
 
-Image Generation Pipeline (IGP) v2 is a TypeScript/Node.js rewrite of the [Python SDXL prompt generator](https://github.com/jflournoy/sdxl-prompt-gen-eval), designed to iteratively refine prompts and generate high-quality images using cloud-based AI services.
+Image Generation Pipeline (IGP) v2 is a Node.js rewrite of the [Python SDXL prompt generator](https://github.com/jflournoy/sdxl-prompt-gen-eval), designed to iteratively refine prompts and generate high-quality images using cloud-based AI services.
 
 ### Key Features
 
 - 🔄 **Iterative Refinement**: Beam search algorithm for exploring prompt variations
-- 🎯 **Multi-Provider Support**: OpenAI, Anthropic, Replicate, and more
-- 📊 **Intelligent Scoring**: CLIP-like alignment + aesthetic quality scoring
-- 🖥️ **Dual Interface**: Web UI (React) + CLI tool
+- 🎯 **OpenAI Integration**: GPT-4 for LLM, DALL-E 3 for images, GPT-4V for vision evaluation
+- 📊 **Intelligent Scoring**: Alignment scoring (0-100) + aesthetic quality scoring (0-10)
+- 🖥️ **React Frontend**: Production-ready UI components with accessibility features
 - ⚡ **Real-time Updates**: WebSocket-based progress monitoring
-- 🧪 **Test-Driven**: Built with comprehensive test coverage
+- 🧪 **Test-Driven**: 410+ tests with comprehensive coverage
 
 ## Architecture
 
 ```
 ┌─────────────┐
-│  Web UI     │  React + Vite + Tailwind
-│  CLI Tool   │  Commander.js
+│  Web UI     │  React + Vite
 └──────┬──────┘
        │
 ┌──────▼──────┐
@@ -42,10 +41,10 @@ Image Generation Pipeline (IGP) v2 is a TypeScript/Node.js rewrite of the [Pytho
        │
 ┌──────▼──────────────────────┐
 │     Provider Layer          │
-│  - LLM (GPT-4, Claude)      │
+│  - LLM (GPT-4)              │
 │  - Image Gen (DALL-E 3)     │
-│  - Vision (GPT-4V, Claude)  │
-│  - Scoring (CLIP, Custom)   │
+│  - Vision (GPT-4V)          │
+│  - Scoring (Mock + Custom)  │
 └─────────────────────────────┘
 ```
 
@@ -124,39 +123,33 @@ See [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) for complete workflow
 
 ## Project Status
 
-🚧 **Currently in development** - Real providers in progress, orchestrator next:
-
-### Completed (✅)
-
-- \[x] Provider abstraction layer (100% ✅)
-  - \[x] ImageGenerationProvider interface (13 tests)
-  - \[x] LLMProvider interface (24 tests)
-  - \[x] VisionProvider interface (26 tests)
-  - \[x] ScoringProvider interface (25 tests)
-- \[x] Mock providers for testing (88 tests passing)
-- \[x] **OpenAI LLM Provider** - Expand, refine, combine prompts ✅
-- \[x] **OpenAI Image Provider** - DALL-E 3 with local storage ✅
-
-### In Progress (🚧)
-
-- \[ ] **Vision/Evaluation Provider** - ⚠️ **BLOCKING** - Required for feedback loop
-  - Options: GPT-4 Vision, CLIP score, or hybrid
-  - Needs image scoring + critique generation
-- \[ ] **Beam Search Orchestrator** (Issue #3)
-  - Blocked by Vision Provider
-  - Will coordinate full 8-step pipeline
-- \[ ] CLI interface
-- \[ ] Web UI
+✅ **Core pipeline complete** - All providers and orchestrator implemented and tested.
 
 ### Component Status
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| LLM Provider (OpenAI) | ✅ Complete | Expand, refine, combine |
-| Image Provider (OpenAI) | ✅ Complete | DALL-E 3 + storage |
-| Vision Provider | ❌ Not started | **Next priority** |
-| Scoring Provider | ❌ Blocked | Needs Vision Provider |
-| Orchestrator | ❌ Blocked | Needs Vision Provider |
+| LLM Provider (OpenAI) | ✅ Complete | Expand, refine, combine prompts via GPT-4 |
+| Image Provider (OpenAI) | ✅ Complete | DALL-E 3 with local storage |
+| Vision Provider (OpenAI) | ✅ Complete | GPT-4V for alignment + aesthetic scoring |
+| Beam Search Orchestrator | ✅ Complete | Full streaming parallel implementation |
+| API Server | ✅ Complete | Express + WebSocket with job management |
+| React Frontend | ✅ Complete | Production components with accessibility |
+| Mock Providers | ✅ Complete | 5 mock providers for testing |
+
+### Test Coverage
+
+- **410+ tests passing** across backend and frontend
+- Provider interfaces: 88+ tests
+- Orchestrator: Full integration tests
+- Frontend components: Unit + accessibility tests
+
+### Future Enhancements
+
+- [ ] Additional provider support (Anthropic, Replicate)
+- [ ] CLI interface
+- [ ] CLIP-based scoring (currently using GPT-4V)
+- [ ] Performance optimizations
 
 See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for detailed tracking.
 
@@ -164,28 +157,40 @@ See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for d
 
 | Layer | Technology |
 |-------|------------|
-| **Frontend** | React 18 + Vite + TypeScript + Tailwind CSS |
+| **Frontend** | React 18 + Vite + PropTypes |
 | **Backend** | Node.js 18+ + Express + WebSocket |
-| **State** | Zustand |
 | **Testing** | Node.js Test Runner (built-in) |
-| **AI Services** | OpenAI API, Anthropic API, Replicate |
+| **AI Services** | OpenAI API (GPT-4, DALL-E 3, GPT-4V) |
+| **Documentation** | MkDocs with Material theme |
 
 ## Python Version
 
-This is a TypeScript rewrite of the original Python implementation:
+This is a JavaScript/Node.js rewrite of the original Python implementation:
 
 - **Original**: [jflournoy/sdxl-prompt-gen-eval](https://github.com/jflournoy/sdxl-prompt-gen-eval)
-- **Why rewrite?**: Better web UI support, easier deployment, stronger typing
+- **Why rewrite?**: Better web UI support, easier deployment, modern async patterns
 
 ## Documentation
 
-- [Development Guide](CLAUDE.md) - AI-assisted development workflow
+### Building Documentation
+
+```bash
+# Install MkDocs
+pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+
+# Serve locally (with hot reload)
+mkdocs serve
+
+# Build static HTML
+mkdocs build
+```
+
+### Documentation Links
+
 - [Beam Search Algorithm](docs/BEAM_SEARCH_ALGORITHM.md) - Complete WHAT/HOW refinement workflow
-- [Streaming Parallel Architecture](docs/streaming-parallel-architecture.md) - Performance-optimized execution model for orchestrator
+- [Streaming Parallel Architecture](docs/streaming-parallel-architecture.md) - Performance-optimized execution model
 - [Provider Storage Spec](docs/PROVIDER_STORAGE_SPEC.md) - Local storage structure and conventions
-- Software Requirements Specification (Coming Soon) - Complete technical spec
-- Architecture Guide (Coming Soon) - System design details
-- API Documentation (Coming Soon) - REST + WebSocket API reference
+- [Development Guide](CLAUDE.md) - AI-assisted development workflow
 
 ## Contributing
 
