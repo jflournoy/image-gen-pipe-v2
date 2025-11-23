@@ -1,0 +1,89 @@
+# Project documentation with MkDocs
+# Build: mkdocs build
+# Serve: mkdocs serve
+# Install: pip install mkdocs mkdocs-material mkdocs-mermaid2-plugin
+
+docs_dir: docs-site
+
+site_name: Image Generation Pipeline v2
+site_description: AI-powered iterative image generation with intelligent prompt refinement
+site_url: https://jflournoy.github.io/image-gen-pipe-v2/
+repo_url: https://github.com/jflournoy/image-gen-pipe-v2
+repo_name: jflournoy/image-gen-pipe-v2
+
+theme:
+  name: material
+  palette:
+    - scheme: default
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - scheme: slate
+      primary: deep purple
+      accent: amber
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.expand
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+
+plugins:
+  - search
+  - mermaid2
+
+markdown_extensions:
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+  - pymdownx.tabbed:
+      alternate_style: true
+  - admonition
+  - pymdownx.details
+  - pymdownx.mark
+  - attr_list
+  - md_in_html
+  - tables
+  - toc:
+      permalink: true
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Quick Start: getting-started/quickstart.md
+    - API Setup: getting-started/api-setup.md
+  - Core Concepts:
+    - Beam Search Algorithm: concepts/beam-search-algorithm.md
+    - WHAT vs HOW Prompts: concepts/what-how-prompts.md
+    - Streaming Parallel Architecture: concepts/streaming-parallel-architecture.md
+  - API Reference:
+    - Provider Interfaces: api/providers.md
+    - REST API: api/rest-api.md
+    - WebSocket API: api/websocket-api.md
+    - Storage Specification: api/provider-storage-spec.md
+  - Development:
+    - Contributing: development/contributing.md
+    - TDD Workflow: development/tdd-workflow.md
+    - Command Reference: development/command-reference.md
+  - Changelog: changelog.md
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/jflournoy/image-gen-pipe-v2
+
+copyright: Copyright &copy; 2025 Image Generation Pipeline v2
