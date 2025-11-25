@@ -5,6 +5,8 @@
  * Reference: docs/streaming-parallel-architecture.md
  */
 
+const { RateLimiter } = require('../utils/rate-limiter.js');
+
 /**
  * Rank candidates by total score and select top M
  * @param {Array<Object>} candidates - Candidates with totalScore property
@@ -114,23 +116,40 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7 } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency } = config;
 
-  // Generate N WHAT+HOW pairs in parallel with stochastic variation
+  // Create rate limiters for each provider if concurrency limit specified
+  const llmLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
+  const imageGenLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
+  const visionLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
+
+  // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
     Array(N).fill().map(async () => {
       // Generate WHAT and HOW in parallel for each candidate
       const [what, how] = await Promise.all([
-        llmProvider.refinePrompt(userPrompt, {
-          dimension: 'what',
-          operation: 'expand',
-          temperature
-        }),
-        llmProvider.refinePrompt(userPrompt, {
-          dimension: 'how',
-          operation: 'expand',
-          temperature
-        })
+        llmLimiter
+          ? llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
+            dimension: 'what',
+            operation: 'expand',
+            temperature
+          }))
+          : llmProvider.refinePrompt(userPrompt, {
+            dimension: 'what',
+            operation: 'expand',
+            temperature
+          }),
+        llmLimiter
+          ? llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
+            dimension: 'how',
+            operation: 'expand',
+            temperature
+          }))
+          : llmProvider.refinePrompt(userPrompt, {
+            dimension: 'how',
+            operation: 'expand',
+            temperature
+          })
       ]);
       return {
         what: what.refinedPrompt,
@@ -139,23 +158,59 @@ async function initialExpansion(
     })
   );
 
-  // Stream all N candidates through the pipeline in parallel
+  // Stream all N candidates through the pipeline with rate limiting
   const candidates = await Promise.all(
-    whatHowPairs.map(({ what, how }, i) =>
-      processCandidateStream(
-        what,
-        how,
-        llmProvider,
-        imageGenProvider,
-        visionProvider,
-        {
-          iteration: 0,
-          candidateId: i,
-          dimension: 'what', // First iteration refines WHAT
+    whatHowPairs.map(({ what, how }, i) => {
+      // Create wrapper that applies rate limiting for image gen and vision
+      const limitedProcessCandidateStream = async () => {
+        // Combine prompts (no rate limiting needed)
+        const combined = await llmProvider.combinePrompts(what, how);
+
+        // Generate image with rate limiting
+        const image = imageGenLimiter
+          ? await imageGenLimiter.execute(() => imageGenProvider.generateImage(combined, {
+            iteration: 0,
+            candidateId: i,
+            dimension: 'what',
+            alpha
+          }))
+          : await imageGenProvider.generateImage(combined, {
+            iteration: 0,
+            candidateId: i,
+            dimension: 'what',
+            alpha
+          });
+
+        // Evaluate image with rate limiting
+        const evaluation = visionLimiter
+          ? await visionLimiter.execute(() => visionProvider.analyzeImage(image.url, combined))
+          : await visionProvider.analyzeImage(image.url, combined);
+
+        // Calculate total score
+        const totalScore = calculateTotalScore(
+          evaluation.alignmentScore,
+          evaluation.aestheticScore,
           alpha
-        }
-      )
-    )
+        );
+
+        // Return complete candidate object
+        return {
+          whatPrompt: what,
+          howPrompt: how,
+          combined,
+          image,
+          evaluation,
+          totalScore,
+          metadata: {
+            iteration: 0,
+            candidateId: i,
+            dimension: 'what'
+          }
+        };
+      };
+
+      return limitedProcessCandidateStream();
+    })
   );
 
   return candidates;
