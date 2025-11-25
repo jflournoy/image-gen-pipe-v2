@@ -14,6 +14,8 @@ const {
   createProviders
 } = require('../src/factory/provider-factory');
 
+const OpenAIVisionProvider = require('../src/providers/openai-vision-provider');
+
 describe('Provider Factory', () => {
   describe('createCritiqueGenerator', () => {
     it('should create a mock critique generator in mock mode', () => {
@@ -123,6 +125,47 @@ describe('Provider Factory', () => {
     it('should create scoring provider', () => {
       const scoring = createScoringProvider({ mode: 'mock' });
       assert(scoring, 'Should return a scoring provider');
+    });
+  });
+
+  describe('createVisionProvider (real mode)', () => {
+    it('should create real OpenAI vision provider in real mode', () => {
+      const originalKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = 'test-key-12345';
+
+      try {
+        const vision = createVisionProvider({ mode: 'real' });
+
+        assert(vision instanceof OpenAIVisionProvider, 'Should return OpenAIVisionProvider instance');
+        assert.strictEqual(typeof vision.analyzeImage, 'function', 'Should have analyzeImage method');
+      } finally {
+        if (originalKey) {
+          process.env.OPENAI_API_KEY = originalKey;
+        } else {
+          delete process.env.OPENAI_API_KEY;
+        }
+      }
+    });
+
+    it('should pass custom model option to real vision provider', () => {
+      const originalKey = process.env.OPENAI_API_KEY;
+      process.env.OPENAI_API_KEY = 'test-key-12345';
+
+      try {
+        const vision = createVisionProvider({
+          mode: 'real',
+          model: 'gpt-4o-mini'
+        });
+
+        assert(vision instanceof OpenAIVisionProvider, 'Should return OpenAIVisionProvider instance');
+        assert.strictEqual(vision.model, 'gpt-4o-mini', 'Should use custom model');
+      } finally {
+        if (originalKey) {
+          process.env.OPENAI_API_KEY = originalKey;
+        } else {
+          delete process.env.OPENAI_API_KEY;
+        }
+      }
     });
   });
 });

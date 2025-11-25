@@ -17,9 +17,8 @@ const MockCritiqueGenerator = require('../providers/mock-critique-generator');
 // Real providers
 const OpenAILLMProvider = require('../providers/openai-llm-provider');
 const OpenAIImageProvider = require('../providers/openai-image-provider');
+const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 const CritiqueGenerator = require('../services/critique-generator');
-// TODO: Add more real providers as they're implemented
-// const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 
 /**
  * Create an LLM provider instance
@@ -90,12 +89,28 @@ function createImageProvider(options = {}) {
 function createVisionProvider(options = {}) {
   const mode = options.mode || config.mode;
 
-  // Always use mock for now - real provider not yet implemented
-  // TODO: Implement OpenAIVisionProvider
-  if (mode === 'real') {
-    console.warn('⚠️  Vision provider: Using mock (real provider not yet implemented)');
+  if (mode === 'mock') {
+    return new MockVisionProvider();
   }
-  return new MockVisionProvider();
+
+  // Real provider
+  const provider = options.provider || config.vision?.provider || 'openai';
+
+  switch (provider) {
+    case 'openai':
+    case 'gpt-vision':
+      if (!config.llm.apiKey) {
+        throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
+      }
+      return new OpenAIVisionProvider(config.llm.apiKey, {
+        model: options.model || 'gpt-4o',
+        maxRetries: options.maxRetries || 3,
+        timeout: options.timeout || 30000
+      });
+
+    default:
+      throw new Error(`Unknown vision provider: ${provider}`);
+  }
 }
 
 /**
