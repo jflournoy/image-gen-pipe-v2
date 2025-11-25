@@ -737,6 +737,152 @@ describe('Beam Search Orchestrator', () => {
     });
   });
 
+  describe('Rate Limiting in beamSearch', () => {
+    test('should limit concurrent LLM refinePrompt calls during initialExpansion', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let maxConcurrentLLM = 0;
+      let currentConcurrentLLM = 0;
+
+      const mockLLM = {
+        refinePrompt: async (prompt, options) => {
+          currentConcurrentLLM++;
+          maxConcurrentLLM = Math.max(maxConcurrentLLM, currentConcurrentLLM);
+
+          // Simulate API call
+          await new Promise(resolve => setTimeout(resolve, 5));
+
+          currentConcurrentLLM--;
+          return { refinedPrompt: `refined_${options.dimension}`, metadata: {} };
+        },
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const config = { beamWidth: 5, rateLimitConcurrency: 2 };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        config
+      );
+
+      assert.ok(maxConcurrentLLM <= 2, `LLM concurrent calls (${maxConcurrentLLM}) should not exceed rate limit of 2`);
+    });
+
+    test('should limit concurrent image generation calls', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let maxConcurrentImageGen = 0;
+      let currentConcurrentImageGen = 0;
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => {
+          currentConcurrentImageGen++;
+          maxConcurrentImageGen = Math.max(maxConcurrentImageGen, currentConcurrentImageGen);
+
+          // Simulate API call
+          await new Promise(resolve => setTimeout(resolve, 5));
+
+          currentConcurrentImageGen--;
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const config = { beamWidth: 5, rateLimitConcurrency: 2 };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        config
+      );
+
+      assert.ok(maxConcurrentImageGen <= 2, `Image generation concurrent calls (${maxConcurrentImageGen}) should not exceed rate limit of 2`);
+    });
+
+    test('should limit concurrent vision API calls', async () => {
+      const { initialExpansion } = require('../../src/orchestrator/beam-search.js');
+
+      let maxConcurrentVision = 0;
+      let currentConcurrentVision = 0;
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (what, how) => `${what} + ${how}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => ({ url: 'test.png', metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async () => {
+          currentConcurrentVision++;
+          maxConcurrentVision = Math.max(maxConcurrentVision, currentConcurrentVision);
+
+          // Simulate API call
+          await new Promise(resolve => setTimeout(resolve, 5));
+
+          currentConcurrentVision--;
+          return {
+            alignmentScore: 80,
+            aestheticScore: 7,
+            analysis: '',
+            strengths: [],
+            weaknesses: [],
+            metadata: {}
+          };
+        }
+      };
+
+      const config = { beamWidth: 5, rateLimitConcurrency: 2 };
+
+      await initialExpansion(
+        'test prompt',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        config
+      );
+
+      assert.ok(maxConcurrentVision <= 2, `Vision concurrent calls (${maxConcurrentVision}) should not exceed rate limit of 2`);
+    });
+  });
+
   describe('beamSearch', () => {
     test('should call initialExpansion for iteration 0', async () => {
       const { beamSearch } = require('../../src/orchestrator/beam-search.js');
