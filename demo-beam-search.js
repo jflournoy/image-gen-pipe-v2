@@ -17,6 +17,13 @@
  *    → Rank by score → Keep top 2
  * 4. Return best candidate from final iteration
  *
+ * Rate Limiting:
+ * - Uses sensible defaults to prevent OpenAI API rate limit errors (429)
+ * - Configurable via environment variables:
+ *   - BEAM_SEARCH_RATE_LIMIT_LLM (default: 3 concurrent)
+ *   - BEAM_SEARCH_RATE_LIMIT_IMAGE_GEN (default: 2 concurrent)
+ *   - BEAM_SEARCH_RATE_LIMIT_VISION (default: 3 concurrent)
+ *
  * Usage:
  *   node demo-beam-search.js
  *
@@ -27,6 +34,7 @@
 require('dotenv').config();
 
 const { beamSearch } = require('./src/orchestrator/beam-search.js');
+const rateLimitConfig = require('./src/config/rate-limits.js');
 const OpenAILLMProvider = require('./src/providers/openai-llm-provider.js');
 const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
@@ -119,6 +127,12 @@ async function demo() {
   console.log('  • Expansion ratio: 2 children per parent');
   console.log('  • Max iterations: 3 (iteration 0, 1, 2)');
   console.log('  • Alpha: 0.7 (70% alignment, 30% aesthetic)');
+  console.log('');
+  console.log('Rate Limiting (prevents OpenAI 429 errors):');
+  console.log(`  • LLM concurrency: ${rateLimitConfig.defaults.llm} requests`);
+  console.log(`  • Image Gen concurrency: ${rateLimitConfig.defaults.imageGen} requests`);
+  console.log(`  • Vision concurrency: ${rateLimitConfig.defaults.vision} requests`);
+  console.log('  • Configure via: BEAM_SEARCH_RATE_LIMIT_* env vars');
   console.log('='.repeat(80));
 
   // Check for API key
@@ -176,6 +190,9 @@ async function demo() {
     alpha: 0.7,          // 70% alignment, 30% aesthetic
     temperature: 0.8,    // Stochastic variation for diversity
     metadataTracker      // Add tracker to config
+    // Note: Rate limits use defaults from rate-limits.js automatically
+    // No need to specify rateLimitConcurrency - beam search uses sensible defaults
+    // Can override via BEAM_SEARCH_RATE_LIMIT_* environment variables
   };
 
   console.log('\n📝 User Prompt: "' + userPrompt + '"');
