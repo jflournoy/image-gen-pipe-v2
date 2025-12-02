@@ -6,6 +6,7 @@
  */
 
 const { RateLimiter } = require('../utils/rate-limiter.js');
+const rateLimitConfig = require('../config/rate-limits.js');
 
 /**
  * Rank candidates by total score and select top M
@@ -118,38 +119,31 @@ async function initialExpansion(
 ) {
   const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency } = config;
 
-  // Create rate limiters for each provider if concurrency limit specified
-  const llmLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
-  const imageGenLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
-  const visionLimiter = rateLimitConcurrency ? new RateLimiter(rateLimitConcurrency) : null;
+  // Get rate limits: use explicit config if provided, otherwise use sensible defaults
+  const llmLimit = rateLimitConcurrency || rateLimitConfig.getLimit('llm');
+  const imageGenLimit = rateLimitConcurrency || rateLimitConfig.getLimit('imageGen');
+  const visionLimit = rateLimitConcurrency || rateLimitConfig.getLimit('vision');
+
+  // Create rate limiters for each provider with sensible defaults
+  const llmLimiter = new RateLimiter(llmLimit);
+  const imageGenLimiter = new RateLimiter(imageGenLimit);
+  const visionLimiter = new RateLimiter(visionLimit);
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
     Array(N).fill().map(async () => {
-      // Generate WHAT and HOW in parallel for each candidate
+      // Generate WHAT and HOW in parallel for each candidate with rate limiting
       const [what, how] = await Promise.all([
-        llmLimiter
-          ? llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
-            dimension: 'what',
-            operation: 'expand',
-            temperature
-          }))
-          : llmProvider.refinePrompt(userPrompt, {
-            dimension: 'what',
-            operation: 'expand',
-            temperature
-          }),
-        llmLimiter
-          ? llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
-            dimension: 'how',
-            operation: 'expand',
-            temperature
-          }))
-          : llmProvider.refinePrompt(userPrompt, {
-            dimension: 'how',
-            operation: 'expand',
-            temperature
-          })
+        llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
+          dimension: 'what',
+          operation: 'expand',
+          temperature
+        })),
+        llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
+          dimension: 'how',
+          operation: 'expand',
+          temperature
+        }))
       ]);
       return {
         what: what.refinedPrompt,
@@ -167,24 +161,19 @@ async function initialExpansion(
         const combined = await llmProvider.combinePrompts(what, how);
 
         // Generate image with rate limiting
-        const image = imageGenLimiter
-          ? await imageGenLimiter.execute(() => imageGenProvider.generateImage(combined, {
+        const image = await imageGenLimiter.execute(() =>
+          imageGenProvider.generateImage(combined, {
             iteration: 0,
             candidateId: i,
             dimension: 'what',
             alpha
-          }))
-          : await imageGenProvider.generateImage(combined, {
-            iteration: 0,
-            candidateId: i,
-            dimension: 'what',
-            alpha
-          });
+          })
+        );
 
         // Evaluate image with rate limiting
-        const evaluation = visionLimiter
-          ? await visionLimiter.execute(() => visionProvider.analyzeImage(image.url, combined))
-          : await visionProvider.analyzeImage(image.url, combined);
+        const evaluation = await visionLimiter.execute(() =>
+          visionProvider.analyzeImage(image.url, combined)
+        );
 
         // Calculate total score
         const totalScore = calculateTotalScore(
