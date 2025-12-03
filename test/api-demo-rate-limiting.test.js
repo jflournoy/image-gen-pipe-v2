@@ -4,8 +4,9 @@
  * Tests for a web-based demo that shows rate limiting in action.
  * This demo should help users understand how rate limits work.
  */
+/* global fetch */
 
-const { describe, test, before, after } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 
 describe('🔴 RED: Web Demo - Rate Limiting Visualization', () => {
