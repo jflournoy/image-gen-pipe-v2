@@ -10,11 +10,14 @@
  *
  * Features:
  *   - Real providers save images locally with beam search structure
- *   - Images saved to: ./output/YYYY-MM-DD/session-HHMMSS/iter-00/candidate-00-what/
+ *   - Images saved to: ./output/YYYY-MM-DD/ses-HHMMSS/
  *   - Mock providers skip local storage (no beam search context)
+ *   - Token efficiency tracking with cost analysis and optimization suggestions
  */
 
 const { createProviders } = require('./src/factory/provider-factory.js');
+const TokenTracker = require('./src/utils/token-tracker.js');
+const { MODEL_PRICING } = require('./src/config/model-pricing.js');
 
 async function demo() {
   // Determine provider mode from CLI args or env
@@ -25,6 +28,15 @@ async function demo() {
   console.log('='.repeat(60));
   console.log(`Provider Mode: ${mode.toUpperCase()}`);
   console.log('='.repeat(60));
+  console.log();
+
+  // Initialize token tracker for cost efficiency tracking
+  const sessionId = `demo-${Date.now()}`;
+  const tokenTracker = new TokenTracker({
+    sessionId,
+    pricing: MODEL_PRICING
+  });
+  console.log('💰 Token efficiency tracking: ENABLED');
   console.log();
 
   // Create providers based on mode
@@ -51,11 +63,37 @@ async function demo() {
   console.log('\nWHAT refinement (content):');
   console.log(`  → "${whatRefinement.refinedPrompt}"`);
   console.log(`  Tokens used: ${whatRefinement.metadata.tokensUsed}`);
+  console.log(`  Model: ${whatRefinement.metadata.model || 'mock'}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: whatRefinement.metadata.tokensUsed || 150,
+    metadata: {
+      model: whatRefinement.metadata.model || 'mock',
+      dimension: 'what',
+      operation: 'expand'
+    }
+  });
 
   const howRefinement = await llm.refinePrompt(originalPrompt, { dimension: 'how' });
   console.log('\nHOW refinement (style):');
   console.log(`  → "${howRefinement.refinedPrompt}"`);
   console.log(`  Tokens used: ${howRefinement.metadata.tokensUsed}`);
+  console.log(`  Model: ${howRefinement.metadata.model || 'mock'}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: howRefinement.metadata.tokensUsed || 150,
+    metadata: {
+      model: howRefinement.metadata.model || 'mock',
+      dimension: 'how',
+      operation: 'expand'
+    }
+  });
 
   console.log();
   console.log('='.repeat(60));
@@ -71,6 +109,16 @@ async function demo() {
 
   if (mode === 'real') {
     console.log('Combined prompt created by LLM');
+    // Track combine operation (combinePrompts doesn't return metadata yet, so estimate)
+    tokenTracker.recordUsage({
+      provider: 'llm',
+      operation: 'combine',
+      tokens: 100, // Estimate
+      metadata: {
+        model: 'gpt-5.1-nano', // From our config for simple operations
+        operation: 'combine'
+      }
+    });
   } else {
     console.log('Using WHAT prompt only (mock mode)');
   }
@@ -123,6 +171,18 @@ async function demo() {
   console.log(`\nAlignment Score: ${analysis.alignmentScore}/100`);
   console.log(`Caption: "${analysis.caption}"`);
   console.log(`Tokens used: ${analysis.metadata.tokensUsed}`);
+  console.log(`Model: ${analysis.metadata.model || 'mock'}`);
+
+  // Track vision token usage
+  tokenTracker.recordUsage({
+    provider: 'vision',
+    operation: 'analyze',
+    tokens: analysis.metadata.tokensUsed || 500,
+    metadata: {
+      model: analysis.metadata.model || 'mock',
+      operation: 'analyze'
+    }
+  });
 
   console.log();
   console.log('='.repeat(60));
@@ -182,6 +242,17 @@ async function demo() {
   console.log();
   console.log('='.repeat(60));
   console.log();
+
+  // Display token efficiency report
+  console.log('💰 Token Efficiency Report');
+  console.log('='.repeat(60));
+
+  tokenTracker.finalize();
+  console.log(tokenTracker.formatSummary());
+
+  // Display optimization suggestions
+  console.log(tokenTracker.formatOptimizationReport());
+
   console.log('✅ Demo complete! All 4 providers working correctly.');
   console.log();
   console.log('💡 This demonstrates the full pipeline:');
@@ -189,6 +260,7 @@ async function demo() {
   console.log('   2. ImageGen creates images from refined prompts');
   console.log('   3. Vision analyzes images and calculates alignment');
   console.log('   4. Scoring combines scores for candidate ranking');
+  console.log('   5. Token efficiency tracking shows costs and optimization opportunities');
   console.log();
 }
 
