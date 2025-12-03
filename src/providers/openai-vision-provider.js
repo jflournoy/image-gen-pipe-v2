@@ -65,10 +65,22 @@ Provide:
 - Strengths: What the image does well
 - Weaknesses: What could be improved
 
+Calibrate your prompt fidelity scoring (0.0 to 1.0 scale):
+- 0.0: No correspondence between the prompt and the image
+- 0.5: *Adequate* correspondence - image contains requested elements but lacks nuance
+- 0.9-1.0: *Exceptional* correspondence - faithful representation with innovative extensions that surpass expectations
+
+Calibrate your aesthetic scoring (0.0 to 10.0 scale):
+- 0.0-2.0: Poor quality - artifacts, distortions, unintentional blurring, technical failures
+- 3.0-4.0: Below average - visible flaws, weak composition, inconsistent execution
+- 5.0-6.0: *Adequate* quality - competent execution, standard techniques, typical aesthetic strategies
+- 7.0-8.0: Good - strong execution, engaging composition, pleasing visual harmony
+- 9.0-10.0: *Exceptional* visual appeal - masterful execution, captivating composition, intentional artistic choices that draw the viewer in
+
 Respond in this exact JSON format:
 {
-  "promptFidelity": 0.85,
-  "aestheticScore": 7.5,
+  "promptFidelity": 0.50,
+  "aestheticScore": 5.0,
   "analysis": "Brief explanation of the scores",
   "strengths": ["strength 1", "strength 2"],
   "weaknesses": ["weakness 1", "weakness 2"]
