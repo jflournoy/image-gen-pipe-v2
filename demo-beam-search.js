@@ -24,6 +24,10 @@
  *   - BEAM_SEARCH_RATE_LIMIT_IMAGE_GEN (default: 2 concurrent)
  *   - BEAM_SEARCH_RATE_LIMIT_VISION (default: 3 concurrent)
  *
+ * Output Structure:
+ * - Metadata and images saved to: output/YYYY-MM-DD/ses-HHMMSS/
+ * - Uses OutputPathManager for consistent path construction
+ *
  * Usage:
  *   node demo-beam-search.js
  *
@@ -40,6 +44,9 @@ const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
 const CritiqueGenerator = require('./src/services/critique-generator.js');
 const MetadataTracker = require('./src/services/metadata-tracker.js');
+const TokenTracker = require('./src/utils/token-tracker.js');
+const { MODEL_PRICING } = require('./src/config/model-pricing.js');
+const { buildSessionPath, buildMetadataPath, DEFAULT_OUTPUT_DIR } = require('./src/utils/output-path-manager.js');
 
 /**
  * Custom logging wrapper to track beam search progress
@@ -142,13 +149,12 @@ async function demo() {
     process.exit(1);
   }
 
-  // Generate session ID with date and time
+  // Generate session ID in ses-HHMMSS format
   const now = new Date();
-  const dateStr = now.toISOString().split('T')[0]; // YYYY-MM-DD
   const hours = String(now.getHours()).padStart(2, '0');
   const minutes = String(now.getMinutes()).padStart(2, '0');
   const seconds = String(now.getSeconds()).padStart(2, '0');
-  const sessionId = `${dateStr}-${hours}${minutes}${seconds}`;
+  const sessionId = `ses-${hours}${minutes}${seconds}`;
 
   // Configuration
   const userPrompt = 'a serene mountain landscape at sunset';
@@ -183,13 +189,22 @@ async function demo() {
   await metadataTracker.initialize();
   console.log('✅ Metadata tracker ready');
 
+  // Initialize token tracker for cost efficiency
+  console.log(`💰 Initializing token efficiency tracker (session: ${sessionId})...`);
+  const tokenTracker = new TokenTracker({
+    sessionId,
+    pricing: MODEL_PRICING
+  });
+  console.log('✅ Token tracker ready - cost tracking enabled');
+
   const config = {
     beamWidth: 4,        // N = 4 candidates
     keepTop: 2,          // M = 2 survivors
     maxIterations: 3,    // Run 3 iterations (0, 1, 2)
     alpha: 0.7,          // 70% alignment, 30% aesthetic
     temperature: 0.8,    // Stochastic variation for diversity
-    metadataTracker      // Add tracker to config
+    metadataTracker,     // Add metadata tracker to config
+    tokenTracker         // Add token tracker to config
     // Note: Rate limits use defaults from rate-limits.js automatically
     // No need to specify rateLimitConcurrency - beam search uses sensible defaults
     // Can override via BEAM_SEARCH_RATE_LIMIT_* environment variables
@@ -248,8 +263,8 @@ async function demo() {
 
   console.log('\n📊 Session Metadata:');
   console.log(`   • Session ID: ${sessionId}`);
-  console.log(`   • Metadata saved to: output/sessions/${sessionId}/metadata.json`);
-  console.log(`   • Images saved to: output/sessions/${sessionId}/`);
+  console.log(`   • Metadata saved to: ${buildMetadataPath(DEFAULT_OUTPUT_DIR, sessionId)}`);
+  console.log(`   • Images saved to: ${buildSessionPath(DEFAULT_OUTPUT_DIR, sessionId)}/`);
 
   // Display lineage info
   const metadata = await metadataTracker.getMetadata();
@@ -261,6 +276,17 @@ async function demo() {
     });
   }
 
+  // Display token efficiency report
+  console.log('\n' + '='.repeat(80));
+  console.log('💰 Token Efficiency Report');
+  console.log('='.repeat(80));
+
+  tokenTracker.finalize();
+  console.log(tokenTracker.formatSummary());
+
+  // Display optimization suggestions
+  console.log(tokenTracker.formatOptimizationReport());
+
   console.log('\n' + '='.repeat(80));
   console.log('✅ Beam search completed successfully!');
   console.log('\n💡 Key Observations:');
@@ -269,6 +295,7 @@ async function demo() {
   console.log('   • Iteration 2: Refined HOW (style), kept top 2');
   console.log('   • Winner emerged through iterative refinement + selection pressure');
   console.log('   • Complete metadata and lineage tracked in metadata.json');
+  console.log('   • Token efficiency tracking shows real costs and optimization opportunities');
   console.log('='.repeat(80));
   console.log();
 }
