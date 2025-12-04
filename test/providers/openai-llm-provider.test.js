@@ -477,6 +477,42 @@ describe('OpenAILLMProvider Interface', () => {
     });
   });
 
+  describe('Model Parameter Syntax', () => {
+    it('🔴 should detect GPT-5.1 models that require max_completion_tokens', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // GPT-5.1 models should use max_completion_tokens
+      assert.strictEqual(provider._usesCompletionTokens('gpt-5.1'), true, 'gpt-5.1 should use max_completion_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-5.1-mini'), true, 'gpt-5.1-mini should use max_completion_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-5.1-nano'), true, 'gpt-5.1-nano should use max_completion_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-5.1-preview'), true, 'gpt-5.1-preview should use max_completion_tokens');
+
+      // Older models should use max_tokens
+      assert.strictEqual(provider._usesCompletionTokens('gpt-4o-mini'), false, 'gpt-4o-mini should use max_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-4'), false, 'gpt-4 should use max_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-4-turbo'), false, 'gpt-4-turbo should use max_tokens');
+      assert.strictEqual(provider._usesCompletionTokens('gpt-3.5-turbo'), false, 'gpt-3.5-turbo should use max_tokens');
+    });
+
+    it('🔴 should build API parameters with correct token limit field', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // Test GPT-5.1 model
+      const gpt51Params = provider._buildChatParams('gpt-5.1', [{ role: 'user', content: 'test' }], 0.7, 500);
+      assert.ok(gpt51Params.max_completion_tokens, 'GPT-5.1 should have max_completion_tokens');
+      assert.strictEqual(gpt51Params.max_completion_tokens, 500);
+      assert.strictEqual(gpt51Params.max_tokens, undefined, 'GPT-5.1 should not have max_tokens');
+
+      // Test GPT-4 model
+      const gpt4Params = provider._buildChatParams('gpt-4o-mini', [{ role: 'user', content: 'test' }], 0.7, 500);
+      assert.ok(gpt4Params.max_tokens, 'GPT-4 should have max_tokens');
+      assert.strictEqual(gpt4Params.max_tokens, 500);
+      assert.strictEqual(gpt4Params.max_completion_tokens, undefined, 'GPT-4 should not have max_completion_tokens');
+    });
+  });
+
   describe('Operation-Specific Model Selection', () => {
     it('should accept operation-specific models in constructor', () => {
       const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
