@@ -42,6 +42,7 @@ function createLLMProvider(options = {}) {
       }
       return new OpenAILLMProvider(config.llm.apiKey, {
         model: config.llm.model,
+        models: config.llm.models,  // Operation-specific models for cost optimization
         maxRetries: config.llm.maxRetries,
         timeout: config.llm.timeout
       });

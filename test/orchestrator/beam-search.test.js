@@ -151,7 +151,10 @@ describe('Beam Search Orchestrator', () => {
 
       // Mock providers
       const mockLLM = {
-        combinePrompts: async (what, how) => `${what} with ${how}`
+        combinePrompts: async (what, how) => ({
+          combinedPrompt: `${what} with ${how}`,
+          metadata: { model: 'mock', tokensUsed: 50 }
+        })
       };
 
       const mockImageGen = {
@@ -316,7 +319,10 @@ describe('Beam Search Orchestrator', () => {
             return { refinedPrompt: `HOW_${howCalls}`, metadata: {} };
           }
         },
-        combinePrompts: async (what, how) => `${what} + ${how}`
+        combinePrompts: async (what, how) => ({
+          combinedPrompt: `${what} + ${how}`,
+          metadata: { model: 'mock', tokensUsed: 50 }
+        })
       };
 
       const mockImageGen = {
@@ -375,7 +381,10 @@ describe('Beam Search Orchestrator', () => {
           capturedOptions.push(options);
           return { refinedPrompt: `refined_${options.dimension}`, metadata: {} };
         },
-        combinePrompts: async (what, how) => `${what} + ${how}`
+        combinePrompts: async (what, how) => ({
+          combinedPrompt: `${what} + ${how}`,
+          metadata: { model: 'mock', tokensUsed: 50 }
+        })
       };
 
       const mockImageGen = {
@@ -1263,6 +1272,219 @@ describe('Beam Search Orchestrator', () => {
 
       assert.strictEqual(capturedAlpha, 0.8, 'Should pass alpha through pipeline');
       assert.strictEqual(capturedTemperature, 0.9, 'Should pass temperature through pipeline');
+    });
+  });
+
+  describe('🔴 Defensive Metadata Recording', () => {
+    test('should call recordAttempt BEFORE image generation', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      const callOrder = [];
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => {
+          callOrder.push('generateImage');
+          return { url: 'test.png', revisedPrompt: 'revised', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockMetadataTracker = {
+        recordAttempt: async () => {
+          callOrder.push('recordAttempt');
+        },
+        updateAttemptWithResults: async () => {
+          callOrder.push('updateAttemptWithResults');
+        },
+        recordCandidate: async () => {},
+        markFinalWinner: async () => {},
+        buildLineage: async () => {}
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision
+      };
+
+      const config = {
+        beamWidth: 2,
+        keepTop: 1,
+        maxIterations: 1,
+        metadataTracker: mockMetadataTracker
+      };
+
+      await beamSearch('test', providers, config);
+
+      // Verify recordAttempt was called BEFORE generateImage
+      const recordAttemptIndex = callOrder.indexOf('recordAttempt');
+      const generateImageIndex = callOrder.indexOf('generateImage');
+
+      assert.ok(
+        recordAttemptIndex !== -1,
+        'recordAttempt should be called'
+      );
+      assert.ok(
+        recordAttemptIndex < generateImageIndex,
+        'recordAttempt should be called BEFORE generateImage (defensive pattern)'
+      );
+    });
+
+    test('should call updateAttemptWithResults AFTER successful generation', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      const callOrder = [];
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => {
+          callOrder.push('generateImage');
+          return { url: 'test.png', revisedPrompt: 'revised', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => {
+          callOrder.push('analyzeImage');
+          return {
+            alignmentScore: 85,
+            aestheticScore: 7,
+            analysis: '',
+            strengths: [],
+            weaknesses: [],
+            metadata: {}
+          };
+        }
+      };
+
+      const mockMetadataTracker = {
+        recordAttempt: async () => {
+          callOrder.push('recordAttempt');
+        },
+        updateAttemptWithResults: async () => {
+          callOrder.push('updateAttemptWithResults');
+        },
+        recordCandidate: async () => {},
+        markFinalWinner: async () => {},
+        buildLineage: async () => {}
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision
+      };
+
+      const config = {
+        beamWidth: 2,
+        keepTop: 1,
+        maxIterations: 1,
+        metadataTracker: mockMetadataTracker
+      };
+
+      await beamSearch('test', providers, config);
+
+      // Verify updateAttemptWithResults was called AFTER both generateImage and analyzeImage
+      const updateIndex = callOrder.indexOf('updateAttemptWithResults');
+      const generateIndex = callOrder.indexOf('generateImage');
+      const analyzeIndex = callOrder.indexOf('analyzeImage');
+
+      assert.ok(
+        updateIndex !== -1,
+        'updateAttemptWithResults should be called'
+      );
+      assert.ok(
+        updateIndex > generateIndex && updateIndex > analyzeIndex,
+        'updateAttemptWithResults should be called AFTER image generation and analysis complete'
+      );
+    });
+
+    test('should preserve recordAttempt data even if image generation fails', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      let attemptRecorded = false;
+      let updateCalled = false;
+
+      const mockLLM = {
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async () => {
+          throw new Error('API rate limit exceeded');
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockMetadataTracker = {
+        recordAttempt: async () => {
+          attemptRecorded = true;
+        },
+        updateAttemptWithResults: async () => {
+          updateCalled = true;
+        }
+      };
+
+      const options = {
+        iteration: 0,
+        candidateId: 0,
+        dimension: 'what',
+        metadataTracker: mockMetadataTracker
+      };
+
+      // Attempt to process - should fail at image generation
+      try {
+        await processCandidateStream(
+          'what prompt',
+          'how prompt',
+          mockLLM,
+          mockImageGen,
+          mockVision,
+          options
+        );
+        assert.fail('Should have thrown error from image generation');
+      } catch (error) {
+        assert.strictEqual(error.message, 'API rate limit exceeded');
+      }
+
+      // Verify defensive metadata was recorded even though generation failed
+      assert.ok(
+        attemptRecorded,
+        'recordAttempt should be called even when image generation fails (defensive pattern)'
+      );
+      assert.ok(
+        !updateCalled,
+        'updateAttemptWithResults should NOT be called when generation fails'
+      );
     });
   });
 });

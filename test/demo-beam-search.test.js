@@ -1,8 +1,10 @@
 /**
- * 🔴 RED: Tests for demo-beam-search.js rate limiting demonstration
+ * 🔴 RED: Tests for demo-beam-search.js
  *
- * These tests verify that the demo properly demonstrates rate limiting
- * functionality to users.
+ * These tests verify:
+ * 1. Rate limiting demonstration
+ * 2. API consistency with OutputPathManager
+ * 3. Correct session ID format
  */
 
 const { describe, test } = require('node:test');
@@ -74,6 +76,78 @@ describe('Beam Search Demo - Rate Limiting Display', () => {
     assert(
       hasRateLimitConfig || usesDefaults,
       'Demo config should either specify rate limits or use defaults from rate-limits.js'
+    );
+  });
+});
+
+describe('Beam Search Demo - API Consistency', () => {
+  test('🔴 should use OutputPathManager for path construction', () => {
+    const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
+    const demoContent = fs.readFileSync(demoPath, 'utf-8');
+
+    // Demo should import OutputPathManager
+    assert(
+      demoContent.includes('output-path-manager'),
+      'Demo should import OutputPathManager utility'
+    );
+
+    // Demo should use buildSessionPath or buildMetadataPath
+    const usesPathBuilder =
+      demoContent.includes('buildSessionPath') ||
+      demoContent.includes('buildMetadataPath');
+
+    assert(
+      usesPathBuilder,
+      'Demo should use OutputPathManager.buildSessionPath() or buildMetadataPath()'
+    );
+  });
+
+  test('🔴 should use ses-HHMMSS session ID format', () => {
+    const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
+    const demoContent = fs.readFileSync(demoPath, 'utf-8');
+
+    // Demo should create session ID in ses-HHMMSS format
+    // NOT in YYYY-MM-DD-HHMMSS format
+    const hasCorrectFormat = demoContent.includes('ses-');
+
+    assert(
+      hasCorrectFormat,
+      'Demo should use ses-HHMMSS session ID format (e.g., "ses-123456")'
+    );
+
+    // Should NOT concatenate date into session ID
+    const hasBadFormat = /sessionId\s*=\s*`\$\{dateStr\}-\$\{/.test(demoContent);
+
+    assert(
+      !hasBadFormat,
+      'Demo should NOT include date in session ID (date goes in directory path, not session ID)'
+    );
+  });
+
+  test('🔴 should NOT hardcode output/sessions/ path', () => {
+    const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
+    const demoContent = fs.readFileSync(demoPath, 'utf-8');
+
+    // Demo should NOT use hardcoded "output/sessions/" path
+    const hasHardcodedPath = demoContent.includes('output/sessions/');
+
+    assert(
+      !hasHardcodedPath,
+      'Demo should NOT hardcode "output/sessions/" - should use OutputPathManager which creates "output/YYYY-MM-DD/" structure'
+    );
+  });
+
+  test('🔴 should use correct output path structure (YYYY-MM-DD/ses-HHMMSS)', () => {
+    const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
+    const demoContent = fs.readFileSync(demoPath, 'utf-8');
+
+    // Demo should document the correct path structure in comments
+    // Format should be: output/YYYY-MM-DD/ses-HHMMSS/
+    const documentationMatch = demoContent.match(/output\/.*ses-/);
+
+    assert(
+      documentationMatch,
+      'Demo should document path structure as output/YYYY-MM-DD/ses-HHMMSS/'
     );
   });
 });

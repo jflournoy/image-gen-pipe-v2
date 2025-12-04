@@ -103,28 +103,25 @@ async function demo() {
   console.log('🔗 Step 1.5: Combining WHAT and HOW prompts');
   console.log('-'.repeat(60));
 
-  let combinedPrompt;
-  if (mode === 'real') {
-    const combineResult = await llm.combinePrompts(whatRefinement.refinedPrompt, howRefinement.refinedPrompt);
-    combinedPrompt = combineResult.combinedPrompt;
+  // Combine WHAT and HOW prompts (both real and mock providers support this)
+  const combineResult = await llm.combinePrompts(whatRefinement.refinedPrompt, howRefinement.refinedPrompt);
+  const combinedPrompt = combineResult.combinedPrompt;
 
-    console.log('Combined prompt created by LLM');
-    // Track combine operation using actual metadata
-    if (combineResult.metadata) {
-      tokenTracker.recordUsage({
-        provider: 'llm',
-        operation: 'combine',
-        tokens: combineResult.metadata.tokensUsed,
-        metadata: {
-          model: combineResult.metadata.model,
-          operation: 'combine'
-        }
-      });
+  console.log('Combined prompt created by LLM');
+  console.log(`  → "${combinedPrompt.substring(0, 80)}..."`);
+  console.log(`  Tokens used: ${combineResult.metadata.tokensUsed}`);
+  console.log(`  Model: ${combineResult.metadata.model}`);
+
+  // Track combine operation using actual metadata
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'combine',
+    tokens: combineResult.metadata.tokensUsed,
+    metadata: {
+      model: combineResult.metadata.model,
+      operation: 'combine'
     }
-  } else {
-    combinedPrompt = whatRefinement.refinedPrompt; // Mock provider doesn't have combinePrompts yet
-    console.log('Using WHAT prompt only (mock mode)');
-  }
+  });
 
   console.log();
   console.log('='.repeat(60));

@@ -19,6 +19,7 @@ const OpenAI = require('openai');
 const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
+const OutputPathManager = require('../utils/output-path-manager.js');
 
 class OpenAIImageProvider {
   constructor(apiKey, options = {}) {
@@ -49,13 +50,13 @@ class OpenAIImageProvider {
 
     // Local storage configuration
     this.saveLocally = options.saveLocally !== undefined ? options.saveLocally : true;
-    this.outputDir = options.outputDir || path.join(process.cwd(), 'output');
+    this.outputDir = options.outputDir || OutputPathManager.DEFAULT_OUTPUT_DIR;
     this.sessionId = options.sessionId || this._generateSessionId();
   }
 
   /**
    * Generate a session ID based on current time
-   * @returns {string} Session ID in format: session-HHMMSS
+   * @returns {string} Session ID in format: ses-HHMMSS
    * @private
    */
   _generateSessionId() {
@@ -63,16 +64,7 @@ class OpenAIImageProvider {
     const hours = String(now.getHours()).padStart(2, '0');
     const minutes = String(now.getMinutes()).padStart(2, '0');
     const seconds = String(now.getSeconds()).padStart(2, '0');
-    return `session-${hours}${minutes}${seconds}`;
-  }
-
-  /**
-   * Get the current date in YYYY-MM-DD format
-   * @returns {string} Date string
-   * @private
-   */
-  _getCurrentDate() {
-    return new Date().toISOString().split('T')[0];
+    return `ses-${hours}${minutes}${seconds}`;
   }
 
   /**
@@ -87,7 +79,7 @@ class OpenAIImageProvider {
    */
   _buildCandidatePath(beamSearch) {
     const { iteration, candidateId, dimension } = beamSearch;
-    const date = this._getCurrentDate();
+    const date = OutputPathManager.getCurrentDate();
     const iterDir = `iter-${String(iteration).padStart(2, '0')}`;
     const candDir = `candidate-${String(candidateId).padStart(2, '0')}-${dimension}`;
     return path.join(this.outputDir, date, this.sessionId, iterDir, candDir);
@@ -106,12 +98,13 @@ class OpenAIImageProvider {
 
   /**
    * Build flat session directory path (no iteration subdirectories)
+   * Uses date-based structure: output/YYYY-MM-DD/ses-HHMMSS/
    * @param {Object} _beamSearch - Beam search context (not used)
    * @returns {string} Session directory path
    * @private
    */
   _buildFlatSessionPath(_beamSearch) {
-    return path.join(this.outputDir, 'sessions', this.sessionId);
+    return OutputPathManager.buildSessionPath(this.outputDir, this.sessionId);
   }
 
   /**
@@ -129,11 +122,12 @@ class OpenAIImageProvider {
 
   /**
    * Build path to metadata.json file
+   * Uses date-based structure: output/YYYY-MM-DD/ses-HHMMSS/metadata.json
    * @returns {string} Path to metadata.json
    * @private
    */
   _buildMetadataPath() {
-    return path.join(this.outputDir, 'sessions', this.sessionId, 'metadata.json');
+    return OutputPathManager.buildMetadataPath(this.outputDir, this.sessionId);
   }
 
   /**
