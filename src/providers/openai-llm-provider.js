@@ -18,7 +18,16 @@ class OpenAILLMProvider {
     this.apiKey = apiKey;
 
     // Configuration options
-    this.model = options.model || 'gpt-4';
+    this.model = options.model || 'gpt-4';  // Fallback model for unspecified operations
+
+    // Operation-specific models for cost optimization
+    // Falls back to single model if not specified
+    this.models = options.models || {
+      expand: options.model || 'gpt-4',
+      refine: options.model || 'gpt-4',
+      combine: options.model || 'gpt-4'
+    };
+
     this.maxRetries = options.maxRetries || 3;
     this.timeout = options.timeout || 30000;
 
@@ -113,10 +122,13 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
       }
     }
 
+    // Select model based on operation for cost optimization
+    const selectedModel = this.models[operation] || this.model;
+
     try {
       // Call OpenAI API
       const completion = await this.client.chat.completions.create({
-        model: this.model,
+        model: selectedModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
@@ -186,10 +198,13 @@ HOW prompt: ${howPrompt}
 
 Combined prompt:`;
 
+    // Select model for combine operation (simple task, use cost-efficient model)
+    const selectedModel = this.models.combine || this.model;
+
     try {
       // Call OpenAI API with lower temperature for more consistent combination
       const completion = await this.client.chat.completions.create({
-        model: this.model,
+        model: selectedModel,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
@@ -200,7 +215,15 @@ Combined prompt:`;
 
       const combinedPrompt = completion.choices[0].message.content.trim();
 
-      return combinedPrompt;
+      // Return object with metadata (consistent with refinePrompt)
+      return {
+        combinedPrompt,
+        metadata: {
+          model: completion.model,
+          tokensUsed: completion.usage.total_tokens,
+          timestamp: new Date().toISOString()
+        }
+      };
     } catch (error) {
       // Wrap OpenAI errors with more context
       throw new Error(`OpenAI API error: ${error.message}`);

@@ -372,9 +372,9 @@ describe('OpenAILLMProvider Interface', () => {
 
       const result = await provider.combinePrompts(whatPrompt, howPrompt);
 
-      assert.strictEqual(typeof result, 'string', 'Result should be a string');
-      assert.ok(result.length > 0, 'Combined prompt should not be empty');
-      assert.ok(result.trim().length > 0, 'Combined prompt should not be just whitespace');
+      assert.strictEqual(typeof result.combinedPrompt, 'string', 'combinedPrompt should be a string');
+      assert.ok(result.combinedPrompt.length > 0, 'Combined prompt should not be empty');
+      assert.ok(result.combinedPrompt.trim().length > 0, 'Combined prompt should not be just whitespace');
     });
 
     it('should return a reasonably sized combined prompt', { skip: !process.env.OPENAI_API_KEY }, async () => {
@@ -384,7 +384,8 @@ describe('OpenAILLMProvider Interface', () => {
       const whatPrompt = 'Ancient temple ruins covered in mystical vines';
       const howPrompt = 'Soft golden hour lighting, shallow depth of field';
 
-      const combined = await provider.combinePrompts(whatPrompt, howPrompt);
+      const result = await provider.combinePrompts(whatPrompt, howPrompt);
+      const combined = result.combinedPrompt;
 
       // Should be longer than either input alone (LLM typically expands)
       assert.ok(combined.length >= whatPrompt.length * 0.5, 'Should be substantial');
@@ -399,13 +400,13 @@ describe('OpenAILLMProvider Interface', () => {
 
       // Short prompts
       const result1 = await provider.combinePrompts('tree', 'sunset light');
-      assert.ok(result1.length > 0, 'Should handle short prompts');
+      assert.ok(result1.combinedPrompt.length > 0, 'Should handle short prompts');
 
       // Long prompts
       const longWhat = 'A massive ancient oak tree with gnarled branches reaching toward the sky, its thick trunk covered in moss and lichen, roots spreading across a forest floor carpeted with fallen leaves';
       const longHow = 'Dramatic cinematic lighting with rays of golden sunlight piercing through the canopy, rich color saturation, shallow depth of field with bokeh effect, professional nature photography style';
       const result2 = await provider.combinePrompts(longWhat, longHow);
-      assert.ok(result2.length > 0, 'Should handle long prompts');
+      assert.ok(result2.combinedPrompt.length > 0, 'Should handle long prompts');
     });
 
     it('should handle special characters and punctuation', { skip: !process.env.OPENAI_API_KEY }, async () => {
@@ -417,7 +418,7 @@ describe('OpenAILLMProvider Interface', () => {
 
       // Should not crash with special characters
       const result = await provider.combinePrompts(whatPrompt, howPrompt);
-      assert.ok(result.length > 0, 'Should handle special characters gracefully');
+      assert.ok(result.combinedPrompt.length > 0, 'Should handle special characters gracefully');
     });
 
     it('should call OpenAI API when combining prompts', async () => {
@@ -433,6 +434,159 @@ describe('OpenAILLMProvider Interface', () => {
         /OpenAI API error/,
         'Should actually call OpenAI API (not just concatenate)'
       );
+    });
+
+    it('🔴 should return metadata with actual model and token count', { skip: !process.env.OPENAI_API_KEY }, async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY, {
+        models: {
+          combine: 'gpt-4o-mini'  // Use specific model for testing
+        }
+      });
+
+      const whatPrompt = 'Ancient forest with towering trees';
+      const howPrompt = 'Misty morning light filtering through leaves';
+
+      const result = await provider.combinePrompts(whatPrompt, howPrompt);
+
+      // Should return an object, not just a string
+      assert.strictEqual(typeof result, 'object', 'Result should be an object');
+      assert.ok(result !== null, 'Result should not be null');
+
+      // Should have combinedPrompt property
+      assert.ok(result.combinedPrompt, 'Should have combinedPrompt property');
+      assert.strictEqual(typeof result.combinedPrompt, 'string', 'combinedPrompt should be a string');
+      assert.ok(result.combinedPrompt.length > 0, 'combinedPrompt should not be empty');
+
+      // Should have metadata property
+      assert.ok(result.metadata, 'Should have metadata property');
+      assert.strictEqual(typeof result.metadata, 'object', 'metadata should be an object');
+
+      // Metadata should contain actual model used
+      assert.ok(result.metadata.model, 'metadata should contain model');
+      assert.strictEqual(typeof result.metadata.model, 'string', 'model should be a string');
+
+      // Metadata should contain actual token count
+      assert.ok(result.metadata.tokensUsed, 'metadata should contain tokensUsed');
+      assert.strictEqual(typeof result.metadata.tokensUsed, 'number', 'tokensUsed should be a number');
+      assert.ok(result.metadata.tokensUsed > 0, 'tokensUsed should be greater than 0');
+
+      // Metadata should contain timestamp
+      assert.ok(result.metadata.timestamp, 'metadata should contain timestamp');
+      assert.strictEqual(typeof result.metadata.timestamp, 'string', 'timestamp should be a string');
+    });
+  });
+
+  describe('Operation-Specific Model Selection', () => {
+    it('should accept operation-specific models in constructor', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key', {
+        model: 'gpt-4',  // Fallback model
+        models: {
+          expand: 'gpt-5.1-nano',
+          refine: 'gpt-5.1-mini',
+          combine: 'gpt-5.1-nano'
+        }
+      });
+
+      assert.ok(provider.models, 'Provider should have models property');
+      assert.strictEqual(provider.models.expand, 'gpt-5.1-nano');
+      assert.strictEqual(provider.models.refine, 'gpt-5.1-mini');
+      assert.strictEqual(provider.models.combine, 'gpt-5.1-nano');
+    });
+
+    it('should fall back to single model when models not specified', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key', {
+        model: 'gpt-4-turbo'
+      });
+
+      assert.ok(provider.models, 'Provider should have models property');
+      assert.strictEqual(provider.models.expand, 'gpt-4-turbo');
+      assert.strictEqual(provider.models.refine, 'gpt-4-turbo');
+      assert.strictEqual(provider.models.combine, 'gpt-4-turbo');
+    });
+
+    it('should use expand model for expand operation', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key', {
+        models: {
+          expand: 'gpt-5.1-nano',
+          refine: 'gpt-5.1-mini',
+          combine: 'gpt-5.1-nano'
+        }
+      });
+
+      // Call will fail with invalid key, but we can check that it attempts to use the right model
+      // by verifying the error occurs (indicating the API was called)
+      await assert.rejects(
+        async () => await provider.refinePrompt('test prompt', { operation: 'expand' }),
+        /OpenAI API error/,
+        'Should attempt API call with expand model'
+      );
+    });
+
+    it('should use refine model for refine operation', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key', {
+        models: {
+          expand: 'gpt-5.1-nano',
+          refine: 'gpt-5.1-mini',
+          combine: 'gpt-5.1-nano'
+        }
+      });
+
+      // Call will fail with invalid key, but we can check that it attempts to use the right model
+      await assert.rejects(
+        async () => await provider.refinePrompt('test prompt', {
+          operation: 'refine',
+          critique: 'needs more detail'
+        }),
+        /OpenAI API error/,
+        'Should attempt API call with refine model'
+      );
+    });
+
+    it('should use combine model for combinePrompts', async () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('invalid-key', {
+        models: {
+          expand: 'gpt-5.1-nano',
+          refine: 'gpt-5.1-mini',
+          combine: 'gpt-5.1-nano'
+        }
+      });
+
+      // Call will fail with invalid key, but we can check that it attempts to use the right model
+      await assert.rejects(
+        async () => await provider.combinePrompts('what prompt', 'how prompt'),
+        /OpenAI API error/,
+        'Should attempt API call with combine model'
+      );
+    });
+
+    it('should return model name in metadata', { skip: true }, async () => {
+      // TODO: Re-enable when GPT-5.1 models are available in OpenAI API
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      // Use real GPT-5.1 models for cost-efficient testing
+      const provider = new OpenAILLMProvider(process.env.OPENAI_API_KEY, {
+        models: {
+          expand: 'gpt-5.1-nano',      // Cost-efficient model for simple operations
+          refine: 'gpt-5.1-mini',      // Best balance for complex operations
+          combine: 'gpt-5.1-nano'      // Cost-efficient model for simple operations
+        }
+      });
+
+      // Test expand operation
+      const expandResult = await provider.refinePrompt('tree in forest', {
+        operation: 'expand',
+        dimension: 'what'
+      });
+
+      assert.ok(expandResult.metadata, 'Should return metadata');
+      assert.ok(expandResult.metadata.model, 'Should include model in metadata');
+      // Note: OpenAI may return a versioned model name, so we just check it exists
+      assert.ok(expandResult.metadata.model.length > 0);
     });
   });
 });

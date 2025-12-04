@@ -103,23 +103,26 @@ async function demo() {
   console.log('🔗 Step 1.5: Combining WHAT and HOW prompts');
   console.log('-'.repeat(60));
 
-  const combinedPrompt = mode === 'real'
-    ? await llm.combinePrompts(whatRefinement.refinedPrompt, howRefinement.refinedPrompt)
-    : whatRefinement.refinedPrompt; // Mock provider doesn't have combinePrompts yet
-
+  let combinedPrompt;
   if (mode === 'real') {
+    const combineResult = await llm.combinePrompts(whatRefinement.refinedPrompt, howRefinement.refinedPrompt);
+    combinedPrompt = combineResult.combinedPrompt;
+
     console.log('Combined prompt created by LLM');
-    // Track combine operation (combinePrompts doesn't return metadata yet, so estimate)
-    tokenTracker.recordUsage({
-      provider: 'llm',
-      operation: 'combine',
-      tokens: 100, // Estimate
-      metadata: {
-        model: 'gpt-5.1-nano', // From our config for simple operations
-        operation: 'combine'
-      }
-    });
+    // Track combine operation using actual metadata
+    if (combineResult.metadata) {
+      tokenTracker.recordUsage({
+        provider: 'llm',
+        operation: 'combine',
+        tokens: combineResult.metadata.tokensUsed,
+        metadata: {
+          model: combineResult.metadata.model,
+          operation: 'combine'
+        }
+      });
+    }
   } else {
+    combinedPrompt = whatRefinement.refinedPrompt; // Mock provider doesn't have combinePrompts yet
     console.log('Using WHAT prompt only (mock mode)');
   }
 
@@ -247,7 +250,6 @@ async function demo() {
   console.log('💰 Token Efficiency Report');
   console.log('='.repeat(60));
 
-  tokenTracker.finalize();
   console.log(tokenTracker.formatSummary());
 
   // Display optimization suggestions

@@ -64,14 +64,62 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId } = options;
+
   // Stage 1: Combine prompts
-  const combined = await llmProvider.combinePrompts(whatPrompt, howPrompt);
+  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt);
+  const combined = combineResult.combinedPrompt;
+
+  // Track combine operation tokens using actual metadata
+  if (tokenTracker && combineResult.metadata) {
+    tokenTracker.recordUsage({
+      provider: 'llm',
+      operation: 'combine',
+      tokens: combineResult.metadata.tokensUsed,
+      metadata: {
+        model: combineResult.metadata.model,
+        iteration,
+        candidateId,
+        operation: 'combine'
+      }
+    });
+  }
+
+  // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
+  // This ensures we save prompts even if image generation fails
+  if (metadataTracker) {
+    await metadataTracker.recordAttempt({
+      whatPrompt,
+      howPrompt,
+      metadata: {
+        iteration,
+        candidateId,
+        dimension,
+        parentId
+      }
+    });
+  }
 
   // Stage 2: Generate image (starts as soon as combine finishes)
   const image = await imageGenProvider.generateImage(combined, options);
 
   // Stage 3: Evaluate image (starts as soon as image finishes)
   const evaluation = await visionProvider.analyzeImage(image.url, combined);
+
+  // Track vision tokens
+  if (tokenTracker && evaluation.metadata?.tokensUsed) {
+    tokenTracker.recordUsage({
+      provider: 'vision',
+      operation: 'analyze',
+      tokens: evaluation.metadata.tokensUsed,
+      metadata: {
+        model: evaluation.metadata.model,
+        iteration,
+        candidateId,
+        operation: 'analyze'
+      }
+    });
+  }
 
   // Calculate total score
   const alpha = options.alpha !== undefined ? options.alpha : 0.7;
@@ -80,6 +128,17 @@ async function processCandidateStream(
     evaluation.aestheticScore,
     alpha
   );
+
+  // DEFENSIVE PATTERN: Update attempt with results AFTER success
+  // This adds image/evaluation data to the defensive metadata
+  if (metadataTracker) {
+    await metadataTracker.updateAttemptWithResults(iteration, candidateId, {
+      combined,
+      image,
+      evaluation,
+      totalScore
+    });
+  }
 
   // Return complete candidate object
   return {
@@ -117,7 +176,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency, metadataTracker, tokenTracker } = config;
 
   // Get rate limits: use explicit config if provided, otherwise use sensible defaults
   const llmLimit = rateLimitConcurrency || rateLimitConfig.getLimit('llm');
@@ -131,7 +190,7 @@ async function initialExpansion(
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
-    Array(N).fill().map(async () => {
+    Array(N).fill().map(async (_, i) => {
       // Generate WHAT and HOW in parallel for each candidate with rate limiting
       const [what, how] = await Promise.all([
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
@@ -145,6 +204,39 @@ async function initialExpansion(
           temperature
         }))
       ]);
+
+      // Track tokens for WHAT expansion
+      if (tokenTracker && what.metadata?.tokensUsed) {
+        tokenTracker.recordUsage({
+          provider: 'llm',
+          operation: 'expand',
+          tokens: what.metadata.tokensUsed,
+          metadata: {
+            model: what.metadata.model,
+            iteration: 0,
+            candidateId: i,
+            dimension: 'what',
+            operation: 'expand'
+          }
+        });
+      }
+
+      // Track tokens for HOW expansion
+      if (tokenTracker && how.metadata?.tokensUsed) {
+        tokenTracker.recordUsage({
+          provider: 'llm',
+          operation: 'expand',
+          tokens: how.metadata.tokensUsed,
+          metadata: {
+            model: how.metadata.model,
+            iteration: 0,
+            candidateId: i,
+            dimension: 'how',
+            operation: 'expand'
+          }
+        });
+      }
+
       return {
         what: what.refinedPrompt,
         how: how.refinedPrompt
@@ -158,7 +250,37 @@ async function initialExpansion(
       // Create wrapper that applies rate limiting for image gen and vision
       const limitedProcessCandidateStream = async () => {
         // Combine prompts (no rate limiting needed)
-        const combined = await llmProvider.combinePrompts(what, how);
+        const combineResult = await llmProvider.combinePrompts(what, how);
+        const combined = combineResult.combinedPrompt;
+
+        // Track combine operation tokens using actual metadata
+        if (tokenTracker && combineResult.metadata) {
+          tokenTracker.recordUsage({
+            provider: 'llm',
+            operation: 'combine',
+            tokens: combineResult.metadata.tokensUsed,
+            metadata: {
+              model: combineResult.metadata.model,
+              iteration: 0,
+              candidateId: i,
+              operation: 'combine'
+            }
+          });
+        }
+
+        // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
+        if (metadataTracker) {
+          await metadataTracker.recordAttempt({
+            whatPrompt: what,
+            howPrompt: how,
+            metadata: {
+              iteration: 0,
+              candidateId: i,
+              dimension: 'what',
+              parentId: null
+            }
+          });
+        }
 
         // Generate image with rate limiting
         const image = await imageGenLimiter.execute(() =>
@@ -175,12 +297,37 @@ async function initialExpansion(
           visionProvider.analyzeImage(image.url, combined)
         );
 
+        // Track vision tokens
+        if (tokenTracker && evaluation.metadata?.tokensUsed) {
+          tokenTracker.recordUsage({
+            provider: 'vision',
+            operation: 'analyze',
+            tokens: evaluation.metadata.tokensUsed,
+            metadata: {
+              model: evaluation.metadata.model,
+              iteration: 0,
+              candidateId: i,
+              operation: 'analyze'
+            }
+          });
+        }
+
         // Calculate total score
         const totalScore = calculateTotalScore(
           evaluation.alignmentScore,
           evaluation.aestheticScore,
           alpha
         );
+
+        // DEFENSIVE PATTERN: Update attempt with results AFTER success
+        if (metadataTracker) {
+          await metadataTracker.updateAttemptWithResults(0, i, {
+            combined,
+            image,
+            evaluation,
+            totalScore
+          });
+        }
 
         // Return complete candidate object
         return {
@@ -228,7 +375,7 @@ async function refinementIteration(
   config,
   iteration
 ) {
-  const { beamWidth: N, keepTop: M, alpha = 0.7 } = config;
+  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker } = config;
   const expansionRatio = Math.floor(N / M);
 
   // Determine dimension: odd iterations refine WHAT, even refine HOW
@@ -249,6 +396,23 @@ async function refinementIteration(
           iteration
         }
       );
+
+      // Track critique tokens
+      if (tokenTracker && critique.metadata?.tokensUsed) {
+        tokenTracker.recordUsage({
+          provider: 'critique',
+          operation: 'generate',
+          tokens: critique.metadata.tokensUsed,
+          metadata: {
+            model: critique.metadata.model,
+            iteration,
+            candidateId: parent.metadata.candidateId,
+            dimension,
+            operation: 'generate'
+          }
+        });
+      }
+
       return { ...parent, critique };
     })
   );
@@ -257,6 +421,8 @@ async function refinementIteration(
   const allChildren = await Promise.all(
     parentsWithCritiques.flatMap((parent, parentIdx) =>
       Array(expansionRatio).fill().map(async (_, childIdx) => {
+        const candidateId = parentIdx * expansionRatio + childIdx;
+
         // Refine the selected dimension using critique
         const refinedResult = await llmProvider.refinePrompt(
           dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
@@ -266,6 +432,22 @@ async function refinementIteration(
             critique: parent.critique
           }
         );
+
+        // Track refine tokens
+        if (tokenTracker && refinedResult.metadata?.tokensUsed) {
+          tokenTracker.recordUsage({
+            provider: 'llm',
+            operation: 'refine',
+            tokens: refinedResult.metadata.tokensUsed,
+            metadata: {
+              model: refinedResult.metadata.model,
+              iteration,
+              candidateId,
+              dimension,
+              operation: 'refine'
+            }
+          });
+        }
 
         // Construct new prompts: refine selected dimension, inherit other
         const whatPrompt = dimension === 'what'
@@ -284,10 +466,12 @@ async function refinementIteration(
           visionProvider,
           {
             iteration,
-            candidateId: parentIdx * expansionRatio + childIdx,
+            candidateId,
             dimension,
             parentId: parent.metadata.candidateId,
-            alpha
+            alpha,
+            metadataTracker,
+            tokenTracker
           }
         );
       })
@@ -337,12 +521,22 @@ async function beamSearch(userPrompt, providers, config) {
   // Rank and select top M candidates
   let topCandidates = rankAndSelect(candidates, keepTop);
 
-  // Record iteration 0 candidates if tracker provided
+  // Update survived status for iteration 0 candidates if tracker provided
   if (metadataTracker) {
     await Promise.all(candidates.map(candidate =>
-      metadataTracker.recordCandidate(candidate, {
-        survived: topCandidates.includes(candidate)
-      })
+      metadataTracker.updateAttemptWithResults(
+        candidate.metadata.iteration,
+        candidate.metadata.candidateId,
+        {
+          combined: candidate.combined,
+          image: candidate.image,
+          evaluation: candidate.evaluation,
+          totalScore: candidate.totalScore
+        },
+        {
+          survived: topCandidates.includes(candidate)
+        }
+      )
     ));
   }
 
@@ -376,12 +570,22 @@ async function beamSearch(userPrompt, providers, config) {
     // Rank and select top M for next iteration
     topCandidates = rankAndSelect(candidates, keepTop);
 
-    // Record iteration candidates if tracker provided
+    // Update survived status for iteration candidates if tracker provided
     if (metadataTracker) {
       await Promise.all(candidates.map(candidate =>
-        metadataTracker.recordCandidate(candidate, {
-          survived: topCandidates.includes(candidate)
-        })
+        metadataTracker.updateAttemptWithResults(
+          candidate.metadata.iteration,
+          candidate.metadata.candidateId,
+          {
+            combined: candidate.combined,
+            image: candidate.image,
+            evaluation: candidate.evaluation,
+            totalScore: candidate.totalScore
+          },
+          {
+            survived: topCandidates.includes(candidate)
+          }
+        )
       ));
     }
 
