@@ -1,0 +1,60 @@
+# Claude Code Session - 2025-12-04 11:47:00
+
+## Session Metadata
+- **Date**: 2025-12-04
+- **Time**: 11:47:00
+- **Session Number**: 001
+- **Session Type**: manual
+- **Description**: retrospective-20251204-1147
+
+## Git Activity
+**Branch**: main
+
+### Recent Commits (20)
+- `90c51db` feat: add metadata return to combinePrompts for accurate token tracking (TDD GREEN)
+- `e1e4e10` feat: integrate TokenTracker into demo scripts for cost visibility
+- `6daa490` fix: resolve eslint errors in rate limiting demo tests
+- `6dca436` fix: correct vision scoring calibration scales and improve clarity
+- `246ae58` refactor: extract demo HTML to static file (TDD REFACTOR)
+- `f232187` feat: add rate limiting demo API endpoints (TDD GREEN)
+- `e4e1865` refactor: enhance demo to showcase rate limiting functionality
+- `1c6ee17` fix: skip vision provider tests when OPENAI_API_KEY not available
+- `3c04edd` fix: correct rate limit test assertion and remove unused variable
+- `bbe6872` feat: implement rate limiting for beam search API calls
+- ... and 10 more
+
+### Working Directory Changes (20 files)
+- **Modified**: .env.example
+- **Modified**: demo-beam-search.js
+- **Modified**: demo-single-iteration.js
+- **Modified**: src/config/provider-config.js
+- **Modified**: src/factory/provider-factory.js
+- **Modified**: src/providers/openai-image-provider.js
+- **Modified**: src/providers/openai-vision-provider.js
+- **Modified**: src/services/metadata-tracker.js
+- **Modified**: test/demo-beam-search.test.js
+- **Modified**: test/orchestrator/beam-search.test.js
+- **Modified**: test/services/metadata-tracker.test.js
+- **Untracked**: demo-token-tracking.js
+- **Untracked**: docs/MODEL_SELECTION_GUIDE.md
+- **Untracked**: src/config/model-pricing.js
+- **Untracked**: src/utils/output-path-manager.js
+- **Untracked**: src/utils/token-tracker.js
+- **Untracked**: test/config/model-pricing.test.js
+- **Untracked**: test/demo-single-iteration.test.js
+- **Untracked**: test/utils/output-path-manager.test.js
+- **Untracked**: test/utils/token-tracker.test.js
+
+## Test Results
+- Tests not run in this session
+
+## Session Summary
+This session captured at 12/4/2025, 11:47:00 AM
+
+### Description
+retrospective-20251204-1147
+
+### Metrics
+- Commits: 20
+- Files changed: 20
+- Tests: 0/0 passing

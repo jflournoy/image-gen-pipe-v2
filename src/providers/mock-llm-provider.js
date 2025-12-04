@@ -111,6 +111,48 @@ class MockLLMProvider {
 
     return `${prompt}, ${styleAdditions.join(', ')}`;
   }
+
+  /**
+   * Combine WHAT and HOW prompts into a unified prompt
+   * @param {string} whatPrompt - Content description (what is in the image)
+   * @param {string} howPrompt - Style description (how it looks)
+   * @returns {Promise<Object>} Combined prompt with metadata
+   */
+  async combinePrompts(whatPrompt, howPrompt) {
+    // Validate whatPrompt
+    if (whatPrompt === null || whatPrompt === undefined) {
+      throw new Error('whatPrompt is required and cannot be null or undefined');
+    }
+    if (typeof whatPrompt !== 'string' || whatPrompt.trim() === '') {
+      throw new Error('whatPrompt is required and cannot be empty');
+    }
+
+    // Validate howPrompt
+    if (howPrompt === null || howPrompt === undefined) {
+      throw new Error('howPrompt is required and cannot be null or undefined');
+    }
+    if (typeof howPrompt !== 'string' || howPrompt.trim() === '') {
+      throw new Error('howPrompt is required and cannot be empty');
+    }
+
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    // Simple combination: merge both prompts
+    const combinedPrompt = `${whatPrompt}, ${howPrompt}`;
+
+    // Calculate mock token usage
+    const tokensUsed = Math.floor(combinedPrompt.length / 4) + 30;
+
+    return {
+      combinedPrompt,
+      metadata: {
+        model: 'mock-gpt-4',
+        tokensUsed,
+        timestamp: new Date().toISOString()
+      }
+    };
+  }
 }
 
 module.exports = MockLLMProvider;
