@@ -2,7 +2,7 @@
  * TDD GREEN Phase: OpenAI Image Provider
  *
  * Real OpenAI API implementation for image generation.
- * Uses DALL-E 3 to generate images from text prompts.
+ * Uses cost-optimized models from provider-config.js by default.
  * Supports local storage with flat session directory structure.
  *
  * Storage Structure (flat):
@@ -20,6 +20,7 @@ const fs = require('fs').promises;
 const path = require('path');
 const https = require('https');
 const OutputPathManager = require('../utils/output-path-manager.js');
+const providerConfig = require('../config/provider-config.js');
 
 class OpenAIImageProvider {
   constructor(apiKey, options = {}) {
@@ -31,8 +32,8 @@ class OpenAIImageProvider {
     this.name = 'openai-image-provider';
     this.apiKey = apiKey;
 
-    // Configuration options
-    this.model = options.model || 'dall-e-3';
+    // Configuration options - defaults from provider-config.js
+    this.model = options.model || providerConfig.image.model;
     this.maxRetries = options.maxRetries || 3;
     this.timeout = options.timeout || 60000; // Image generation takes longer
 

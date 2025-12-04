@@ -2,10 +2,11 @@
  * TDD GREEN Phase: OpenAI LLM Provider
  *
  * Real OpenAI API implementation for prompt refinement.
- * Uses GPT-4 to expand prompts in WHAT (content) or HOW (style) dimensions.
+ * Uses cost-optimized models from provider-config.js by default.
  */
 
 const OpenAI = require('openai');
+const providerConfig = require('../config/provider-config.js');
 
 class OpenAILLMProvider {
   constructor(apiKey, options = {}) {
@@ -17,15 +18,15 @@ class OpenAILLMProvider {
     this.name = 'openai-llm-provider';
     this.apiKey = apiKey;
 
-    // Configuration options
-    this.model = options.model || 'gpt-4';  // Fallback model for unspecified operations
+    // Configuration options - defaults from provider-config.js
+    this.model = options.model || providerConfig.llm.model;
 
     // Operation-specific models for cost optimization
     // Falls back to single model if not specified
     this.models = options.models || {
-      expand: options.model || 'gpt-4',
-      refine: options.model || 'gpt-4',
-      combine: options.model || 'gpt-4'
+      expand: options.model || providerConfig.llm.models.expand,
+      refine: options.model || providerConfig.llm.models.refine,
+      combine: options.model || providerConfig.llm.models.combine
     };
 
     this.maxRetries = options.maxRetries || 3;

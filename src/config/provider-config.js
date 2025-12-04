@@ -19,12 +19,13 @@ const providerConfig = {
     provider: process.env.LLM_PROVIDER || 'openai',
     apiKey: process.env.OPENAI_API_KEY,
     // Support both single model (legacy) and operation-specific models
-    model: process.env.OPENAI_LLM_MODEL || 'gpt-5-mini',  // Fallback for non-specific operations
+    // Using real models that exist today (not aspirational gpt-5 models)
+    model: process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',  // Fallback: $0.15/1M tokens
     // Operation-specific models for cost optimization
     models: {
-      expand: process.env.OPENAI_LLM_MODEL_EXPAND || process.env.OPENAI_LLM_MODEL || 'gpt-5-nano',    // Simple: $0.05/1M
-      refine: process.env.OPENAI_LLM_MODEL_REFINE || process.env.OPENAI_LLM_MODEL || 'gpt-5-mini',    // Moderate: $0.25/1M
-      combine: process.env.OPENAI_LLM_MODEL_COMBINE || process.env.OPENAI_LLM_MODEL || 'gpt-5-nano'   // Simple: $0.05/1M
+      expand: process.env.OPENAI_LLM_MODEL_EXPAND || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',    // Simple: $0.15/1M
+      refine: process.env.OPENAI_LLM_MODEL_REFINE || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',    // Moderate: $0.15/1M
+      combine: process.env.OPENAI_LLM_MODEL_COMBINE || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini'   // Simple: $0.15/1M
     },
     maxRetries: parseInt(process.env.OPENAI_MAX_RETRIES || '3', 10),
     timeout: parseInt(process.env.OPENAI_TIMEOUT_MS || '30000', 10)
@@ -34,7 +35,7 @@ const providerConfig = {
   image: {
     provider: process.env.IMAGE_PROVIDER || 'dalle',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1-mini'  // Cost-efficient GPT Image 1 Mini
+    model: process.env.OPENAI_IMAGE_MODEL || 'dall-e-3'  // Current DALL-E model
   },
 
   // Vision Provider Configuration

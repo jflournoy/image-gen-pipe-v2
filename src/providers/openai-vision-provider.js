@@ -1,11 +1,12 @@
 /**
  * TDD GREEN Phase: OpenAI Vision Provider
  *
- * Real OpenAI GPT-4 Vision API implementation for image evaluation.
- * Evaluates generated images for prompt fidelity and provides actionable feedback.
+ * Real OpenAI Vision API implementation for image evaluation.
+ * Uses cost-optimized models from provider-config.js by default.
  */
 
 const OpenAI = require('openai');
+const providerConfig = require('../config/provider-config.js');
 
 class OpenAIVisionProvider {
   constructor(apiKey, options = {}) {
@@ -17,9 +18,9 @@ class OpenAIVisionProvider {
     this.name = 'openai-vision-provider';
     this.apiKey = apiKey;
 
-    // Configuration options
+    // Configuration options - defaults from provider-config.js
     // Note: gpt-4-vision-preview is deprecated, use gpt-4o or gpt-4o-mini
-    this.model = options.model || 'gpt-4o';
+    this.model = options.model || providerConfig.vision.model;
     this.maxRetries = options.maxRetries || 3;
     this.timeout = options.timeout || 30000;
 
