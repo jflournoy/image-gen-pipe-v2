@@ -26,6 +26,8 @@ const OpenAILLMProvider = require('./src/providers/openai-llm-provider.js');
 const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
 const CritiqueGenerator = require('./src/services/critique-generator.js');
+const TokenTracker = require('./src/utils/token-tracker.js');
+const { MODEL_PRICING } = require('./src/config/model-pricing.js');
 
 async function demo() {
   console.log('🔄 Complete Single Iteration Demo\n');
@@ -41,13 +43,28 @@ async function demo() {
     process.exit(1);
   }
 
+  // Generate session ID in ses-HHMMSS format
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const sessionId = `ses-${hours}${minutes}${seconds}`;
+
   // Initialize all components
   console.log('🔧 Initializing components...');
   const llm = new OpenAILLMProvider(process.env.OPENAI_API_KEY);
-  const imageGen = new OpenAIImageProvider(process.env.OPENAI_API_KEY);
+  const imageGen = new OpenAIImageProvider(process.env.OPENAI_API_KEY, { sessionId });
   const vision = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
   const critique = new CritiqueGenerator({ apiKey: process.env.OPENAI_API_KEY });
-  console.log('✅ All components initialized\n');
+  console.log('✅ All components initialized');
+
+  // Initialize token tracker for cost efficiency
+  console.log('💰 Initializing token efficiency tracker...');
+  const tokenTracker = new TokenTracker({
+    sessionId,
+    pricing: MODEL_PRICING
+  });
+  console.log('✅ Token tracker ready - cost tracking enabled\n');
 
   console.log('='.repeat(80));
   console.log();
@@ -72,6 +89,19 @@ async function demo() {
   });
   console.log(`✅ WHAT: "${whatExpansion.refinedPrompt}"`);
   console.log(`   Tokens: ${whatExpansion.metadata.tokensUsed}`);
+  console.log(`   Model: ${whatExpansion.metadata.model}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: whatExpansion.metadata.tokensUsed,
+    metadata: {
+      model: whatExpansion.metadata.model,
+      dimension: 'what',
+      operation: 'expand'
+    }
+  });
 
   console.log('\nExpanding HOW dimension (style)...');
   const howExpansion = await llm.refinePrompt(initialPrompt, {
@@ -80,6 +110,19 @@ async function demo() {
   });
   console.log(`✅ HOW: "${howExpansion.refinedPrompt}"`);
   console.log(`   Tokens: ${howExpansion.metadata.tokensUsed}`);
+  console.log(`   Model: ${howExpansion.metadata.model}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: howExpansion.metadata.tokensUsed,
+    metadata: {
+      model: howExpansion.metadata.model,
+      dimension: 'how',
+      operation: 'expand'
+    }
+  });
   console.log();
 
   // STEP 3: Combine WHAT + HOW
@@ -89,11 +132,25 @@ async function demo() {
   console.log('-'.repeat(80));
 
   console.log('Combining prompts...');
-  const combinedPrompt = await llm.combinePrompts(
+  const combineResult = await llm.combinePrompts(
     whatExpansion.refinedPrompt,
     howExpansion.refinedPrompt
   );
+  const combinedPrompt = combineResult.combinedPrompt;
   console.log(`✅ Combined: "${combinedPrompt}"`);
+  console.log(`   Tokens: ${combineResult.metadata.tokensUsed}`);
+  console.log(`   Model: ${combineResult.metadata.model}`);
+
+  // Track combine operation
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'combine',
+    tokens: combineResult.metadata.tokensUsed,
+    metadata: {
+      model: combineResult.metadata.model,
+      operation: 'combine'
+    }
+  });
   console.log();
 
   // STEP 4: Generate image
@@ -115,6 +172,7 @@ async function demo() {
     console.log(`💾 Saved to: ${generatedImage.localPath}`);
   }
   console.log(`📝 DALL-E revised: "${generatedImage.revisedPrompt.substring(0, 100)}..."`);
+  console.log(`🤖 Model: ${generatedImage.metadata.model}`);
   console.log();
 
   // STEP 5: Evaluate image
@@ -138,6 +196,18 @@ async function demo() {
     console.log(`⚠️  Weaknesses: ${evaluation.weaknesses.join(', ')}`);
   }
   console.log(`🔢 Tokens used: ${evaluation.metadata.tokensUsed}`);
+  console.log(`🤖 Model: ${evaluation.metadata.model}`);
+
+  // Track vision token usage
+  tokenTracker.recordUsage({
+    provider: 'vision',
+    operation: 'analyze',
+    tokens: evaluation.metadata.tokensUsed,
+    metadata: {
+      model: evaluation.metadata.model,
+      operation: 'analyze'
+    }
+  });
   console.log();
 
   // STEP 6: Generate critique
@@ -169,6 +239,19 @@ async function demo() {
   console.log(`   🎯 Reason: ${critiqueResult.reason}`);
   console.log(`   📊 Score used: ${critiqueResult.metadata.scoreType} (${dimension === 'what' ? 'alignment' : 'aesthetic'})`);
   console.log(`   🔢 Tokens used: ${critiqueResult.metadata.tokensUsed}`);
+  console.log(`   🤖 Model: ${critiqueResult.metadata.model}`);
+
+  // Track critique tokens
+  tokenTracker.recordUsage({
+    provider: 'critique',
+    operation: 'generate',
+    tokens: critiqueResult.metadata.tokensUsed,
+    metadata: {
+      model: critiqueResult.metadata.model,
+      dimension,
+      operation: 'generate'
+    }
+  });
   console.log();
 
   // STEP 7: Refine prompt using critique
@@ -190,6 +273,19 @@ async function demo() {
   console.log(`✅ Refined ${dimension.toUpperCase()} prompt:`);
   console.log(`   "${refinedPrompt.refinedPrompt}"`);
   console.log(`   🔢 Tokens used: ${refinedPrompt.metadata.tokensUsed}`);
+  console.log(`   🤖 Model: ${refinedPrompt.metadata.model}`);
+
+  // Track refine tokens
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'refine',
+    tokens: refinedPrompt.metadata.tokensUsed,
+    metadata: {
+      model: refinedPrompt.metadata.model,
+      dimension,
+      operation: 'refine'
+    }
+  });
   console.log();
 
   // STEP 8: Ready for next iteration
@@ -206,6 +302,17 @@ async function demo() {
   console.log(`   Next dimension to refine: ${dimension === 'what' ? 'HOW (style)' : 'WHAT (content)'}`);
   console.log();
 
+  // Display token efficiency report
+  console.log('='.repeat(80));
+  console.log();
+  console.log('💰 Token Efficiency Report');
+  console.log('='.repeat(80));
+
+  console.log(tokenTracker.formatSummary());
+
+  // Display optimization suggestions
+  console.log(tokenTracker.formatOptimizationReport());
+
   // Summary
   console.log('='.repeat(80));
   console.log();
@@ -219,6 +326,7 @@ async function demo() {
   console.log('   ✓ Generated dimension-aware critique (uses relevant score)');
   console.log('   ✓ Refined prompt using structured critique');
   console.log('   ✓ Ready to repeat cycle with improved prompts');
+  console.log('   ✓ Tracked token usage and costs for all operations');
   console.log();
   console.log('🔄 This process repeats for multiple iterations (beam search)');
   console.log('   - Alternate between refining WHAT (odd) and HOW (even) iterations');

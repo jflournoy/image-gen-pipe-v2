@@ -66,25 +66,31 @@ Provide:
 - Weaknesses: What could be improved
 
 Calibrate your prompt fidelity scoring (0.0 to 1.0 scale):
-- 0.0: No correspondence between the prompt and the image
-- 0.5: *Adequate* correspondence - image contains requested elements but lacks nuance
-- 0.9-1.0: *Exceptional* correspondence - faithful representation with innovative extensions that surpass expectations
+IMPORTANT: Be strict and critical. Reserve high scores for truly exceptional work.
+- 0.0-0.2: Minimal/no correspondence - image misses key prompt elements
+- 0.3-0.4: Partial correspondence - some elements present but execution is rough or incomplete
+- 0.5-0.6: *Typical first iteration* - contains requested elements but lacks refinement, nuance, or polish
+- 0.7-0.8: Good correspondence - refined execution with most elements well-represented
+- 0.9-1.0: *Exceptional* correspondence - surpasses expectations with innovative extensions and masterful execution
 
 Calibrate your aesthetic scoring (0.0 to 10.0 scale):
-- 0.0-2.0: Poor quality - artifacts, distortions, unintentional blurring, technical failures
-- 3.0-4.0: Below average - visible flaws, weak composition, inconsistent execution
-- 5.0-6.0: *Adequate* quality - competent execution, standard techniques, typical aesthetic strategies
-- 7.0-8.0: Good - strong execution, engaging composition, pleasing visual harmony
-- 9.0-10.0: *Exceptional* visual appeal - masterful execution, captivating composition, intentional artistic choices that draw the viewer in
+IMPORTANT: Be strict and critical. Reserve high scores for truly exceptional work.
+- 0.0-2.0: Poor quality - significant artifacts, distortions, technical failures
+- 3.0-4.0: *Typical first iteration* - competent but unrefined, standard execution without polish
+- 5.0-6.0: Good quality - refined execution, pleasing composition, evidence of intentional choices
+- 7.0-8.0: Strong quality - polished execution, engaging composition, cohesive visual harmony
+- 9.0-10.0: *Exceptional* visual appeal - masterful execution, captivating composition, artistic choices that elevate the work
 
 Respond in this exact JSON format:
 {
   "promptFidelity": 0.50,
-  "aestheticScore": 5.0,
+  "aestheticScore": 4.0,
   "analysis": "Brief explanation of the scores",
   "strengths": ["strength 1", "strength 2"],
   "weaknesses": ["weakness 1", "weakness 2"]
-}`;
+}
+
+Note: This example shows a typical first-iteration score. Adjust based on actual image quality.`;
 
     const userPrompt = `Evaluate this image against the prompt: "${prompt}"
 
@@ -127,7 +133,7 @@ Provide your evaluation in the JSON format specified.`;
         // If JSON parsing fails, create a default response
         evaluation = {
           promptFidelity: 0.5,
-          aestheticScore: 5.0,
+          aestheticScore: 4.0,
           analysis: responseText,
           strengths: [],
           weaknesses: ['Unable to parse structured evaluation']
@@ -143,9 +149,9 @@ Provide your evaluation in the JSON format specified.`;
       alignmentScore = Math.round(alignmentScore * 100);
 
       // Validate aestheticScore (0-10 scale)
-      let aestheticScore = evaluation.aestheticScore || 5.0;
+      let aestheticScore = evaluation.aestheticScore || 4.0;
       if (typeof aestheticScore !== 'number' || aestheticScore < 0 || aestheticScore > 10) {
-        aestheticScore = 5.0;
+        aestheticScore = 4.0;
       }
 
       // Ensure arrays exist

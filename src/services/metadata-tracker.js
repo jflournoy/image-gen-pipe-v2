@@ -9,6 +9,7 @@
 
 const fs = require('fs').promises;
 const path = require('path');
+const OutputPathManager = require('../utils/output-path-manager.js');
 
 class MetadataTracker {
   /**
@@ -20,7 +21,7 @@ class MetadataTracker {
    * @param {Object} [options.config] - Beam search configuration
    */
   constructor(options = {}) {
-    this.outputDir = options.outputDir || path.join(process.cwd(), 'output');
+    this.outputDir = options.outputDir || OutputPathManager.DEFAULT_OUTPUT_DIR;
     this.sessionId = options.sessionId;
     this.userPrompt = options.userPrompt || '';
     this.config = options.config || {};
@@ -39,11 +40,12 @@ class MetadataTracker {
 
   /**
    * Get path to metadata.json file
+   * Uses date-based structure: output/YYYY-MM-DD/ses-HHMMSS/metadata.json
    * @returns {string} Path to metadata file
    * @private
    */
   _getMetadataPath() {
-    return path.join(this.outputDir, 'sessions', this.sessionId, 'metadata.json');
+    return OutputPathManager.buildMetadataPath(this.outputDir, this.sessionId);
   }
 
   /**
@@ -149,6 +151,104 @@ class MetadataTracker {
     if (iterationEntry.bestScore === null || candidate.totalScore > iterationEntry.bestScore) {
       iterationEntry.bestCandidateId = candidateId;
       iterationEntry.bestScore = candidate.totalScore;
+    }
+
+    // Persist to disk
+    await this._writeMetadata();
+  }
+
+  /**
+   * Record an attempt before processing (defensive metadata)
+   * Records what/how prompts and metadata BEFORE risky operations.
+   * This ensures we have a record of what was attempted even if processing fails.
+   *
+   * @param {Object} attemptInfo - Attempt information
+   * @param {string} attemptInfo.whatPrompt - Content prompt
+   * @param {string} attemptInfo.howPrompt - Style prompt
+   * @param {Object} attemptInfo.metadata - Metadata with iteration, candidateId, dimension
+   * @param {string} [attemptInfo.critique] - Optional critique that prompted this attempt
+   * @returns {Promise<void>}
+   */
+  async recordAttempt(attemptInfo) {
+    const { whatPrompt, howPrompt, metadata, critique } = attemptInfo;
+    const { iteration, candidateId, dimension, parentId } = metadata;
+
+    // Get or create iteration entry
+    const iterationEntry = this._getOrCreateIteration(iteration, dimension);
+
+    // Build minimal candidate record with attempt status
+    const candidateRecord = {
+      candidateId,
+      parentId: parentId !== undefined ? parentId : null,
+      whatPrompt,
+      howPrompt,
+      critique: critique || null,
+      status: 'attempted',
+      combined: null,
+      image: null,
+      evaluation: null,
+      totalScore: null,
+      survived: null
+    };
+
+    // Add to iteration
+    iterationEntry.candidates.push(candidateRecord);
+
+    // Persist to disk immediately (before any risky operations)
+    await this._writeMetadata();
+  }
+
+  /**
+   * Update an attempt with processing results
+   * Called after successful processing to update the attempt with actual results.
+   *
+   * @param {number} iteration - Iteration number
+   * @param {number} candidateId - Candidate ID
+   * @param {Object} results - Processing results
+   * @param {string} results.combined - Combined prompt
+   * @param {Object} results.image - Image data
+   * @param {Object} results.evaluation - Evaluation data
+   * @param {number} results.totalScore - Total score
+   * @param {Object} options - Update options
+   * @param {boolean} options.survived - Whether candidate survived selection
+   * @returns {Promise<void>}
+   */
+  async updateAttemptWithResults(iteration, candidateId, results, options = {}) {
+    const { survived = false } = options;
+
+    // Find the iteration
+    const iterationEntry = this.metadata.iterations.find(it => it.iteration === iteration);
+    if (!iterationEntry) {
+      throw new Error(`Iteration ${iteration} not found`);
+    }
+
+    // Find the candidate
+    const candidate = iterationEntry.candidates.find(c => c.candidateId === candidateId);
+    if (!candidate) {
+      throw new Error(`Candidate ${candidateId} not found in iteration ${iteration}`);
+    }
+
+    // Update with results
+    candidate.status = 'completed';
+    candidate.combined = results.combined;
+    candidate.image = {
+      url: results.image.url,
+      localPath: results.image.localPath
+    };
+    candidate.evaluation = {
+      alignmentScore: results.evaluation.alignmentScore,
+      aestheticScore: results.evaluation.aestheticScore,
+      analysis: results.evaluation.analysis,
+      strengths: results.evaluation.strengths || [],
+      weaknesses: results.evaluation.weaknesses || []
+    };
+    candidate.totalScore = results.totalScore;
+    candidate.survived = survived;
+
+    // Update best candidate for iteration
+    if (iterationEntry.bestScore === null || results.totalScore > iterationEntry.bestScore) {
+      iterationEntry.bestCandidateId = candidateId;
+      iterationEntry.bestScore = results.totalScore;
     }
 
     // Persist to disk

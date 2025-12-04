@@ -45,17 +45,19 @@ const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js'
 const CritiqueGenerator = require('./src/services/critique-generator.js');
 const MetadataTracker = require('./src/services/metadata-tracker.js');
 const TokenTracker = require('./src/utils/token-tracker.js');
+const DebugLogger = require('./src/utils/debug-logger.js');
 const { MODEL_PRICING } = require('./src/config/model-pricing.js');
 const { buildSessionPath, buildMetadataPath, DEFAULT_OUTPUT_DIR } = require('./src/utils/output-path-manager.js');
 
 /**
- * Custom logging wrapper to track beam search progress
+ * Custom logging wrapper to track beam search progress with debug info
  */
 class BeamSearchLogger {
-  constructor(providers) {
+  constructor(providers, options = {}) {
     this.originalProviders = providers;
     this.iterationCounts = { llm: 0, imageGen: 0, vision: 0, critique: 0 };
     this.currentIteration = -1;
+    this.debugLogger = new DebugLogger({ debug: options.debug !== false }); // Debug enabled by default
   }
 
   wrapProviders() {
@@ -77,10 +79,37 @@ class BeamSearchLogger {
           console.log('='.repeat(80));
         }
         const result = await llm.refinePrompt(prompt, options);
+
+        // Display debug info (model + tokens)
+        if (result.metadata) {
+          const debugInfo = this.debugLogger.logProviderCall({
+            provider: 'llm',
+            operation: options.operation || 'refine',
+            metadata: result.metadata
+          });
+          if (debugInfo) {
+            console.log(debugInfo);
+          }
+        }
+
         return result;
       },
       combinePrompts: async (what, how) => {
-        return llm.combinePrompts(what, how);
+        const result = await llm.combinePrompts(what, how);
+
+        // Display debug info for combine operation
+        if (result.metadata) {
+          const debugInfo = this.debugLogger.logProviderCall({
+            provider: 'llm',
+            operation: 'combine',
+            metadata: result.metadata
+          });
+          if (debugInfo) {
+            console.log(debugInfo);
+          }
+        }
+
+        return result;
       }
     };
   }
@@ -98,6 +127,19 @@ class BeamSearchLogger {
 
         console.log(`  🖼️  Generating image for candidate ${options.candidateId}...`);
         const result = await imageGen.generateImage(prompt, options);
+
+        // Display debug info (model, no tokens for DALL-E)
+        if (result.metadata) {
+          const debugInfo = this.debugLogger.logProviderCall({
+            provider: 'image',
+            operation: 'generate',
+            metadata: result.metadata
+          });
+          if (debugInfo) {
+            console.log(debugInfo);
+          }
+        }
+
         if (result.localPath) {
           console.log(`     💾 Saved: ${result.localPath}`);
         }
@@ -110,6 +152,19 @@ class BeamSearchLogger {
     return {
       analyzeImage: async (imageUrl, prompt) => {
         const result = await vision.analyzeImage(imageUrl, prompt);
+
+        // Display debug info (model + tokens)
+        if (result.metadata) {
+          const debugInfo = this.debugLogger.logProviderCall({
+            provider: 'vision',
+            operation: 'analyze',
+            metadata: result.metadata
+          });
+          if (debugInfo) {
+            console.log(debugInfo);
+          }
+        }
+
         console.log(`     📊 Scores: alignment=${result.alignmentScore}/100, aesthetic=${result.aestheticScore}/10`);
         return result;
       }
@@ -119,7 +174,21 @@ class BeamSearchLogger {
   wrapCritique(critique) {
     return {
       generateCritique: async (evaluation, prompts, options) => {
-        return critique.generateCritique(evaluation, prompts, options);
+        const result = await critique.generateCritique(evaluation, prompts, options);
+
+        // Display debug info for critique generation
+        if (result.metadata) {
+          const debugInfo = this.debugLogger.logProviderCall({
+            provider: 'critique',
+            operation: 'generate',
+            metadata: result.metadata
+          });
+          if (debugInfo) {
+            console.log(debugInfo);
+          }
+        }
+
+        return result;
       }
     };
   }
@@ -281,7 +350,6 @@ async function demo() {
   console.log('💰 Token Efficiency Report');
   console.log('='.repeat(80));
 
-  tokenTracker.finalize();
   console.log(tokenTracker.formatSummary());
 
   // Display optimization suggestions

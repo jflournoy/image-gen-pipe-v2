@@ -21,6 +21,8 @@ require('dotenv').config();
 const OpenAILLMProvider = require('./src/providers/openai-llm-provider.js');
 const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
+const TokenTracker = require('./src/utils/token-tracker.js');
+const { MODEL_PRICING } = require('./src/config/model-pricing.js');
 
 async function demo() {
   console.log('🎨 Prompt Fidelity Evaluation Demo\n');
@@ -41,6 +43,14 @@ async function demo() {
   const imageGen = new OpenAIImageProvider(process.env.OPENAI_API_KEY);
   const vision = new OpenAIVisionProvider(process.env.OPENAI_API_KEY);
 
+  // Initialize token tracker for cost efficiency
+  const sessionId = `demo-fidelity-${Date.now()}`;
+  const tokenTracker = new TokenTracker({
+    sessionId,
+    pricing: MODEL_PRICING
+  });
+  console.log('💰 Token efficiency tracking: ENABLED\n');
+
   // Step 1: Start with a simple prompt
   console.log('📝 Step 1: Expanding initial prompt');
   console.log('-'.repeat(70));
@@ -55,6 +65,19 @@ async function demo() {
   });
   console.log('\n✨ WHAT expansion (content):');
   console.log(`"${whatExpansion.refinedPrompt}"`);
+  console.log(`Tokens: ${whatExpansion.metadata.tokensUsed}, Model: ${whatExpansion.metadata.model}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: whatExpansion.metadata.tokensUsed,
+    metadata: {
+      model: whatExpansion.metadata.model,
+      dimension: 'what',
+      operation: 'expand'
+    }
+  });
 
   // Expand HOW (style)
   const howExpansion = await llm.refinePrompt(originalPrompt, {
@@ -63,14 +86,40 @@ async function demo() {
   });
   console.log('\n🎨 HOW expansion (style):');
   console.log(`"${howExpansion.refinedPrompt}"`);
+  console.log(`Tokens: ${howExpansion.metadata.tokensUsed}, Model: ${howExpansion.metadata.model}`);
+
+  // Track token usage
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'expand',
+    tokens: howExpansion.metadata.tokensUsed,
+    metadata: {
+      model: howExpansion.metadata.model,
+      dimension: 'how',
+      operation: 'expand'
+    }
+  });
 
   // Combine prompts
-  const combinedPrompt = await llm.combinePrompts(
+  const combineResult = await llm.combinePrompts(
     whatExpansion.refinedPrompt,
     howExpansion.refinedPrompt
   );
+  const combinedPrompt = combineResult.combinedPrompt;
   console.log('\n🔗 Combined prompt:');
   console.log(`"${combinedPrompt}"`);
+  console.log(`Tokens: ${combineResult.metadata.tokensUsed}, Model: ${combineResult.metadata.model}`);
+
+  // Track combine operation
+  tokenTracker.recordUsage({
+    provider: 'llm',
+    operation: 'combine',
+    tokens: combineResult.metadata.tokensUsed,
+    metadata: {
+      model: combineResult.metadata.model,
+      operation: 'combine'
+    }
+  });
 
   console.log();
   console.log('='.repeat(70));
@@ -136,6 +185,17 @@ async function demo() {
   console.log(`   Tokens used: ${evaluation.metadata.tokensUsed}`);
   console.log(`   Timestamp: ${evaluation.metadata.timestamp}`);
 
+  // Track vision token usage
+  tokenTracker.recordUsage({
+    provider: 'vision',
+    operation: 'analyze',
+    tokens: evaluation.metadata.tokensUsed,
+    metadata: {
+      model: evaluation.metadata.model,
+      operation: 'analyze'
+    }
+  });
+
   console.log();
   console.log('='.repeat(70));
   console.log();
@@ -164,6 +224,18 @@ async function demo() {
   console.log();
   console.log('='.repeat(70));
   console.log();
+
+  // Display token efficiency report
+  console.log('💰 Token Efficiency Report');
+  console.log('='.repeat(70));
+
+  console.log(tokenTracker.formatSummary());
+
+  // Display optimization suggestions
+  console.log(tokenTracker.formatOptimizationReport());
+
+  console.log('='.repeat(70));
+  console.log();
   console.log('✅ Demo complete!');
   console.log();
   console.log('📚 What we demonstrated:');
@@ -172,6 +244,7 @@ async function demo() {
   console.log('   ✓ Generate image with DALL-E 3');
   console.log('   ✓ Evaluate prompt fidelity with GPT-4o Vision');
   console.log('   ✓ Get structured feedback (score + strengths + weaknesses)');
+  console.log('   ✓ Track token usage and costs for all operations');
   console.log();
   console.log('🚀 This is Step 5 of the beam search pipeline!');
   console.log();

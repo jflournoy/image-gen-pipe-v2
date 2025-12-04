@@ -75,13 +75,14 @@ describe('Flat Image Storage', () => {
 
     it('should create flat directory path without iteration subdirectories', async () => {
       const OpenAIImageProvider = require('../../src/providers/openai-image-provider.js');
+      const OutputPathManager = require('../../src/utils/output-path-manager.js');
       const provider = new OpenAIImageProvider('fake-api-key', {
         outputDir: testOutputDir,
         sessionId: 'test-session'
       });
 
-      // Expected: output/sessions/test-session/iter0-cand0.png
-      // NOT: output/sessions/test-session/iteration-0/candidate-0/image.png
+      // Expected: output/YYYY-MM-DD/test-session/iter0-cand0.png
+      // NOT: output/YYYY-MM-DD/test-session/iteration-0/candidate-0/image.png
 
       const beamSearch = {
         iteration: 0,
@@ -90,7 +91,8 @@ describe('Flat Image Storage', () => {
       };
 
       const sessionDir = provider._buildFlatSessionPath(beamSearch);
-      const expectedPath = path.join(testOutputDir, 'sessions', 'test-session');
+      const currentDate = OutputPathManager.getCurrentDate();
+      const expectedPath = path.join(testOutputDir, currentDate, 'test-session');
 
       assert.strictEqual(sessionDir, expectedPath);
       assert.ok(!sessionDir.includes('iteration'), 'Should not include iteration directory');
@@ -162,32 +164,36 @@ describe('Flat Image Storage', () => {
   });
 
   describe('Session Management for Flat Storage', () => {
-    it('should use sessions subdirectory', async () => {
-      // New structure: output/sessions/<sessionId>/
-      // Old structure: output/<date>/<sessionId>/
+    it('should use date-based session directory', async () => {
+      // Current structure: output/<date>/<sessionId>/
+      // (Date-based organization for better archival)
 
       const OpenAIImageProvider = require('../../src/providers/openai-image-provider.js');
+      const OutputPathManager = require('../../src/utils/output-path-manager.js');
       const provider = new OpenAIImageProvider('fake-api-key', {
         outputDir: testOutputDir,
         sessionId: 'my-session'
       });
 
       const sessionPath = provider._buildFlatSessionPath({ iteration: 0, candidateId: 0, dimension: 'what' });
+      const currentDate = OutputPathManager.getCurrentDate();
 
-      assert.ok(sessionPath.includes('sessions'), 'Should include sessions directory');
+      assert.ok(sessionPath.includes(currentDate), 'Should include current date');
       assert.ok(sessionPath.includes('my-session'), 'Should include session ID');
     });
 
     it('should store metadata.json in session directory', async () => {
-      // Metadata file location: output/sessions/<sessionId>/metadata.json
+      // Metadata file location: output/<date>/<sessionId>/metadata.json
       const OpenAIImageProvider = require('../../src/providers/openai-image-provider.js');
+      const OutputPathManager = require('../../src/utils/output-path-manager.js');
       const provider = new OpenAIImageProvider('fake-api-key', {
         outputDir: testOutputDir,
         sessionId: 'test-session'
       });
 
       const metadataPath = provider._buildMetadataPath();
-      const expectedPath = path.join(testOutputDir, 'sessions', 'test-session', 'metadata.json');
+      const currentDate = OutputPathManager.getCurrentDate();
+      const expectedPath = path.join(testOutputDir, currentDate, 'test-session', 'metadata.json');
 
       assert.strictEqual(metadataPath, expectedPath);
     });

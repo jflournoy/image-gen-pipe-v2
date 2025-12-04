@@ -84,7 +84,8 @@ describe('Metadata Tracker', () => {
       await tracker.initialize();
 
       // Verify file exists
-      const metadataPath = path.join(testOutputDir, 'sessions', testSessionId, 'metadata.json');
+      const date = new Date().toISOString().split('T')[0];
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const stats = await fs.stat(metadataPath);
       assert.ok(stats.isFile());
     });
@@ -102,7 +103,8 @@ describe('Metadata Tracker', () => {
       await tracker.initialize();
 
       // Read and parse metadata
-      const metadataPath = path.join(testOutputDir, 'sessions', testSessionId, 'metadata.json');
+      const date = new Date().toISOString().split('T')[0];
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content);
 
@@ -136,7 +138,7 @@ describe('Metadata Tracker', () => {
         combined: 'detailed mountain scene with dramatic lighting',
         image: {
           url: 'https://example.com/img.png',
-          localPath: 'sessions/test-session-123/iter0-cand0.png'
+          localPath: '2025-12-03/test-session-123/iter0-cand0.png'
         },
         evaluation: {
           alignmentScore: 85,
@@ -379,7 +381,8 @@ describe('Metadata Tracker', () => {
       }, { survived: true });
 
       // Read directly from disk to verify persistence
-      const metadataPath = path.join(testOutputDir, 'sessions', testSessionId, 'metadata.json');
+      const date = new Date().toISOString().split('T')[0];
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content);
 
@@ -413,7 +416,8 @@ describe('Metadata Tracker', () => {
       }
 
       // Read and parse - should not throw
-      const metadataPath = path.join(testOutputDir, 'sessions', testSessionId, 'metadata.json');
+      const date = new Date().toISOString().split('T')[0];
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content); // Will throw if invalid JSON
 
@@ -527,6 +531,136 @@ describe('Metadata Tracker', () => {
       assert.deepStrictEqual(metadata.lineage[0], { iteration: 0, candidateId: 1 });
       assert.deepStrictEqual(metadata.lineage[1], { iteration: 1, candidateId: 0 });
       assert.deepStrictEqual(metadata.lineage[2], { iteration: 2, candidateId: 0 });
+    });
+  });
+
+  describe('Defensive Metadata Recording', () => {
+    it('should record attempt before processing to survive errors', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // Record attempt with just the prompts and metadata (before processing)
+      const attemptInfo = {
+        whatPrompt: 'detailed mountain',
+        howPrompt: 'dramatic lighting',
+        metadata: {
+          iteration: 0,
+          candidateId: 0,
+          dimension: 'what',
+          parentId: null
+        }
+      };
+
+      await tracker.recordAttempt(attemptInfo);
+
+      // Verify attempt was recorded even without results
+      const metadata = await tracker.getMetadata();
+      assert.strictEqual(metadata.iterations.length, 1);
+      assert.strictEqual(metadata.iterations[0].candidates.length, 1);
+
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.strictEqual(candidate.whatPrompt, 'detailed mountain');
+      assert.strictEqual(candidate.howPrompt, 'dramatic lighting');
+      assert.strictEqual(candidate.status, 'attempted');
+      assert.strictEqual(candidate.combined, null);
+      assert.strictEqual(candidate.image, null);
+      assert.strictEqual(candidate.evaluation, null);
+    });
+
+    it('should update attempt with results after successful processing', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // First record attempt
+      const attemptInfo = {
+        whatPrompt: 'detailed mountain',
+        howPrompt: 'dramatic lighting',
+        metadata: {
+          iteration: 0,
+          candidateId: 0,
+          dimension: 'what'
+        }
+      };
+
+      await tracker.recordAttempt(attemptInfo);
+
+      // Then update with results
+      const results = {
+        combined: 'detailed mountain with dramatic lighting',
+        image: {
+          url: 'https://example.com/img.png',
+          localPath: '2025-12-03/test-session-123/iter0-cand0.png'
+        },
+        evaluation: {
+          alignmentScore: 85,
+          aestheticScore: 7.5,
+          analysis: 'Good composition',
+          strengths: ['lighting'],
+          weaknesses: []
+        },
+        totalScore: 81.75
+      };
+
+      await tracker.updateAttemptWithResults(0, 0, results, { survived: true });
+
+      // Verify status changed to completed
+      const metadata = await tracker.getMetadata();
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.strictEqual(candidate.status, 'completed');
+      assert.strictEqual(candidate.combined, 'detailed mountain with dramatic lighting');
+      assert.strictEqual(candidate.totalScore, 81.75);
+      assert.strictEqual(candidate.survived, true);
+    });
+
+    it('should persist attempt to disk immediately', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // Record attempt
+      await tracker.recordAttempt({
+        whatPrompt: 'test what',
+        howPrompt: 'test how',
+        metadata: {
+          iteration: 0,
+          candidateId: 0,
+          dimension: 'what'
+        }
+      });
+
+      // Read directly from disk to verify immediate persistence
+      const date = new Date().toISOString().split('T')[0];
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
+      const content = await fs.readFile(metadataPath, 'utf8');
+      const metadata = JSON.parse(content);
+
+      assert.strictEqual(metadata.iterations.length, 1);
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.strictEqual(candidate.status, 'attempted');
+      assert.strictEqual(candidate.whatPrompt, 'test what');
     });
   });
 });
