@@ -238,6 +238,54 @@ Combined prompt:`;
   }
 
   /**
+   * Get model capabilities from centralized registry
+   *
+   * This method returns a capabilities object that defines exactly which
+   * parameters a model supports. This guarantees we never send invalid
+   * parameters to the OpenAI API.
+   *
+   * Capabilities include:
+   * - tokenParam: 'max_tokens' or 'max_completion_tokens'
+   * - supportsCustomTemperature: true/false
+   *
+   * @private
+   * @param {string} model - Model name
+   * @returns {Object} Model capabilities
+   */
+  _getModelCapabilities(model) {
+    // GPT-5.1 family: max_completion_tokens, no custom temperature
+    if (model.includes('gpt-5.1')) {
+      return {
+        tokenParam: 'max_completion_tokens',
+        supportsCustomTemperature: false
+      };
+    }
+
+    // GPT-5 family (non-5.1): max_completion_tokens, no custom temperature
+    if (model.includes('gpt-5')) {
+      return {
+        tokenParam: 'max_completion_tokens',
+        supportsCustomTemperature: false
+      };
+    }
+
+    // o-series models (o1, o3, o4): max_completion_tokens, no custom temperature
+    if (model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) {
+      return {
+        tokenParam: 'max_completion_tokens',
+        supportsCustomTemperature: false
+      };
+    }
+
+    // Default: GPT-4, GPT-3.5, and older models
+    // These support max_tokens and custom temperature
+    return {
+      tokenParam: 'max_tokens',
+      supportsCustomTemperature: true
+    };
+  }
+
+  /**
    * Detect if a model uses max_completion_tokens instead of max_tokens
    *
    * OpenAI API models use different parameter names for token limits:
@@ -252,29 +300,57 @@ Combined prompt:`;
    * @returns {boolean} True if model uses max_completion_tokens
    */
   _usesCompletionTokens(model) {
-    // GPT-5.1, GPT-5, and o-series models use max_completion_tokens
-    // All older models (GPT-4, GPT-3.5) use max_tokens
-    return model.includes('gpt-5') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4');
+    const capabilities = this._getModelCapabilities(model);
+    return capabilities.tokenParam === 'max_completion_tokens';
+  }
+
+  /**
+   * Detect if a model supports custom temperature parameter
+   *
+   * Some models (like GPT-5.1) only support the default temperature (1.0)
+   * and will error if you pass a custom temperature value.
+   *
+   * @private
+   * @param {string} model - Model name
+   * @returns {boolean} True if model supports custom temperature
+   */
+  _supportsCustomTemperature(model) {
+    const capabilities = this._getModelCapabilities(model);
+    return capabilities.supportsCustomTemperature;
   }
 
   /**
    * Build chat completion parameters with correct token limit field
+   *
+   * This method uses the model capabilities registry to guarantee that
+   * only valid parameters are included in the API request. This prevents
+   * API errors from unsupported parameters.
+   *
    * @private
    * @param {string} model - Model name
    * @param {Array} messages - Chat messages
    * @param {number} temperature - Temperature setting
    * @param {number} maxTokens - Maximum tokens to generate
-   * @returns {Object} API parameters object
+   * @returns {Object} API parameters object with only valid parameters
    */
   _buildChatParams(model, messages, temperature, maxTokens) {
+    // Get model capabilities to determine which parameters to use
+    const capabilities = this._getModelCapabilities(model);
+
+    // Start with base parameters that all models support
     const params = {
       model,
-      messages,
-      temperature
+      messages
     };
 
-    // Use correct parameter based on model
-    if (this._usesCompletionTokens(model)) {
+    // Add temperature only if model supports custom temperature
+    if (capabilities.supportsCustomTemperature) {
+      params.temperature = temperature;
+    }
+    // Otherwise, omit temperature to use model's default (typically 1.0)
+
+    // Add token limit using the correct parameter name for this model
+    if (capabilities.tokenParam === 'max_completion_tokens') {
       params.max_completion_tokens = maxTokens;
     } else {
       params.max_tokens = maxTokens;

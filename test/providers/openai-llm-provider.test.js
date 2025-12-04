@@ -478,7 +478,7 @@ describe('OpenAILLMProvider Interface', () => {
   });
 
   describe('Model Parameter Syntax', () => {
-    it('🔴 should detect GPT-5.1 models that require max_completion_tokens', () => {
+    it('should detect GPT-5.1 models that require max_completion_tokens', () => {
       const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
       const provider = new OpenAILLMProvider('fake-api-key');
 
@@ -495,7 +495,7 @@ describe('OpenAILLMProvider Interface', () => {
       assert.strictEqual(provider._usesCompletionTokens('gpt-3.5-turbo'), false, 'gpt-3.5-turbo should use max_tokens');
     });
 
-    it('🔴 should build API parameters with correct token limit field', () => {
+    it('should build API parameters with correct token limit field', () => {
       const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
       const provider = new OpenAILLMProvider('fake-api-key');
 
@@ -510,6 +510,73 @@ describe('OpenAILLMProvider Interface', () => {
       assert.ok(gpt4Params.max_tokens, 'GPT-4 should have max_tokens');
       assert.strictEqual(gpt4Params.max_tokens, 500);
       assert.strictEqual(gpt4Params.max_completion_tokens, undefined, 'GPT-4 should not have max_completion_tokens');
+    });
+
+    it('🔴 should detect models with temperature restrictions', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // GPT-5.1 models only support default temperature (1.0)
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-5.1'), false, 'gpt-5.1 should not support custom temperature');
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-5.1-mini'), false, 'gpt-5.1-mini should not support custom temperature');
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-5.1-nano'), false, 'gpt-5.1-nano should not support custom temperature');
+
+      // GPT-4 models support custom temperature
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-4o-mini'), true, 'gpt-4o-mini should support custom temperature');
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-4'), true, 'gpt-4 should support custom temperature');
+      assert.strictEqual(provider._supportsCustomTemperature('gpt-3.5-turbo'), true, 'gpt-3.5-turbo should support custom temperature');
+    });
+
+    it('🔴 should build API parameters respecting temperature restrictions', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // GPT-5.1 should omit temperature parameter (use default)
+      const gpt51Params = provider._buildChatParams('gpt-5.1', [{ role: 'user', content: 'test' }], 0.7, 500);
+      assert.strictEqual(gpt51Params.temperature, undefined, 'GPT-5.1 should not have temperature parameter');
+
+      // GPT-4 should include custom temperature
+      const gpt4Params = provider._buildChatParams('gpt-4o-mini', [{ role: 'user', content: 'test' }], 0.7, 500);
+      assert.strictEqual(gpt4Params.temperature, 0.7, 'GPT-4 should have custom temperature');
+    });
+
+    it('🔴 should get model capabilities from centralized registry', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // GPT-5.1 capabilities
+      const gpt51Caps = provider._getModelCapabilities('gpt-5.1');
+      assert.strictEqual(gpt51Caps.tokenParam, 'max_completion_tokens', 'GPT-5.1 should use max_completion_tokens');
+      assert.strictEqual(gpt51Caps.supportsCustomTemperature, false, 'GPT-5.1 should not support custom temperature');
+
+      // GPT-4 capabilities
+      const gpt4Caps = provider._getModelCapabilities('gpt-4o-mini');
+      assert.strictEqual(gpt4Caps.tokenParam, 'max_tokens', 'GPT-4 should use max_tokens');
+      assert.strictEqual(gpt4Caps.supportsCustomTemperature, true, 'GPT-4 should support custom temperature');
+    });
+
+    it('🔴 should guarantee no invalid parameters are sent to API', () => {
+      const OpenAILLMProvider = require('../../src/providers/openai-llm-provider.js');
+      const provider = new OpenAILLMProvider('fake-api-key');
+
+      // Test all parameter combinations for GPT-5.1
+      const gpt51Params = provider._buildChatParams('gpt-5.1', [{ role: 'user', content: 'test' }], 0.8, 500);
+
+      // Must have exactly the right parameters
+      assert.ok(gpt51Params.model, 'Must have model');
+      assert.ok(gpt51Params.messages, 'Must have messages');
+      assert.ok(gpt51Params.max_completion_tokens, 'GPT-5.1 must have max_completion_tokens');
+      assert.strictEqual(gpt51Params.max_tokens, undefined, 'GPT-5.1 must not have max_tokens');
+      assert.strictEqual(gpt51Params.temperature, undefined, 'GPT-5.1 must not have custom temperature');
+
+      // Test all parameter combinations for GPT-4
+      const gpt4Params = provider._buildChatParams('gpt-4o-mini', [{ role: 'user', content: 'test' }], 0.8, 500);
+
+      assert.ok(gpt4Params.model, 'Must have model');
+      assert.ok(gpt4Params.messages, 'Must have messages');
+      assert.ok(gpt4Params.max_tokens, 'GPT-4 must have max_tokens');
+      assert.strictEqual(gpt4Params.max_completion_tokens, undefined, 'GPT-4 must not have max_completion_tokens');
+      assert.strictEqual(gpt4Params.temperature, 0.8, 'GPT-4 must have custom temperature');
     });
   });
 
