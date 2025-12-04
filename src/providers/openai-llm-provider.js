@@ -141,7 +141,22 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
       // Call OpenAI API
       const completion = await this.client.chat.completions.create(apiParams);
 
-      const refinedPrompt = completion.choices[0].message.content.trim();
+      // Validate response structure
+      if (!completion.choices || completion.choices.length === 0) {
+        throw new Error(`OpenAI API returned no choices. Model: ${completion.model}, Finish reason: ${completion.choices?.[0]?.finish_reason || 'none'}`);
+      }
+
+      const message = completion.choices[0].message;
+      if (!message || !message.content) {
+        throw new Error(`OpenAI API returned empty content. Model: ${completion.model}, Finish reason: ${completion.choices[0].finish_reason}, Refusal: ${message?.refusal || 'none'}`);
+      }
+
+      const refinedPrompt = message.content.trim();
+
+      // Validate that we got a non-empty response
+      if (!refinedPrompt || refinedPrompt.length === 0) {
+        throw new Error(`OpenAI API returned empty refined prompt after trimming. Model: ${completion.model}, Original content length: ${message.content.length}, Finish reason: ${completion.choices[0].finish_reason}`);
+      }
 
       return {
         refinedPrompt,
@@ -220,7 +235,22 @@ Combined prompt:`;
       // Call OpenAI API
       const completion = await this.client.chat.completions.create(apiParams);
 
-      const combinedPrompt = completion.choices[0].message.content.trim();
+      // Validate response structure
+      if (!completion.choices || completion.choices.length === 0) {
+        throw new Error(`OpenAI API returned no choices for combine. Model: ${completion.model}, Finish reason: ${completion.choices?.[0]?.finish_reason || 'none'}`);
+      }
+
+      const message = completion.choices[0].message;
+      if (!message || !message.content) {
+        throw new Error(`OpenAI API returned empty content for combine. Model: ${completion.model}, Finish reason: ${completion.choices[0].finish_reason}, Refusal: ${message?.refusal || 'none'}`);
+      }
+
+      const combinedPrompt = message.content.trim();
+
+      // Validate that we got a non-empty response
+      if (!combinedPrompt || combinedPrompt.length === 0) {
+        throw new Error(`OpenAI API returned empty combined prompt after trimming. Model: ${completion.model}, Original content length: ${message.content.length}, Finish reason: ${completion.choices[0].finish_reason}`);
+      }
 
       // Return object with metadata (consistent with refinePrompt)
       return {
