@@ -127,16 +127,19 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
     const selectedModel = this.models[operation] || this.model;
 
     try {
-      // Call OpenAI API
-      const completion = await this.client.chat.completions.create({
-        model: selectedModel,
-        messages: [
+      // Build API parameters with correct token limit field based on model
+      const apiParams = this._buildChatParams(
+        selectedModel,
+        [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userMessage }
         ],
         temperature,
-        max_tokens: maxTokens
-      });
+        maxTokens
+      );
+
+      // Call OpenAI API
+      const completion = await this.client.chat.completions.create(apiParams);
 
       const refinedPrompt = completion.choices[0].message.content.trim();
 
@@ -203,16 +206,19 @@ Combined prompt:`;
     const selectedModel = this.models.combine || this.model;
 
     try {
-      // Call OpenAI API with lower temperature for more consistent combination
-      const completion = await this.client.chat.completions.create({
-        model: selectedModel,
-        messages: [
+      // Build API parameters with correct token limit field based on model
+      const apiParams = this._buildChatParams(
+        selectedModel,
+        [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.5, // Lower temperature for more deterministic combination
-        max_tokens: 500
-      });
+        0.5, // Lower temperature for more deterministic combination
+        500
+      );
+
+      // Call OpenAI API
+      const completion = await this.client.chat.completions.create(apiParams);
 
       const combinedPrompt = completion.choices[0].message.content.trim();
 
@@ -229,6 +235,52 @@ Combined prompt:`;
       // Wrap OpenAI errors with more context
       throw new Error(`OpenAI API error: ${error.message}`);
     }
+  }
+
+  /**
+   * Detect if a model uses max_completion_tokens instead of max_tokens
+   *
+   * OpenAI API models use different parameter names for token limits:
+   * - GPT-5.1 family (gpt-5.1, gpt-5.1-mini, gpt-5.1-nano): max_completion_tokens
+   * - GPT-5 family (gpt-5-mini, gpt-5-nano): max_completion_tokens
+   * - o-series models (o1, o3, o4): max_completion_tokens
+   * - GPT-4 family (gpt-4, gpt-4o, gpt-4-turbo): max_tokens
+   * - GPT-3.5 family: max_tokens
+   *
+   * @private
+   * @param {string} model - Model name
+   * @returns {boolean} True if model uses max_completion_tokens
+   */
+  _usesCompletionTokens(model) {
+    // GPT-5.1, GPT-5, and o-series models use max_completion_tokens
+    // All older models (GPT-4, GPT-3.5) use max_tokens
+    return model.includes('gpt-5') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4');
+  }
+
+  /**
+   * Build chat completion parameters with correct token limit field
+   * @private
+   * @param {string} model - Model name
+   * @param {Array} messages - Chat messages
+   * @param {number} temperature - Temperature setting
+   * @param {number} maxTokens - Maximum tokens to generate
+   * @returns {Object} API parameters object
+   */
+  _buildChatParams(model, messages, temperature, maxTokens) {
+    const params = {
+      model,
+      messages,
+      temperature
+    };
+
+    // Use correct parameter based on model
+    if (this._usesCompletionTokens(model)) {
+      params.max_completion_tokens = maxTokens;
+    } else {
+      params.max_tokens = maxTokens;
+    }
+
+    return params;
   }
 
   /**
