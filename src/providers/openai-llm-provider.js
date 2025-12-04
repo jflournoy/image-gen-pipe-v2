@@ -291,30 +291,36 @@ Combined prompt:`;
    * @returns {Object} Model capabilities
    */
   _getModelCapabilities(model) {
-    // GPT-5.1 family: max_completion_tokens, no custom temperature, higher token limits
+    // GPT-5.1 family: max_completion_tokens, no custom temperature, much higher token limits
+    // Note: GPT-5.1 models use reasoning_tokens internally, which count toward max_completion_tokens
+    // They can use ALL tokens for reasoning, leaving zero for output. Need large buffer.
     if (model.includes('gpt-5.1')) {
       return {
         tokenParam: 'max_completion_tokens',
         supportsCustomTemperature: false,
-        recommendedMaxTokens: 2000 // GPT-5.1 needs more tokens for reasoning + output
+        recommendedMaxTokens: 4000 // GPT-5.1 needs tokens for reasoning (can be 2000+) + output (500+)
       };
     }
 
-    // GPT-5 family (non-5.1): max_completion_tokens, no custom temperature, higher token limits
+    // GPT-5 family (non-5.1): max_completion_tokens, no custom temperature, much higher token limits
+    // Note: GPT-5 models use reasoning_tokens internally, which count toward max_completion_tokens
+    // They can use ALL tokens for reasoning, leaving zero for output. Need large buffer.
     if (model.includes('gpt-5')) {
       return {
         tokenParam: 'max_completion_tokens',
         supportsCustomTemperature: false,
-        recommendedMaxTokens: 2000 // GPT-5 needs more tokens for reasoning + output
+        recommendedMaxTokens: 4000 // GPT-5 needs tokens for reasoning (can be 2000+) + output (500+)
       };
     }
 
     // o-series models (o1, o3, o4): max_completion_tokens, no custom temperature
+    // Note: o-series models use reasoning_tokens internally, which count toward max_completion_tokens
+    // They can use ALL tokens for reasoning, leaving zero for output. Need large buffer.
     if (model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) {
       return {
         tokenParam: 'max_completion_tokens',
         supportsCustomTemperature: false,
-        recommendedMaxTokens: 2000 // o-series needs tokens for reasoning
+        recommendedMaxTokens: 4000 // o-series needs tokens for reasoning (can be 2000+) + output (500+)
       };
     }
 
