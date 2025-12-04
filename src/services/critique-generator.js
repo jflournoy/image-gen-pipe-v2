@@ -9,12 +9,14 @@
  */
 
 const OpenAI = require('openai');
+const providerConfig = require('../config/provider-config.js');
 
 class CritiqueGenerator {
   constructor(options = {}) {
     // Use OpenAI for critique generation if API key provided
     this.apiKey = options.apiKey || process.env.OPENAI_API_KEY;
-    this.model = options.model || 'gpt-4o-mini'; // Fast model for critique generation
+    // Use refine model from config (critique is a moderate complexity task like refine)
+    this.model = options.model || providerConfig.llm.models.refine;
 
     if (this.apiKey) {
       this.client = new OpenAI({
