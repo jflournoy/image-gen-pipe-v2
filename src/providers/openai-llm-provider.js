@@ -67,7 +67,7 @@ class OpenAILLMProvider {
       operation = 'expand',
       critique,
       temperature = 0.7,
-      maxTokens = 500
+      maxTokens // Will use model-specific default if not provided
     } = options;
 
     // Validate dimension
@@ -126,6 +126,10 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
     // Select model based on operation for cost optimization
     const selectedModel = this.models[operation] || this.model;
 
+    // Get model capabilities and apply recommended token limit if not explicitly provided
+    const capabilities = this._getModelCapabilities(selectedModel);
+    const effectiveMaxTokens = maxTokens ?? capabilities.recommendedMaxTokens;
+
     try {
       // Build API parameters with correct token limit field based on model
       const apiParams = this._buildChatParams(
@@ -135,7 +139,7 @@ Please refine the ${dimension.toUpperCase()} prompt based on the above feedback.
           { role: 'user', content: userMessage }
         ],
         temperature,
-        maxTokens
+        effectiveMaxTokens
       );
 
       // Call OpenAI API
@@ -220,6 +224,9 @@ Combined prompt:`;
     // Select model for combine operation (simple task, use cost-efficient model)
     const selectedModel = this.models.combine || this.model;
 
+    // Get model capabilities and use recommended token limit
+    const capabilities = this._getModelCapabilities(selectedModel);
+
     try {
       // Build API parameters with correct token limit field based on model
       const apiParams = this._buildChatParams(
@@ -229,7 +236,7 @@ Combined prompt:`;
           { role: 'user', content: userPrompt }
         ],
         0.5, // Lower temperature for more deterministic combination
-        500
+        capabilities.recommendedMaxTokens
       );
 
       // Call OpenAI API
@@ -277,25 +284,28 @@ Combined prompt:`;
    * Capabilities include:
    * - tokenParam: 'max_tokens' or 'max_completion_tokens'
    * - supportsCustomTemperature: true/false
+   * - recommendedMaxTokens: Recommended token limit for this model
    *
    * @private
    * @param {string} model - Model name
    * @returns {Object} Model capabilities
    */
   _getModelCapabilities(model) {
-    // GPT-5.1 family: max_completion_tokens, no custom temperature
+    // GPT-5.1 family: max_completion_tokens, no custom temperature, higher token limits
     if (model.includes('gpt-5.1')) {
       return {
         tokenParam: 'max_completion_tokens',
-        supportsCustomTemperature: false
+        supportsCustomTemperature: false,
+        recommendedMaxTokens: 2000 // GPT-5.1 needs more tokens for reasoning + output
       };
     }
 
-    // GPT-5 family (non-5.1): max_completion_tokens, no custom temperature
+    // GPT-5 family (non-5.1): max_completion_tokens, no custom temperature, higher token limits
     if (model.includes('gpt-5')) {
       return {
         tokenParam: 'max_completion_tokens',
-        supportsCustomTemperature: false
+        supportsCustomTemperature: false,
+        recommendedMaxTokens: 2000 // GPT-5 needs more tokens for reasoning + output
       };
     }
 
@@ -303,7 +313,8 @@ Combined prompt:`;
     if (model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) {
       return {
         tokenParam: 'max_completion_tokens',
-        supportsCustomTemperature: false
+        supportsCustomTemperature: false,
+        recommendedMaxTokens: 2000 // o-series needs tokens for reasoning
       };
     }
 
@@ -311,7 +322,8 @@ Combined prompt:`;
     // These support max_tokens and custom temperature
     return {
       tokenParam: 'max_tokens',
-      supportsCustomTemperature: true
+      supportsCustomTemperature: true,
+      recommendedMaxTokens: 500 // Standard models work well with 500
     };
   }
 
