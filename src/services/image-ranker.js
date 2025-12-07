@@ -1,0 +1,662 @@
+/**
+ * TDD GREEN Phase: Image Ranker
+ *
+ * Comparative ranking system for images using LLM vision capabilities.
+ * Instead of absolute scores, compares images relatively to determine quality.
+ *
+ * Strategy:
+ * - Unified pairwise comparison for all N (consistent behavior)
+ * - Transitive inference to minimize API calls (if A>B and B>C, then A>C)
+ * - Optional ensemble voting for reliability (multiple comparisons per pair)
+ *
+ * Benefits of comparative ranking:
+ * - More reliable than absolute scoring (easier for model to compare than score)
+ * - Provides reasons tied to specific comparisons
+ * - Consistent algorithm regardless of image count
+ */
+
+const OpenAI = require('openai');
+const providerConfig = require('../config/provider-config.js');
+
+class ImageRanker {
+  constructor(options = {}) {
+    this.apiKey = options.apiKey || process.env.OPENAI_API_KEY;
+    this.model = options.model || providerConfig.vision.model;
+
+    if (this.apiKey) {
+      this.client = new OpenAI({
+        apiKey: this.apiKey,
+        maxRetries: options.maxRetries || providerConfig.llm.maxRetries,
+        timeout: options.timeout || providerConfig.llm.timeout
+      });
+    }
+
+    // Ensemble configuration
+    this.defaultEnsembleSize = options.defaultEnsembleSize || 1;
+
+    // Multi-factor scoring weights (alignment vs aesthetics)
+    // Default: 70% alignment (prompt match), 30% aesthetics
+    this.alignmentWeight = options.alignmentWeight ?? 0.7;
+
+    // Threshold for switching algorithms (kept for backward compatibility)
+    this.allAtOnceThreshold = 4;
+  }
+
+  /**
+   * Rank images using unified pairwise comparison with transitive inference
+   * Consistent algorithm for all N - no special cases for small N
+   * @param {Array<{candidateId: number, url: string}>} images - Images to rank
+   * @param {string} prompt - The prompt they should match
+   * @param {Object} options - Ranking options
+   * @param {number} [options.keepTop] - Number of top candidates needed (for optimization)
+   * @param {number} [options.ensembleSize] - Number of votes per comparison for reliability
+   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
+   */
+  async rankImages(images, prompt, options = {}) {
+    // Always use transitive pairwise ranking for consistency
+    // This ensures the same algorithm regardless of image count
+    return this.rankPairwiseTransitive(images, prompt, options);
+  }
+
+  /**
+   * Rank all images at once (best for N ≤ 4)
+   * Sends all images in one API call for holistic comparison
+   * @param {Array<{candidateId: number, url: string}>} images - Images to rank
+   * @param {string} prompt - The prompt they should match
+   * @param {Object} options - Ranking options
+   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
+   */
+  async rankAllAtOnce(images, prompt, _options = {}) {
+    // Shuffle images to mitigate position bias
+    // Create array of indices and shuffle them
+    const indices = images.map((_, i) => i);
+    for (let i = indices.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [indices[i], indices[j]] = [indices[j], indices[i]];
+    }
+    const shuffledImages = indices.map(i => images[i]);
+
+    // Create letter labels for clearer reference (A, B, C, D...)
+    const labels = shuffledImages.map((_, i) => String.fromCharCode(65 + i));
+    const labelToCandidateId = new Map(
+      shuffledImages.map((img, i) => [labels[i], img.candidateId])
+    );
+
+    // Build vision API request with all images
+    const systemPrompt = `You are an expert at comparing and ranking images for quality and prompt adherence.
+
+Your task is to rank ${images.length} images (labeled ${labels.join(', ')}) based on how well they match the given prompt.
+
+Consider:
+1. Content alignment: Does the image contain what the prompt asks for?
+2. Aesthetic quality: Composition, lighting, color, technical execution
+3. Prompt adherence: How closely does it follow the specific details?
+
+Output format (JSON):
+{
+  "rankings": [
+    {
+      "imageLabel": "<letter A-${labels[labels.length - 1]}>",
+      "rank": <1 for best, ${images.length} for worst>,
+      "reason": "Specific comparative reason (e.g., 'Image A has clouds as requested, better composition than B')",
+      "strengths": ["what this image does well"],
+      "weaknesses": ["what could be improved"],
+      "improvementSuggestion": "Specific actionable improvement for the prompt"
+    },
+    ...
+  ]
+}
+
+IMPORTANT:
+- Reference images by their letter labels (${labels.join(', ')})
+- Provide COMPARATIVE reasons (reference what makes this better/worse than others)
+- Rank ALL ${images.length} images
+- Use ranks 1 through ${images.length} exactly once each
+- For EACH image, provide strengths, weaknesses, and improvement suggestions`;
+
+    const userPrompt = `Prompt: "${prompt}"
+
+The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.length} images from best (rank 1) to worst (rank ${images.length}), with comparative reasons.`;
+
+    // Build image content for vision API with labels
+    const imageContent = shuffledImages.map((img) => ({
+      type: 'image_url',
+      image_url: { url: img.url }
+    }));
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: userPrompt },
+          ...imageContent
+        ]
+      }
+    ];
+
+    const result = await this._callVisionAPI(messages);
+
+    // Map image labels back to candidateIds
+    return result.rankings.map(r => ({
+      candidateId: labelToCandidateId.get(r.imageLabel),
+      rank: r.rank,
+      reason: r.reason,
+      strengths: r.strengths || [],
+      weaknesses: r.weaknesses || [],
+      improvementSuggestion: r.improvementSuggestion
+    }));
+  }
+
+  /**
+   * Rank images using pairwise comparisons with merge-sort (best for N > 4)
+   * O(N log N) comparisons instead of O(N²)
+   * @param {Array<{candidateId: number, url: string}>} images - Images to rank
+   * @param {string} prompt - The prompt they should match
+   * @param {Object} options - Ranking options
+   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
+   */
+  async rankPairwise(images, prompt, _options = {}) {
+    // Use merge sort to rank images with pairwise comparisons
+    const sorted = await this._mergeSort(images, prompt);
+
+    // Convert sorted array to rankings with reasons
+    const rankings = sorted.map((item, index) => ({
+      candidateId: item.candidateId,
+      rank: index + 1,
+      reason: item.reason || `Ranked ${index + 1} of ${images.length} through pairwise comparison`
+    }));
+
+    return rankings;
+  }
+
+  /**
+   * Rank images using transitive inference to minimize comparisons
+   * Uses tournament-style selection with transitivity (if A>B and B>C, then A>C)
+   * @param {Array<{candidateId: number, url: string}>} images - Images to rank
+   * @param {string} prompt - The prompt they should match
+   * @param {Object} options - Ranking options
+   * @param {number} options.keepTop - Number of top candidates needed
+   * @param {number} options.ensembleSize - Number of votes per comparison
+   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
+   */
+  async rankPairwiseTransitive(images, prompt, options = {}) {
+    const keepTop = options.keepTop || images.length;
+
+    // Comparison graph: tracks A > B relationships and infers transitivity
+    const graph = new ComparisonGraph();
+
+    // Tournament-style selection for top K
+    const ranked = [];
+    const remaining = [...images];
+
+    // Find top K candidates one by one
+    for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
+      if (remaining.length === 0) break;
+
+      if (remaining.length === 1) {
+        // Last candidate wins by default
+        const winner = remaining[0];
+        ranked.push({
+          candidateId: winner.candidateId,
+          rank,
+          reason: 'Last remaining candidate'
+        });
+        break;
+      }
+
+      // Find the best among remaining using minimal comparisons + transitivity
+      const { winner, reason, ranks } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
+
+      ranked.push({
+        candidateId: winner.candidateId,
+        rank,
+        reason,
+        ranks
+      });
+
+      // Remove winner from remaining
+      const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
+      remaining.splice(winnerIdx, 1);
+    }
+
+    return ranked;
+  }
+
+  /**
+   * Find the best candidate among a set using transitivity to minimize comparisons
+   * @private
+   * @param {Array} candidates - Candidates to evaluate
+   * @param {string} prompt - Prompt for comparison
+   * @param {ComparisonGraph} graph - Comparison graph for transitivity
+   * @param {Object} options - Options including ensembleSize
+   * @returns {Promise<{winner: Object, reason: string, ranks: Object}>}
+   */
+  async _findBestWithTransitivity(candidates, prompt, graph, options = {}) {
+    if (candidates.length === 1) {
+      return { winner: candidates[0], reason: 'Only candidate' };
+    }
+
+    // Tournament: compare pairs, track results
+    let champion = candidates[0];
+    let championReason = 'Initial candidate';
+    let championRanks = null;
+
+    for (let i = 1; i < candidates.length; i++) {
+      const challenger = candidates[i];
+
+      // Check if we can infer winner from transitivity
+      const inferred = graph.canInferWinner(champion.candidateId, challenger.candidateId);
+
+      if (inferred) {
+        // Use transitive inference (no API call needed!)
+        if (inferred.winner === champion.candidateId) {
+          championReason = `Better than candidate ${challenger.candidateId} (inferred via transitivity)`;
+        } else {
+          champion = challenger;
+          championReason = 'Better than previous champion (inferred via transitivity)';
+        }
+      } else {
+        // Need to compare directly (with ensemble voting for reliability)
+        const comparison = await this.compareWithEnsemble(champion, challenger, prompt, options);
+
+        // Record comparison in graph
+        graph.recordComparison(champion.candidateId, challenger.candidateId, comparison.winner);
+
+        if (comparison.winner === 'A') {
+          championReason = comparison.reason;
+          // Store winner's ranks
+          championRanks = comparison.aggregatedRanks?.A || comparison.ranks?.A;
+        } else {
+          champion = challenger;
+          championReason = comparison.reason;
+          // Store winner's ranks
+          championRanks = comparison.aggregatedRanks?.B || comparison.ranks?.B;
+        }
+      }
+    }
+
+    return { winner: champion, reason: championReason, ranks: championRanks };
+  }
+
+  /**
+   * Merge sort using pairwise image comparisons
+   * @private
+   * @param {Array} images - Images to sort
+   * @param {string} prompt - Prompt for comparison context
+   * @returns {Promise<Array>} Sorted images (best to worst)
+   */
+  async _mergeSort(images, prompt) {
+    if (images.length <= 1) {
+      return images;
+    }
+
+    const mid = Math.floor(images.length / 2);
+    const left = await this._mergeSort(images.slice(0, mid), prompt);
+    const right = await this._mergeSort(images.slice(mid), prompt);
+
+    return this._merge(left, right, prompt);
+  }
+
+  /**
+   * Merge two sorted arrays using pairwise comparisons
+   * @private
+   */
+  async _merge(left, right, prompt) {
+    const result = [];
+    let i = 0;
+    let j = 0;
+
+    while (i < left.length && j < right.length) {
+      const comparison = await this.compareTwo(left[i], right[j], prompt);
+
+      if (comparison.winner === 'A') {
+        result.push({ ...left[i], reason: comparison.reason });
+        i++;
+      } else {
+        result.push({ ...right[j], reason: comparison.reason });
+        j++;
+      }
+    }
+
+    // Add remaining elements
+    while (i < left.length) {
+      result.push(left[i]);
+      i++;
+    }
+
+    while (j < right.length) {
+      result.push(right[j]);
+      j++;
+    }
+
+    return result;
+  }
+
+  /**
+   * Compare two images with ensemble voting for reliability
+   * Calls vision API multiple times and uses majority vote
+   * Aggregates multi-factor ranks across all votes
+   * @param {{candidateId: number, url: string}} imageA - First image
+   * @param {{candidateId: number, url: string}} imageB - Second image
+   * @param {string} prompt - The prompt they should match
+   * @param {Object} options - Options
+   * @param {number} [options.ensembleSize] - Number of comparisons to make
+   * @returns {Promise<{winner: string, votes: {A: number, B: number}, confidence: number, reason: string, aggregatedRanks: Object}>}
+   */
+  async compareWithEnsemble(imageA, imageB, prompt, options = {}) {
+    const ensembleSize = options.ensembleSize || this.defaultEnsembleSize;
+    const votes = { A: 0, B: 0 };
+    let lastReason = '';
+
+    // Accumulate ranks for averaging
+    const rankAccumulators = {
+      A: { alignment: 0, aesthetics: 0, combined: 0 },
+      B: { alignment: 0, aesthetics: 0, combined: 0 }
+    };
+
+    // Make multiple comparisons using compareTwo for each
+    for (let i = 0; i < ensembleSize; i++) {
+      const result = await this.compareTwo(imageA, imageB, prompt);
+      if (result.winner === 'A') {
+        votes.A++;
+      } else if (result.winner === 'B') {
+        votes.B++;
+      }
+
+      // Accumulate ranks for averaging
+      if (result.ranks) {
+        rankAccumulators.A.alignment += result.ranks.A?.alignment || 0;
+        rankAccumulators.A.aesthetics += result.ranks.A?.aesthetics || 0;
+        rankAccumulators.A.combined += result.ranks.A?.combined || 0;
+        rankAccumulators.B.alignment += result.ranks.B?.alignment || 0;
+        rankAccumulators.B.aesthetics += result.ranks.B?.aesthetics || 0;
+        rankAccumulators.B.combined += result.ranks.B?.combined || 0;
+      }
+
+      // Track last reason for reporting
+      lastReason = result.reason;
+    }
+
+    // Determine winner by majority
+    let winner;
+    if (votes.A > votes.B) {
+      winner = 'A';
+    } else if (votes.B > votes.A) {
+      winner = 'B';
+    } else {
+      // Tie: prefer first image (A) with low confidence
+      winner = 'A';
+    }
+
+    // Confidence = majority votes / total votes
+    const majorityVotes = Math.max(votes.A, votes.B);
+    const confidence = ensembleSize > 0 ? majorityVotes / ensembleSize : 0;
+
+    // Calculate averaged ranks
+    const aggregatedRanks = {
+      A: {
+        alignment: ensembleSize > 0 ? rankAccumulators.A.alignment / ensembleSize : 0,
+        aesthetics: ensembleSize > 0 ? rankAccumulators.A.aesthetics / ensembleSize : 0,
+        combined: ensembleSize > 0 ? rankAccumulators.A.combined / ensembleSize : 0
+      },
+      B: {
+        alignment: ensembleSize > 0 ? rankAccumulators.B.alignment / ensembleSize : 0,
+        aesthetics: ensembleSize > 0 ? rankAccumulators.B.aesthetics / ensembleSize : 0,
+        combined: ensembleSize > 0 ? rankAccumulators.B.combined / ensembleSize : 0
+      }
+    };
+
+    return {
+      winner,
+      votes,
+      confidence,
+      reason: lastReason,
+      aggregatedRanks
+    };
+  }
+
+  /**
+   * Compare two images and determine which is better
+   * Returns multi-factor RANKS (1 or 2) and combined weighted rank score
+   * Lower combined rank score wins (rank 1 is better than rank 2)
+   * @param {{candidateId: number, url: string}} imageA - First image
+   * @param {{candidateId: number, url: string}} imageB - Second image
+   * @param {string} prompt - The prompt they should match
+   * @returns {Promise<{winner: string, reason: string, ranks: Object, winnerStrengths: string[], loserWeaknesses: string[]}>}
+   */
+  async compareTwo(imageA, imageB, prompt) {
+    // Ensure deterministic ordering: A = lower candidateId, B = higher candidateId
+    const [orderedA, orderedB] = imageA.candidateId < imageB.candidateId
+      ? [imageA, imageB]
+      : [imageB, imageA];
+
+    // Track if we swapped so we can interpret the result correctly
+    const swapped = imageA.candidateId > imageB.candidateId;
+
+    const systemPrompt = `You are an expert at comparing images for quality and prompt adherence.
+
+Your task is to compare two images (A and B) and RANK them on multiple factors.
+
+For each factor, assign rank 1 (better) or rank 2 (worse):
+1. alignment: Which image better matches the prompt content and requirements?
+2. aesthetics: Which image has better technical quality - composition, lighting, color, clarity?
+
+Output format (JSON):
+{
+  "winner": "A" | "B" | "tie",
+  "reason": "Specific reason explaining the decision, mentioning alignment (prompt match) and aesthetic quality differences",
+  "ranks": {
+    "A": { "alignment": <1 or 2>, "aesthetics": <1 or 2> },
+    "B": { "alignment": <1 or 2>, "aesthetics": <1 or 2> }
+  },
+  "winnerStrengths": ["strength 1", "strength 2"],
+  "loserWeaknesses": ["weakness 1", "weakness 2"]
+}
+
+Important:
+- For each factor, one image gets rank 1, the other gets rank 2
+- If truly equal on a factor, both can get rank 1
+- Winner is determined by weighted combination (alignment weighted higher)
+- Reference both alignment and aesthetics in your reason`;
+
+    const userPrompt = `Prompt: "${prompt}"
+
+Compare images A and B. Rank both on alignment (prompt match) and aesthetics (visual quality). Use rank 1 for better, rank 2 for worse.`;
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: userPrompt },
+          { type: 'image_url', image_url: { url: orderedA.url } },
+          { type: 'image_url', image_url: { url: orderedB.url } }
+        ]
+      }
+    ];
+
+    const result = await this._callVisionAPI(messages);
+
+    // Get ranks from result, with sensible defaults
+    const ranks = result.ranks || {
+      A: { alignment: 1, aesthetics: 1 },
+      B: { alignment: 2, aesthetics: 2 }
+    };
+
+    // Calculate combined rank score (lower is better)
+    ranks.A.combined = this._calculateCombinedRank(ranks.A);
+    ranks.B.combined = this._calculateCombinedRank(ranks.B);
+
+    // Determine winner based on combined rank score (lower wins)
+    let winner = result.winner;
+    if (ranks.A.combined < ranks.B.combined) {
+      winner = 'A';
+    } else if (ranks.B.combined < ranks.A.combined) {
+      winner = 'B';
+    }
+
+    // If we swapped the images for ordering, swap back the winner label
+    // so it refers to the original imageA/imageB parameters
+    if (swapped) {
+      winner = winner === 'A' ? 'B' : (winner === 'B' ? 'A' : winner);
+      // Also swap ranks to match original parameter order
+      const swappedRanks = { A: ranks.B, B: ranks.A };
+      return {
+        winner,
+        reason: result.reason,
+        ranks: swappedRanks,
+        winnerStrengths: result.winnerStrengths || [],
+        loserWeaknesses: result.loserWeaknesses || []
+      };
+    }
+
+    return {
+      winner,
+      reason: result.reason,
+      ranks,
+      winnerStrengths: result.winnerStrengths || [],
+      loserWeaknesses: result.loserWeaknesses || []
+    };
+  }
+
+  /**
+   * Calculate combined rank score from alignment and aesthetics ranks
+   * Lower combined score is better (rank 1 is better than rank 2)
+   * @private
+   */
+  _calculateCombinedRank(imageRanks) {
+    const alignWeight = this.alignmentWeight;
+    const aestheticWeight = 1 - alignWeight;
+    return (alignWeight * imageRanks.alignment) + (aestheticWeight * imageRanks.aesthetics);
+  }
+
+  /**
+   * Call OpenAI vision API with JSON response format
+   * @private
+   * @param {Array} messages - Messages array for API
+   * @returns {Promise<Object>} Parsed JSON response
+   */
+  async _callVisionAPI(messages) {
+    // Model-aware parameters (gpt-5 vs others)
+    const isGpt5 = this.model.includes('gpt-5');
+    const tokenParam = isGpt5 ? 'max_completion_tokens' : 'max_tokens';
+
+    const requestParams = {
+      model: this.model,
+      messages,
+      response_format: { type: 'json_object' }
+    };
+
+    // Add temperature only for non-gpt-5 models
+    if (!isGpt5) {
+      requestParams.temperature = 0.3; // Low temperature for consistent comparisons
+    }
+
+    // Token limit
+    requestParams[tokenParam] = isGpt5 ? 4000 : 1000;
+
+    const completion = await this.client.chat.completions.create(requestParams);
+
+    const responseText = completion.choices[0].message?.content?.trim() || '';
+
+    if (!responseText) {
+      throw new Error('Vision API returned empty content');
+    }
+
+    let parsed;
+    try {
+      parsed = JSON.parse(responseText);
+    } catch (parseError) {
+      console.error('Failed to parse vision API JSON response:', responseText);
+      throw new Error(`Failed to parse vision response: ${parseError.message}`);
+    }
+
+    return parsed;
+  }
+}
+
+/**
+ * Comparison Graph for transitive inference
+ * Tracks A > B relationships and infers A > C when A > B and B > C
+ */
+class ComparisonGraph {
+  constructor() {
+    // Map: candidateId → Set of candidateIds it beats
+    this.beats = new Map();
+    // Map: candidateId → Set of candidateIds it loses to
+    this.losesTo = new Map();
+  }
+
+  /**
+   * Record a comparison result
+   * @param {number} idA - First candidate ID
+   * @param {number} idB - Second candidate ID
+   * @param {string} winner - 'A' or 'B'
+   */
+  recordComparison(idA, idB, winner) {
+    const winnerId = winner === 'A' ? idA : idB;
+    const loserId = winner === 'A' ? idB : idA;
+
+    // Direct relationship
+    if (!this.beats.has(winnerId)) this.beats.set(winnerId, new Set());
+    if (!this.losesTo.has(loserId)) this.losesTo.set(loserId, new Set());
+
+    this.beats.get(winnerId).add(loserId);
+    this.losesTo.get(loserId).add(winnerId);
+
+    // Transitive closure: if A > B and B > C, then A > C
+    this._propagateTransitivity(winnerId, loserId);
+  }
+
+  /**
+   * Propagate transitive relationships after a new comparison
+   * @private
+   * @param {number} winnerId - Winner of comparison
+   * @param {number} loserId - Loser of comparison
+   */
+  _propagateTransitivity(winnerId, loserId) {
+    // All candidates that beat winner also beat loser
+    const beatWinner = this.losesTo.get(winnerId) || new Set();
+    for (const superiorId of beatWinner) {
+      if (!this.beats.has(superiorId)) this.beats.set(superiorId, new Set());
+      this.beats.get(superiorId).add(loserId);
+
+      if (!this.losesTo.has(loserId)) this.losesTo.set(loserId, new Set());
+      this.losesTo.get(loserId).add(superiorId);
+    }
+
+    // Winner beats all candidates that loser beats
+    const loserBeats = this.beats.get(loserId) || new Set();
+    for (const inferiorId of loserBeats) {
+      if (!this.beats.has(winnerId)) this.beats.set(winnerId, new Set());
+      this.beats.get(winnerId).add(inferiorId);
+
+      if (!this.losesTo.has(inferiorId)) this.losesTo.set(inferiorId, new Set());
+      this.losesTo.get(inferiorId).add(winnerId);
+    }
+  }
+
+  /**
+   * Check if we can infer winner from existing comparisons
+   * @param {number} idA - First candidate ID
+   * @param {number} idB - Second candidate ID
+   * @returns {{winner: number, inferred: boolean} | null}
+   */
+  canInferWinner(idA, idB) {
+    // Check if A beats B
+    if (this.beats.has(idA) && this.beats.get(idA).has(idB)) {
+      return { winner: idA, inferred: true };
+    }
+
+    // Check if B beats A
+    if (this.beats.has(idB) && this.beats.get(idB).has(idA)) {
+      return { winner: idB, inferred: true };
+    }
+
+    // Cannot infer
+    return null;
+  }
+}
+
+module.exports = ImageRanker;
