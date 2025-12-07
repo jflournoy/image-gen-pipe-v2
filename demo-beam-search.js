@@ -43,6 +43,7 @@ const OpenAILLMProvider = require('./src/providers/openai-llm-provider.js');
 const OpenAIImageProvider = require('./src/providers/openai-image-provider.js');
 const OpenAIVisionProvider = require('./src/providers/openai-vision-provider.js');
 const CritiqueGenerator = require('./src/services/critique-generator.js');
+const ImageRanker = require('./src/services/image-ranker.js');
 const MetadataTracker = require('./src/services/metadata-tracker.js');
 const TokenTracker = require('./src/utils/token-tracker.js');
 const DebugLogger = require('./src/utils/debug-logger.js');
@@ -61,11 +62,108 @@ class BeamSearchLogger {
   }
 
   wrapProviders() {
-    return {
+    const wrapped = {
       llm: this.wrapLLM(this.originalProviders.llm),
       imageGen: this.wrapImageGen(this.originalProviders.imageGen),
       vision: this.wrapVision(this.originalProviders.vision),
       critiqueGen: this.wrapCritique(this.originalProviders.critiqueGen)
+    };
+    // Add imageRanker if provided
+    if (this.originalProviders.imageRanker) {
+      wrapped.imageRanker = this.wrapImageRanker(this.originalProviders.imageRanker);
+    }
+    return wrapped;
+  }
+
+  wrapImageRanker(imageRanker) {
+    const self = this;
+
+    // Track comparison stats for this ranking session
+    let comparisonStats = { apiCalls: 0, transitivityInferred: 0, totalVotes: 0 };
+
+    // Wrap compareWithEnsemble to log individual comparisons
+    const originalCompareWithEnsemble = imageRanker.compareWithEnsemble.bind(imageRanker);
+    imageRanker.compareWithEnsemble = async (imgA, imgB, prompt, options) => {
+      const ensembleSize = options.ensembleSize || imageRanker.defaultEnsembleSize || 1;
+      comparisonStats.apiCalls++;
+      comparisonStats.totalVotes += ensembleSize;
+
+      console.log(`        🔄 Comparing: ${imgA.candidateId} vs ${imgB.candidateId} (${ensembleSize} vote${ensembleSize > 1 ? 's' : ''})...`);
+
+      const result = await originalCompareWithEnsemble(imgA, imgB, prompt, options);
+
+      // Log multi-factor ranks (1=better, 2=worse)
+      const ranksA = result.aggregatedRanks?.A || {};
+      const ranksB = result.aggregatedRanks?.B || {};
+      console.log(`           • Ranks [${imgA.candidateId}]: align=${ranksA.alignment?.toFixed(2) || '?'} aesth=${ranksA.aesthetics?.toFixed(2) || '?'} combined=${ranksA.combined?.toFixed(2) || '?'}`);
+      console.log(`           • Ranks [${imgB.candidateId}]: align=${ranksB.alignment?.toFixed(2) || '?'} aesth=${ranksB.aesthetics?.toFixed(2) || '?'} combined=${ranksB.combined?.toFixed(2) || '?'}`);
+
+      // Log ensemble votes if applicable
+      if (ensembleSize > 1) {
+        console.log(`           • Votes: A=${result.votes.A}, B=${result.votes.B} → Winner: ${result.winner} (conf: ${(result.confidence * 100).toFixed(0)}%)`);
+      } else {
+        console.log(`           • Winner: ${result.winner} (lower combined rank wins)`);
+      }
+
+      return result;
+    };
+
+    // Wrap _findBestWithTransitivity to log transitivity inferences
+    const originalFindBest = imageRanker._findBestWithTransitivity.bind(imageRanker);
+    imageRanker._findBestWithTransitivity = async (candidates, prompt, graph, options) => {
+      // Wrap canInferWinner to track transitivity usage
+      const originalCanInfer = graph.canInferWinner.bind(graph);
+      graph.canInferWinner = (idA, idB) => {
+        const result = originalCanInfer(idA, idB);
+        if (result) {
+          comparisonStats.transitivityInferred++;
+          const loserId = result.winner === idA ? idB : idA;
+          console.log(`        ⚡ Transitivity: ${result.winner} > ${loserId} (skipped API call!)`);
+        }
+        return result;
+      };
+
+      return originalFindBest(candidates, prompt, graph, options);
+    };
+
+    return {
+      rankImages: async (images, prompt, options) => {
+        // Reset stats for each ranking call
+        comparisonStats = { apiCalls: 0, transitivityInferred: 0, totalVotes: 0 };
+
+        const ensembleSize = options.ensembleSize || imageRanker.defaultEnsembleSize || 1;
+        const method = ensembleSize > 1 ? `ensemble(${ensembleSize} votes/pair)` : 'single-vote';
+        console.log(`\n  🏅 Pairwise ranking: ${images.length} candidates, keepTop=${options.keepTop || images.length}, ${method}`);
+        console.log('     • Using transitive inference to minimize comparisons');
+        console.log('     • Multi-factor scoring: alignment (70%) + aesthetics (30%)');
+
+        try {
+          const result = await imageRanker.rankImages(images, prompt, options);
+
+          // Summary stats
+          console.log(`\n     📊 Comparison stats:`);
+          console.log(`        • API comparisons: ${comparisonStats.apiCalls}`);
+          console.log(`        • Total votes cast: ${comparisonStats.totalVotes}`);
+          console.log(`        • Transitivity inferences: ${comparisonStats.transitivityInferred}`);
+          if (comparisonStats.transitivityInferred > 0) {
+            console.log(`        • API calls saved: ${comparisonStats.transitivityInferred} (via transitivity)`);
+          }
+
+          console.log(`\n     ✅ Ranking complete: ${result.length} candidates ranked`);
+          result.forEach((r, i) => {
+            const reason = r.reason || 'No reason provided';
+            const truncatedReason = reason.length > 60 ? reason.substring(0, 60) + '...' : reason;
+            const ranks = r.ranks
+              ? ` [align=${r.ranks.alignment?.toFixed(2)}, aesth=${r.ranks.aesthetics?.toFixed(2)}, comb=${r.ranks.combined?.toFixed(2)}]`
+              : '';
+            console.log(`        ${i + 1}. Candidate ${r.candidateId}${ranks}: "${truncatedReason}"`);
+          });
+          return result;
+        } catch (error) {
+          console.error(`     ❌ Ranking failed: ${error.message}`);
+          throw error;
+        }
+      }
     };
   }
 
@@ -195,6 +293,9 @@ class BeamSearchLogger {
 }
 
 async function demo() {
+  // Ensemble configuration - use 3 for reliable ranking, 1 for speed
+  const ensembleSize = parseInt(process.env.ENSEMBLE_SIZE || '3', 10);
+
   console.log('🚀 Beam Search Demo: Multi-Iteration Refinement');
   console.log('='.repeat(80));
   console.log('Configuration:');
@@ -202,13 +303,19 @@ async function demo() {
   console.log('  • M = 2 (keep top: 2 best candidates survive)');
   console.log('  • Expansion ratio: 2 children per parent');
   console.log('  • Max iterations: 3 (iteration 0, 1, 2)');
-  console.log('  • Alpha: 0.7 (70% alignment, 30% aesthetic)');
+  console.log(`  • Ensemble size: ${ensembleSize} (votes per comparison for reliability)`);
+  console.log('');
+  console.log('Streamlined Flow (unified pairwise ranking):');
+  console.log('  1. Generate images (no per-image vision scoring)');
+  console.log('  2. Ensemble pairwise ranking → multiple votes per pair for reliability');
+  console.log('  3. Transitive inference → minimizes API calls (if A>B and B>C, skip A vs C)');
+  console.log('  4. Critique uses ranking feedback → refines prompts');
   console.log('');
   console.log('Rate Limiting (prevents OpenAI 429 errors):');
   console.log(`  • LLM concurrency: ${rateLimitConfig.defaults.llm} requests`);
   console.log(`  • Image Gen concurrency: ${rateLimitConfig.defaults.imageGen} requests`);
-  console.log(`  • Vision concurrency: ${rateLimitConfig.defaults.vision} requests`);
   console.log('  • Configure via: BEAM_SEARCH_RATE_LIMIT_* env vars');
+  console.log('  • Ensemble size via: ENSEMBLE_SIZE env var (default: 3)');
   console.log('='.repeat(80));
 
   // Check for API key
@@ -234,11 +341,15 @@ async function demo() {
     llm: new OpenAILLMProvider(process.env.OPENAI_API_KEY),
     imageGen: new OpenAIImageProvider(process.env.OPENAI_API_KEY, { sessionId }),
     vision: new OpenAIVisionProvider(process.env.OPENAI_API_KEY),
-    critiqueGen: new CritiqueGenerator({ apiKey: process.env.OPENAI_API_KEY })
+    critiqueGen: new CritiqueGenerator({ apiKey: process.env.OPENAI_API_KEY }),
+    imageRanker: new ImageRanker({
+      apiKey: process.env.OPENAI_API_KEY,
+      defaultEnsembleSize: ensembleSize
+    })
   };
-  console.log('✅ All providers initialized');
+  console.log(`✅ All providers initialized (ImageRanker with ensembleSize=${ensembleSize})`);
 
-  // Wrap providers with logging
+  // Wrap providers with logging (includes imageRanker)
   const logger = new BeamSearchLogger(providers);
   const wrappedProviders = logger.wrapProviders();
 
@@ -292,12 +403,29 @@ async function demo() {
 
   // Display results
   console.log('\n' + '='.repeat(80));
-  console.log('🏆 WINNER: Best Candidate from Final Iteration');
+  console.log('🏆 WINNER: Best Candidate');
   console.log('='.repeat(80));
-  console.log('\n📊 Final Scores:');
-  console.log(`   • Total Score: ${winner.totalScore.toFixed(2)}/100`);
-  console.log(`   • Alignment Score: ${winner.evaluation.alignmentScore}/100 (content match)`);
-  console.log(`   • Aesthetic Score: ${winner.evaluation.aestheticScore}/10 (visual quality)`);
+
+  // Display ranking info (primary method when using comparative ranking)
+  if (winner.ranking) {
+    console.log('\n🏅 Comparative Ranking:');
+    console.log(`   • Final Rank: ${winner.ranking.rank} (1 = best)`);
+    console.log(`   • Reason: ${winner.ranking.reason}`);
+    if (winner.ranking.strengths?.length > 0) {
+      console.log(`   • Strengths: ${winner.ranking.strengths.join(', ')}`);
+    }
+    if (winner.ranking.weaknesses?.length > 0) {
+      console.log(`   • Areas for improvement: ${winner.ranking.weaknesses.join(', ')}`);
+    }
+  }
+
+  // Display scores (legacy fallback when not using ranking)
+  if (winner.evaluation && winner.totalScore !== null) {
+    console.log('\n📊 Scores (legacy mode):');
+    console.log(`   • Total Score: ${winner.totalScore.toFixed(2)}/100`);
+    console.log(`   • Alignment Score: ${winner.evaluation.alignmentScore}/100 (content match)`);
+    console.log(`   • Aesthetic Score: ${winner.evaluation.aestheticScore}/10 (visual quality)`);
+  }
 
   console.log('\n🔍 Metadata:');
   console.log(`   • From Iteration: ${winner.metadata.iteration}`);
@@ -313,7 +441,12 @@ async function demo() {
   console.log(`   • Combined: "${winner.combined.substring(0, 80)}..."`);
 
   console.log('\n🖼️  Image:');
-  console.log(`   • URL: ${winner.image.url}`);
+  // Check if URL is a data URL (base64 encoded) to avoid printing raw base64
+  if (winner.image.url.startsWith('data:image/')) {
+    console.log('   • URL: <base64 data URL - see local file>');
+  } else {
+    console.log(`   • URL: ${winner.image.url}`);
+  }
   if (winner.image.localPath) {
     console.log(`   • Local: ${winner.image.localPath}`);
   }
@@ -361,6 +494,9 @@ async function demo() {
   console.log('   • Iteration 0: Generated 4 diverse candidates, kept top 2');
   console.log('   • Iteration 1: Refined WHAT (content), kept top 2');
   console.log('   • Iteration 2: Refined HOW (style), kept top 2');
+  console.log('   • Unified pairwise ranking: Same algorithm for any N images');
+  console.log(`   • Ensemble voting (${ensembleSize} votes/pair): Reduces ranking variance`);
+  console.log('   • Transitive inference: Minimizes API calls (if A>B>C, skip A vs C)');
   console.log('   • Winner emerged through iterative refinement + selection pressure');
   console.log('   • Complete metadata and lineage tracked in metadata.json');
   console.log('   • Token efficiency tracking shows real costs and optimization opportunities');
