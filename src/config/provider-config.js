@@ -8,7 +8,7 @@
  * See docs/MODEL_SELECTION_GUIDE.md for pricing details.
  */
 
-require('dotenv').config();
+require('dotenv').config({ override: true });
 
 const providerConfig = {
   // Mode: 'mock' or 'real'
@@ -28,21 +28,21 @@ const providerConfig = {
       combine: process.env.OPENAI_LLM_MODEL_COMBINE || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini'   // Simple: $0.15/1M
     },
     maxRetries: parseInt(process.env.OPENAI_MAX_RETRIES || '3', 10),
-    timeout: parseInt(process.env.OPENAI_TIMEOUT_MS || '30000', 10)
+    timeout: parseInt(process.env.OPENAI_TIMEOUT_MS || '60000', 10)  // 60s for gpt-5 reasoning models
   },
 
   // Image Provider Configuration
   image: {
     provider: process.env.IMAGE_PROVIDER || 'dalle',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_IMAGE_MODEL || 'dall-e-3'  // Current DALL-E model
+    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1'  // GPT Image model
   },
 
   // Vision Provider Configuration
   vision: {
     provider: process.env.VISION_PROVIDER || 'gpt-vision',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini'  // Cost-optimized default: $0.15/1M tokens
+    model: process.env.OPENAI_VISION_MODEL || 'gpt-5-nano'  // Flex pricing: $0.025/1M tokens (50% savings vs Standard)
   },
 
   // Scoring Provider Configuration

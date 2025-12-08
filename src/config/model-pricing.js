@@ -21,26 +21,58 @@
  * Official OpenAI API pricing per token (December 2025)
  * Prices shown as {input, output} objects in USD per token
  *
- * Source: https://openai.com/api/pricing/ (Standard tier)
+ * Source: https://openai.com/api/pricing/
  * Note: Output tokens cost ~4x more than input tokens
+ *
+ * FLEX TIER PRICING (50% savings):
+ * - gpt-5-nano: $0.025/1M (Standard) → $0.0125/1M (Flex)
+ * - gpt-5-mini: $0.25/1M (Standard) → $0.125/1M (Flex)
+ * - gpt-5: $1.25/1M (Standard) → $0.625/1M (Flex)
+ * Trade-off: Occasional 429 rate limit errors, slower response times
+ * Benefits: 50% cost savings, vision-capable models, immediate response (vs Batch API 24h wait)
  */
 const MODEL_PRICING = {
   // GPT-5 models (latest, most capable - December 2025 release)
+  // Vision-capable with Flex pricing support
   'gpt-5.1': {
-    input: 0.00000125,            // $1.25 per 1M input tokens (flagship reasoning)
-    output: 0.000005              // $5.00 per 1M output tokens
+    standard: {
+      input: 0.00000125,            // $1.25 per 1M input tokens (flagship reasoning)
+      output: 0.000005              // $5.00 per 1M output tokens
+    },
+    flex: {
+      input: 0.000000625,           // $0.625 per 1M input tokens (50% savings!)
+      output: 0.0000025             // $2.50 per 1M output tokens
+    }
   },
   'gpt-5': {
-    input: 0.00000125,            // $1.25 per 1M input tokens
-    output: 0.000005              // $5.00 per 1M output tokens
+    standard: {
+      input: 0.00000125,            // $1.25 per 1M input tokens
+      output: 0.000005              // $5.00 per 1M output tokens
+    },
+    flex: {
+      input: 0.000000625,           // $0.625 per 1M input tokens (50% savings!)
+      output: 0.0000025             // $2.50 per 1M output tokens
+    }
   },
   'gpt-5-mini': {
-    input: 0.00000025,            // $0.25 per 1M input tokens (best balance)
-    output: 0.000001              // $1.00 per 1M output tokens
+    standard: {
+      input: 0.00000025,            // $0.25 per 1M input tokens (best balance)
+      output: 0.000001              // $1.00 per 1M output tokens
+    },
+    flex: {
+      input: 0.000000125,           // $0.125 per 1M input tokens (50% savings!)
+      output: 0.0000005             // $0.50 per 1M output tokens
+    }
   },
   'gpt-5-nano': {
-    input: 0.00000005,            // $0.05 per 1M input tokens (ultra-cheap)
-    output: 0.0000002             // $0.20 per 1M output tokens
+    standard: {
+      input: 0.00000005,            // $0.05 per 1M input tokens (ultra-cheap)
+      output: 0.0000002             // $0.20 per 1M output tokens
+    },
+    flex: {
+      input: 0.000000025,           // $0.025 per 1M input tokens (50% savings!) ← CURRENT DEFAULT
+      output: 0.0000001             // $0.10 per 1M output tokens
+    }
   },
 
   // GPT Image models (multimodal image generation)
@@ -80,9 +112,9 @@ const MODEL_PRICING = {
   },
 
   // Generic fallback pricing (deprecated - use specific models instead)
-  llm: 0.0000025,                 // Default to gpt-4o input pricing (legacy support)
-  vision: 0.0000025,              // Default to gpt-4o input pricing (legacy support)
-  critique: 0.00000015            // Default to gpt-4o-mini input pricing (legacy support)
+  llm: 0.00000025,                 // Default to gpt-5-mini input pricing (legacy support)
+  vision: 0.00000025,              // Default to gpt-5-nano Flex input pricing (legacy support)
+  critique: 0.00000025             // Default to gpt-5-mini Flex input pricing (legacy support)
 };
 
 /**
@@ -111,18 +143,20 @@ const MODEL_RECOMMENDATIONS = {
     cost_per_1m: 1.25
   },
 
-  // Vision tasks - use vision-optimized models
+  // Vision tasks - use vision-optimized models with Flex pricing (50% savings)
   vision: {
-    model: 'gpt-4o-mini',
+    model: 'gpt-5-nano',
     use_cases: ['image_analysis', 'vision_scoring'],
-    cost_per_1m: 0.15
+    cost_per_1m: 0.025,  // Flex pricing: $0.025/1M (was $0.05 Standard)
+    tier: 'flex'
   },
 
-  // High-quality vision - use flagship vision model
+  // High-quality vision - use better vision model
   vision_premium: {
-    model: 'gpt-4o',
+    model: 'gpt-5-mini',
     use_cases: ['detailed_image_analysis', 'vision_critique'],
-    cost_per_1m: 2.50
+    cost_per_1m: 0.125,  // Flex pricing: $0.125/1M (was $0.25 Standard)
+    tier: 'flex'
   }
 };
 
