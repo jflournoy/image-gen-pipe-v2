@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
+const { getDateString, getTimeString, formatDate } = require('../src/utils/timezone.js');
 
 // Configuration
 const SESSION_HISTORY_DIR = path.join(process.cwd(), 'session-history');
@@ -17,14 +18,6 @@ function ensureDirectoryExists(dir) {
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-}
-
-function getDateString() {
-  return new Date().toISOString().split('T')[0];
-}
-
-function getTimeString() {
-  return new Date().toTimeString().split(' ')[0].replace(/:/g, '');
 }
 
 function getSessionDirectory() {
@@ -245,14 +238,15 @@ function saveSession(description = '', options = {}) {
   
   // Build session content
   const sessionTitle = isDelta ? 'Delta Session' : 'Session';
-  let content = `# Claude Code ${sessionTitle} - ${getDateString()} ${new Date().toTimeString().split(' ')[0]}
+  const currentTime = getTimeString().replace(/(\d{2})(\d{2})(\d{2})/, '$1:$2:$3');
+  let content = `# Claude Code ${sessionTitle} - ${getDateString()} ${currentTime}
 
 `;
-  
+
   content += `## Session Metadata
 `;
   content += `- **Date**: ${getDateString()}\n`;
-  content += `- **Time**: ${new Date().toTimeString().split(' ')[0]}\n`;
+  content += `- **Time**: ${currentTime}\n`;
   content += `- **Session Number**: ${sessionNum}\n`;
   content += `- **Session Type**: ${sessionType}\n`;
   content += `- **Description**: ${description || 'Development session'}\n`;
@@ -308,7 +302,7 @@ function saveSession(description = '', options = {}) {
   
   // Session Summary
   content += '## Session Summary\n';
-  content += `This session captured at ${new Date().toLocaleString()}\n\n`;
+  content += `This session captured at ${formatDate(new Date())}\n\n`;
   
   if (description) {
     content += `### Description\n${description}\n\n`;

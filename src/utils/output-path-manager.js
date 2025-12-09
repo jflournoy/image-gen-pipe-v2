@@ -9,6 +9,7 @@
  */
 
 const path = require('path');
+const { getDateString } = require('./timezone.js');
 
 /**
  * Default output directory (relative to current working directory)
@@ -17,11 +18,11 @@ const path = require('path');
 const DEFAULT_OUTPUT_DIR = path.join(process.cwd(), 'output');
 
 /**
- * Get the current date in YYYY-MM-DD format
+ * Get the current date in YYYY-MM-DD format (local timezone)
  * @returns {string} Date string in YYYY-MM-DD format
  */
 function getCurrentDate() {
-  return new Date().toISOString().split('T')[0];
+  return getDateString();
 }
 
 /**

@@ -3,6 +3,7 @@
 const { execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
+const { getDateString } = require('../src/utils/timezone.js');
 
 // Parse command line arguments
 const args = process.argv.slice(2);
@@ -169,13 +170,13 @@ function generateReport() {
 
 function updateLearnings(commits, patterns, learnings) {
   const learningsFile = path.join(process.cwd(), 'LEARNINGS.md');
-  
+
   if (!fs.existsSync(learningsFile)) {
     console.log('\n⚠️  LEARNINGS.md not found, skipping update');
     return;
   }
-  
-  const date = new Date().toISOString().split('T')[0];
+
+  const date = getDateString();
   const entry = `
 ### Session Retrospective - ${date}
 **Commits**: ${commits.length}
