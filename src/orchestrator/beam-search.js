@@ -293,7 +293,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency, metadataTracker, tokenTracker } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker } = config;
 
   // Rate limiters are initialized at module load time
   // They are reused across all jobs to maintain consistent metrics
