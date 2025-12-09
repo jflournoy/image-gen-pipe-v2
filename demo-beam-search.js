@@ -76,8 +76,6 @@ class BeamSearchLogger {
   }
 
   wrapImageRanker(imageRanker) {
-    const self = this;
-
     // Track comparison stats for this ranking session
     let comparisonStats = { apiCalls: 0, transitivityInferred: 0, totalVotes: 0 };
 
@@ -157,7 +155,7 @@ class BeamSearchLogger {
           const rankings = Array.isArray(rankResult) ? rankResult : rankResult.rankings;
 
           // Summary stats
-          console.log(`\n     📊 Comparison stats:`);
+          console.log('\n     📊 Comparison stats:');
           console.log(`        • API comparisons: ${comparisonStats.apiCalls}`);
           console.log(`        • Total votes cast: ${comparisonStats.totalVotes}`);
           console.log(`        • Transitivity inferences: ${comparisonStats.transitivityInferred}`);
