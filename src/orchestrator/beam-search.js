@@ -599,7 +599,7 @@ async function refinementIteration(
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen, imageRanker } = providers;
-  const { maxIterations, keepTop, metadataTracker, onIterationComplete, onCandidateProcessed, ensembleSize } = config;
+  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onCandidateProcessed, ensembleSize } = config;
 
   // Determine ranking strategy: Use comparative ranking if imageRanker provided
   const useComparativeRanking = imageRanker !== undefined;
