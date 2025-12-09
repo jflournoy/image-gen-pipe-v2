@@ -1,0 +1,13 @@
+# Version history files
+.history/
+
+# Debug test files
+test-ensemble-debug.js
+test-multi-image-ranking.js
+
+# Node modules
+node_modules/
+
+# Output directories
+output/
+session-history/

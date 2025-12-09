@@ -114,7 +114,7 @@ describe('🔴 Prompt Bundler - Bundle Operations for Efficient Submission', () 
       const bundler = new PromptBundler();
 
       const operation = { id: 'op1', type: 'expand', dimension: 'what', prompt: 'prompt' };
-      const bundle = bundler.bundle([operation]);
+      bundler.bundle([operation]);
 
       // Simulate submission
       const result = { id: 'op1', refinedPrompt: 'expanded prompt' };
