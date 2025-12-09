@@ -6,10 +6,26 @@
  */
 /* global fetch */
 
-const { describe, test } = require('node:test');
+const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert');
+const { startServer } = require('../src/api/server.js');
+const { attachWebSocket } = require('../src/api/server.js');
+const { _resetWebSocketState } = require('../src/api/server.js');
+
+let server;
 
 describe('🔴 RED: Web Demo - Rate Limiting Visualization', () => {
+  before(async () => {
+    server = await startServer(3000);
+    attachWebSocket(server);
+  });
+
+  after(() => {
+    return new Promise((resolve) => {
+      _resetWebSocketState();
+      server.close(resolve);
+    });
+  });
   describe('Demo Configuration Endpoint', () => {
     test('should have /api/demo/config endpoint', async () => {
       // This endpoint should return current rate limiting configuration
