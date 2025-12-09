@@ -81,6 +81,16 @@ class BeamSearchLogger {
     // Track comparison stats for this ranking session
     let comparisonStats = { apiCalls: 0, transitivityInferred: 0, totalVotes: 0 };
 
+    // Helper to format candidate ID for display
+    const formatId = (img) => {
+      // Global ID format: "i{iteration}c{candidateId}" e.g., "i0c1"
+      if (typeof img.candidateId === 'string' && img.candidateId.startsWith('i')) {
+        return img.candidateId; // Already formatted
+      }
+      // Fallback for simple numeric IDs
+      return `c${img.candidateId}`;
+    };
+
     // Wrap compareWithEnsemble to log individual comparisons
     const originalCompareWithEnsemble = imageRanker.compareWithEnsemble.bind(imageRanker);
     imageRanker.compareWithEnsemble = async (imgA, imgB, prompt, options) => {
@@ -88,15 +98,17 @@ class BeamSearchLogger {
       comparisonStats.apiCalls++;
       comparisonStats.totalVotes += ensembleSize;
 
-      console.log(`        🔄 Comparing: ${imgA.candidateId} vs ${imgB.candidateId} (${ensembleSize} vote${ensembleSize > 1 ? 's' : ''})...`);
+      const idA = formatId(imgA);
+      const idB = formatId(imgB);
+      console.log(`        🔄 Comparing: ${idA} vs ${idB} (${ensembleSize} vote${ensembleSize > 1 ? 's' : ''})...`);
 
       const result = await originalCompareWithEnsemble(imgA, imgB, prompt, options);
 
       // Log multi-factor ranks (1=better, 2=worse)
       const ranksA = result.aggregatedRanks?.A || {};
       const ranksB = result.aggregatedRanks?.B || {};
-      console.log(`           • Ranks [${imgA.candidateId}]: align=${ranksA.alignment?.toFixed(2) || '?'} aesth=${ranksA.aesthetics?.toFixed(2) || '?'} combined=${ranksA.combined?.toFixed(2) || '?'}`);
-      console.log(`           • Ranks [${imgB.candidateId}]: align=${ranksB.alignment?.toFixed(2) || '?'} aesth=${ranksB.aesthetics?.toFixed(2) || '?'} combined=${ranksB.combined?.toFixed(2) || '?'}`);
+      console.log(`           • Ranks [${idA}]: align=${ranksA.alignment?.toFixed(2) || '?'} aesth=${ranksA.aesthetics?.toFixed(2) || '?'} combined=${ranksA.combined?.toFixed(2) || '?'}`);
+      console.log(`           • Ranks [${idB}]: align=${ranksB.alignment?.toFixed(2) || '?'} aesth=${ranksB.aesthetics?.toFixed(2) || '?'} combined=${ranksB.combined?.toFixed(2) || '?'}`);
 
       // Log ensemble votes if applicable
       if (ensembleSize > 1) {
@@ -134,6 +146,7 @@ class BeamSearchLogger {
         const ensembleSize = options.ensembleSize || imageRanker.defaultEnsembleSize || 1;
         const method = ensembleSize > 1 ? `ensemble(${ensembleSize} votes/pair)` : 'single-vote';
         console.log(`\n  🏅 Pairwise ranking: ${images.length} candidates, keepTop=${options.keepTop || images.length}, ${method}`);
+        console.log('     • ID format: i{iter}c{candidate} (e.g., i0c1 = iteration 0, candidate 1)');
         console.log('     • Using transitive inference to minimize comparisons');
         console.log('     • Multi-factor scoring: alignment (70%) + aesthetics (30%)');
 
@@ -270,13 +283,14 @@ class BeamSearchLogger {
   }
 
   wrapCritique(critique) {
+    const self = this;
     return {
       generateCritique: async (evaluation, prompts, options) => {
         const result = await critique.generateCritique(evaluation, prompts, options);
 
         // Display debug info for critique generation
         if (result.metadata) {
-          const debugInfo = this.debugLogger.logProviderCall({
+          const debugInfo = self.debugLogger.logProviderCall({
             provider: 'critique',
             operation: 'generate',
             metadata: result.metadata
@@ -284,6 +298,31 @@ class BeamSearchLogger {
           if (debugInfo) {
             console.log(debugInfo);
           }
+        }
+
+        // Display the actual critique content for top candidates
+        console.log(`\n  📝 Critique for refinement (${options.dimension?.toUpperCase() || 'unknown'} dimension):`);
+
+        // Show key critique components (result has critique, recommendation, reason as strings)
+        if (result.critique) {
+          const truncatedCritique = result.critique.length > 120
+            ? result.critique.substring(0, 120) + '...'
+            : result.critique;
+          console.log(`     ✗ Issue: ${truncatedCritique}`);
+        }
+
+        if (result.recommendation) {
+          const truncatedRec = result.recommendation.length > 120
+            ? result.recommendation.substring(0, 120) + '...'
+            : result.recommendation;
+          console.log(`     → Recommendation: ${truncatedRec}`);
+        }
+
+        if (result.reason) {
+          const truncatedReason = result.reason.length > 100
+            ? result.reason.substring(0, 100) + '...'
+            : result.reason;
+          console.log(`     💡 Reason: ${truncatedReason}`);
         }
 
         return result;
@@ -304,6 +343,7 @@ async function demo() {
   console.log('  • Expansion ratio: 2 children per parent');
   console.log('  • Max iterations: 3 (iteration 0, 1, 2)');
   console.log(`  • Ensemble size: ${ensembleSize} (votes per comparison for reliability)`);
+  console.log('  • Vision model: gpt-5-nano with Flex pricing ($0.025/1M tokens - 50% savings!)');
   console.log('');
   console.log('Streamlined Flow (unified pairwise ranking):');
   console.log('  1. Generate images (no per-image vision scoring)');
@@ -316,6 +356,12 @@ async function demo() {
   console.log(`  • Image Gen concurrency: ${rateLimitConfig.defaults.imageGen} requests`);
   console.log('  • Configure via: BEAM_SEARCH_RATE_LIMIT_* env vars');
   console.log('  • Ensemble size via: ENSEMBLE_SIZE env var (default: 3)');
+  console.log('');
+  console.log('💡 Cost Optimization with Flex Pricing:');
+  console.log('  • Vision model uses OpenAI Flex tier pricing');
+  console.log('  • 50% cost savings vs Standard pricing tier');
+  console.log('  • Trade-off: Occasional 429 rate limits, handled with automatic retry');
+  console.log('  • See docs/FLEX_PRICING_STRATEGY.md for complete strategy details');
   console.log('='.repeat(80));
 
   // Check for API key
@@ -403,21 +449,106 @@ async function demo() {
 
   // Display results
   console.log('\n' + '='.repeat(80));
-  console.log('🏆 WINNER: Best Candidate');
+  console.log('🏆 FINAL COMPARISON: Top 2 Candidates');
   console.log('='.repeat(80));
 
-  // Display ranking info (primary method when using comparative ranking)
-  if (winner.ranking) {
-    console.log('\n🏅 Comparative Ranking:');
-    console.log(`   • Final Rank: ${winner.ranking.rank} (1 = best)`);
-    console.log(`   • Reason: ${winner.ranking.reason}`);
-    if (winner.ranking.strengths?.length > 0) {
-      console.log(`   • Strengths: ${winner.ranking.strengths.join(', ')}`);
+  // Display both finalists side by side
+  const finalists = winner.finalists || [winner];
+  const displayFinalist = (candidate, position) => {
+    const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+    const label = position === 1 ? '🥇 WINNER' : '🥈 RUNNER-UP';
+    const ranking = candidate.ranking || {};
+
+    console.log(`\n${label} (${globalId}):`);
+
+    // Show ranking scores
+    if (ranking.ranks) {
+      const r = ranking.ranks;
+      console.log(`   📊 Scores: align=${r.alignment?.toFixed(2) || '?'} aesth=${r.aesthetics?.toFixed(2) || '?'} combined=${r.combined?.toFixed(2) || '?'}`);
     }
-    if (winner.ranking.weaknesses?.length > 0) {
-      console.log(`   • Areas for improvement: ${winner.ranking.weaknesses.join(', ')}`);
+
+    // Show prompts (abbreviated)
+    const whatAbbrev = candidate.whatPrompt.length > 60
+      ? candidate.whatPrompt.substring(0, 60) + '...'
+      : candidate.whatPrompt;
+    const howAbbrev = candidate.howPrompt.length > 60
+      ? candidate.howPrompt.substring(0, 60) + '...'
+      : candidate.howPrompt;
+    console.log(`   📝 WHAT: "${whatAbbrev}"`);
+    console.log(`   🎨 HOW: "${howAbbrev}"`);
+
+    // Show image path
+    if (candidate.image?.localPath) {
+      console.log(`   🖼️  Image: ${candidate.image.localPath}`);
     }
+
+    // Show ranking reason
+    if (ranking.reason) {
+      const reasonAbbrev = ranking.reason.length > 100
+        ? ranking.reason.substring(0, 100) + '...'
+        : ranking.reason;
+      console.log(`   💬 Ranking reason: ${reasonAbbrev}`);
+    }
+  };
+
+  // Show both candidates
+  finalists.slice(0, 2).forEach((candidate, idx) => {
+    displayFinalist(candidate, idx + 1);
+  });
+
+  // Show why winner won (the comparison that decided it)
+  console.log('\n' + '-'.repeat(80));
+  console.log('⚖️  WHY WINNER WON:');
+  console.log('-'.repeat(80));
+
+  if (finalists.length >= 2) {
+    const winnerRanking = winner.ranking || {};
+    const runnerUp = finalists[1];
+    const runnerRanking = runnerUp.ranking || {};
+
+    // Compare scores
+    if (winnerRanking.ranks && runnerRanking.ranks) {
+      const wR = winnerRanking.ranks;
+      const rR = runnerRanking.ranks;
+      const alignDiff = (rR.alignment || 0) - (wR.alignment || 0);
+      const aesthetDiff = (rR.aesthetics || 0) - (wR.aesthetics || 0);
+
+      console.log('\n   📈 Score comparison (lower = better):');
+      console.log(`      Winner combined:    ${wR.combined?.toFixed(2) || '?'}`);
+      console.log(`      Runner-up combined: ${rR.combined?.toFixed(2) || '?'}`);
+
+      if (alignDiff !== 0 || aesthetDiff !== 0) {
+        const factors = [];
+        if (alignDiff > 0) factors.push(`+${alignDiff.toFixed(2)} alignment`);
+        if (alignDiff < 0) factors.push(`${alignDiff.toFixed(2)} alignment`);
+        if (aesthetDiff > 0) factors.push(`+${aesthetDiff.toFixed(2)} aesthetics`);
+        if (aesthetDiff < 0) factors.push(`${aesthetDiff.toFixed(2)} aesthetics`);
+        console.log(`      Winner advantage: ${factors.join(', ')}`);
+      }
+    }
+
+    // Show strengths comparison
+    if (winnerRanking.strengths?.length > 0 || winnerRanking.winnerStrengths?.length > 0) {
+      const strengths = winnerRanking.strengths || winnerRanking.winnerStrengths || [];
+      console.log(`\n   ✅ Winner strengths: ${strengths.join(', ')}`);
+    }
+
+    if (runnerRanking.weaknesses?.length > 0 || runnerRanking.loserWeaknesses?.length > 0) {
+      const weaknesses = runnerRanking.weaknesses || runnerRanking.loserWeaknesses || [];
+      console.log(`   ⚠️  Runner-up weaknesses: ${weaknesses.join(', ')}`);
+    }
+
+    // Show the decisive comparison reason if available
+    if (winnerRanking.reason) {
+      console.log(`\n   💡 Decision: ${winnerRanking.reason}`);
+    }
+  } else {
+    console.log('   Only one finalist - no comparison available');
   }
+
+  console.log('\n' + '='.repeat(80));
+  console.log('📋 WINNER DETAILS');
+  console.log('='.repeat(80));
 
   // Display scores (legacy fallback when not using ranking)
   if (winner.evaluation && winner.totalScore !== null) {
@@ -428,10 +559,10 @@ async function demo() {
   }
 
   console.log('\n🔍 Metadata:');
-  console.log(`   • From Iteration: ${winner.metadata.iteration}`);
-  console.log(`   • Candidate ID: ${winner.metadata.candidateId}`);
-  if (winner.metadata.parentId !== undefined) {
-    console.log(`   • Parent ID: ${winner.metadata.parentId} (lineage tracking)`);
+  const globalId = `i${winner.metadata.iteration}c${winner.metadata.candidateId}`;
+  console.log(`   • Global ID: ${globalId} (iteration ${winner.metadata.iteration}, candidate ${winner.metadata.candidateId})`);
+  if (winner.metadata.parentId !== undefined && winner.metadata.parentId !== null) {
+    console.log(`   • Parent: i${winner.metadata.iteration - 1}c${winner.metadata.parentId}`);
   }
   console.log(`   • Last Refined Dimension: ${winner.metadata.dimension}`);
 
@@ -451,13 +582,32 @@ async function demo() {
     console.log(`   • Local: ${winner.image.localPath}`);
   }
 
-  console.log('\n📈 Evaluation:');
-  console.log(`   • Analysis: ${winner.evaluation.analysis}`);
-  if (winner.evaluation.strengths.length > 0) {
-    console.log(`   • Strengths: ${winner.evaluation.strengths.join(', ')}`);
-  }
-  if (winner.evaluation.weaknesses.length > 0) {
-    console.log(`   • Weaknesses: ${winner.evaluation.weaknesses.join(', ')}`);
+  // Display evaluation info (available when using vision analysis)
+  // or ranking details (when using comparative ranking)
+  if (winner.evaluation) {
+    console.log('\n📈 Evaluation:');
+    console.log(`   • Analysis: ${winner.evaluation.analysis}`);
+    if (winner.evaluation.strengths?.length > 0) {
+      console.log(`   • Strengths: ${winner.evaluation.strengths.join(', ')}`);
+    }
+    if (winner.evaluation.weaknesses?.length > 0) {
+      console.log(`   • Weaknesses: ${winner.evaluation.weaknesses.join(', ')}`);
+    }
+  } else if (winner.ranking) {
+    // Show ranking details when no evaluation (comparative ranking mode)
+    console.log('\n📈 Ranking Details:');
+    if (winner.ranking.ranks) {
+      const r = winner.ranking.ranks;
+      console.log(`   • Alignment rank: ${r.alignment?.toFixed(2) || '?'} (1=best)`);
+      console.log(`   • Aesthetics rank: ${r.aesthetics?.toFixed(2) || '?'} (1=best)`);
+      console.log(`   • Combined score: ${r.combined?.toFixed(2) || '?'} (lower=better)`);
+    }
+    if (winner.ranking.winnerStrengths?.length > 0) {
+      console.log(`   • Strengths: ${winner.ranking.winnerStrengths.join(', ')}`);
+    }
+    if (winner.ranking.loserWeaknesses?.length > 0) {
+      console.log(`   • Competitors weak on: ${winner.ranking.loserWeaknesses.join(', ')}`);
+    }
   }
 
   console.log('\n⏱️  Performance:');
