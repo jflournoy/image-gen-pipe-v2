@@ -158,7 +158,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         dimension,
         metadata: {
           model: response.model,
-          tokens: response.usage?.total_tokens,
+          tokensUsed: response.usage?.total_tokens,
           feedbackType: 'ranking'
         }
       };
@@ -170,7 +170,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         recommendation: improvementSuggestion || 'Refine the prompt for better results',
         reason: reason || 'Based on comparative analysis',
         dimension,
-        metadata: { feedbackType: 'ranking-fallback' }
+        metadata: { feedbackType: 'ranking-fallback', tokensUsed: 0 }
       };
     }
   }
@@ -373,6 +373,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         relevantScore: dimension === 'how' && aestheticScore !== undefined ? aestheticScore : alignmentScore,
         scoreType,
         method: 'rule-based',
+        tokensUsed: 0,
         timestamp: new Date().toISOString()
       }
     };
