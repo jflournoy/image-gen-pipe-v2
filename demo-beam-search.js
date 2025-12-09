@@ -151,7 +151,10 @@ class BeamSearchLogger {
         console.log('     • Multi-factor scoring: alignment (70%) + aesthetics (30%)');
 
         try {
-          const result = await imageRanker.rankImages(images, prompt, options);
+          const rankResult = await imageRanker.rankImages(images, prompt, options);
+
+          // Handle new return format: { rankings, metadata }
+          const rankings = Array.isArray(rankResult) ? rankResult : rankResult.rankings;
 
           // Summary stats
           console.log(`\n     📊 Comparison stats:`);
@@ -162,8 +165,8 @@ class BeamSearchLogger {
             console.log(`        • API calls saved: ${comparisonStats.transitivityInferred} (via transitivity)`);
           }
 
-          console.log(`\n     ✅ Ranking complete: ${result.length} candidates ranked`);
-          result.forEach((r, i) => {
+          console.log(`\n     ✅ Ranking complete: ${rankings.length} candidates ranked`);
+          rankings.forEach((r, i) => {
             const reason = r.reason || 'No reason provided';
             const truncatedReason = reason.length > 60 ? reason.substring(0, 60) + '...' : reason;
             const ranks = r.ranks
@@ -171,7 +174,7 @@ class BeamSearchLogger {
               : '';
             console.log(`        ${i + 1}. Candidate ${r.candidateId}${ranks}: "${truncatedReason}"`);
           });
-          return result;
+          return rankings;
         } catch (error) {
           console.error(`     ❌ Ranking failed: ${error.message}`);
           throw error;
