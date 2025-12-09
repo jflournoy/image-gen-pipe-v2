@@ -3,6 +3,12 @@
 /**
  * Demo: Multi-Iteration Beam Search with N=4, M=2
  *
+ * ✨ Latest Features & Innovations:
+ * - Real-time rate limiting metrics API (see /demo or http://localhost:3000/demo)
+ * - Accurate token tracking across all providers (LLM, Vision, Critique, Image)
+ * - Improved Vision API error handling with detailed diagnostics
+ * - Global rate limiter initialization for consistent metrics
+ *
  * This demonstrates the complete beam search algorithm:
  * - N = 4 (beam width: 4 candidates per iteration)
  * - M = 2 (keep top: 2 best candidates survive each round)
@@ -17,22 +23,45 @@
  *    → Rank by score → Keep top 2
  * 4. Return best candidate from final iteration
  *
- * Rate Limiting:
- * - Uses sensible defaults to prevent OpenAI API rate limit errors (429)
+ * Rate Limiting (Prevents OpenAI 429 Errors):
+ * - Uses sensible defaults (LLM: 3, ImageGen: 2, Vision: 3 concurrent)
  * - Configurable via environment variables:
  *   - BEAM_SEARCH_RATE_LIMIT_LLM (default: 3 concurrent)
  *   - BEAM_SEARCH_RATE_LIMIT_IMAGE_GEN (default: 2 concurrent)
  *   - BEAM_SEARCH_RATE_LIMIT_VISION (default: 3 concurrent)
+ * - Monitor live metrics at: http://localhost:3000/api/demo/rate-limits/status
+ * - Demo visualization: http://localhost:3000/demo
+ *
+ * Token Tracking (NEW - Fixed in this session):
+ * - Accurately tracks tokens for all provider types:
+ *   • LLM (GPT-4): Expansion, refinement, critique operations
+ *   • Vision (GPT-4V): Image analysis and ranking
+ *   • Critique: Ranking-based, LLM-based, and rule-based paths
+ *   • Image Generation: DALL-E operations (counted separately)
+ * - Standardized metadata field names (tokensUsed) across all paths
+ * - Cost tracking shows real token attribution by provider
+ *
+ * Vision API Error Handling (IMPROVED in this session):
+ * - Three-level response validation (structure, content, trimmed)
+ * - Detailed error diagnostics include:
+ *   • Model name (helps identify which model failed)
+ *   • Finish reason (explains why: length, content_filter, stop, etc.)
+ *   • Refusal status (indicates content policy violations)
+ *   • Original content length (shows if response was truncated)
+ * - Prevents null/undefined access errors
+ * - Consistent with openai-llm-provider.js best practices
  *
  * Output Structure:
  * - Metadata and images saved to: output/YYYY-MM-DD/ses-HHMMSS/
  * - Uses OutputPathManager for consistent path construction
+ * - Complete token usage and cost analysis included in metadata
  *
  * Usage:
  *   node demo-beam-search.js
  *
  * Requirements:
  *   - OPENAI_API_KEY environment variable set
+ *   - Optional: npm start (in another terminal) to run API server for demo metrics
  */
 
 require('dotenv').config();
@@ -346,6 +375,12 @@ async function demo() {
   console.log(`  • Ensemble size: ${ensembleSize} (votes per comparison for reliability)`);
   console.log('  • Vision model: gpt-5-nano with Flex pricing ($0.025/1M tokens - 50% savings!)');
   console.log('');
+  console.log('✨ Latest Innovations (just added):');
+  console.log('  • Real-time rate limiting visualization API');
+  console.log('  • Fixed token tracking bug (Vision & Critique now properly tracked)');
+  console.log('  • Improved Vision API error diagnostics');
+  console.log('  • Global rate limiter initialization for consistent metrics');
+  console.log('');
   console.log('Streamlined Flow (unified pairwise ranking):');
   console.log('  1. Generate images (no per-image vision scoring)');
   console.log('  2. Ensemble pairwise ranking → multiple votes per pair for reliability');
@@ -355,8 +390,17 @@ async function demo() {
   console.log('Rate Limiting (prevents OpenAI 429 errors):');
   console.log(`  • LLM concurrency: ${rateLimitConfig.defaults.llm} requests`);
   console.log(`  • Image Gen concurrency: ${rateLimitConfig.defaults.imageGen} requests`);
+  console.log(`  • Vision concurrency: ${rateLimitConfig.defaults.vision} requests`);
   console.log('  • Configure via: BEAM_SEARCH_RATE_LIMIT_* env vars');
   console.log('  • Ensemble size via: ENSEMBLE_SIZE env var (default: 3)');
+  console.log('  • 📊 Monitor live metrics: http://localhost:3000/api/demo/rate-limits/status');
+  console.log('');
+  console.log('💰 Token Tracking (FIXED - Accurate provider attribution):');
+  console.log('  • LLM: GPT-4 expansion, refinement, critique operations');
+  console.log('  • Vision: GPT-4V image analysis and ranking comparisons');
+  console.log('  • Critique: Ranking-based, LLM-based, and rule-based evaluation');
+  console.log('  • Image Gen: DALL-E 3 generation (separate counter)');
+  console.log('  • See token report at end for full cost breakdown');
   console.log('');
   console.log('💡 Cost Optimization with Flex Pricing:');
   console.log('  • Vision model uses OpenAI Flex tier pricing');
@@ -380,7 +424,7 @@ async function demo() {
   const sessionId = `ses-${hours}${minutes}${seconds}`;
 
   // Configuration
-  const userPrompt = 'a serene mountain landscape at sunset';
+  const userPrompt = 'a hyperreal photorealistic painting of the american west during sunset with a mysterious attractive woman subtly placed somewhere in the image. I want it to look like a photograph with subtle hints that it is a photoreal painting. i want to woman to be almost hidden but also intriguing, inviting, and attractive to the viewer. i want the american west to have a quality that is epic like the new frontier.';
 
   // Initialize providers
   console.log('\n🔧 Initializing providers...');
