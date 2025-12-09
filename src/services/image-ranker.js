@@ -375,8 +375,11 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
   /**
    * Compare two images with ensemble voting for reliability
-   * Calls vision API multiple times and uses majority vote
-   * Aggregates multi-factor ranks across all votes
+   * Calls vision API multiple times in PARALLEL and uses majority vote
+   * Aggregates multi-factor ranks across all votes:
+   * 1. Average alignment ranks across all votes
+   * 2. Average aesthetics ranks across all votes
+   * 3. Combine averaged dimensions into final ranking
    * @param {{candidateId: number, url: string}} imageA - First image
    * @param {{candidateId: number, url: string}} imageB - Second image
    * @param {string} prompt - The prompt they should match
@@ -401,7 +404,10 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
     const weaknessesA = new Set();
     const weaknessesB = new Set();
 
-    // Make multiple comparisons using compareTwo for each
+    // PARALLELIZATION: Prepare all comparison promises with swap info
+    const comparisonPromises = [];
+    const swapInfo = [];
+
     for (let i = 0; i < ensembleSize; i++) {
       // Randomize order for this comparison to reduce bias
       const shouldSwap = Math.random() < 0.5;
@@ -409,9 +415,21 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         ? [imageB, imageA]
         : [imageA, imageB];
 
-      const result = await this.compareTwo(firstImage, secondImage, prompt, {
-        temperature: this.ensembleTemperature
-      });
+      comparisonPromises.push(
+        this.compareTwo(firstImage, secondImage, prompt, {
+          temperature: this.ensembleTemperature
+        })
+      );
+      swapInfo.push(shouldSwap);
+    }
+
+    // Execute all comparisons in parallel
+    const results = await Promise.all(comparisonPromises);
+
+    // Process results
+    for (let i = 0; i < results.length; i++) {
+      const result = results[i];
+      const shouldSwap = swapInfo[i];
 
       // Map result back to original imageA/imageB
       // Winner 'A' in response refers to firstImage, 'B' refers to secondImage
