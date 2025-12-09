@@ -23,6 +23,88 @@ function rankAndSelect(candidates, keepTop) {
 }
 
 /**
+ * Rank candidates using comparative evaluation (preferred over absolute scoring)
+ * Uses ImageRanker to compare candidates relatively instead of scoring absolutely
+ * @param {Array<Object>} candidates - Candidates with image URLs
+ * @param {number} keepTop - Number of top candidates to keep
+ * @param {Object} imageRanker - ImageRanker instance for comparative evaluation
+ * @param {string} userPrompt - Original user prompt for comparison context
+ * @param {Object} options - Options
+ * @param {Array<Object>} [options.previousTopCandidates] - Previous iteration's top candidates (already ranked)
+ * @returns {Promise<Array<Object>>} Top M candidates sorted by rank with ranking reasons
+ */
+async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, options = {}) {
+  const { previousTopCandidates = [] } = options;
+
+  // Build image list for ranking with globally unique IDs
+  // Format: "i{iteration}c{candidateId}" e.g., "i0c1" for iteration 0, candidate 1
+  const images = candidates.map(candidate => ({
+    candidateId: `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`,
+    iteration: candidate.metadata.iteration,
+    localId: candidate.metadata.candidateId,
+    url: candidate.image.url
+  }));
+
+  // Build known comparisons from previous top candidates' rankings
+  // If we have parents with rank 1 and rank 2, we know rank 1 > rank 2
+  const knownComparisons = [];
+  if (previousTopCandidates.length >= 2) {
+    // Sort by ranking to get ordered pairs
+    const sorted = [...previousTopCandidates].sort((a, b) =>
+      (a.ranking?.rank || Infinity) - (b.ranking?.rank || Infinity)
+    );
+
+    // For each pair where rank(i) < rank(j), record i > j
+    for (let i = 0; i < sorted.length; i++) {
+      for (let j = i + 1; j < sorted.length; j++) {
+        const winnerId = `i${sorted[i].metadata.iteration}c${sorted[i].metadata.candidateId}`;
+        const loserId = `i${sorted[j].metadata.iteration}c${sorted[j].metadata.candidateId}`;
+        knownComparisons.push({ winnerId, loserId });
+      }
+    }
+  }
+
+  // Get comparative rankings from ImageRanker with keepTop optimization
+  // Pass known comparisons to avoid re-comparing parents from same iteration
+  const { ensembleSize, tokenTracker } = options;
+  const rankResult = await imageRanker.rankImages(images, userPrompt, { keepTop, knownComparisons, ensembleSize });
+
+  // Handle both old format (array) and new format (object with metadata)
+  const rankings = Array.isArray(rankResult) ? rankResult : rankResult.rankings;
+  const rankingMetadata = !Array.isArray(rankResult) ? rankResult.metadata : {};
+
+  // Record vision tokens if tokenTracker is provided
+  if (tokenTracker && rankingMetadata.tokensUsed) {
+    tokenTracker.recordUsage({
+      provider: 'vision',
+      operation: 'rank',
+      tokens: rankingMetadata.tokensUsed
+    });
+  }
+
+  // Create lookup map: globalId → ranking data
+  const rankingMap = new Map(
+    rankings.map(r => [r.candidateId, r])
+  );
+
+  // Attach ranking data to candidates using global ID
+  const rankedCandidates = candidates.map(candidate => {
+    const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+    return {
+      ...candidate,
+      ranking: rankingMap.get(globalId)
+    };
+  });
+
+  // Filter out candidates without rankings (happens when keepTop < N)
+  // Then sort by rank (1 = best) and return top M
+  const candidatesWithRankings = rankedCandidates.filter(c => c.ranking !== undefined);
+  candidatesWithRankings.sort((a, b) => a.ranking.rank - b.ranking.rank);
+
+  return candidatesWithRankings.slice(0, keepTop);
+}
+
+/**
  * Calculate total score from alignment and aesthetic scores
  * @param {number} alignmentScore - Alignment score (0-100)
  * @param {number} aestheticScore - Aesthetic score (0-10)
@@ -103,31 +185,37 @@ async function processCandidateStream(
   // Stage 2: Generate image (starts as soon as combine finishes)
   const image = await imageGenProvider.generateImage(combined, options);
 
-  // Stage 3: Evaluate image (starts as soon as image finishes)
-  const evaluation = await visionProvider.analyzeImage(image.url, combined);
+  // Stage 3: Evaluate image (skip if using comparative ranking)
+  // When skipVisionAnalysis is true, ranking step will provide feedback
+  let evaluation = null;
+  let totalScore = null;
 
-  // Track vision tokens
-  if (tokenTracker && evaluation.metadata?.tokensUsed) {
-    tokenTracker.recordUsage({
-      provider: 'vision',
-      operation: 'analyze',
-      tokens: evaluation.metadata.tokensUsed,
-      metadata: {
-        model: evaluation.metadata.model,
-        iteration,
-        candidateId,
-        operation: 'analyze'
-      }
-    });
+  if (!options.skipVisionAnalysis && visionProvider) {
+    evaluation = await visionProvider.analyzeImage(image.url, combined);
+
+    // Track vision tokens
+    if (tokenTracker && evaluation.metadata?.tokensUsed) {
+      tokenTracker.recordUsage({
+        provider: 'vision',
+        operation: 'analyze',
+        tokens: evaluation.metadata.tokensUsed,
+        metadata: {
+          model: evaluation.metadata.model,
+          iteration,
+          candidateId,
+          operation: 'analyze'
+        }
+      });
+    }
+
+    // Calculate total score
+    const alpha = options.alpha !== undefined ? options.alpha : 0.7;
+    totalScore = calculateTotalScore(
+      evaluation.alignmentScore,
+      evaluation.aestheticScore,
+      alpha
+    );
   }
-
-  // Calculate total score
-  const alpha = options.alpha !== undefined ? options.alpha : 0.7;
-  const totalScore = calculateTotalScore(
-    evaluation.alignmentScore,
-    evaluation.aestheticScore,
-    alpha
-  );
 
   // DEFENSIVE PATTERN: Update attempt with results AFTER success
   // This adds image/evaluation data to the defensive metadata
@@ -292,32 +380,37 @@ async function initialExpansion(
           })
         );
 
-        // Evaluate image with rate limiting
-        const evaluation = await visionLimiter.execute(() =>
-          visionProvider.analyzeImage(image.url, combined)
-        );
+        // Evaluate image with rate limiting (skip if using comparative ranking)
+        let evaluation = null;
+        let totalScore = null;
 
-        // Track vision tokens
-        if (tokenTracker && evaluation.metadata?.tokensUsed) {
-          tokenTracker.recordUsage({
-            provider: 'vision',
-            operation: 'analyze',
-            tokens: evaluation.metadata.tokensUsed,
-            metadata: {
-              model: evaluation.metadata.model,
-              iteration: 0,
-              candidateId: i,
-              operation: 'analyze'
-            }
-          });
+        if (!config.skipVisionAnalysis && visionProvider) {
+          evaluation = await visionLimiter.execute(() =>
+            visionProvider.analyzeImage(image.url, combined)
+          );
+
+          // Track vision tokens
+          if (tokenTracker && evaluation.metadata?.tokensUsed) {
+            tokenTracker.recordUsage({
+              provider: 'vision',
+              operation: 'analyze',
+              tokens: evaluation.metadata.tokensUsed,
+              metadata: {
+                model: evaluation.metadata.model,
+                iteration: 0,
+                candidateId: i,
+                operation: 'analyze'
+              }
+            });
+          }
+
+          // Calculate total score
+          totalScore = calculateTotalScore(
+            evaluation.alignmentScore,
+            evaluation.aestheticScore,
+            alpha
+          );
         }
-
-        // Calculate total score
-        const totalScore = calculateTotalScore(
-          evaluation.alignmentScore,
-          evaluation.aestheticScore,
-          alpha
-        );
 
         // DEFENSIVE PATTERN: Update attempt with results AFTER success
         if (metadataTracker) {
@@ -375,7 +468,7 @@ async function refinementIteration(
   config,
   iteration
 ) {
-  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker } = config;
+  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker, skipVisionAnalysis } = config;
   const expansionRatio = Math.floor(N / M);
 
   // Determine dimension: odd iterations refine WHAT, even refine HOW
@@ -384,8 +477,11 @@ async function refinementIteration(
   // Generate M critiques in parallel (one per parent)
   const parentsWithCritiques = await Promise.all(
     parents.map(async (parent) => {
+      // Use ranking feedback if available (new flow), otherwise use evaluation (legacy)
+      const feedback = parent.ranking || parent.evaluation;
+
       const critique = await critiqueGenProvider.generateCritique(
-        parent.evaluation,
+        feedback,
         {
           what: parent.whatPrompt,
           how: parent.howPrompt,
@@ -471,7 +567,8 @@ async function refinementIteration(
             parentId: parent.metadata.candidateId,
             alpha,
             metadataTracker,
-            tokenTracker
+            tokenTracker,
+            skipVisionAnalysis
           }
         );
       })
@@ -501,8 +598,17 @@ async function refinementIteration(
  * @returns {Promise<Object>} Best candidate after all iterations
  */
 async function beamSearch(userPrompt, providers, config) {
-  const { llm, imageGen, vision, critiqueGen } = providers;
-  const { maxIterations, keepTop, metadataTracker, onIterationComplete, onCandidateProcessed } = config;
+  const { llm, imageGen, vision, critiqueGen, imageRanker } = providers;
+  const { maxIterations, keepTop, metadataTracker, onIterationComplete, onCandidateProcessed, ensembleSize } = config;
+
+  // Determine ranking strategy: Use comparative ranking if imageRanker provided
+  const useComparativeRanking = imageRanker !== undefined;
+
+  // Build config with skipVisionAnalysis when using ranking
+  const pipelineConfig = {
+    ...config,
+    skipVisionAnalysis: useComparativeRanking
+  };
 
   // Iteration 0: Initial expansion
   let candidates = await initialExpansion(
@@ -510,7 +616,7 @@ async function beamSearch(userPrompt, providers, config) {
     llm,
     imageGen,
     vision,
-    config
+    pipelineConfig
   );
 
   // Notify about processed candidates (optional callback)
@@ -519,7 +625,13 @@ async function beamSearch(userPrompt, providers, config) {
   }
 
   // Rank and select top M candidates
-  let topCandidates = rankAndSelect(candidates, keepTop);
+  // Use comparative ranking if imageRanker provided, otherwise use score-based ranking
+  let topCandidates;
+  if (useComparativeRanking) {
+    topCandidates = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker });
+  } else {
+    topCandidates = rankAndSelect(candidates, keepTop);
+  }
 
   // Update survived status for iteration 0 candidates if tracker provided
   if (metadataTracker) {
@@ -558,7 +670,7 @@ async function beamSearch(userPrompt, providers, config) {
       imageGen,
       vision,
       critiqueGen,
-      config,
+      pipelineConfig,
       iteration
     );
 
@@ -568,7 +680,17 @@ async function beamSearch(userPrompt, providers, config) {
     }
 
     // Rank and select top M for next iteration
-    topCandidates = rankAndSelect(candidates, keepTop);
+    // Include both parents and children to ensure best from ANY iteration survives
+    const allCandidates = [...topCandidates, ...candidates];
+
+    // Use comparative ranking if imageRanker provided, otherwise use score-based ranking
+    if (useComparativeRanking) {
+      // Pass previous top candidates to avoid re-comparing known pairs
+      const previousTop = topCandidates;
+      topCandidates = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker });
+    } else {
+      topCandidates = rankAndSelect(allCandidates, keepTop);
+    }
 
     // Update survived status for iteration candidates if tracker provided
     if (metadataTracker) {
@@ -609,12 +731,15 @@ async function beamSearch(userPrompt, providers, config) {
     });
   }
 
-  // Return best candidate from final iteration
+  // Return best candidate with all finalists for comparison display
+  // Attach finalists to winner for backward compatibility
+  winner.finalists = topCandidates;
   return winner;
 }
 
 module.exports = {
   rankAndSelect,
+  rankAndSelectComparative,
   calculateTotalScore,
   processCandidateStream,
   initialExpansion,
