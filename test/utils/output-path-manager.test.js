@@ -10,6 +10,7 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
+const { getDateString } = require('../../src/utils/timezone.js');
 
 describe('OutputPathManager', () => {
   describe('getCurrentDate', () => {
@@ -22,11 +23,11 @@ describe('OutputPathManager', () => {
       assert.ok(/^\d{4}-\d{2}-\d{2}$/.test(date), `Date ${date} should match YYYY-MM-DD format`);
     });
 
-    it('should return current date', () => {
+    it('should return current date in local timezone', () => {
       const OutputPathManager = require('../../src/utils/output-path-manager.js');
 
       const date = OutputPathManager.getCurrentDate();
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDateString(); // Use local timezone
 
       assert.strictEqual(date, today);
     });
@@ -45,11 +46,11 @@ describe('OutputPathManager', () => {
       assert.strictEqual(parts[2], 'ses-123456');
     });
 
-    it('should use current date in path', () => {
+    it('should use current date in path (local timezone)', () => {
       const OutputPathManager = require('../../src/utils/output-path-manager.js');
 
       const sessionPath = OutputPathManager.buildSessionPath('output', 'ses-123456');
-      const today = new Date().toISOString().split('T')[0];
+      const today = getDateString(); // Use local timezone
 
       assert.ok(sessionPath.includes(today), `Path should include today's date: ${today}`);
     });

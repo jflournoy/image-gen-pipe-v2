@@ -11,6 +11,7 @@ const { describe, it, beforeEach, afterEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs').promises;
 const path = require('path');
+const { getDateString } = require('../../src/utils/timezone.js');
 
 describe('Metadata Tracker', () => {
   const testOutputDir = path.join(__dirname, '../../test-output-metadata');
@@ -84,7 +85,7 @@ describe('Metadata Tracker', () => {
       await tracker.initialize();
 
       // Verify file exists
-      const date = new Date().toISOString().split('T')[0];
+      const date = getDateString();
       const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const stats = await fs.stat(metadataPath);
       assert.ok(stats.isFile());
@@ -103,7 +104,7 @@ describe('Metadata Tracker', () => {
       await tracker.initialize();
 
       // Read and parse metadata
-      const date = new Date().toISOString().split('T')[0];
+      const date = getDateString();
       const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content);
@@ -381,7 +382,7 @@ describe('Metadata Tracker', () => {
       }, { survived: true });
 
       // Read directly from disk to verify persistence
-      const date = new Date().toISOString().split('T')[0];
+      const date = getDateString();
       const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content);
@@ -416,7 +417,7 @@ describe('Metadata Tracker', () => {
       }
 
       // Read and parse - should not throw
-      const date = new Date().toISOString().split('T')[0];
+      const date = getDateString();
       const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content); // Will throw if invalid JSON
@@ -652,7 +653,7 @@ describe('Metadata Tracker', () => {
       });
 
       // Read directly from disk to verify immediate persistence
-      const date = new Date().toISOString().split('T')[0];
+      const date = getDateString();
       const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
       const content = await fs.readFile(metadataPath, 'utf8');
       const metadata = JSON.parse(content);
