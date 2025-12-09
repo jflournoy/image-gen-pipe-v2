@@ -7,6 +7,18 @@
 
 const { RateLimiter } = require('../utils/rate-limiter.js');
 const rateLimitConfig = require('../config/rate-limits.js');
+const { registerLimiter } = require('../utils/rate-limiter-registry.js');
+
+// Initialize rate limiters at module load time
+// This ensures metrics are always available via the API, even before jobs start
+const llmLimiter = new RateLimiter(rateLimitConfig.getLimit('llm'));
+const imageGenLimiter = new RateLimiter(rateLimitConfig.getLimit('imageGen'));
+const visionLimiter = new RateLimiter(rateLimitConfig.getLimit('vision'));
+
+// Register limiters globally for API endpoint access
+registerLimiter('llm', llmLimiter);
+registerLimiter('imageGen', imageGenLimiter);
+registerLimiter('vision', visionLimiter);
 
 /**
  * Rank candidates by total score and select top M
@@ -283,15 +295,8 @@ async function initialExpansion(
 ) {
   const { beamWidth: N, temperature = 0.7, alpha = 0.7, rateLimitConcurrency, metadataTracker, tokenTracker } = config;
 
-  // Get rate limits: use explicit config if provided, otherwise use sensible defaults
-  const llmLimit = rateLimitConcurrency || rateLimitConfig.getLimit('llm');
-  const imageGenLimit = rateLimitConcurrency || rateLimitConfig.getLimit('imageGen');
-  const visionLimit = rateLimitConcurrency || rateLimitConfig.getLimit('vision');
-
-  // Create rate limiters for each provider with sensible defaults
-  const llmLimiter = new RateLimiter(llmLimit);
-  const imageGenLimiter = new RateLimiter(imageGenLimit);
-  const visionLimiter = new RateLimiter(visionLimit);
+  // Rate limiters are initialized at module load time
+  // They are reused across all jobs to maintain consistent metrics
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
