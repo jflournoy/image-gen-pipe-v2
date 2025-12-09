@@ -5,14 +5,23 @@
  * Instead of absolute scores, compares images relatively to determine quality.
  *
  * Strategy:
- * - Unified pairwise comparison for all N (consistent behavior)
+ * - All-pairs comparison for small N (≤8): Build complete comparison graph
+ * - Tournament selection with transitivity for large N (>8): Minimize comparisons
  * - Transitive inference to minimize API calls (if A>B and B>C, then A>C)
  * - Optional ensemble voting for reliability (multiple comparisons per pair)
+ *
+ * All-Pairs Optimization (N ≤ 8):
+ * - Compares all unique pairs upfront: C(N,2) = N*(N-1)/2 comparisons
+ * - Builds complete comparison graph with full transitivity information
+ * - Better for ensemble voting (all pairs compared consistently)
+ * - Unlocks transitivity benefits for subsequent rankings
+ * - Example: 4 candidates = 6 all-pairs comparisons (optimal for total ordering)
  *
  * Benefits of comparative ranking:
  * - More reliable than absolute scoring (easier for model to compare than score)
  * - Provides reasons tied to specific comparisons
  * - Consistent algorithm regardless of image count
+ * - Complete graph enables better transitivity inference
  */
 
 const OpenAI = require('openai');
@@ -187,7 +196,8 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
   /**
    * Rank images using transitive inference to minimize comparisons
-   * Uses tournament-style selection with transitivity (if A>B and B>C, then A>C)
+   * Uses all-pairs comparison for small N (≤8) to build complete graph
+   * Uses tournament-style selection for larger N
    * @param {Array<{candidateId: number, url: string}>} images - Images to rank
    * @param {string} prompt - The prompt they should match
    * @param {Object} options - Ranking options
@@ -209,43 +219,88 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
       graph.recordComparison(winnerId, loserId, 'A');  // A=winner format
     }
 
-    // Tournament-style selection for top K
-    const ranked = [];
-    const remaining = [...images];
+    // Choose strategy: all-pairs for small N, tournament for large N
+    const useAllPairs = images.length <= 8;
 
-    // Find top K candidates one by one
-    for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
-      if (remaining.length === 0) break;
+    if (useAllPairs) {
+      // All-pairs: compare all unique pairs upfront for complete graph
+      // Benefit: Fully leverages transitivity, better for ensemble voting
+      // Cost: C(N,2) = N*(N-1)/2 comparisons, but more comprehensive
+      const ranked = [];
+      const remaining = [...images];
 
-      if (remaining.length === 1) {
-        // Last candidate wins by default
-        const winner = remaining[0];
+      for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
+        if (remaining.length === 0) break;
+
+        if (remaining.length === 1) {
+          ranked.push({
+            candidateId: remaining[0].candidateId,
+            rank,
+            reason: 'Last remaining candidate'
+          });
+          break;
+        }
+
+        // For first rank, do all-pairs to build complete graph
+        if (rank === 1) {
+          const allPairsRanked = await this._rankAllPairsOptimal(remaining, prompt, graph, options);
+          const winner = allPairsRanked[0];
+          ranked.push({
+            candidateId: winner.candidateId,
+            rank,
+            reason: `Best candidate (${winner.wins} wins in all-pairs comparison)`
+          });
+          const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
+          remaining.splice(winnerIdx, 1);
+        } else {
+          // For subsequent ranks, use transitivity from complete graph
+          const allPairsRanked = await this._rankAllPairsOptimal(remaining, prompt, graph, options);
+          const winner = allPairsRanked[0];
+          ranked.push({
+            candidateId: winner.candidateId,
+            rank,
+            reason: `Best remaining candidate (${winner.wins} wins)`
+          });
+          const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
+          remaining.splice(winnerIdx, 1);
+        }
+      }
+
+      return ranked;
+    } else {
+      // Tournament-style selection for top K (original approach)
+      const ranked = [];
+      const remaining = [...images];
+
+      for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
+        if (remaining.length === 0) break;
+
+        if (remaining.length === 1) {
+          ranked.push({
+            candidateId: remaining[0].candidateId,
+            rank,
+            reason: 'Last remaining candidate'
+          });
+          break;
+        }
+
+        const { winner, reason, ranks, strengths, weaknesses } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
+
         ranked.push({
           candidateId: winner.candidateId,
           rank,
-          reason: 'Last remaining candidate'
+          reason,
+          ranks,
+          strengths,
+          weaknesses
         });
-        break;
+
+        const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
+        remaining.splice(winnerIdx, 1);
       }
 
-      // Find the best among remaining using minimal comparisons + transitivity
-      const { winner, reason, ranks, strengths, weaknesses } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
-
-      ranked.push({
-        candidateId: winner.candidateId,
-        rank,
-        reason,
-        ranks,
-        strengths,
-        weaknesses
-      });
-
-      // Remove winner from remaining
-      const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
-      remaining.splice(winnerIdx, 1);
+      return ranked;
     }
-
-    return ranked;
   }
 
   /**
@@ -317,6 +372,61 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
       strengths: championStrengths,
       weaknesses: championWeaknesses
     };
+  }
+
+  /**
+   * Rank candidates using all-pairs comparison with complete transitivity graph
+   * More efficient for ensemble voting and leverages transitivity fully
+   * @private
+   * @param {Array} candidates - Candidates to rank
+   * @param {string} prompt - Prompt for comparison
+   * @param {ComparisonGraph} graph - Graph to populate with all comparisons
+   * @param {Object} options - Options including ensembleSize, keepTop
+   * @returns {Promise<Array>} Ranked candidates with win counts
+   */
+  async _rankAllPairsOptimal(candidates, prompt, graph, options = {}) {
+    if (candidates.length <= 1) {
+      return candidates.map(c => ({ ...c, wins: 0 }));
+    }
+
+    // Generate all unique pairs
+    const pairs = [];
+    for (let i = 0; i < candidates.length; i++) {
+      for (let j = i + 1; j < candidates.length; j++) {
+        pairs.push({ a: candidates[i], b: candidates[j], aIdx: i, bIdx: j });
+      }
+    }
+
+    // Compare all pairs (with ensemble if specified)
+    const winCounts = new Map(candidates.map(c => [c.candidateId, 0]));
+
+    for (const { a, b } of pairs) {
+      // Skip if already compared
+      if (graph.canInferWinner(a.candidateId, b.candidateId)) {
+        // Use inferred result
+        const inferred = graph.canInferWinner(a.candidateId, b.candidateId);
+        if (inferred.winner === a.candidateId) {
+          winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
+        } else {
+          winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
+        }
+      } else {
+        // New comparison needed
+        const comparison = await this.compareWithEnsemble(a, b, prompt, options);
+        graph.recordComparison(a.candidateId, b.candidateId, comparison.winner);
+
+        if (comparison.winner === 'A') {
+          winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
+        } else {
+          winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
+        }
+      }
+    }
+
+    // Rank candidates by win count (descending)
+    return candidates
+      .map(c => ({ ...c, wins: winCounts.get(c.candidateId) || 0 }))
+      .sort((a, b) => b.wins - a.wins);
   }
 
   /**

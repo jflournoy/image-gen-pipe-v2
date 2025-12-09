@@ -414,4 +414,92 @@ describe('ImageRanker', () => {
       assert.ok(result[0].reason);
     });
   });
+
+  describe('All-Pairs Optimization (_rankAllPairsOptimal)', () => {
+    it('should compare all unique pairs for small N', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      let comparisonCount = 0;
+      ranker.compareWithEnsemble = async (imageA, imageB, _prompt, _options) => {
+        comparisonCount++;
+        return {
+          winner: imageA.candidateId < imageB.candidateId ? 'A' : 'B',
+          reason: 'test'
+        };
+      };
+
+      const candidates = [
+        { candidateId: 0, url: 'http://image-0.png' },
+        { candidateId: 1, url: 'http://image-1.png' },
+        { candidateId: 2, url: 'http://image-2.png' },
+        { candidateId: 3, url: 'http://image-3.png' }
+      ];
+
+      class MockGraph {
+        canInferWinner() { return null; }
+        recordComparison() {}
+      }
+      const graph = new MockGraph();
+
+      // For 4 candidates: C(4,2) = 6 all-pairs comparisons
+      const result = await ranker._rankAllPairsOptimal(candidates, 'test prompt', graph, {});
+
+      assert.strictEqual(result.length, 4);
+      // Should have compared all pairs: 6 comparisons for 4 candidates
+      assert.strictEqual(comparisonCount, 6);
+      // Should rank by win count (0 beats all: 3 wins, 1 beats 2,3: 2 wins, etc.)
+      assert.strictEqual(result[0].candidateId, 0);
+      assert.strictEqual(result[0].wins, 3);
+    });
+
+    it('should use all-pairs strategy for N ≤ 8 in rankPairwiseTransitive', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      let allPairsMethodCalled = false;
+      ranker._rankAllPairsOptimal = async function(...args) {
+        allPairsMethodCalled = true;
+        const candidates = args[0];
+        return candidates.map((c, i) => ({ ...c, wins: candidates.length - 1 - i }));
+      };
+
+      const images = Array.from({ length: 4 }, (_, i) => ({
+        candidateId: i,
+        url: `http://image-${i}.png`
+      }));
+
+      await ranker.rankPairwiseTransitive(images, 'test prompt', { keepTop: 2 });
+
+      assert.strictEqual(allPairsMethodCalled, true);
+    });
+
+    it('should leverage transitivity in subsequent rankings', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      let comparisonCount = 0;
+      ranker.compareWithEnsemble = async (imageA, imageB) => {
+        comparisonCount++;
+        return {
+          winner: imageA.candidateId < imageB.candidateId ? 'A' : 'B',
+          reason: 'test'
+        };
+      };
+
+      const images = [
+        { candidateId: 0, url: 'http://image-0.png' },
+        { candidateId: 1, url: 'http://image-1.png' },
+        { candidateId: 2, url: 'http://image-2.png' },
+        { candidateId: 3, url: 'http://image-3.png' }
+      ];
+
+      // For small N (≤8), all-pairs builds complete graph
+      // Finding top 2: first rank needs all 6 comparisons, second rank uses transitivity
+      const result = await ranker.rankPairwiseTransitive(images, 'test prompt', { keepTop: 2 });
+
+      assert.strictEqual(result.length, 2);
+      assert.strictEqual(result[0].rank, 1);
+      assert.strictEqual(result[1].rank, 2);
+      // Should be 6 comparisons for all-pairs of 4 candidates
+      assert.strictEqual(comparisonCount, 6);
+    });
+  });
 });
