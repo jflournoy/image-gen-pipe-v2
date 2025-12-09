@@ -64,6 +64,8 @@ class TokenTracker {
       llmTokens: 0,
       visionTokens: 0,
       critiqueTokens: 0,
+      imageGenTokens: 0,
+      byProvider: {},
       byOperation: {},
       byIteration: {}
     };
@@ -79,6 +81,13 @@ class TokenTracker {
         stats.visionTokens += record.tokens;
       } else if (record.provider === 'critique') {
         stats.critiqueTokens += record.tokens;
+      } else if (record.provider === 'image') {
+        stats.imageGenTokens += record.tokens;
+      }
+
+      // Aggregate by provider (generic tracking for any provider type)
+      if (record.provider) {
+        stats.byProvider[record.provider] = (stats.byProvider[record.provider] || 0) + record.tokens;
       }
 
       // Aggregate by operation
@@ -149,14 +158,17 @@ class TokenTracker {
    */
   getEstimatedCost() {
     const stats = this.getStats();
+    const imageGenPrice = this.pricing.image || 0;
 
     return {
       total: stats.llmTokens * this.pricing.llm +
              stats.visionTokens * this.pricing.vision +
-             stats.critiqueTokens * this.pricing.critique,
+             stats.critiqueTokens * this.pricing.critique +
+             stats.imageGenTokens * imageGenPrice,
       llm: stats.llmTokens * this.pricing.llm,
       vision: stats.visionTokens * this.pricing.vision,
-      critique: stats.critiqueTokens * this.pricing.critique
+      critique: stats.critiqueTokens * this.pricing.critique,
+      imageGen: stats.imageGenTokens * imageGenPrice
     };
   }
 
@@ -199,12 +211,18 @@ class TokenTracker {
     lines.push(`  • LLM: ${stats.llmTokens.toLocaleString()}`);
     lines.push(`  • Vision: ${stats.visionTokens.toLocaleString()}`);
     lines.push(`  • Critique: ${stats.critiqueTokens.toLocaleString()}`);
+    if (stats.imageGenTokens > 0) {
+      lines.push(`  • Image Gen: ${stats.imageGenTokens.toLocaleString()}`);
+    }
 
     lines.push('');
     lines.push(`Estimated Cost: $${cost.total.toFixed(4)}`);
     lines.push(`  • LLM: $${cost.llm.toFixed(4)}`);
     lines.push(`  • Vision: $${cost.vision.toFixed(4)}`);
     lines.push(`  • Critique: $${cost.critique.toFixed(4)}`);
+    if (cost.imageGen > 0) {
+      lines.push(`  • Image Gen: $${cost.imageGen.toFixed(4)}`);
+    }
 
     lines.push('');
     lines.push(`Duration: ${duration.toFixed(1)}s`);
