@@ -1273,6 +1273,83 @@ describe('Beam Search Orchestrator', () => {
       assert.strictEqual(capturedAlpha, 0.8, 'Should pass alpha through pipeline');
       assert.strictEqual(capturedTemperature, 0.9, 'Should pass temperature through pipeline');
     });
+
+    test('should include parents in iteration 1+ ranking (cross-iteration ranking)', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      // Scenario: Parent from iteration 0 is better than all children from iteration 1
+      // Parent score: 95, Children scores: 70, 75, 80
+      // Expected: Parent should survive in final topCandidates
+
+      let iter1CallCount = 0;
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => ({ url: `image-${options.iteration}-${options.candidateId}.png`, metadata: {} })
+      };
+
+      const mockVision = {
+        analyzeImage: async (url) => {
+          // Iteration 0: Return 95 for first candidate, 60 for others
+          if (url.includes('iteration-0-0')) {
+            return { alignmentScore: 95, aestheticScore: 9, analysis: '', strengths: [], weaknesses: [], metadata: {} };
+          } else if (url.includes('iteration-0')) {
+            return { alignmentScore: 60, aestheticScore: 5, analysis: '', strengths: [], weaknesses: [], metadata: {} };
+          }
+          // Iteration 1: Return lower scores for all children
+          return { alignmentScore: 70 + (iter1CallCount++ * 5), aestheticScore: 6, analysis: '', strengths: [], weaknesses: [], metadata: {} };
+        }
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix',
+          recommendation: 'Do',
+          reason: 'Because',
+          dimension: 'what',
+          metadata: {}
+        })
+      };
+
+      const mockImageRanker = {
+        rankImages: async (images, prompt, options) => {
+          // Simulate comparative ranking: candidateId 0 (parent) is best
+          const rankings = images.map(img => {
+            const isParent = img.candidateId === 0;
+            return {
+              candidateId: img.candidateId,
+              rank: isParent ? 1 : 2 + img.candidateId,
+              reason: isParent ? 'Best overall composition' : 'Good but lacks parent quality'
+            };
+          });
+          return rankings.sort((a, b) => a.rank - b.rank).slice(0, options.keepTop || rankings.length);
+        }
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen,
+        imageRanker: mockImageRanker
+      };
+
+      const config = {
+        beamWidth: 4, // Generate 4 initial candidates
+        keepTop: 2,   // Keep top 2
+        maxIterations: 2 // Run iteration 0 and 1
+      };
+
+      const result = await beamSearch('test', providers, config);
+
+      // Verify that the winner is from iteration 0 (the great parent)
+      assert.strictEqual(result.metadata.iteration, 0, 'Best candidate should be from iteration 0 (parent survived)');
+      assert.strictEqual(result.metadata.candidateId, 0, 'Best candidate should be the high-scoring parent');
+    });
   });
 
   describe('🔴 Defensive Metadata Recording', () => {

@@ -181,7 +181,7 @@ describe('PromptRefiner', () => {
       refiner.client = {
         chat: {
           completions: {
-            create: async (params) => {
+            create: async (_params) => {
               llmCalled = true;
               return {
                 choices: [{

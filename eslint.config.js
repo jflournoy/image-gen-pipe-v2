@@ -1,6 +1,9 @@
 import js from '@eslint/js';
 
 export default [
+  {
+    ignores: ['.history/**', 'test-ensemble-debug.js', 'test-multi-image-ranking.js', 'node_modules/**', 'output/**', 'session-history/**']
+  },
   js.configs.recommended,
   {
     languageOptions: {

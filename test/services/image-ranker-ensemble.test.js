@@ -131,6 +131,52 @@ describe('ImageRanker Ensemble', () => {
     });
   });
 
+  describe('ensemble variance with temperature', () => {
+    it('should use higher temperature for ensemble to increase variance', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      let capturedTemperature = null;
+      ranker._callVisionAPI = async (messages, options) => {
+        capturedTemperature = options?.temperature;
+        return { winner: 'A', reason: 'test' };
+      };
+
+      await ranker.compareWithEnsemble(
+        { candidateId: 0, url: 'http://a.png' },
+        { candidateId: 1, url: 'http://b.png' },
+        'test prompt',
+        { ensembleSize: 3 }
+      );
+
+      // Should use higher temperature for ensemble (0.7-0.9)
+      assert.ok(capturedTemperature >= 0.7, 'Ensemble should use temperature >= 0.7');
+    });
+
+    it('should randomize image order across ensemble calls', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      const observedOrders = new Set();
+      ranker._callVisionAPI = async (messages) => {
+        // Extract image URLs from message to detect order
+        const images = messages[1].content
+          .filter(c => c.type === 'image_url')
+          .map(c => c.image_url.url);
+        observedOrders.add(images.join(','));
+        return { winner: 'A', reason: 'test' };
+      };
+
+      await ranker.compareWithEnsemble(
+        { candidateId: 0, url: 'http://a.png' },
+        { candidateId: 1, url: 'http://b.png' },
+        'test prompt',
+        { ensembleSize: 5 }
+      );
+
+      // With 5 calls and randomization, should see at least 2 different orders
+      assert.ok(observedOrders.size >= 2, 'Should randomize image order across calls');
+    });
+  });
+
   describe('transitive ranking with ensemble', () => {
     it('should use transitive inference to skip comparisons even with ensemble', async () => {
       const ranker = new ImageRanker({ apiKey: 'mock-key' });
@@ -317,6 +363,95 @@ describe('ImageRanker Ensemble', () => {
       );
 
       assert.strictEqual(callCount, 1, 'ensembleSize=1 should make only 1 call');
+    });
+  });
+
+  describe('known comparisons optimization', () => {
+    it('should skip comparisons for pairs with known results', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      // Track which pairs were actually compared via API
+      const comparedPairs = new Set();
+      ranker.compareWithEnsemble = async (imageA, imageB, _prompt, _options) => {
+        const key = `${imageA.candidateId}-${imageB.candidateId}`;
+        comparedPairs.add(key);
+        return {
+          winner: imageA.candidateId < imageB.candidateId ? 'A' : 'B',
+          votes: { A: 1, B: 0 },
+          confidence: 1.0,
+          reason: 'test',
+          aggregatedRanks: {
+            A: { alignment: 1, aesthetics: 1, combined: 1 },
+            B: { alignment: 2, aesthetics: 2, combined: 2 }
+          }
+        };
+      };
+
+      // Simulate: parents 0 and 1 already ranked (0 > 1)
+      // New children: 2 and 3
+      const images = [
+        { candidateId: 'i0c0', url: 'http://image-0.png' },  // Parent (rank 1)
+        { candidateId: 'i0c1', url: 'http://image-1.png' },  // Parent (rank 2)
+        { candidateId: 'i1c0', url: 'http://image-2.png' },  // Child
+        { candidateId: 'i1c1', url: 'http://image-3.png' }   // Child
+      ];
+
+      // Pass known comparisons: 0 > 1 (parent ranking from previous iteration)
+      const knownComparisons = [
+        { winnerId: 'i0c0', loserId: 'i0c1' }
+      ];
+
+      await ranker.rankImages(images, 'test prompt', {
+        keepTop: 2,
+        ensembleSize: 1,
+        knownComparisons
+      });
+
+      // Should NOT compare i0c0 vs i0c1 (already known)
+      assert.ok(!comparedPairs.has('i0c0-i0c1'), 'Should skip known parent comparison');
+      assert.ok(!comparedPairs.has('i0c1-i0c0'), 'Should skip known parent comparison (reverse)');
+    });
+
+    it('should use known comparisons for transitivity inference', async () => {
+      const ranker = new ImageRanker({ apiKey: 'mock-key' });
+
+      let comparisonCount = 0;
+      ranker.compareWithEnsemble = async (_imageA, _imageB, _prompt, _options) => {
+        comparisonCount++;
+        return {
+          winner: 'A',
+          votes: { A: 1, B: 0 },
+          confidence: 1.0,
+          reason: 'test',
+          aggregatedRanks: {
+            A: { alignment: 1, aesthetics: 1, combined: 1 },
+            B: { alignment: 2, aesthetics: 2, combined: 2 }
+          }
+        };
+      };
+
+      // 4 images where we know: A > B from previous iteration
+      const images = [
+        { candidateId: 'A', url: 'http://a.png' },
+        { candidateId: 'B', url: 'http://b.png' },
+        { candidateId: 'C', url: 'http://c.png' },
+        { candidateId: 'D', url: 'http://d.png' }
+      ];
+
+      // Known: A > B
+      const knownComparisons = [
+        { winnerId: 'A', loserId: 'B' }
+      ];
+
+      await ranker.rankImages(images, 'test prompt', {
+        keepTop: 4,
+        ensembleSize: 1,
+        knownComparisons
+      });
+
+      // With 4 images and 1 known comparison, we need fewer than N*(N-1)/2 = 6 comparisons
+      // Exact count depends on tournament order, but should be < 6
+      assert.ok(comparisonCount < 6, `Should need fewer comparisons with known result, got ${comparisonCount}`);
     });
   });
 });
