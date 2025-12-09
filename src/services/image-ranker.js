@@ -33,6 +33,8 @@ class ImageRanker {
 
     // Ensemble configuration
     this.defaultEnsembleSize = options.defaultEnsembleSize || 1;
+    this.ensembleTemperature = options.ensembleTemperature || 0.8; // Higher for variance
+    this.defaultTemperature = options.temperature || 0.3; // Low for consistency
 
     // Multi-factor scoring weights (alignment vs aesthetics)
     // Default: 70% alignment (prompt match), 30% aesthetics
@@ -40,6 +42,9 @@ class ImageRanker {
 
     // Threshold for switching algorithms (kept for backward compatibility)
     this.allAtOnceThreshold = 4;
+
+    // Token tracking for cost monitoring
+    this.accumulatedTokens = 0;
   }
 
   /**
@@ -53,9 +58,19 @@ class ImageRanker {
    * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
    */
   async rankImages(images, prompt, options = {}) {
+    // Reset token counter for this ranking session
+    this.resetTokenCount();
+
     // Always use transitive pairwise ranking for consistency
     // This ensures the same algorithm regardless of image count
-    return this.rankPairwiseTransitive(images, prompt, options);
+    const rankings = await this.rankPairwiseTransitive(images, prompt, options);
+
+    // Attach accumulated tokens as metadata
+    const tokensUsed = this.getAccumulatedTokens();
+    return {
+      rankings,
+      metadata: { tokensUsed }
+    };
   }
 
   /**
@@ -178,13 +193,21 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
    * @param {Object} options - Ranking options
    * @param {number} options.keepTop - Number of top candidates needed
    * @param {number} options.ensembleSize - Number of votes per comparison
+   * @param {Array<{winnerId: string, loserId: string}>} [options.knownComparisons] - Pre-existing comparison results to skip
    * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
    */
   async rankPairwiseTransitive(images, prompt, options = {}) {
     const keepTop = options.keepTop || images.length;
+    const knownComparisons = options.knownComparisons || [];
 
     // Comparison graph: tracks A > B relationships and infers transitivity
     const graph = new ComparisonGraph();
+
+    // Pre-populate graph with known comparisons (e.g., from previous iteration's ranking)
+    // This avoids re-comparing parents that were already ranked
+    for (const { winnerId, loserId } of knownComparisons) {
+      graph.recordComparison(winnerId, loserId, 'A');  // A=winner format
+    }
 
     // Tournament-style selection for top K
     const ranked = [];
@@ -206,13 +229,15 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
       }
 
       // Find the best among remaining using minimal comparisons + transitivity
-      const { winner, reason, ranks } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
+      const { winner, reason, ranks, strengths, weaknesses } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
 
       ranked.push({
         candidateId: winner.candidateId,
         rank,
         reason,
-        ranks
+        ranks,
+        strengths,
+        weaknesses
       });
 
       // Remove winner from remaining
@@ -230,17 +255,19 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
    * @param {string} prompt - Prompt for comparison
    * @param {ComparisonGraph} graph - Comparison graph for transitivity
    * @param {Object} options - Options including ensembleSize
-   * @returns {Promise<{winner: Object, reason: string, ranks: Object}>}
+   * @returns {Promise<{winner: Object, reason: string, ranks: Object, strengths: string[], weaknesses: string[]}>}
    */
   async _findBestWithTransitivity(candidates, prompt, graph, options = {}) {
     if (candidates.length === 1) {
-      return { winner: candidates[0], reason: 'Only candidate' };
+      return { winner: candidates[0], reason: 'Only candidate', strengths: [], weaknesses: [] };
     }
 
     // Tournament: compare pairs, track results
     let champion = candidates[0];
     let championReason = 'Initial candidate';
     let championRanks = null;
+    let championStrengths = [];
+    let championWeaknesses = [];
 
     for (let i = 1; i < candidates.length; i++) {
       const challenger = candidates[i];
@@ -255,6 +282,9 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         } else {
           champion = challenger;
           championReason = 'Better than previous champion (inferred via transitivity)';
+          // Reset feedback for new champion (no direct comparison data available)
+          championStrengths = [];
+          championWeaknesses = [];
         }
       } else {
         // Need to compare directly (with ensemble voting for reliability)
@@ -265,18 +295,28 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
         if (comparison.winner === 'A') {
           championReason = comparison.reason;
-          // Store winner's ranks
+          // Store winner's ranks and feedback
           championRanks = comparison.aggregatedRanks?.A || comparison.ranks?.A;
+          championStrengths = comparison.aggregatedFeedback?.A?.strengths || [];
+          championWeaknesses = comparison.aggregatedFeedback?.A?.weaknesses || [];
         } else {
           champion = challenger;
           championReason = comparison.reason;
-          // Store winner's ranks
+          // Store winner's ranks and feedback
           championRanks = comparison.aggregatedRanks?.B || comparison.ranks?.B;
+          championStrengths = comparison.aggregatedFeedback?.B?.strengths || [];
+          championWeaknesses = comparison.aggregatedFeedback?.B?.weaknesses || [];
         }
       }
     }
 
-    return { winner: champion, reason: championReason, ranks: championRanks };
+    return {
+      winner: champion,
+      reason: championReason,
+      ranks: championRanks,
+      strengths: championStrengths,
+      weaknesses: championWeaknesses
+    };
   }
 
   /**
@@ -349,29 +389,68 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
     const votes = { A: 0, B: 0 };
     let lastReason = '';
 
-    // Accumulate ranks for averaging
+    // Accumulate ranks for averaging (per-dimension, combined calculated AFTER averaging)
     const rankAccumulators = {
-      A: { alignment: 0, aesthetics: 0, combined: 0 },
-      B: { alignment: 0, aesthetics: 0, combined: 0 }
+      A: { alignment: 0, aesthetics: 0 },
+      B: { alignment: 0, aesthetics: 0 }
     };
+
+    // Collect strengths/weaknesses across comparisons (use Sets to deduplicate)
+    const strengthsA = new Set();
+    const strengthsB = new Set();
+    const weaknessesA = new Set();
+    const weaknessesB = new Set();
 
     // Make multiple comparisons using compareTwo for each
     for (let i = 0; i < ensembleSize; i++) {
-      const result = await this.compareTwo(imageA, imageB, prompt);
+      // Randomize order for this comparison to reduce bias
+      const shouldSwap = Math.random() < 0.5;
+      const [firstImage, secondImage] = shouldSwap
+        ? [imageB, imageA]
+        : [imageA, imageB];
+
+      const result = await this.compareTwo(firstImage, secondImage, prompt, {
+        temperature: this.ensembleTemperature
+      });
+
+      // Map result back to original imageA/imageB
+      // Winner 'A' in response refers to firstImage, 'B' refers to secondImage
+      let actualWinner;
       if (result.winner === 'A') {
-        votes.A++;
+        actualWinner = shouldSwap ? 'B' : 'A'; // First was imageB : imageA
       } else if (result.winner === 'B') {
-        votes.B++;
+        actualWinner = shouldSwap ? 'A' : 'B'; // Second was imageA : imageB
+      } else {
+        actualWinner = 'tie';
       }
 
-      // Accumulate ranks for averaging
+      if (actualWinner === 'A') {
+        votes.A++;
+        // A won: A's strengths are winner strengths, B's weaknesses are loser weaknesses
+        (result.winnerStrengths || []).forEach(s => strengthsA.add(s));
+        (result.loserWeaknesses || []).forEach(w => weaknessesB.add(w));
+      } else if (actualWinner === 'B') {
+        votes.B++;
+        // B won: B's strengths are winner strengths, A's weaknesses are loser weaknesses
+        (result.winnerStrengths || []).forEach(s => strengthsB.add(s));
+        (result.loserWeaknesses || []).forEach(w => weaknessesA.add(w));
+      }
+
+      // Accumulate individual dimension ranks (need to map back if swapped)
       if (result.ranks) {
-        rankAccumulators.A.alignment += result.ranks.A?.alignment || 0;
-        rankAccumulators.A.aesthetics += result.ranks.A?.aesthetics || 0;
-        rankAccumulators.A.combined += result.ranks.A?.combined || 0;
-        rankAccumulators.B.alignment += result.ranks.B?.alignment || 0;
-        rankAccumulators.B.aesthetics += result.ranks.B?.aesthetics || 0;
-        rankAccumulators.B.combined += result.ranks.B?.combined || 0;
+        if (shouldSwap) {
+          // Result.ranks.A refers to firstImage which is imageB
+          rankAccumulators.B.alignment += result.ranks.A?.alignment || 0;
+          rankAccumulators.B.aesthetics += result.ranks.A?.aesthetics || 0;
+          rankAccumulators.A.alignment += result.ranks.B?.alignment || 0;
+          rankAccumulators.A.aesthetics += result.ranks.B?.aesthetics || 0;
+        } else {
+          // Result.ranks.A refers to firstImage which is imageA
+          rankAccumulators.A.alignment += result.ranks.A?.alignment || 0;
+          rankAccumulators.A.aesthetics += result.ranks.A?.aesthetics || 0;
+          rankAccumulators.B.alignment += result.ranks.B?.alignment || 0;
+          rankAccumulators.B.aesthetics += result.ranks.B?.aesthetics || 0;
+        }
       }
 
       // Track last reason for reporting
@@ -393,18 +472,31 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
     const majorityVotes = Math.max(votes.A, votes.B);
     const confidence = ensembleSize > 0 ? majorityVotes / ensembleSize : 0;
 
-    // Calculate averaged ranks
+    // Step 1: Average each dimension's ranks across all votes
+    const avgAlignmentA = ensembleSize > 0 ? rankAccumulators.A.alignment / ensembleSize : 0;
+    const avgAestheticsA = ensembleSize > 0 ? rankAccumulators.A.aesthetics / ensembleSize : 0;
+    const avgAlignmentB = ensembleSize > 0 ? rankAccumulators.B.alignment / ensembleSize : 0;
+    const avgAestheticsB = ensembleSize > 0 ? rankAccumulators.B.aesthetics / ensembleSize : 0;
+
+    // Step 2: Apply alpha weighting to averaged dimension ranks
+    // This is more nuanced than averaging pre-combined scores
     const aggregatedRanks = {
       A: {
-        alignment: ensembleSize > 0 ? rankAccumulators.A.alignment / ensembleSize : 0,
-        aesthetics: ensembleSize > 0 ? rankAccumulators.A.aesthetics / ensembleSize : 0,
-        combined: ensembleSize > 0 ? rankAccumulators.A.combined / ensembleSize : 0
+        alignment: avgAlignmentA,
+        aesthetics: avgAestheticsA,
+        combined: this._calculateCombinedRank({ alignment: avgAlignmentA, aesthetics: avgAestheticsA })
       },
       B: {
-        alignment: ensembleSize > 0 ? rankAccumulators.B.alignment / ensembleSize : 0,
-        aesthetics: ensembleSize > 0 ? rankAccumulators.B.aesthetics / ensembleSize : 0,
-        combined: ensembleSize > 0 ? rankAccumulators.B.combined / ensembleSize : 0
+        alignment: avgAlignmentB,
+        aesthetics: avgAestheticsB,
+        combined: this._calculateCombinedRank({ alignment: avgAlignmentB, aesthetics: avgAestheticsB })
       }
+    };
+
+    // Aggregate strengths/weaknesses per candidate
+    const aggregatedFeedback = {
+      A: { strengths: [...strengthsA], weaknesses: [...weaknessesA] },
+      B: { strengths: [...strengthsB], weaknesses: [...weaknessesB] }
     };
 
     return {
@@ -412,7 +504,8 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
       votes,
       confidence,
       reason: lastReason,
-      aggregatedRanks
+      aggregatedRanks,
+      aggregatedFeedback
     };
   }
 
@@ -425,15 +518,7 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
    * @param {string} prompt - The prompt they should match
    * @returns {Promise<{winner: string, reason: string, ranks: Object, winnerStrengths: string[], loserWeaknesses: string[]}>}
    */
-  async compareTwo(imageA, imageB, prompt) {
-    // Ensure deterministic ordering: A = lower candidateId, B = higher candidateId
-    const [orderedA, orderedB] = imageA.candidateId < imageB.candidateId
-      ? [imageA, imageB]
-      : [imageB, imageA];
-
-    // Track if we swapped so we can interpret the result correctly
-    const swapped = imageA.candidateId > imageB.candidateId;
-
+  async compareTwo(imageA, imageB, prompt, options = {}) {
     const systemPrompt = `You are an expert at comparing images for quality and prompt adherence.
 
 Your task is to compare two images (A and B) and RANK them on multiple factors.
@@ -470,13 +555,14 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
         role: 'user',
         content: [
           { type: 'text', text: userPrompt },
-          { type: 'image_url', image_url: { url: orderedA.url } },
-          { type: 'image_url', image_url: { url: orderedB.url } }
+          { type: 'image_url', image_url: { url: imageA.url } },
+          { type: 'image_url', image_url: { url: imageB.url } }
         ]
       }
     ];
 
-    const result = await this._callVisionAPI(messages);
+    const temperature = options.temperature !== undefined ? options.temperature : this.defaultTemperature;
+    const result = await this._callVisionAPI(messages, { temperature });
 
     // Get ranks from result, with sensible defaults
     const ranks = result.ranks || {
@@ -494,21 +580,6 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
       winner = 'A';
     } else if (ranks.B.combined < ranks.A.combined) {
       winner = 'B';
-    }
-
-    // If we swapped the images for ordering, swap back the winner label
-    // so it refers to the original imageA/imageB parameters
-    if (swapped) {
-      winner = winner === 'A' ? 'B' : (winner === 'B' ? 'A' : winner);
-      // Also swap ranks to match original parameter order
-      const swappedRanks = { A: ranks.B, B: ranks.A };
-      return {
-        winner,
-        reason: result.reason,
-        ranks: swappedRanks,
-        winnerStrengths: result.winnerStrengths || [],
-        loserWeaknesses: result.loserWeaknesses || []
-      };
     }
 
     return {
@@ -535,9 +606,11 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
    * Call OpenAI vision API with JSON response format
    * @private
    * @param {Array} messages - Messages array for API
+   * @param {Object} options - API options
+   * @param {number} [options.temperature] - Temperature for response variance
    * @returns {Promise<Object>} Parsed JSON response
    */
-  async _callVisionAPI(messages) {
+  async _callVisionAPI(messages, options = {}) {
     // Model-aware parameters (gpt-5 vs others)
     const isGpt5 = this.model.includes('gpt-5');
     const tokenParam = isGpt5 ? 'max_completion_tokens' : 'max_tokens';
@@ -550,13 +623,19 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
 
     // Add temperature only for non-gpt-5 models
     if (!isGpt5) {
-      requestParams.temperature = 0.3; // Low temperature for consistent comparisons
+      const temperature = options.temperature !== undefined ? options.temperature : this.defaultTemperature;
+      requestParams.temperature = temperature;
     }
 
     // Token limit
     requestParams[tokenParam] = isGpt5 ? 4000 : 1000;
 
     const completion = await this.client.chat.completions.create(requestParams);
+
+    // Track token usage for cost monitoring
+    if (completion.usage) {
+      this.accumulatedTokens += completion.usage.total_tokens || 0;
+    }
 
     const responseText = completion.choices[0].message?.content?.trim() || '';
 
@@ -573,6 +652,21 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
     }
 
     return parsed;
+  }
+
+  /**
+   * Get accumulated token usage from ranking operations
+   * @returns {number} Total tokens used
+   */
+  getAccumulatedTokens() {
+    return this.accumulatedTokens;
+  }
+
+  /**
+   * Reset accumulated token counter
+   */
+  resetTokenCount() {
+    this.accumulatedTokens = 0;
   }
 }
 
