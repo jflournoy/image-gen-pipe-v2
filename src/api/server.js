@@ -13,6 +13,7 @@ import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
+const { getMetrics: getRateLimiterMetrics } = require('../utils/rate-limiter-registry.js');
 
 // Store WebSocket connections by jobId
 let jobSubscriptions = new Map();
@@ -145,12 +146,8 @@ export function createApp() {
   });
 
   app.get('/api/demo/rate-limits/status', (req, res) => {
-    // Minimal implementation - return zero state
-    res.status(200).json({
-      llm: { active: 0, queued: 0, limit: rateLimitConfig.defaults.llm },
-      imageGen: { active: 0, queued: 0, limit: rateLimitConfig.defaults.imageGen },
-      vision: { active: 0, queued: 0, limit: rateLimitConfig.defaults.vision }
-    });
+    const metrics = getRateLimiterMetrics();
+    res.status(200).json(metrics);
   });
 
   app.post('/api/demo/start', (req, res) => {
@@ -183,13 +180,10 @@ export function createApp() {
       return res.status(404).json({ error: 'Job not found' });
     }
 
+    const metrics = getRateLimiterMetrics();
     res.status(200).json({
       ...status,
-      rateLimitStatus: {
-        llm: { active: 0, queued: 0, limit: rateLimitConfig.defaults.llm },
-        imageGen: { active: 0, queued: 0, limit: rateLimitConfig.defaults.imageGen },
-        vision: { active: 0, queued: 0, limit: rateLimitConfig.defaults.vision }
-      }
+      rateLimitStatus: metrics
     });
   });
 

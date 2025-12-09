@@ -35,6 +35,18 @@ class RateLimiter {
   }
 
   /**
+   * Get current rate limiter metrics
+   * @returns {Object} Metrics object with active, queued, and limit counts
+   */
+  getMetrics() {
+    return {
+      active: this.currentConcurrency,
+      queued: this.queue.length,
+      limit: this.concurrencyLimit
+    };
+  }
+
+  /**
    * Execute a task and handle concurrency
    * @private
    * @param {Object} task - Task object with taskFn, resolve, reject
