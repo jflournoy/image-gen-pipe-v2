@@ -655,10 +655,27 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
       this.accumulatedTokens += completion.usage.total_tokens || 0;
     }
 
-    const responseText = completion.choices[0].message?.content?.trim() || '';
+    // Validate response structure with detailed error diagnostics
+    if (!completion.choices || completion.choices.length === 0) {
+      throw new Error(
+        `Vision API returned no choices. Model: ${this.model}, Finish reason: ${completion.choices?.[0]?.finish_reason || 'none'}`
+      );
+    }
 
+    const message = completion.choices[0].message;
+    if (!message || !message.content) {
+      throw new Error(
+        `Vision API returned empty content. Model: ${this.model}, Finish reason: ${completion.choices[0].finish_reason}, Refusal: ${message?.refusal || 'none'}`
+      );
+    }
+
+    const responseText = message.content.trim();
+
+    // Validate that we got a non-empty response after trimming
     if (!responseText) {
-      throw new Error('Vision API returned empty content');
+      throw new Error(
+        `Vision API returned empty response after trimming. Model: ${this.model}, Original length: ${message.content.length}, Finish reason: ${completion.choices[0].finish_reason}`
+      );
     }
 
     let parsed;
