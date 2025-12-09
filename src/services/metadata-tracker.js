@@ -235,20 +235,29 @@ class MetadataTracker {
       url: results.image.url,
       localPath: results.image.localPath
     };
-    candidate.evaluation = {
-      alignmentScore: results.evaluation.alignmentScore,
-      aestheticScore: results.evaluation.aestheticScore,
-      analysis: results.evaluation.analysis,
-      strengths: results.evaluation.strengths || [],
-      weaknesses: results.evaluation.weaknesses || []
-    };
+
+    // Handle evaluation (null when using ranking-based flow)
+    if (results.evaluation) {
+      candidate.evaluation = {
+        alignmentScore: results.evaluation.alignmentScore,
+        aestheticScore: results.evaluation.aestheticScore,
+        analysis: results.evaluation.analysis,
+        strengths: results.evaluation.strengths || [],
+        weaknesses: results.evaluation.weaknesses || []
+      };
+    } else {
+      candidate.evaluation = null; // Will be populated by ranking step
+    }
+
     candidate.totalScore = results.totalScore;
     candidate.survived = survived;
 
-    // Update best candidate for iteration
-    if (iterationEntry.bestScore === null || results.totalScore > iterationEntry.bestScore) {
-      iterationEntry.bestCandidateId = candidateId;
-      iterationEntry.bestScore = results.totalScore;
+    // Update best candidate for iteration (only if using score-based ranking)
+    if (results.totalScore !== null) {
+      if (iterationEntry.bestScore === null || results.totalScore > iterationEntry.bestScore) {
+        iterationEntry.bestCandidateId = candidateId;
+        iterationEntry.bestScore = results.totalScore;
+      }
     }
 
     // Persist to disk
