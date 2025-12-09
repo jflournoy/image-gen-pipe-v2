@@ -21,8 +21,8 @@ class OpenAIVisionProvider {
     // Configuration options - defaults from provider-config.js
     // Note: gpt-4-vision-preview is deprecated, use gpt-4o or gpt-4o-mini
     this.model = options.model || providerConfig.vision.model;
-    this.maxRetries = options.maxRetries || 3;
-    this.timeout = options.timeout || 30000;
+    this.maxRetries = options.maxRetries || providerConfig.llm.maxRetries;
+    this.timeout = options.timeout || providerConfig.llm.timeout;
 
     // Initialize OpenAI client
     this.client = new OpenAI({
@@ -30,6 +30,9 @@ class OpenAIVisionProvider {
       maxRetries: this.maxRetries,
       timeout: this.timeout
     });
+
+    // Log timeout configuration for debugging
+    console.log(`[OpenAIVisionProvider] Initialized: timeout=${this.timeout}ms, maxRetries=${this.maxRetries}, model=${this.model}`);
   }
 
   /**
@@ -37,9 +40,10 @@ class OpenAIVisionProvider {
    * @param {string} imageUrl - URL of the image to analyze
    * @param {string} prompt - The prompt that was used to generate the image
    * @param {Object} options - Analysis options
+   * @param {number} [options.temperature] - Temperature for API response (default 0.3)
    * @returns {Promise<Object>} Analysis result with alignment score (0-100), aesthetic score (0-10), and detailed feedback
    */
-  async analyzeImage(imageUrl, prompt, _options = {}) {
+  async analyzeImage(imageUrl, prompt, options = {}) {
     // Validate imageUrl
     if (!imageUrl || typeof imageUrl !== 'string' || imageUrl.trim() === '') {
       throw new Error('imageUrl is required and cannot be empty');
@@ -99,6 +103,7 @@ Provide your evaluation in the JSON format specified.`;
 
     try {
       // Call OpenAI Vision API
+      const temperature = options.temperature !== undefined ? options.temperature : 0.3; // Default: lower temperature for more consistent evaluation
       const completion = await this.client.chat.completions.create({
         model: this.model,
         messages: [
@@ -116,7 +121,7 @@ Provide your evaluation in the JSON format specified.`;
             ]
           }
         ],
-        temperature: 0.3, // Lower temperature for more consistent evaluation
+        temperature,
         max_tokens: 500
       });
 

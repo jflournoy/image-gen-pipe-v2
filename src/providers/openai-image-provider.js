@@ -34,8 +34,8 @@ class OpenAIImageProvider {
 
     // Configuration options - defaults from provider-config.js
     this.model = options.model || providerConfig.image.model;
-    this.maxRetries = options.maxRetries || 3;
-    this.timeout = options.timeout || 60000; // Image generation takes longer
+    this.maxRetries = options.maxRetries || providerConfig.llm.maxRetries;
+    this.timeout = options.timeout || providerConfig.llm.timeout;
 
     // Initialize OpenAI client
     this.client = new OpenAI({
@@ -44,10 +44,23 @@ class OpenAIImageProvider {
       timeout: this.timeout
     });
 
-    // DALL-E 3 constraints
+    // Log timeout configuration for debugging
+    console.log(`[OpenAIImageProvider] Initialized: timeout=${this.timeout}ms, maxRetries=${this.maxRetries}, model=${this.model}`);
+
+    // Model-specific constraints
     this.validSizes = ['1024x1024', '1024x1792', '1792x1024'];
-    this.validQualities = ['standard', 'hd'];
-    this.validStyles = ['vivid', 'natural'];
+
+    // Different models support different quality values
+    if (this.model === 'dall-e-3') {
+      this.validQualities = ['standard', 'hd'];
+      this.validStyles = ['vivid', 'natural'];
+      this.defaultQuality = 'standard';
+    } else {
+      // gpt-image-1-mini and newer models
+      this.validQualities = ['low', 'medium', 'high', 'auto'];
+      this.validStyles = []; // No style parameter for newer models
+      this.defaultQuality = 'medium';
+    }
 
     // Local storage configuration
     this.saveLocally = options.saveLocally !== undefined ? options.saveLocally : true;
@@ -200,7 +213,7 @@ class OpenAIImageProvider {
    * @returns {Promise<string>} Local path to saved image
    * @private
    */
-  async _saveFlatImage(beamSearch, url, _prompt) {
+  async _saveFlatImage(beamSearch, urlOrBase64, _prompt) {
     // Build paths
     const sessionDir = this._buildFlatSessionPath(beamSearch);
     const imagePath = await this._buildFlatImagePath(beamSearch);
@@ -208,8 +221,20 @@ class OpenAIImageProvider {
     // Create session directory
     await fs.mkdir(sessionDir, { recursive: true });
 
-    // Download and save image with flat filename
-    await this._downloadImage(url, imagePath);
+    // Check if it's a HTTP URL, data URL, or raw base64
+    if (urlOrBase64.startsWith('http://') || urlOrBase64.startsWith('https://')) {
+      // It's a HTTP URL - download it
+      await this._downloadImage(urlOrBase64, imagePath);
+    } else if (urlOrBase64.startsWith('data:image/')) {
+      // It's a data URL - extract base64 portion and decode
+      const base64Data = urlOrBase64.split(',')[1];
+      const imageBuffer = Buffer.from(base64Data, 'base64');
+      await fs.writeFile(imagePath, imageBuffer);
+    } else {
+      // It's raw base64 data - decode and save
+      const imageBuffer = Buffer.from(urlOrBase64, 'base64');
+      await fs.writeFile(imagePath, imageBuffer);
+    }
 
     return imagePath;
   }
@@ -239,41 +264,63 @@ class OpenAIImageProvider {
     // Validate and default options
     const {
       size = '1024x1024',
-      quality = 'standard',
-      style = 'vivid',
+      quality: requestedQuality,
+      style: requestedStyle,
       iteration,
       candidateId,
       dimension
     } = options;
+
+    // Use model-specific defaults if not provided or if invalid for this model
+    const quality = requestedQuality && this.validQualities.includes(requestedQuality)
+      ? requestedQuality
+      : this.defaultQuality;
+
+    const style = requestedStyle && this.validStyles.includes(requestedStyle)
+      ? requestedStyle
+      : (this.model === 'dall-e-3' ? 'vivid' : null);
 
     // Validate size
     if (!this.validSizes.includes(size)) {
       throw new Error(`Invalid size: ${size}. Must be one of: ${this.validSizes.join(', ')}`);
     }
 
-    // Validate quality
-    if (!this.validQualities.includes(quality)) {
-      throw new Error(`Invalid quality: ${quality}. Must be one of: ${this.validQualities.join(', ')}`);
-    }
-
-    // Validate style
-    if (!this.validStyles.includes(style)) {
-      throw new Error(`Invalid style: ${style}. Must be one of: ${this.validStyles.join(', ')}`);
-    }
-
     try {
-      // Call OpenAI API
-      const response = await this.client.images.generate({
+      // Build API parameters
+      const params = {
         model: this.model,
         prompt: prompt,
         n: 1,
         size: size,
-        quality: quality,
-        style: style
-      });
+        quality: quality
+      };
+
+      // Only include style for dall-e-3 (newer models like gpt-image-1-mini don't support it)
+      if (this.model === 'dall-e-3') {
+        params.style = style;
+      }
+
+      // Call OpenAI API
+      const response = await this.client.images.generate(params);
 
       const imageData = response.data[0];
-      const url = imageData.url;
+      if (!imageData) {
+        throw new Error(`No image data returned from ${this.model}`);
+      }
+
+      // Different models return images differently
+      // - DALL-E returns: { url: "https://..." }
+      // - Some models return: { b64_json: "..." }
+      let url;
+      if (imageData.url) {
+        url = imageData.url;
+      } else if (imageData.b64_json) {
+        // Convert base64 to data URL format for Vision API compatibility
+        url = `data:image/png;base64,${imageData.b64_json}`;
+      } else {
+        throw new Error(`${this.model} returned no URL or base64 data. Response: ${JSON.stringify(imageData)}`);
+      }
+
       const revisedPrompt = imageData.revised_prompt || prompt;
 
       // Build result object

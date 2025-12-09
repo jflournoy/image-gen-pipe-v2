@@ -29,8 +29,8 @@ class OpenAILLMProvider {
       combine: options.model || providerConfig.llm.models.combine
     };
 
-    this.maxRetries = options.maxRetries || 3;
-    this.timeout = options.timeout || 30000;
+    this.maxRetries = options.maxRetries || providerConfig.llm.maxRetries;
+    this.timeout = options.timeout || providerConfig.llm.timeout;
 
     // Initialize OpenAI client
     this.client = new OpenAI({
@@ -38,6 +38,9 @@ class OpenAILLMProvider {
       maxRetries: this.maxRetries,
       timeout: this.timeout
     });
+
+    // Log timeout configuration for debugging
+    console.log(`[OpenAILLMProvider] Initialized: timeout=${this.timeout}ms, maxRetries=${this.maxRetries}`);
   }
 
   /**
@@ -309,7 +312,7 @@ Combined prompt:`;
       return {
         tokenParam: 'max_completion_tokens',
         supportsCustomTemperature: false,
-        recommendedMaxTokens: 4000 // GPT-5 needs tokens for reasoning (can be 2000+) + output (500+)
+        recommendedMaxTokens: 8000 // GPT-5 needs tokens for reasoning (can be 2000-6000+) + output (500+)
       };
     }
 

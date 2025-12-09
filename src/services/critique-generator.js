@@ -21,20 +21,23 @@ class CritiqueGenerator {
     if (this.apiKey) {
       this.client = new OpenAI({
         apiKey: this.apiKey,
-        maxRetries: options.maxRetries || 3,
-        timeout: options.timeout || 15000
+        maxRetries: options.maxRetries || providerConfig.llm.maxRetries,
+        timeout: options.timeout || providerConfig.llm.timeout
       });
     }
   }
 
   /**
    * Generate structured critique for prompt refinement
-   * @param {Object} evaluation - Vision provider evaluation results
-   * @param {number} evaluation.alignmentScore - Score 0-100 (content match)
-   * @param {number} [evaluation.aestheticScore] - Score 0-10 (visual quality)
-   * @param {string} evaluation.analysis - Vision analysis text
-   * @param {string[]} evaluation.strengths - What worked well
-   * @param {string[]} evaluation.weaknesses - What needs improvement
+   * @param {Object} feedback - Evaluation or ranking feedback
+   * @param {number} [feedback.alignmentScore] - Score 0-100 (evaluation mode)
+   * @param {number} [feedback.aestheticScore] - Score 0-10 (evaluation mode)
+   * @param {string} [feedback.analysis] - Vision analysis text (evaluation mode)
+   * @param {number} [feedback.rank] - Comparative rank (ranking mode)
+   * @param {string} [feedback.reason] - Ranking reason (ranking mode)
+   * @param {string} [feedback.improvementSuggestion] - Direct suggestion (ranking mode)
+   * @param {string[]} feedback.strengths - What worked well
+   * @param {string[]} feedback.weaknesses - What needs improvement
    * @param {Object} prompts - The prompts used
    * @param {string} prompts.what - Content prompt
    * @param {string} prompts.how - Style prompt
@@ -42,13 +45,12 @@ class CritiqueGenerator {
    * @param {Object} options - Generation options
    * @param {string} options.dimension - 'what' or 'how'
    * @param {number} [options.iteration] - Current iteration number
-   * @param {number} [options.parentScore] - Previous iteration score
    * @returns {Promise<Object>} Structured critique with recommendation
    */
-  async generateCritique(evaluation, prompts, options) {
+  async generateCritique(feedback, prompts, options) {
     // Validate required parameters
-    if (!evaluation) {
-      throw new Error('evaluation is required');
+    if (!feedback) {
+      throw new Error('feedback is required');
     }
 
     if (!prompts) {
@@ -66,13 +68,111 @@ class CritiqueGenerator {
       throw new Error('dimension must be either "what" or "how"');
     }
 
+    // Detect feedback type: ranking-based vs evaluation-based
+    const isRankingBased = feedback.rank !== undefined || feedback.improvementSuggestion !== undefined;
+
     // If no API key, generate a simple rule-based critique
     if (!this.apiKey) {
-      return this._generateSimpleCritique(evaluation, prompts, options);
+      return this._generateSimpleCritique(feedback, prompts, options);
     }
 
-    // Use LLM to generate sophisticated critique
-    return this._generateLLMCritique(evaluation, prompts, options);
+    // Use appropriate LLM critique method based on feedback type
+    if (isRankingBased) {
+      return this._generateRankingBasedCritique(feedback, prompts, options);
+    }
+    return this._generateLLMCritique(feedback, prompts, options);
+  }
+
+  /**
+   * Generate critique using ranking feedback (no absolute scores)
+   * @private
+   */
+  async _generateRankingBasedCritique(feedback, prompts, options) {
+    const { dimension, iteration } = options;
+    const { rank, reason, strengths, weaknesses, improvementSuggestion } = feedback;
+
+    const systemPrompt = `You are an expert at providing actionable feedback for prompt refinement based on comparative ranking.
+
+Your task is to analyze ranking feedback and provide specific improvements for the ${dimension === 'what' ? 'WHAT (content)' : 'HOW (style)'} prompt.
+
+You will receive:
+- The WHAT prompt (content description)
+- The HOW prompt (visual style description)
+- Comparative ranking feedback (rank, reason, strengths, weaknesses)
+- An improvement suggestion from the ranking
+
+Output format (JSON):
+{
+  "critique": "Clear statement of the main issue OR what could be enhanced",
+  "recommendation": "Specific change to the ${dimension.toUpperCase()} prompt that PRESERVES strengths while addressing weaknesses",
+  "reason": "Why this change will improve ${dimension === 'how' ? 'visual quality' : 'content alignment'}"
+}
+
+Guidelines:
+- Focus ONLY on ${dimension === 'what' ? 'content elements (subjects, objects, actions, setting)' : 'style elements (lighting, composition, color, atmosphere, artistic techniques)'}
+- PRESERVE and CAPITALIZE on the strengths - don't remove or dilute what's working
+- Address the weaknesses with targeted improvements
+- Be specific and actionable
+- The recommendation should build on existing strengths while fixing weaknesses`;
+
+    const userPrompt = `Current Prompts:
+WHAT: "${prompts.what}"
+HOW: "${prompts.how}"
+COMBINED: "${prompts.combined}"
+
+Comparative Ranking Feedback:
+- Rank: ${rank} (1 = best)
+- Reason: ${reason || 'Not provided'}
+- Strengths: ${strengths?.length > 0 ? strengths.join(', ') : 'None identified'}
+- Weaknesses: ${weaknesses?.length > 0 ? weaknesses.join(', ') : 'None identified'}
+- Improvement Suggestion: ${improvementSuggestion || 'Not provided'}
+
+${iteration !== undefined ? `Iteration: ${iteration}` : ''}
+
+Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt.`;
+
+    try {
+      const isGpt5 = this.model.includes('gpt-5');
+      const tokenParam = isGpt5 ? 'max_completion_tokens' : 'max_tokens';
+      // GPT-5 models need more tokens for reasoning overhead
+      const tokenLimit = isGpt5 ? 4000 : 1000;
+
+      const requestParams = {
+        model: this.model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt }
+        ],
+        response_format: { type: 'json_object' }
+      };
+      requestParams[tokenParam] = tokenLimit;
+
+      const response = await this.client.chat.completions.create(requestParams);
+      const content = response.choices[0].message.content;
+      const parsed = JSON.parse(content);
+
+      return {
+        critique: parsed.critique,
+        recommendation: parsed.recommendation,
+        reason: parsed.reason,
+        dimension,
+        metadata: {
+          model: response.model,
+          tokens: response.usage?.total_tokens,
+          feedbackType: 'ranking'
+        }
+      };
+    } catch (error) {
+      console.error('Ranking-based critique generation failed:', error.message);
+      // Fallback: use the improvement suggestion directly
+      return {
+        critique: weaknesses?.[0] || 'Could be improved',
+        recommendation: improvementSuggestion || 'Refine the prompt for better results',
+        reason: reason || 'Based on comparative analysis',
+        dimension,
+        metadata: { feedbackType: 'ranking-fallback' }
+      };
+    }
   }
 
   /**
@@ -114,18 +214,20 @@ ${dimension === 'how' && aestheticScore !== undefined ?
 
 Output format (JSON):
 {
-  "critique": "Clear statement of the main issue with current result",
-  "recommendation": "Specific change to the ${dimension.toUpperCase()} prompt",
+  "critique": "Clear statement of the main issue OR what could be enhanced",
+  "recommendation": "Specific change to the ${dimension.toUpperCase()} prompt that PRESERVES strengths while addressing weaknesses",
   "reason": "Why this change will address the critique and improve ${dimension === 'how' ? 'visual quality' : 'content alignment'}"
 }
 
 Guidelines:
 - Be specific and actionable
 - Focus ONLY on ${dimension === 'what' ? 'content elements (subjects, objects, actions, setting)' : 'style elements (lighting, composition, color, atmosphere, artistic techniques)'}
+- PRESERVE and CAPITALIZE on identified strengths - don't remove or dilute what's working
+- Address the weaknesses with targeted improvements
 - Consider how the WHAT and HOW interact in the combined prompt
-- For high scores (>80 or >8/10): suggest minor refinements
-- For medium scores (60-80 or 6-8/10): suggest moderate improvements
-- For low scores (<60 or <6/10): suggest significant revisions`;
+- For high scores (>80 or >8/10): suggest minor refinements that build on strengths
+- For medium scores (60-80 or 6-8/10): suggest moderate improvements while preserving strengths
+- For low scores (<60 or <6/10): suggest significant revisions but keep any identified strengths`;
 
     const userPrompt = `Current Prompts:
 WHAT: "${prompts.what}"
@@ -145,19 +247,58 @@ ${parentScore !== undefined ? `Previous score: ${parentScore}/100` : ''}
 Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt${dimension === 'how' && aestheticScore !== undefined ? ' (focus on visual quality/aesthetic score)' : dimension === 'what' ? ' (focus on content/alignment score)' : ''}.`;
 
     try {
-      const completion = await this.client.chat.completions.create({
+      // Determine model capabilities
+      // gpt-5 models: use max_completion_tokens, no custom temperature
+      // Other models: use max_tokens, support custom temperature
+      const isGpt5 = this.model.includes('gpt-5');
+      const tokenParam = isGpt5 ? 'max_completion_tokens' : 'max_tokens';
+
+      const requestParams = {
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        temperature: 0.5, // Balanced creativity and consistency
-        max_tokens: 400,
         response_format: { type: 'json_object' }
-      });
+      };
 
-      const responseText = completion.choices[0].message.content.trim();
-      const parsed = JSON.parse(responseText);
+      // Add temperature only for non-gpt-5 models (gpt-5 only supports default temperature=1)
+      if (!isGpt5) {
+        requestParams.temperature = 0.5; // Balanced creativity and consistency
+      }
+
+      // Add token limit using model-appropriate parameter
+      // gpt-5 models use reasoning tokens (internal thinking) which count against the limit
+      // Need much higher limit: ~800 for reasoning + ~400 for actual JSON response
+      requestParams[tokenParam] = isGpt5 ? 4000 : 800;
+
+      const completion = await this.client.chat.completions.create(requestParams);
+
+      // Debug: Check what we got back
+      if (!completion.choices || completion.choices.length === 0) {
+        console.error('Critique API returned no choices:', JSON.stringify(completion, null, 2));
+        throw new Error('Critique API returned no choices');
+      }
+
+      const responseText = completion.choices[0].message?.content?.trim() || '';
+
+      // Better error handling for JSON parsing
+      if (!responseText) {
+        console.error('Critique API returned empty content. Full response:', JSON.stringify(completion, null, 2));
+        throw new Error('Critique API returned empty content');
+      }
+
+      let parsed;
+      try {
+        parsed = JSON.parse(responseText);
+      } catch (parseError) {
+        console.error('Failed to parse critique JSON.');
+        console.error('Response length:', responseText.length);
+        console.error('Response text:', responseText);
+        console.error('Parse error:', parseError.message);
+        console.error('Full completion object:', JSON.stringify(completion, null, 2));
+        throw new Error(`Failed to parse critique response: ${parseError.message}`);
+      }
 
       return {
         critique: parsed.critique || 'Unable to generate critique',
