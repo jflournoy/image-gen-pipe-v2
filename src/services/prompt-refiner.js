@@ -78,7 +78,7 @@ ${originalPrompt !== prompt ? `First attempt was: "${originalPrompt}"` : ''}`;
       const similarViolations = this.violationTracker.findSimilar(prompt);
 
       if (similarViolations && similarViolations.length > 0) {
-        userPrompt += `\n\nSimilar past violations and their successful refinements:`;
+        userPrompt += '\n\nSimilar past violations and their successful refinements:';
 
         for (const example of similarViolations) {
           userPrompt += `\n- Original: "${example.original}"`;
@@ -86,11 +86,11 @@ ${originalPrompt !== prompt ? `First attempt was: "${originalPrompt}"` : ''}`;
           userPrompt += `\n  Similarity: ${(example.similarity * 100).toFixed(0)}%\n`;
         }
 
-        userPrompt += `\nUse these examples as guidance for your refinement.`;
+        userPrompt += '\nUse these examples as guidance for your refinement.';
       }
     }
 
-    userPrompt += `\n\nProvide a refined prompt that avoids the violation while preserving the original intent.`;
+    userPrompt += '\n\nProvide a refined prompt that avoids the violation while preserving the original intent.';
 
     try {
       // Determine model capabilities
