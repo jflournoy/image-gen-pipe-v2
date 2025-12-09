@@ -185,6 +185,23 @@ async function processCandidateStream(
   // Stage 2: Generate image (starts as soon as combine finishes)
   const image = await imageGenProvider.generateImage(combined, options);
 
+  // Track image generation
+  if (tokenTracker && image.metadata) {
+    tokenTracker.recordUsage({
+      provider: 'image',
+      operation: 'generate',
+      tokens: 1, // Image gen doesn't use tokens, count as 1 generation
+      metadata: {
+        model: image.metadata.model,
+        size: image.metadata.size,
+        quality: image.metadata.quality,
+        iteration: options.iteration,
+        candidateId: options.candidateId,
+        operation: 'generate'
+      }
+    });
+  }
+
   // Stage 3: Evaluate image (skip if using comparative ranking)
   // When skipVisionAnalysis is true, ranking step will provide feedback
   let evaluation = null;
@@ -379,6 +396,24 @@ async function initialExpansion(
             alpha
           })
         );
+
+        // Track image generation
+        if (tokenTracker && image.metadata) {
+          tokenTracker.recordUsage({
+            provider: 'image',
+            operation: 'generate',
+            tokens: 1, // Image gen doesn't use tokens, count as 1 generation
+            metadata: {
+              model: image.metadata.model,
+              size: image.metadata.size,
+              quality: image.metadata.quality,
+              iteration: 0,
+              candidateId: i,
+              dimension: 'what',
+              operation: 'generate'
+            }
+          });
+        }
 
         // Evaluate image with rate limiting (skip if using comparative ranking)
         let evaluation = null;
