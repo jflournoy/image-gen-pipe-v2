@@ -1,0 +1,38 @@
+# Claude Code Session - 2025-12-04 15:24:35
+
+## Session Metadata
+- **Date**: 2025-12-04
+- **Time**: 15:24:35
+- **Session Number**: 002
+- **Session Type**: manual
+- **Description**: retrospective-20251204-1524
+
+## Git Activity
+**Branch**: main
+
+### Recent Commits (20)
+- `4150ec1` fix: increase token limits for reasoning models to 4000
+- `74e76bf` fix: add model-aware token limits to prevent length-limited responses
+- `a9e2ffc` fix: add defensive validation for empty API responses
+- `7e5400a` feat: add model capabilities registry to guarantee correct API parameters (TDD GREEN)
+- `a5962f7` refactor: handle model-specific parameter syntax for token limits (TDD REFACTOR)
+- `42227b7` refactor: providers now read model defaults from provider-config (TDD REFACTOR)
+- `6589ece` feat: add DebugLogger utility to display model names and token counts (TDD GREEN)
+- `90c51db` feat: add metadata return to combinePrompts for accurate token tracking (TDD GREEN)
+- `e1e4e10` feat: integrate TokenTracker into demo scripts for cost visibility
+- `6daa490` fix: resolve eslint errors in rate limiting demo tests
+- ... and 10 more
+
+## Test Results
+- Tests not run in this session
+
+## Session Summary
+This session captured at 12/4/2025, 3:24:35 PM
+
+### Description
+retrospective-20251204-1524
+
+### Metrics
+- Commits: 20
+- Files changed: 0
+- Tests: 0/0 passing

@@ -69,6 +69,7 @@ class OpenAILLMProvider {
       dimension = 'what',
       operation = 'expand',
       critique,
+      userPrompt,
       temperature = 0.7,
       maxTokens // Will use model-specific default if not provided
     } = options;
@@ -96,6 +97,11 @@ class OpenAILLMProvider {
       if (typeof critique === 'object' && (!critique.critique || !critique.recommendation)) {
         throw new Error('Structured critique must have critique and recommendation fields');
       }
+
+      // userPrompt helps maintain alignment with original user intent
+      if (!userPrompt) {
+        throw new Error('userPrompt is required for refine operation');
+      }
     }
 
     // Validate temperature
@@ -104,26 +110,40 @@ class OpenAILLMProvider {
     }
 
     // Build system prompt based on dimension and operation
-    const systemPrompt = this._buildSystemPrompt(dimension, operation);
+    let systemPrompt = this._buildSystemPrompt(dimension, operation);
 
     // Build user message based on operation
     let userMessage;
     if (operation === 'expand') {
       userMessage = prompt;
     } else {
+      // For refine operation, include original user prompt to maintain alignment
       // Handle both string and structured critique
       if (typeof critique === 'string') {
-        userMessage = `Current prompt: ${prompt}\n\nCritique: ${critique}\n\nRefined prompt:`;
+        userMessage = `Original User Request: "${userPrompt}"
+
+Current prompt: ${prompt}
+
+Critique: ${critique}
+
+Refined prompt:`;
       } else {
         // Structured critique object
-        userMessage = `Current ${dimension.toUpperCase()} prompt: ${prompt}
+        userMessage = `Original User Request: "${userPrompt}"
+
+Current ${dimension.toUpperCase()} prompt: ${prompt}
 
 Critique: ${critique.critique}
 Recommendation: ${critique.recommendation}
 Reason: ${critique.reason}
 
-Please refine the ${dimension.toUpperCase()} prompt based on the above feedback. Output only the refined prompt, no explanation.`;
+Please refine the ${dimension.toUpperCase()} prompt based on the above feedback while maintaining alignment with the original user request. Output only the refined prompt, no explanation.`;
       }
+
+      // Enhance system prompt for refine operation to include user intent guidance
+      systemPrompt += `
+
+${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays aligned with the original user request while addressing the critique feedback.' : 'CRITICAL CONSTRAINT: Ensure refined HOW prompt stays aligned with the original user request while addressing the critique feedback.'}`;
     }
 
     // Select model based on operation for cost optimization

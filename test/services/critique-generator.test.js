@@ -74,7 +74,7 @@ describe('CritiqueGenerator', () => {
       const prompts = { what: 'test', how: 'test', combined: 'test' };
 
       await assert.rejects(
-        async () => await generator.generateCritique(evaluation, prompts),
+        async () => await generator.generateCritique(evaluation, prompts, 'test prompt'),
         /dimension.*required/i,
         'Should throw when dimension is missing'
       );
@@ -85,7 +85,7 @@ describe('CritiqueGenerator', () => {
       const prompts = { what: 'test', how: 'test', combined: 'test' };
 
       await assert.rejects(
-        async () => await generator.generateCritique(evaluation, prompts, { dimension: 'invalid' }),
+        async () => await generator.generateCritique(evaluation, prompts, 'test prompt', { dimension: 'invalid' }),
         /dimension.*what.*how/i,
         'Should throw for invalid dimension'
       );
@@ -114,7 +114,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Verify structure
       assert.ok(result, 'Should return a result object');
@@ -141,7 +141,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       assert.ok(result.metadata, 'Should have metadata');
       assert.strictEqual(result.metadata.alignmentScore, 65, 'Should include alignment score');
@@ -171,7 +171,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Critique should identify content issues
       const critique = result.critique.toLowerCase();
@@ -205,7 +205,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should suggest being more specific about content
       assert.ok(result.critique, 'Should have critique');
@@ -237,7 +237,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Critique should identify style issues
       assert.ok(result.critique, 'Should have critique');
@@ -268,7 +268,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should suggest style-specific improvements
       assert.ok(result.critique, 'Should have critique');
@@ -300,7 +300,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should be mindful of how combined prompt worked
       assert.ok(result.critique, 'Should critique the result');
@@ -326,7 +326,7 @@ describe('CritiqueGenerator', () => {
         parentScore: 65
       };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should work with iteration context
       assert.ok(result, 'Should handle iteration context');
@@ -358,7 +358,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should still provide structured feedback even for good results
       assert.ok(result.critique, 'Should have critique');
@@ -380,7 +380,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should provide substantial feedback for poor results
       assert.ok(result.critique, 'Should have critique');
@@ -414,7 +414,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should successfully process evaluation with aestheticScore
       assert.ok(result, 'Should return result');
@@ -437,7 +437,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       assert.ok(result.metadata, 'Should have metadata');
       assert.strictEqual(result.metadata.aestheticScore, 6.2, 'Should store aesthetic score in metadata');
@@ -459,7 +459,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluationPoorAesthetic, prompts, options);
+      const result = await generator.generateCritique(evaluationPoorAesthetic, prompts, 'test prompt', options);
 
       // For HOW dimension with low aesthetic score, should provide significant style improvements
       // even if alignment is high
@@ -495,7 +495,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'what' };
 
-      const result = await generator.generateCritique(evaluationPoorAlignment, prompts, options);
+      const result = await generator.generateCritique(evaluationPoorAlignment, prompts, 'test prompt', options);
 
       // For WHAT dimension with low alignment, should provide significant content changes
       // even if aesthetic is high
@@ -528,7 +528,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluationNoAesthetic, prompts, options);
+      const result = await generator.generateCritique(evaluationNoAesthetic, prompts, 'test prompt', options);
 
       // Should still work without aestheticScore (backwards compatibility)
       assert.ok(result, 'Should return result even without aesthetic score');
@@ -551,7 +551,7 @@ describe('CritiqueGenerator', () => {
       };
       const options = { dimension: 'how' };
 
-      const result = await generator.generateCritique(evaluation, prompts, options);
+      const result = await generator.generateCritique(evaluation, prompts, 'test prompt', options);
 
       // Should focus on style issues (low aesthetic) not content issues (high alignment)
       assert.ok(result.critique, 'Should have critique');

@@ -26,7 +26,6 @@ coverage/
 .env.*.local
 
 # Local Claude settings (user-specific)
-.claude/settings.local.json
 .claude/workflows/
 .claude/issues/
 .claude/designs/
