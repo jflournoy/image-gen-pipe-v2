@@ -315,8 +315,8 @@ class BeamSearchLogger {
   wrapCritique(critique) {
     const self = this;
     return {
-      generateCritique: async (evaluation, prompts, options) => {
-        const result = await critique.generateCritique(evaluation, prompts, options);
+      generateCritique: async (evaluation, prompts, userPrompt, options) => {
+        const result = await critique.generateCritique(evaluation, prompts, userPrompt, options);
 
         // Display debug info for critique generation
         if (result.metadata) {
@@ -424,7 +424,7 @@ async function demo() {
   const sessionId = `ses-${hours}${minutes}${seconds}`;
 
   // Configuration
-  const userPrompt = 'a hyperreal photorealistic painting of the american west during sunset with a mysterious attractive woman subtly placed somewhere in the image. I want it to look like a photograph with subtle hints that it is a photoreal painting. i want to woman to be almost hidden but also intriguing, inviting, and attractive to the viewer. i want the american west to have a quality that is epic like the new frontier.';
+  const userPrompt = 'a hyperreal photorealistic painting of the american west during sunset with a mysterious attractive woman subtly placed somewhere in the image. I want it to look like a photograph with subtle hints that it is a photoreal painting. i want to woman to be almost hidden but also intriguing, inviting, and attractive to the viewer. In fact, she should be gorgeous, please emphasize this. i want the american west to have a quality that is epic like the new frontier. Emphasize photorealism. Emphasize grandiousity.';
 
   // Initialize providers
   console.log('\n🔧 Initializing providers...');

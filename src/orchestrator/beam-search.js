@@ -527,6 +527,7 @@ async function refinementIteration(
           how: parent.howPrompt,
           combined: parent.combined
         },
+        userPrompt,
         {
           dimension,
           iteration
@@ -565,7 +566,8 @@ async function refinementIteration(
           {
             operation: 'refine',
             dimension,
-            critique: parent.critique
+            critique: parent.critique,
+            userPrompt
           }
         );
 
