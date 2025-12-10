@@ -192,7 +192,7 @@ describe('OpenAILLMProvider Interface', () => {
       const provider = new OpenAILLMProvider('fake-api-key');
 
       await assert.rejects(
-        async () => await provider.refinePrompt('test', { operation: 'refine' }),
+        async () => await provider.refinePrompt('test', { operation: 'refine', userPrompt: 'test' }),
         /critique.*required.*refine/i,
         'Should require critique for refine operation'
       );
@@ -206,7 +206,8 @@ describe('OpenAILLMProvider Interface', () => {
       await assert.rejects(
         async () => await provider.refinePrompt('test', {
           operation: 'refine',
-          critique: 'Add more detail about the subject'
+          critique: 'Add more detail about the subject',
+          userPrompt: 'test prompt'
         }),
         /OpenAI API error/,
         'Should accept critique parameter'
@@ -230,7 +231,8 @@ describe('OpenAILLMProvider Interface', () => {
         async () => await provider.refinePrompt('mountain landscape', {
           operation: 'refine',
           dimension: 'what',
-          critique: structuredCritique
+          critique: structuredCritique,
+          userPrompt: 'majestic mountain'
         }),
         /OpenAI API error/,
         'Should accept structured critique object'

@@ -42,12 +42,13 @@ class CritiqueGenerator {
    * @param {string} prompts.what - Content prompt
    * @param {string} prompts.how - Style prompt
    * @param {string} prompts.combined - Combined prompt used for generation
+   * @param {string} userPrompt - Original user request (for alignment checking)
    * @param {Object} options - Generation options
    * @param {string} options.dimension - 'what' or 'how'
    * @param {number} [options.iteration] - Current iteration number
    * @returns {Promise<Object>} Structured critique with recommendation
    */
-  async generateCritique(feedback, prompts, options) {
+  async generateCritique(feedback, prompts, userPrompt, options) {
     // Validate required parameters
     if (!feedback) {
       throw new Error('feedback is required');
@@ -55,6 +56,10 @@ class CritiqueGenerator {
 
     if (!prompts) {
       throw new Error('prompts are required');
+    }
+
+    if (!userPrompt) {
+      throw new Error('userPrompt is required');
     }
 
     if (!options || !options.dimension) {
@@ -78,16 +83,16 @@ class CritiqueGenerator {
 
     // Use appropriate LLM critique method based on feedback type
     if (isRankingBased) {
-      return this._generateRankingBasedCritique(feedback, prompts, options);
+      return this._generateRankingBasedCritique(feedback, prompts, userPrompt, options);
     }
-    return this._generateLLMCritique(feedback, prompts, options);
+    return this._generateLLMCritique(feedback, prompts, userPrompt, options);
   }
 
   /**
    * Generate critique using ranking feedback (no absolute scores)
    * @private
    */
-  async _generateRankingBasedCritique(feedback, prompts, options) {
+  async _generateRankingBasedCritique(feedback, prompts, userPrompt, options) {
     const { dimension, iteration } = options;
     const { rank, reason, strengths, weaknesses, improvementSuggestion } = feedback;
 
@@ -96,6 +101,7 @@ class CritiqueGenerator {
 Your task is to analyze ranking feedback and provide specific improvements for the ${dimension === 'what' ? 'WHAT (content)' : 'HOW (style)'} prompt.
 
 You will receive:
+- The ORIGINAL USER REQUEST (for alignment verification)
 - The WHAT prompt (content description)
 - The HOW prompt (visual style description)
 - Comparative ranking feedback (rank, reason, strengths, weaknesses)
@@ -113,9 +119,12 @@ Guidelines:
 - PRESERVE and CAPITALIZE on the strengths - don't remove or dilute what's working
 - Address the weaknesses with targeted improvements
 - Be specific and actionable
-- The recommendation should build on existing strengths while fixing weaknesses`;
+- The recommendation should build on existing strengths while fixing weaknesses
+- CRITICAL: Ensure refined prompts stay aligned with the ORIGINAL USER REQUEST while addressing critique feedback`;
 
-    const userPrompt = `Current Prompts:
+    const userPromptMessage = `Original User Request: "${userPrompt}"
+
+Current Prompts:
 WHAT: "${prompts.what}"
 HOW: "${prompts.how}"
 COMBINED: "${prompts.combined}"
@@ -129,7 +138,7 @@ Comparative Ranking Feedback:
 
 ${iteration !== undefined ? `Iteration: ${iteration}` : ''}
 
-Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt.`;
+Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt while maintaining alignment with the original user request.`;
 
     try {
       const isGpt5 = this.model.includes('gpt-5');
@@ -141,7 +150,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
+          { role: 'user', content: userPromptMessage }
         ],
         response_format: { type: 'json_object' }
       };
@@ -179,7 +188,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
    * Generate critique using LLM (GPT-4)
    * @private
    */
-  async _generateLLMCritique(evaluation, prompts, options) {
+  async _generateLLMCritique(evaluation, prompts, userPrompt, options) {
     const { dimension, iteration, parentScore } = options;
     const { alignmentScore, aestheticScore, analysis, strengths, weaknesses } = evaluation;
 
@@ -195,9 +204,10 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
     // Build system prompt
     const systemPrompt = `You are an expert at analyzing image generation results and providing actionable feedback for prompt refinement.
 
-Your task is to analyze the evaluation of a generated image and provide structured feedback.
+Your task is to analyze the evaluation of a generated image and provide structured feedback that maintains alignment with the user's original request.
 
 You will receive:
+- The ORIGINAL USER REQUEST (for alignment verification)
 - The WHAT prompt (content description)
 - The HOW prompt (visual style description)
 - The COMBINED prompt (what was actually used)
@@ -225,11 +235,14 @@ Guidelines:
 - PRESERVE and CAPITALIZE on identified strengths - don't remove or dilute what's working
 - Address the weaknesses with targeted improvements
 - Consider how the WHAT and HOW interact in the combined prompt
+- CRITICAL: Ensure refined prompts stay aligned with the ORIGINAL USER REQUEST while addressing evaluation feedback
 - For high scores (>80 or >8/10): suggest minor refinements that build on strengths
 - For medium scores (60-80 or 6-8/10): suggest moderate improvements while preserving strengths
 - For low scores (<60 or <6/10): suggest significant revisions but keep any identified strengths`;
 
-    const userPrompt = `Current Prompts:
+    const userPromptMessage = `Original User Request: "${userPrompt}"
+
+Current Prompts:
 WHAT: "${prompts.what}"
 HOW: "${prompts.how}"
 COMBINED: "${prompts.combined}"
@@ -244,7 +257,7 @@ ${aestheticScore !== undefined ? `- Aesthetic Score: ${aestheticScore}/10 (visua
 ${iteration !== undefined ? `Iteration: ${iteration}` : ''}
 ${parentScore !== undefined ? `Previous score: ${parentScore}/100` : ''}
 
-Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt${dimension === 'how' && aestheticScore !== undefined ? ' (focus on visual quality/aesthetic score)' : dimension === 'what' ? ' (focus on content/alignment score)' : ''}.`;
+Provide critique and recommendation for improving the ${dimension.toUpperCase()} prompt while maintaining alignment with the original user request${dimension === 'how' && aestheticScore !== undefined ? ' (focus on visual quality/aesthetic score)' : dimension === 'what' ? ' (focus on content/alignment score)' : ''}.`;
 
     try {
       // Determine model capabilities
@@ -257,7 +270,7 @@ Provide critique and recommendation for improving the ${dimension.toUpperCase()}
         model: this.model,
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
+          { role: 'user', content: userPromptMessage }
         ],
         response_format: { type: 'json_object' }
       };
