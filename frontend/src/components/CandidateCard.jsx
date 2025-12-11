@@ -23,7 +23,10 @@ export default function CandidateCard({ candidate, survivalStatus }) {
   // Reset image loaded state when imageUrl changes
   useEffect(() => {
     setImageLoaded(false);
-  }, [candidate.imageUrl]);
+    if (candidate.imageUrl) {
+      console.log(`[CandidateCard ${candidate.id}] Image URL: ${candidate.imageUrl}`);
+    }
+  }, [candidate.imageUrl, candidate.id]);
 
   const hasImage = !!candidate.imageUrl && imageLoaded;
   const hasPrompts = !!candidate.combined;
