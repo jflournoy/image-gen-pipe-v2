@@ -114,7 +114,8 @@ const MODEL_PRICING = {
   // Generic fallback pricing (deprecated - use specific models instead)
   llm: 0.00000025,                 // Default to gpt-5-mini input pricing (legacy support)
   vision: 0.00000005,              // Default to gpt-5-nano Standard input pricing (legacy support)
-  critique: 0.00000025             // Default to gpt-5-mini input pricing (legacy support)
+  critique: 0.00000025,            // Default to gpt-5-mini input pricing (legacy support)
+  image: 0.04                      // Average cost per image (gpt-image-1-mini, 1024x1024 size)
 };
 
 /**

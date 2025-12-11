@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 import { readFile } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
-import { startBeamSearchJob, getJobStatus, getJobMetadata } from './beam-search-worker.js';
+import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -117,20 +117,87 @@ export function createApp() {
     }
   });
 
-  // Image serving endpoint
-  app.get('/api/images/:imageId', async (req, res) => {
-    const { imageId } = req.params;
+  // Cancel job endpoint
+  app.post('/api/jobs/:jobId/cancel', (req, res) => {
+    const { jobId } = req.params;
+    const status = getJobStatus(jobId);
 
-    // Validate imageId to prevent path traversal attacks
-    const normalizedId = normalize(imageId);
-    if (normalizedId.includes('..') || normalizedId.includes('/') || normalizedId.includes('\\')) {
-      return res.status(400).json({
-        error: 'Invalid image ID'
+    if (!status) {
+      return res.status(404).json({
+        error: 'Job not found'
       });
     }
 
-    // Construct safe image path
-    const imagePath = join(process.cwd(), 'output', 'test', `${imageId}.png`);
+    // Request cancellation (aborts all pending operations)
+    const cancelled = cancelBeamSearchJob(jobId);
+
+    if (!cancelled) {
+      return res.status(400).json({
+        error: 'Job is no longer running or has already completed'
+      });
+    }
+
+    // Send cancellation signal to all subscribed WebSocket clients
+    if (jobSubscriptions.has(jobId)) {
+      const clients = jobSubscriptions.get(jobId);
+      const cancelMessage = JSON.stringify({
+        type: 'cancelled',
+        jobId,
+        timestamp: new Date().toISOString(),
+        message: 'Job was cancelled by user'
+      });
+
+      clients.forEach(client => {
+        if (client.readyState === 1) { // WebSocket.OPEN
+          client.send(cancelMessage);
+        }
+      });
+    }
+
+    res.status(200).json({
+      jobId,
+      status: 'cancelling',
+      message: 'Job cancellation in progress'
+    });
+  });
+
+  // Image serving endpoint: /api/images/:sessionId/:filename
+  // Serves images from output/YYYY-MM-DD/:sessionId/:filename
+  app.get('/api/images/:sessionId/:filename', async (req, res) => {
+    const { sessionId, filename } = req.params;
+
+    // Validate sessionId (format: ses-HHMMSS)
+    const sessionIdRegex = /^ses-\d{6}$/;
+    if (!sessionIdRegex.test(sessionId)) {
+      return res.status(400).json({
+        error: 'Invalid session ID'
+      });
+    }
+
+    // Validate filename (prevent path traversal)
+    const filenameNormalized = normalize(filename);
+    if (filenameNormalized.includes('..') || filenameNormalized.includes('/') || filenameNormalized.includes('\\')) {
+      return res.status(400).json({
+        error: 'Invalid filename'
+      });
+    }
+
+    // Ensure filename ends with .png
+    if (!filename.endsWith('.png')) {
+      return res.status(400).json({
+        error: 'Only PNG files are allowed'
+      });
+    }
+
+    // Get current date for directory path (images are stored in output/YYYY-MM-DD/)
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const date = String(now.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${date}`;
+
+    // Construct safe image path: output/YYYY-MM-DD/ses-HHMMSS/iter0-cand0.png
+    const imagePath = join(process.cwd(), 'output', dateStr, sessionId, filename);
 
     try {
       // Read the image file
@@ -138,6 +205,7 @@ export function createApp() {
 
       // Set appropriate headers and send image
       res.setHeader('Content-Type', 'image/png');
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
       res.status(200).send(imageBuffer);
     } catch (error) {
       // Handle file not found or read errors

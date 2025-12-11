@@ -42,7 +42,7 @@ const providerConfig = {
   vision: {
     provider: process.env.VISION_PROVIDER || 'gpt-vision',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_VISION_MODEL || 'gpt-4o-mini'  // Cost-optimized: $0.00015/1M input tokens vs $0.005 for gpt-4o
+    model: process.env.OPENAI_VISION_MODEL || 'gpt-5-nano'  // Flex pricing: $0.025/1M tokens (50% savings vs Standard)
   },
 
   // Scoring Provider Configuration
