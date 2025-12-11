@@ -15,7 +15,8 @@ export default function ProgressVisualization({
   totalCandidates,
   bestScore,
   elapsedTime,
-  error
+  error,
+  currentOperation
 }) {
   // Don't render if no job is active
   if (!jobId && !status) {
@@ -93,6 +94,13 @@ export default function ProgressVisualization({
         </div>
       )}
 
+      {currentOperation && (
+        <div className="operation-info">
+          <span className="operation-label">Processing:</span>
+          <span className="operation-message">{currentOperation.message}</span>
+        </div>
+      )}
+
       {(candidatesProcessed !== undefined && totalCandidates !== undefined) && (
         <div className="candidates-info">
           Candidates: {candidatesProcessed} / {totalCandidates}
@@ -123,5 +131,11 @@ ProgressVisualization.propTypes = {
   totalCandidates: PropTypes.number,
   bestScore: PropTypes.number,
   elapsedTime: PropTypes.number,
-  error: PropTypes.string
+  error: PropTypes.string,
+  currentOperation: PropTypes.shape({
+    message: PropTypes.string,
+    operation: PropTypes.string,
+    candidateId: PropTypes.string,
+    status: PropTypes.string
+  })
 };

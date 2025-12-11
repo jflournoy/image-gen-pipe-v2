@@ -88,6 +88,7 @@ function App() {
   const startedMessages = getMessagesByType('started');
   const iterationMessages = getMessagesByType('iteration');
   const candidateMessages = getMessagesByType('candidate');
+  const operationMessages = getMessagesByType('operation');
   const completeMessages = getMessagesByType('complete');
   const errorMessages = getMessagesByType('error');
 
@@ -96,6 +97,7 @@ function App() {
   const currentIteration = latestIteration?.iteration || 0;
   const totalIterations = latestIteration?.totalIterations || 0;
   const bestScore = latestIteration?.bestScore || 0;
+  const currentOperation = operationMessages[operationMessages.length - 1];
 
   // Calculate elapsed time
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -238,6 +240,7 @@ function App() {
               bestScore={bestScore}
               elapsedTime={elapsedTime}
               error={error}
+              currentOperation={currentOperation}
             />
           </section>
         )}
