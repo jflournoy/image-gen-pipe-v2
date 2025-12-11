@@ -61,27 +61,38 @@ function calculateActualCosts(tokenUsage) {
     critique: 0
   }
 
-  // LLM costs
-  if (tokenUsage.llm) {
-    const { input = 0, output = 0 } = tokenUsage.llm
-    breakdown.llm = (input / 1000) * 0.00015 + (output / 1000) * 0.0006
-  }
+  // Handle cost breakdown structure from backend
+  if (typeof tokenUsage === 'object') {
+    // Check for direct cost values (from backend estimatedCost)
+    if ('llm' in tokenUsage && typeof tokenUsage.llm === 'number') {
+      breakdown.llm = tokenUsage.llm
+    }
+    if ('vision' in tokenUsage && typeof tokenUsage.vision === 'number') {
+      breakdown.vision = tokenUsage.vision
+    }
+    if ('imageGen' in tokenUsage && typeof tokenUsage.imageGen === 'number') {
+      breakdown.imageGen = tokenUsage.imageGen
+    }
+    if ('critique' in tokenUsage && typeof tokenUsage.critique === 'number') {
+      breakdown.critique = tokenUsage.critique
+    }
 
-  // Vision costs
-  if (tokenUsage.vision) {
-    const { input = 0, output = 0 } = tokenUsage.vision
-    breakdown.vision = (input / 1000) * 0.005 + (output / 1000) * 0.015
-  }
+    // If we found cost values, use them
+    const hasDirectCosts = breakdown.llm > 0 || breakdown.vision > 0 || breakdown.imageGen > 0 || breakdown.critique > 0
 
-  // Image generation costs
-  if (tokenUsage.imageGen?.requests) {
-    breakdown.imageGen = tokenUsage.imageGen.requests * 0.04
-  }
-
-  // Critique costs
-  if (tokenUsage.critique) {
-    const { input = 0, output = 0 } = tokenUsage.critique
-    breakdown.critique = (input / 1000) * 0.005 + (output / 1000) * 0.015
+    // Only recalculate from tokens if we didn't find direct costs and have token counts
+    if (!hasDirectCosts && 'total' in tokenUsage && typeof tokenUsage.total === 'number') {
+      // Recalculate costs from token counts for legacy support
+      if (tokenUsage.llm && typeof tokenUsage.llm === 'number') {
+        breakdown.llm = (tokenUsage.llm / 1000000) * 0.00015 // $0.15/1M for gpt-4o-mini
+      }
+      if (tokenUsage.vision && typeof tokenUsage.vision === 'number') {
+        breakdown.vision = (tokenUsage.vision / 1000000) * 0.0125 // $12.5/1M for gpt-5-nano flex
+      }
+      if (tokenUsage.critique && typeof tokenUsage.critique === 'number') {
+        breakdown.critique = (tokenUsage.critique / 1000000) * 0.00015 // $0.15/1M
+      }
+    }
   }
 
   const total = Object.values(breakdown).reduce((a, b) => a + b, 0)

@@ -9,6 +9,8 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { beamSearch } = require('../orchestrator/beam-search.js');
 const MetadataTracker = require('../services/metadata-tracker.js');
+const TokenTracker = require('../utils/token-tracker.js');
+const { MODEL_PRICING } = require('../config/model-pricing.js');
 
 // Store active jobs
 const activeJobs = new Map();
@@ -52,11 +54,17 @@ export async function startBeamSearchJob(jobId, params) {
   });
   await metadataTracker.initialize();
 
-  // Map jobId to sessionId for later retrieval
-  jobMetadataMap.set(jobId, { sessionId, metadataTracker });
+  // Initialize token tracker for cost tracking
+  const tokenTracker = new TokenTracker({
+    sessionId,
+    pricing: MODEL_PRICING
+  });
+
+  // Map jobId to sessionId and trackers for later retrieval
+  jobMetadataMap.set(jobId, { sessionId, metadataTracker, tokenTracker });
 
   // Mark job as running
-  activeJobs.set(jobId, { status: 'running', startTime: Date.now(), sessionId });
+  activeJobs.set(jobId, { status: 'running', startTime: Date.now(), sessionId, tokenTracker });
 
   try {
     // Create providers using factory (CommonJS module)
@@ -89,14 +97,32 @@ export async function startBeamSearchJob(jobId, params) {
       alpha,
       temperature,
       metadataTracker, // Pass metadata tracker to beam search
+      tokenTracker,    // Pass token tracker for cost tracking
       // Progress callback - called after each iteration
       onIterationComplete: (iterationData) => {
+        // Get current token usage for cost tracking
+        const stats = tokenTracker.getStats();
+        const cost = tokenTracker.getEstimatedCost();
         emitProgress(jobId, {
           type: 'iteration',
           iteration: iterationData.iteration,
           totalIterations: iterations,
           candidatesCount: iterationData.candidates.length,
           bestScore: iterationData.topCandidates[0]?.totalScore || 0,
+          tokenUsage: {
+            total: stats.totalTokens,
+            llm: stats.llmTokens,
+            vision: stats.visionTokens,
+            critique: stats.critiqueTokens,
+            imageGen: stats.imageGenTokens
+          },
+          estimatedCost: {
+            total: cost.total,
+            llm: cost.llm,
+            vision: cost.vision,
+            critique: cost.critique,
+            imageGen: cost.imageGen
+          },
           timestamp: new Date().toISOString()
         });
       },
