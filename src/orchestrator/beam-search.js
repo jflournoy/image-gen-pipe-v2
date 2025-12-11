@@ -382,12 +382,15 @@ async function initialExpansion(
 
       // Progress: Prompt expansion starting
       if (onStepProgress) {
+        console.log(`[initialExpansion] Emitting expand start for ${candidateId_str}`);
         onStepProgress({
           stage: 'expand',
           status: 'starting',
           candidateId: candidateId_str,
           message: `📝 ${candidateId_str}: Expanding 'what' and 'how' prompts...`
         });
+      } else {
+        console.log(`[initialExpansion] WARNING: No onStepProgress callback available`);
       }
 
       // Generate WHAT and HOW in parallel for each candidate with rate limiting
