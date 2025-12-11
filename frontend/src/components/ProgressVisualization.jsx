@@ -1,6 +1,6 @@
 /**
  * @file ProgressVisualization Component (TDD GREEN)
- * Displays progress information for beam search jobs
+ * Displays progress information for beam search jobs with token tracking
  */
 
 import PropTypes from 'prop-types';
@@ -16,7 +16,10 @@ export default function ProgressVisualization({
   bestScore,
   elapsedTime,
   error,
-  currentOperation
+  currentOperation,
+  tokenUsage,
+  estimatedCost,
+  operationMessages = []
 }) {
   // Don't render if no job is active
   if (!jobId && !status) {
@@ -47,6 +50,21 @@ export default function ProgressVisualization({
   };
 
   const formattedElapsedTime = formatElapsedTime(elapsedTime);
+
+  // Format token counts with commas
+  const formatTokens = (tokens) => {
+    if (tokens === undefined || tokens === null) return '0';
+    return tokens.toLocaleString();
+  };
+
+  // Format cost as currency
+  const formatCost = (cost) => {
+    if (cost === undefined || cost === null) return '$0.00';
+    return `$${cost.toFixed(4)}`;
+  };
+
+  // Get recent operations (last 5)
+  const recentOperations = operationMessages.slice(-5);
 
   // Determine CSS classes
   const containerClasses = [
@@ -101,6 +119,67 @@ export default function ProgressVisualization({
         </div>
       )}
 
+      {/* Token Usage and Cost Display */}
+      {(tokenUsage || estimatedCost) && (
+        <div className="tokens-cost-section">
+          <div className="tokens-grid">
+            {tokenUsage?.llm !== undefined && (
+              <div className="token-item">
+                <span className="token-label">LLM Tokens:</span>
+                <span className="token-value">{formatTokens(tokenUsage.llm)}</span>
+              </div>
+            )}
+            {tokenUsage?.vision !== undefined && (
+              <div className="token-item">
+                <span className="token-label">Vision Tokens:</span>
+                <span className="token-value">{formatTokens(tokenUsage.vision)}</span>
+              </div>
+            )}
+            {tokenUsage?.imageGen !== undefined && (
+              <div className="token-item">
+                <span className="token-label">ImageGen Tokens:</span>
+                <span className="token-value">{formatTokens(tokenUsage.imageGen)}</span>
+              </div>
+            )}
+            {tokenUsage?.critique !== undefined && (
+              <div className="token-item">
+                <span className="token-label">Critique Tokens:</span>
+                <span className="token-value">{formatTokens(tokenUsage.critique)}</span>
+              </div>
+            )}
+            {tokenUsage?.total !== undefined && (
+              <div className="token-item token-total">
+                <span className="token-label">Total Tokens:</span>
+                <span className="token-value">{formatTokens(tokenUsage.total)}</span>
+              </div>
+            )}
+            {estimatedCost?.total !== undefined && (
+              <div className="token-item cost-item">
+                <span className="token-label">Estimated Cost:</span>
+                <span className="token-value cost-value">{formatCost(estimatedCost.total)}</span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Operation History */}
+      {recentOperations.length > 0 && (
+        <div className="operation-history">
+          <div className="history-label">Recent Steps:</div>
+          <div className="history-list">
+            {recentOperations.map((op, idx) => (
+              <div key={idx} className="history-item">
+                <span className="history-time">
+                  {op.timestamp ? new Date(op.timestamp).toLocaleTimeString() : ''}
+                </span>
+                <span className="history-message">{op.message}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {(candidatesProcessed !== undefined && totalCandidates !== undefined) && (
         <div className="candidates-info">
           Candidates: {candidatesProcessed} / {totalCandidates}
@@ -137,5 +216,23 @@ ProgressVisualization.propTypes = {
     operation: PropTypes.string,
     candidateId: PropTypes.string,
     status: PropTypes.string
-  })
+  }),
+  tokenUsage: PropTypes.shape({
+    llm: PropTypes.number,
+    vision: PropTypes.number,
+    imageGen: PropTypes.number,
+    critique: PropTypes.number,
+    total: PropTypes.number
+  }),
+  estimatedCost: PropTypes.shape({
+    llm: PropTypes.number,
+    vision: PropTypes.number,
+    imageGen: PropTypes.number,
+    critique: PropTypes.number,
+    total: PropTypes.number
+  }),
+  operationMessages: PropTypes.arrayOf(PropTypes.shape({
+    message: PropTypes.string,
+    timestamp: PropTypes.string
+  }))
 };

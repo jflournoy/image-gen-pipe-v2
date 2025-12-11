@@ -160,6 +160,107 @@
   color: #495057;
 }
 
+/* Token Usage and Cost Section */
+.tokens-cost-section {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f0f4f8;
+  border-radius: 4px;
+}
+
+.tokens-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 0.75rem;
+}
+
+.token-item {
+  display: flex;
+  flex-direction: column;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 4px;
+  border-left: 3px solid #0d6efd;
+}
+
+.token-item.token-total {
+  border-left-color: #6f42c1;
+  font-weight: 600;
+}
+
+.token-item.cost-item {
+  border-left-color: #198754;
+}
+
+.token-label {
+  font-size: 0.75rem;
+  color: #6c757d;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 0.25rem;
+}
+
+.token-value {
+  font-size: 0.9375rem;
+  color: #212529;
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+.cost-value {
+  color: #198754;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+/* Operation History */
+.operation-history {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #f8f9fa;
+  border-radius: 4px;
+  max-height: 150px;
+  overflow-y: auto;
+}
+
+.history-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: #495057;
+  margin-bottom: 0.5rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.history-item {
+  display: flex;
+  gap: 0.5rem;
+  font-size: 0.8125rem;
+  color: #6c757d;
+  padding: 0.5rem;
+  background: white;
+  border-radius: 3px;
+  border-left: 2px solid #0d6efd;
+}
+
+.history-time {
+  font-family: 'Courier New', monospace;
+  color: #adb5bd;
+  flex-shrink: 0;
+  min-width: 70px;
+}
+
+.history-message {
+  flex: 1;
+  color: #495057;
+}
+
 .candidates-info,
 .best-score {
   margin-top: 0.5rem;

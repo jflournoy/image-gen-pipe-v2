@@ -242,6 +242,9 @@ function App() {
               elapsedTime={elapsedTime}
               error={error}
               currentOperation={currentOperation}
+              tokenUsage={tokenUsage}
+              estimatedCost={estimatedCost}
+              operationMessages={operationMessages}
             />
           </section>
         )}
