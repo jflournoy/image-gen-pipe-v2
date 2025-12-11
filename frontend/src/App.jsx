@@ -121,7 +121,8 @@ function App() {
         .map((candidate) => ({
           id: `i${candidate.iteration}c${candidate.candidateId}`,
           url: candidate.imageUrl,
-          score: candidate.score,
+          score: candidate.score,        // Keep for sorting/legacy
+          ranking: candidate.ranking,    // Add ranking data
           whatPrompt: candidate.whatPrompt,
           howPrompt: candidate.howPrompt
         }));

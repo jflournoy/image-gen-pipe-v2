@@ -38,15 +38,20 @@ export default function ImageGallery({ images, loading = false, expectedCount = 
   return (
     <div className="image-gallery">
       <div className="gallery-grid">
-        {sortedImages.map((image) => (
+        {sortedImages.map((image, index) => (
           <div key={image.id} className="image-card">
             <img
               src={image.url}
-              alt={`Generated image ${image.id} with score ${image.score}`}
+              alt={`Generated image ${image.id}`}
               className="gallery-image"
             />
-            <div className="image-score">
-              Score: {image.score}
+            <div className="image-info">
+              <div className="image-id">{image.id}</div>
+              {image.ranking && (
+                <div className="image-rank">
+                  Rank {image.ranking.rank} of {sortedImages.length}
+                </div>
+              )}
             </div>
           </div>
         ))}
