@@ -50,22 +50,21 @@ export default function CandidateCard({ candidate, survivalStatus }) {
       <div className="card-image-section">
         {!candidate.imageUrl ? (
           <LoadingSkeleton type="image-card" count={1} />
-        ) : imageLoaded ? (
-          <img
-            src={candidate.imageUrl}
-            alt={`Candidate ${candidate.id}`}
-            className="card-image"
-            onLoad={() => setImageLoaded(true)}
-          />
         ) : (
           <>
-            <LoadingSkeleton type="image-card" count={1} />
+            {!imageLoaded && <LoadingSkeleton type="image-card" count={1} />}
             <img
               src={candidate.imageUrl}
               alt={`Candidate ${candidate.id}`}
               className="card-image"
-              style={{ display: 'none' }}
-              onLoad={() => setImageLoaded(true)}
+              style={{ display: imageLoaded ? 'block' : 'none' }}
+              onLoad={() => {
+                console.log(`[CandidateCard ${candidate.id}] Image loaded successfully`);
+                setImageLoaded(true);
+              }}
+              onError={(e) => {
+                console.error(`[CandidateCard ${candidate.id}] Image failed to load: ${candidate.imageUrl}`, e);
+              }}
             />
           </>
         )}

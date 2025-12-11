@@ -3,16 +3,13 @@
  */
 
 .iteration-column {
-  min-width: 250px;
+  min-width: 400px;
   flex-shrink: 0;
-  flex-grow: 0;
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
   scroll-snap-stop: always;
   height: fit-content;
-  /* Don't constrain height - let container handle overflow */
-  /* Removed max-height calc which was truncating content */
 }
 
 .iteration-header {

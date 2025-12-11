@@ -30,7 +30,9 @@
   border-left: 3px solid #ddd;
   line-height: 1.5;
   word-wrap: break-word;
-  white-space: pre-wrap;
+  word-break: break-word;
+  white-space: normal;
+  overflow-wrap: break-word;
   color: #555;
   font-size: 0.9rem;
 }
