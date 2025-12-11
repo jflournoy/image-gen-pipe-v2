@@ -14,6 +14,7 @@ import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob }
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
 const { getMetrics: getRateLimiterMetrics } = require('../utils/rate-limiter-registry.js');
+const { getDateString } = require('../utils/timezone.js');
 
 // Store WebSocket connections by jobId
 let jobSubscriptions = new Map();
@@ -195,12 +196,10 @@ export function createApp() {
       });
     }
 
-    // Get current date for directory path (images are stored in output/YYYY-MM-DD/)
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const date = String(now.getDate()).padStart(2, '0');
-    const dateStr = `${year}-${month}-${date}`;
+    // Get current date in configured timezone (images are stored in output/YYYY-MM-DD/)
+    // IMPORTANT: Use timezone-aware date to match how images were saved
+    // If we use UTC date and the local timezone differs, paths will mismatch at midnight
+    const dateStr = getDateString();
 
     // Construct safe image path: output/YYYY-MM-DD/ses-HHMMSS/iter0-cand0.png
     const imagePath = join(process.cwd(), 'output', dateStr, sessionId, filename);
