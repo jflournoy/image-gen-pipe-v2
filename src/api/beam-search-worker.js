@@ -72,14 +72,16 @@ export async function startBeamSearchJob(jobId, params) {
       createLLMProvider,
       createImageProvider,
       createVisionProvider,
-      createCritiqueGenerator
+      createCritiqueGenerator,
+      createImageRanker
     } = require('../factory/provider-factory.js');
 
     const providers = {
       llm: createLLMProvider(),
       imageGen: createImageProvider(),
       vision: createVisionProvider(),
-      critiqueGen: createCritiqueGenerator()
+      critiqueGen: createCritiqueGenerator(),
+      imageRanker: createImageRanker()
     };
 
     // Emit start event
@@ -128,11 +130,28 @@ export async function startBeamSearchJob(jobId, params) {
       },
       // Candidate progress callback - called for each candidate generated
       onCandidateProcessed: (candidate) => {
+        // Determine operation type based on iteration
+        const operationType = candidate.metadata.iteration === 0 ? 'expansion' : 'refinement';
+        const candidateId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+
+        // Emit operation start message (once per candidate)
+        emitProgress(jobId, {
+          type: 'operation',
+          operation: operationType,
+          candidateId,
+          status: 'processing',
+          message: `Running ${operationType} for ${candidateId}`,
+          timestamp: new Date().toISOString()
+        });
+
+        // Emit candidate message
         emitProgress(jobId, {
           type: 'candidate',
           iteration: candidate.metadata.iteration,
           candidateId: candidate.metadata.candidateId,
-          score: candidate.totalScore,
+          // Support both modes
+          score: candidate.totalScore,              // Legacy: numeric score (or null)
+          ranking: candidate.ranking,               // Modern: rank object with reason
           imageUrl: candidate.image?.url || null,
           whatPrompt: candidate.whatPrompt,
           howPrompt: candidate.howPrompt,
