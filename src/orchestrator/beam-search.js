@@ -251,11 +251,16 @@ async function processCandidateStream(
 
   // Progress: Image generation complete
   if (onStepProgress) {
+    // Prefer local API URL (persistent, no CORS issues) over temporary OpenAI URL (1hr expiration)
+    const imageUrl = image.localPath
+      ? `/api/images/${options.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
+      : image.url; // Fallback to OpenAI URL if local save failed
+
     onStepProgress({
       stage: 'imageGen',
       status: 'complete',
       candidateId: candidateId_str,
-      imageUrl: image.url || (image.localPath ? `/api/images/${options.sessionId}/${image.localPath.split(/[\\/]/).pop()}` : null),
+      imageUrl,
       message: `✓ ${candidateId_str}: Image generated (ready for evaluation)`
     });
   }
@@ -564,11 +569,16 @@ async function initialExpansion(
 
         // Progress: Image generation complete
         if (onStepProgress) {
+          // Prefer local API URL (persistent, no CORS issues) over temporary OpenAI URL (1hr expiration)
+          const imageUrl = image.localPath
+            ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
+            : image.url; // Fallback to OpenAI URL if local save failed
+
           onStepProgress({
             stage: 'imageGen',
             status: 'complete',
             candidateId: candidateId_str,
-            imageUrl: image.url || (image.localPath ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}` : null),
+            imageUrl,
             message: `✓ ${candidateId_str}: Image generated (ready for evaluation)`
           });
         }
