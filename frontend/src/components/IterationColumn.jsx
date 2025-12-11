@@ -5,6 +5,7 @@
  * Used within BeamSearchTimeline for horizontal scrolling layout.
  */
 
+import PropTypes from 'prop-types';
 import CandidateCard from './CandidateCard';
 import './IterationColumn.css';
 
@@ -32,3 +33,22 @@ export default function IterationColumn({ iteration, candidates, survivalStatus 
     </div>
   );
 }
+
+IterationColumn.propTypes = {
+  iteration: PropTypes.number.isRequired,
+  candidates: PropTypes.arrayOf(
+    PropTypes.shape({
+      id: PropTypes.string.isRequired,
+      iteration: PropTypes.number.isRequired,
+      imageUrl: PropTypes.string,
+      combined: PropTypes.string,
+      parentId: PropTypes.number
+    })
+  ).isRequired,
+  survivalStatus: PropTypes.objectOf(
+    PropTypes.shape({
+      survived: PropTypes.bool.isRequired,
+      rank: PropTypes.number.isRequired
+    })
+  ).isRequired
+};

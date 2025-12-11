@@ -10,6 +10,7 @@
  * - Scroll-snap for smooth snapping to iteration columns
  */
 
+import PropTypes from 'prop-types';
 import IterationColumn from './IterationColumn';
 import './BeamSearchTimeline.css';
 
@@ -43,3 +44,23 @@ export default function BeamSearchTimeline({
     </div>
   );
 }
+
+BeamSearchTimeline.propTypes = {
+  candidatesByIteration: PropTypes.objectOf(
+    PropTypes.arrayOf(
+      PropTypes.shape({
+        id: PropTypes.string.isRequired,
+        iteration: PropTypes.number.isRequired,
+        imageUrl: PropTypes.string,
+        combined: PropTypes.string,
+        parentId: PropTypes.number
+      })
+    )
+  ).isRequired,
+  survivalStatus: PropTypes.objectOf(
+    PropTypes.shape({
+      survived: PropTypes.bool.isRequired,
+      rank: PropTypes.number.isRequired
+    })
+  ).isRequired
+};
