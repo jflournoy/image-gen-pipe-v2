@@ -161,23 +161,47 @@ function App() {
   }, [currentStatus, jobStartTime]);
 
   // NEW: Aggregate candidates by iteration for timeline view
+  // Merge updates for same candidate to avoid duplicates
   const candidatesByIteration = useMemo(() => {
     const grouped = {};
+    const candidateMap = {}; // Map to store latest version of each candidate
+
     candidateMessages.forEach(msg => {
-      if (!grouped[msg.iteration]) grouped[msg.iteration] = [];
-      grouped[msg.iteration].push({
-        id: `i${msg.iteration}c${msg.candidateId}`,
-        iteration: msg.iteration,
-        candidateId: msg.candidateId,
-        imageUrl: msg.imageUrl || null,
-        combined: msg.combined || null,  // FIX: Extract combined prompt
-        whatPrompt: msg.whatPrompt || null,
-        howPrompt: msg.howPrompt || null,
-        ranking: msg.ranking || null,
-        parentId: msg.parentId || null,
-        timestamp: msg.timestamp
-      });
+      const candidateKey = `${msg.iteration}-${msg.candidateId}`;
+
+      // Create or merge candidate data
+      if (!candidateMap[candidateKey]) {
+        candidateMap[candidateKey] = {
+          id: `i${msg.iteration}c${msg.candidateId}`,
+          iteration: msg.iteration,
+          candidateId: msg.candidateId,
+          imageUrl: null,
+          combined: null,
+          whatPrompt: null,
+          howPrompt: null,
+          ranking: null,
+          parentId: null,
+          timestamp: msg.timestamp
+        };
+      }
+
+      // Merge in new data (later messages override earlier ones)
+      const candidate = candidateMap[candidateKey];
+      if (msg.imageUrl) candidate.imageUrl = msg.imageUrl;
+      if (msg.combined) candidate.combined = msg.combined;
+      if (msg.whatPrompt) candidate.whatPrompt = msg.whatPrompt;
+      if (msg.howPrompt) candidate.howPrompt = msg.howPrompt;
+      if (msg.ranking) candidate.ranking = msg.ranking;
+      if (msg.parentId !== undefined) candidate.parentId = msg.parentId;
+      if (msg.timestamp) candidate.timestamp = msg.timestamp;
     });
+
+    // Group candidates by iteration
+    Object.values(candidateMap).forEach(candidate => {
+      if (!grouped[candidate.iteration]) grouped[candidate.iteration] = [];
+      grouped[candidate.iteration].push(candidate);
+    });
+
     return grouped;
   }, [candidateMessages]);
 
