@@ -104,9 +104,28 @@ export async function startBeamSearchJob(jobId, params) {
       maxIterations: iterations,
       alpha,
       temperature,
+      sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking
       abortSignal: abortController.signal, // Pass abort signal for cancellation
+      // Step-level progress callback - called during candidate processing
+      onStepProgress: (stepData) => {
+        const { stage, status, candidateId, message, imageUrl, alignment, aesthetic, totalScore } = stepData;
+
+        // Emit progress message for this step
+        emitProgress(jobId, {
+          type: 'step',
+          stage,
+          status,
+          candidateId,
+          message,
+          imageUrl,
+          alignment: alignment !== undefined ? Math.round(alignment) : null,
+          aesthetic: aesthetic !== undefined ? aesthetic.toFixed(1) : null,
+          totalScore: totalScore !== undefined ? totalScore.toFixed(2) : null,
+          timestamp: new Date().toISOString()
+        });
+      },
       // Progress callback - called after each iteration
       onIterationComplete: (iterationData) => {
         // Get current token usage for cost tracking

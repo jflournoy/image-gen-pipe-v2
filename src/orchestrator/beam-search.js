@@ -162,7 +162,18 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
-  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId } = options;
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress } = options;
+  const candidateId_str = `i${iteration}c${candidateId}`;
+
+  // Progress: Combine start
+  if (onStepProgress) {
+    onStepProgress({
+      stage: 'combine',
+      status: 'starting',
+      candidateId: candidateId_str,
+      message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...`
+    });
+  }
 
   // Stage 1: Combine prompts
   const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt);
@@ -183,6 +194,16 @@ async function processCandidateStream(
     });
   }
 
+  // Progress: Combine complete, image generation starting
+  if (onStepProgress) {
+    onStepProgress({
+      stage: 'combine',
+      status: 'complete',
+      candidateId: candidateId_str,
+      message: `✓ ${candidateId_str}: Prompts combined, submitting to image generation...`
+    });
+  }
+
   // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
   // This ensures we save prompts even if image generation fails
   if (metadataTracker) {
@@ -195,6 +216,16 @@ async function processCandidateStream(
         dimension,
         parentId
       }
+    });
+  }
+
+  // Progress: Image generation starting
+  if (onStepProgress) {
+    onStepProgress({
+      stage: 'imageGen',
+      status: 'starting',
+      candidateId: candidateId_str,
+      message: `⬆️  ${candidateId_str}: Generating image with DALL-E...`
     });
   }
 
@@ -218,12 +249,33 @@ async function processCandidateStream(
     });
   }
 
+  // Progress: Image generation complete
+  if (onStepProgress) {
+    onStepProgress({
+      stage: 'imageGen',
+      status: 'complete',
+      candidateId: candidateId_str,
+      imageUrl: image.url || (image.localPath ? `/api/images/${options.sessionId}/${image.localPath.split(/[\\/]/).pop()}` : null),
+      message: `✓ ${candidateId_str}: Image generated (ready for evaluation)`
+    });
+  }
+
   // Stage 3: Evaluate image (skip if using comparative ranking)
   // When skipVisionAnalysis is true, ranking step will provide feedback
   let evaluation = null;
   let totalScore = null;
 
   if (!options.skipVisionAnalysis && visionProvider) {
+    // Progress: Vision analysis starting
+    if (onStepProgress) {
+      onStepProgress({
+        stage: 'vision',
+        status: 'starting',
+        candidateId: candidateId_str,
+        message: `🔍 ${candidateId_str}: Analyzing image with vision model...`
+      });
+    }
+
     evaluation = await visionProvider.analyzeImage(image.url, combined);
 
     // Track vision tokens
@@ -248,6 +300,19 @@ async function processCandidateStream(
       evaluation.aestheticScore,
       alpha
     );
+
+    // Progress: Vision analysis complete
+    if (onStepProgress) {
+      onStepProgress({
+        stage: 'vision',
+        status: 'complete',
+        candidateId: candidateId_str,
+        alignment: evaluation.alignmentScore,
+        aesthetic: evaluation.aestheticScore,
+        totalScore,
+        message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10`
+      });
+    }
   }
 
   // DEFENSIVE PATTERN: Update attempt with results AFTER success
@@ -298,7 +363,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker, onCandidateProcessed, abortSignal } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
 
   // Rate limiters are initialized at module load time
   // They are reused across all jobs to maintain consistent metrics
@@ -308,7 +373,7 @@ async function initialExpansion(
     throw new Error('Job cancelled');
   }
 
-  console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}`);
+  console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}, onStepProgress=${!!onStepProgress}`);
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
@@ -381,6 +446,18 @@ async function initialExpansion(
           throw new Error('Job cancelled');
         }
 
+        const candidateId_str = `i0c${i}`;
+
+        // Progress: Combine start
+        if (onStepProgress) {
+          onStepProgress({
+            stage: 'combine',
+            status: 'starting',
+            candidateId: candidateId_str,
+            message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...`
+          });
+        }
+
         // Combine prompts (no rate limiting needed)
         const combineResult = await llmProvider.combinePrompts(what, how);
         const combined = combineResult.combinedPrompt;
@@ -400,6 +477,16 @@ async function initialExpansion(
           });
         }
 
+        // Progress: Combine complete, image generation starting
+        if (onStepProgress) {
+          onStepProgress({
+            stage: 'combine',
+            status: 'complete',
+            candidateId: candidateId_str,
+            message: `✓ ${candidateId_str}: Prompts combined, submitting to image generation...`
+          });
+        }
+
         // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
         if (metadataTracker) {
           await metadataTracker.recordAttempt({
@@ -414,13 +501,24 @@ async function initialExpansion(
           });
         }
 
+        // Progress: Image generation starting
+        if (onStepProgress) {
+          onStepProgress({
+            stage: 'imageGen',
+            status: 'starting',
+            candidateId: candidateId_str,
+            message: `⬆️  ${candidateId_str}: Generating image with DALL-E...`
+          });
+        }
+
         // Generate image with rate limiting
         const image = await imageGenLimiter.execute(() =>
           imageGenProvider.generateImage(combined, {
             iteration: 0,
             candidateId: i,
             dimension: 'what',
-            alpha
+            alpha,
+            sessionId: config.sessionId
           })
         );
 
@@ -442,11 +540,32 @@ async function initialExpansion(
           });
         }
 
+        // Progress: Image generation complete
+        if (onStepProgress) {
+          onStepProgress({
+            stage: 'imageGen',
+            status: 'complete',
+            candidateId: candidateId_str,
+            imageUrl: image.url || (image.localPath ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}` : null),
+            message: `✓ ${candidateId_str}: Image generated (ready for evaluation)`
+          });
+        }
+
         // Evaluate image with rate limiting (skip if using comparative ranking)
         let evaluation = null;
         let totalScore = null;
 
         if (!config.skipVisionAnalysis && visionProvider) {
+          // Progress: Vision analysis starting
+          if (onStepProgress) {
+            onStepProgress({
+              stage: 'vision',
+              status: 'starting',
+              candidateId: candidateId_str,
+              message: `🔍 ${candidateId_str}: Analyzing image with vision model...`
+            });
+          }
+
           evaluation = await visionLimiter.execute(() =>
             visionProvider.analyzeImage(image.url, combined)
           );
@@ -472,6 +591,19 @@ async function initialExpansion(
             evaluation.aestheticScore,
             alpha
           );
+
+          // Progress: Vision analysis complete
+          if (onStepProgress) {
+            onStepProgress({
+              stage: 'vision',
+              status: 'complete',
+              candidateId: candidateId_str,
+              alignment: evaluation.alignmentScore,
+              aesthetic: evaluation.aestheticScore,
+              totalScore,
+              message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10`
+            });
+          }
         }
 
         // DEFENSIVE PATTERN: Update attempt with results AFTER success
@@ -543,7 +675,7 @@ async function refinementIteration(
   iteration,
   userPrompt
 ) {
-  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker, skipVisionAnalysis, onCandidateProcessed, abortSignal } = config;
+  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker, skipVisionAnalysis, onCandidateProcessed, onStepProgress, abortSignal } = config;
   const expansionRatio = Math.floor(N / M);
 
   // Check if already aborted
@@ -655,7 +787,9 @@ async function refinementIteration(
             alpha,
             metadataTracker,
             tokenTracker,
-            skipVisionAnalysis
+            skipVisionAnalysis,
+            onStepProgress,
+            sessionId: config.sessionId
           }
         );
 
