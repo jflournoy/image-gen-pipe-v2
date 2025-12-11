@@ -89,6 +89,7 @@ function App() {
   const iterationMessages = getMessagesByType('iteration');
   const candidateMessages = getMessagesByType('candidate');
   const operationMessages = getMessagesByType('operation');
+  const stepMessages = getMessagesByType('step');
   const completeMessages = getMessagesByType('complete');
   const errorMessages = getMessagesByType('error');
 
@@ -98,6 +99,12 @@ function App() {
   const totalIterations = latestIteration?.totalIterations || 0;
   const bestScore = latestIteration?.bestScore || 0;
   const currentOperation = operationMessages[operationMessages.length - 1];
+
+  // Combine operation and step messages for detailed progress display
+  // Steps provide finer-grained micro-progress with token counts
+  const allProgressMessages = [...operationMessages, ...stepMessages].sort((a, b) =>
+    new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
+  );
 
   // Calculate elapsed time
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -247,7 +254,7 @@ function App() {
               currentOperation={currentOperation}
               tokenUsage={tokenUsage}
               estimatedCost={estimatedCost}
-              operationMessages={operationMessages}
+              operationMessages={allProgressMessages}
             />
           </section>
         )}

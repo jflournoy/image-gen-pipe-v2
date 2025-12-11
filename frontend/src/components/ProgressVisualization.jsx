@@ -75,8 +75,8 @@ export default function ProgressVisualization({
     return `$${cost.toFixed(4)}`;
   };
 
-  // Get recent operations (last 5)
-  const recentOperations = operationMessages.slice(-5);
+  // Get recent progress messages (last 15 for better visibility of micro-progress)
+  const recentOperations = operationMessages.slice(-15);
 
   // Determine CSS classes
   const containerClasses = [
