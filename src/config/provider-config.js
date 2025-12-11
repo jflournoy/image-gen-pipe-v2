@@ -19,30 +19,31 @@ const providerConfig = {
     provider: process.env.LLM_PROVIDER || 'openai',
     apiKey: process.env.OPENAI_API_KEY,
     // Support both single model (legacy) and operation-specific models
-    // Using real models that exist today (not aspirational gpt-5 models)
-    model: process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',  // Fallback: $0.15/1M tokens
+    // Using gpt-5 era models with FLEX pricing support
+    model: process.env.OPENAI_LLM_MODEL || 'gpt-5-mini',  // Fallback: gpt-5-mini FLEX pricing: $0.125/1M tokens
     // Operation-specific models for cost optimization
     models: {
-      expand: process.env.OPENAI_LLM_MODEL_EXPAND || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',    // Simple: $0.15/1M
-      refine: process.env.OPENAI_LLM_MODEL_REFINE || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini',    // Moderate: $0.15/1M
-      combine: process.env.OPENAI_LLM_MODEL_COMBINE || process.env.OPENAI_LLM_MODEL || 'gpt-4o-mini'   // Simple: $0.15/1M
+      expand: process.env.OPENAI_LLM_MODEL_EXPAND || process.env.OPENAI_LLM_MODEL || 'gpt-5-nano',    // Simple: gpt-5-nano FLEX: $0.025/1M
+      refine: process.env.OPENAI_LLM_MODEL_REFINE || process.env.OPENAI_LLM_MODEL || 'gpt-5-mini',    // Moderate: gpt-5-mini FLEX: $0.125/1M
+      combine: process.env.OPENAI_LLM_MODEL_COMBINE || process.env.OPENAI_LLM_MODEL || 'gpt-5-nano'   // Simple: gpt-5-nano FLEX: $0.025/1M
     },
     maxRetries: parseInt(process.env.OPENAI_MAX_RETRIES || '3', 10),
-    timeout: parseInt(process.env.OPENAI_TIMEOUT_MS || '60000', 10)  // 60s for gpt-5 reasoning models
+    timeout: parseInt(process.env.OPENAI_TIMEOUT_MS || '60000', 10)  // 60s for gpt-5 models
   },
 
   // Image Provider Configuration
   image: {
     provider: process.env.IMAGE_PROVIDER || 'dalle',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-image-1'  // GPT Image model
+    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-5-image-mini'  // gpt-5-image-mini: $2.00/1M input tokens
   },
 
   // Vision Provider Configuration
   vision: {
     provider: process.env.VISION_PROVIDER || 'gpt-vision',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_VISION_MODEL || 'gpt-5-nano'  // Flex pricing: $0.025/1M tokens (50% savings vs Standard)
+    model: process.env.OPENAI_VISION_MODEL || 'gpt-5-nano',  // gpt-5-nano FLEX pricing: $0.025/1M tokens (50% savings vs Standard)
+    tier: 'flex'  // Explicitly use FLEX pricing for 50% cost savings
   },
 
   // Scoring Provider Configuration
