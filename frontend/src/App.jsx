@@ -122,6 +122,19 @@ function App() {
   const errorMessages = getMessagesByType('error');
   const cancelledMessages = getMessagesByType('cancelled');
 
+  // Debug: Log candidate messages to understand what data we're receiving
+  useEffect(() => {
+    if (candidateMessages.length > 0 && currentStatus === 'running') {
+      const candidatesWithImages = candidateMessages.filter(m => m.imageUrl);
+      const candidatesWithParents = candidateMessages.filter(m => m.parentId !== undefined);
+      console.log(`[Timeline Debug] Candidates: ${candidateMessages.length} total, ${candidatesWithImages.length} with images, ${candidatesWithParents.length} with parentId`, {
+        sample: candidateMessages[candidateMessages.length - 1],
+        candidatesByIteration: Object.keys(candidatesByIteration).length,
+        totalCandidatesAggregated: Object.values(candidatesByIteration).reduce((sum, arr) => sum + arr.length, 0)
+      });
+    }
+  }, [candidateMessages, currentStatus, candidatesByIteration]);
+
   // Calculate progress data from messages
   const latestIteration = iterationMessages[iterationMessages.length - 1];
   const currentIteration = latestIteration?.iteration || 0;
