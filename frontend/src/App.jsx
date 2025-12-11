@@ -8,6 +8,7 @@ import BeamSearchForm from './components/BeamSearchForm';
 import ImageGallery from './components/ImageGallery';
 import ProgressVisualization from './components/ProgressVisualization';
 import ErrorDisplay from './components/ErrorDisplay';
+import CandidateTreeVisualization from './components/CandidateTreeVisualization';
 import useWebSocket from './hooks/useWebSocket';
 import './App.css';
 
@@ -21,6 +22,7 @@ function App() {
   const [lastFormData, setLastFormData] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [retrying, setRetrying] = useState(false);
+  const [metadata, setMetadata] = useState(null);
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = useCallback(async (formData) => {
@@ -31,6 +33,7 @@ function App() {
 
       // Reset state for new job
       setImages([]);
+      setMetadata(null);
       setCurrentStatus('starting');
       setJobStartTime(Date.now());
       setLastFormData(formData); // Save for retry
@@ -116,8 +119,19 @@ function App() {
           score: bestCandidate.totalScore
         }]);
       }
+
+      // Fetch metadata for completed job
+      if (currentJobId) {
+        fetch(`http://localhost:3000/api/jobs/${currentJobId}/metadata`)
+          .then((res) => {
+            if (res.ok) return res.json();
+            throw new Error('Failed to fetch metadata');
+          })
+          .then((data) => setMetadata(data))
+          .catch((err) => console.error('Error fetching metadata:', err));
+      }
     }
-  }, [completeMessages, images.length]);
+  }, [completeMessages, images.length, currentJobId]);
 
   // Handle error messages
   useEffect(() => {
@@ -195,6 +209,12 @@ function App() {
             expectedCount={lastFormData?.n || 4}
           />
         </section>
+
+        {metadata && (
+          <section className="visualization-section">
+            <CandidateTreeVisualization metadata={metadata} />
+          </section>
+        )}
       </main>
     </div>
   )
