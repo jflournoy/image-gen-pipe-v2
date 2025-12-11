@@ -10,14 +10,21 @@
  * - Parent-child relationship indication
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import ExpandableText from './ExpandableText';
 import LoadingSkeleton from './LoadingSkeleton';
 import './CandidateCard.css';
 
-export default function CandidateCard({ candidate, survivalStatus, imageLoading }) {
+export default function CandidateCard({ candidate, survivalStatus }) {
   const [showDetails, setShowDetails] = useState(false);
-  const hasImage = !!candidate.imageUrl && !imageLoading;
+  const [imageLoaded, setImageLoaded] = useState(false);
+
+  // Reset image loaded state when imageUrl changes
+  useEffect(() => {
+    setImageLoaded(false);
+  }, [candidate.imageUrl]);
+
+  const hasImage = !!candidate.imageUrl && imageLoaded;
   const hasPrompts = !!candidate.combined;
   const hasSurvivalStatus = survivalStatus !== undefined;
   const survived = survivalStatus?.survived;
@@ -37,14 +44,26 @@ export default function CandidateCard({ candidate, survivalStatus, imageLoading 
     >
       {/* Image Section */}
       <div className="card-image-section">
-        {!hasImage ? (
+        {!candidate.imageUrl ? (
           <LoadingSkeleton type="image-card" count={1} />
-        ) : (
+        ) : imageLoaded ? (
           <img
             src={candidate.imageUrl}
             alt={`Candidate ${candidate.id}`}
             className="card-image"
+            onLoad={() => setImageLoaded(true)}
           />
+        ) : (
+          <>
+            <LoadingSkeleton type="image-card" count={1} />
+            <img
+              src={candidate.imageUrl}
+              alt={`Candidate ${candidate.id}`}
+              className="card-image"
+              style={{ display: 'none' }}
+              onLoad={() => setImageLoaded(true)}
+            />
+          </>
         )}
       </div>
 
@@ -104,9 +123,9 @@ export default function CandidateCard({ candidate, survivalStatus, imageLoading 
         )}
 
         {/* Parent Info */}
-        {candidate.parentId !== null && (
+        {candidate.parentId !== null && candidate.parentId !== undefined && typeof candidate.parentId === 'number' && (
           <div className="parent-info">
-            Parent: i{Math.floor(candidate.iteration - 1)}c{candidate.parentId}
+            Parent: i{candidate.iteration - 1}c{candidate.parentId}
           </div>
         )}
       </div>
