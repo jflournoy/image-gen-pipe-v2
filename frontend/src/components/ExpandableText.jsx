@@ -3,6 +3,7 @@
  *
  * Displays text with truncation and expansion indicator.
  * Shows "[+N more characters]" when text exceeds max length.
+ * Collapse button available at top when expanded for easy closing.
  */
 
 import { useState } from 'react'
@@ -24,9 +25,20 @@ export default function ExpandableText({
 
   return (
     <div className={styles.expandable_text}>
-      {showLabel && label && (
-        <strong className={styles.label}>{label}:</strong>
-      )}
+      <div className={styles.header}>
+        {showLabel && label && (
+          <strong className={styles.label}>{label}:</strong>
+        )}
+        {expanded && isLong && (
+          <button
+            className={styles.collapse_button_top}
+            onClick={() => setExpanded(false)}
+            title="Show less"
+          >
+            [collapse]
+          </button>
+        )}
+      </div>
       <div className={styles.text_content}>
         <p className={styles.text}>{displayText}</p>
         {isLong && !expanded && (
