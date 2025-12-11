@@ -21,7 +21,7 @@ export default function JobSelector({ onSelectJob, isLoading: externalIsLoading 
       try {
         setIsLoading(true);
         setError(null);
-        const response = await fetch('/api/jobs');
+        const response = await fetch('http://localhost:3000/api/jobs');
 
         if (!response.ok) {
           throw new Error(`Failed to fetch jobs: ${response.statusText}`);
