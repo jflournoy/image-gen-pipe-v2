@@ -186,8 +186,70 @@ export async function startBeamSearchJob(jobId, params) {
       }
     };
 
-    // Run beam search
-    const result = await beamSearch(prompt, providers, config);
+    // Run beam search with auto-rephrase on safety violations
+    let result;
+    let currentPrompt = prompt;
+    let rephraseAttempted = false;
+
+    try {
+      result = await beamSearch(currentPrompt, providers, config);
+    } catch (error) {
+      // Check if this is a safety violation error
+      const isSafetyViolation = error.message?.includes('safety') || error.message?.includes('safety_violations');
+
+      if (isSafetyViolation && !rephraseAttempted) {
+        // Emit rephrase attempt message
+        emitProgress(jobId, {
+          type: 'operation',
+          message: 'Safety check triggered - attempting to rephrase prompt...',
+          status: 'rephrasing',
+          timestamp: new Date().toISOString()
+        });
+
+        try {
+          // Use LLM to suggest a safer rephrase of the original prompt
+          const rephrasePrompt = `The following image generation prompt was flagged by a content safety system.
+Please rephrase it to be more appropriate while maintaining the user's original intent:
+
+Original prompt: "${prompt}"
+
+Provide ONLY the rephrased prompt, nothing else.`;
+
+          const rephrased = await providers.llm.generateText(rephrasePrompt, {
+            maxTokens: 150,
+            temperature: 0.7
+          });
+
+          currentPrompt = rephrased.trim();
+          rephraseAttempted = true;
+
+          // Emit rephrase success message
+          emitProgress(jobId, {
+            type: 'operation',
+            message: `✓ Prompt rephrased - retrying with safer version`,
+            status: 'processing',
+            timestamp: new Date().toISOString()
+          });
+
+          // Retry beam search with rephrased prompt
+          result = await beamSearch(currentPrompt, providers, config);
+
+          // Emit note that rephrasing helped
+          emitProgress(jobId, {
+            type: 'operation',
+            message: `✓ Rephrased prompt accepted - proceeding with beam search`,
+            status: 'success',
+            timestamp: new Date().toISOString()
+          });
+        } catch (rephraseError) {
+          // If rephrase attempt fails, throw the original error
+          throw error;
+        }
+      } else {
+        // Not a safety violation, or already attempted rephrase, re-throw
+        throw error;
+      }
+    }
 
     // Emit completion event
     emitProgress(jobId, {
