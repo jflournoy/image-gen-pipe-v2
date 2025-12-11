@@ -112,8 +112,6 @@ export async function startBeamSearchJob(jobId, params) {
       onStepProgress: (stepData) => {
         const { stage, status, candidateId, message, imageUrl, alignment, aesthetic, totalScore } = stepData;
 
-        console.log(`[onStepProgress] ${stage} ${status}: ${candidateId} - ${message.substring(0, 50)}`);
-
         // Emit progress message for this step
         emitProgress(jobId, {
           type: 'step',
