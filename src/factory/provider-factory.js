@@ -104,7 +104,7 @@ function createVisionProvider(options = {}) {
         throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
       }
       return new OpenAIVisionProvider(config.llm.apiKey, {
-        model: options.model || 'gpt-4o',
+        model: options.model || config.vision?.model || 'gpt-5-nano',
         maxRetries: options.maxRetries || 3,
         timeout: options.timeout || 30000
       });
