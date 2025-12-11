@@ -276,12 +276,71 @@
 
 .error-message {
   margin-top: 1rem;
-  padding: 0.75rem;
+  padding: 1rem;
   background: #f8d7da;
   border: 1px solid #dc3545;
+  border-left: 4px solid #dc3545;
   border-radius: 4px;
   color: #842029;
   font-size: 0.875rem;
+}
+
+.error-message.safety-error {
+  background: #fff3cd;
+  border-color: #ff6b6b;
+  border-left-color: #ff6b6b;
+  color: #664d03;
+}
+
+.error-main {
+  margin-bottom: 0.5rem;
+  font-weight: 600;
+}
+
+.error-suggestion {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: 3px;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+}
+
+.error-details-section {
+  margin-top: 0.75rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+  padding-top: 0.5rem;
+}
+
+.details-toggle {
+  background: none;
+  border: none;
+  color: #6c757d;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 0.25rem 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  font-weight: 600;
+  transition: color 0.2s ease;
+}
+
+.details-toggle:hover {
+  color: #495057;
+}
+
+.error-details {
+  margin-top: 0.5rem;
+  padding: 0.5rem;
+  background: rgba(0, 0, 0, 0.05);
+  border-radius: 3px;
+  font-family: 'Courier New', monospace;
+  font-size: 0.75rem;
+  color: #495057;
+  word-break: break-all;
+  max-height: 150px;
+  overflow-y: auto;
+  white-space: pre-wrap;
 }
 
 /* Responsive adjustments */

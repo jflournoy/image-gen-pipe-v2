@@ -164,6 +164,9 @@ function App() {
     }
   }, [completeMessages, currentJobId]);
 
+  // Get the latest error message from WebSocket backend
+  const latestErrorMessage = errorMessages.length > 0 ? errorMessages[errorMessages.length - 1]?.message : null;
+
   // Handle error messages
   useEffect(() => {
     if (errorMessages.length > 0) {
@@ -240,7 +243,7 @@ function App() {
               totalIterations={totalIterations}
               bestScore={bestScore}
               elapsedTime={elapsedTime}
-              error={error}
+              error={latestErrorMessage}
               currentOperation={currentOperation}
               tokenUsage={tokenUsage}
               estimatedCost={estimatedCost}
