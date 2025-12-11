@@ -172,6 +172,7 @@ export function createApp() {
     // Validate sessionId (format: ses-HHMMSS)
     const sessionIdRegex = /^ses-\d{6}$/;
     if (!sessionIdRegex.test(sessionId)) {
+      console.warn(`[Image API] Invalid session ID: ${sessionId}`);
       return res.status(400).json({
         error: 'Invalid session ID'
       });
@@ -180,6 +181,7 @@ export function createApp() {
     // Validate filename (prevent path traversal)
     const filenameNormalized = normalize(filename);
     if (filenameNormalized.includes('..') || filenameNormalized.includes('/') || filenameNormalized.includes('\\')) {
+      console.warn(`[Image API] Invalid filename: ${filename}`);
       return res.status(400).json({
         error: 'Invalid filename'
       });
@@ -187,6 +189,7 @@ export function createApp() {
 
     // Ensure filename ends with .png
     if (!filename.endsWith('.png')) {
+      console.warn(`[Image API] Non-PNG file requested: ${filename}`);
       return res.status(400).json({
         error: 'Only PNG files are allowed'
       });
@@ -204,6 +207,7 @@ export function createApp() {
 
     try {
       // Read the image file
+      console.log(`[Image API] Serving image: ${imagePath}`);
       const imageBuffer = await readFile(imagePath);
 
       // Set appropriate headers and send image
@@ -213,13 +217,14 @@ export function createApp() {
     } catch (error) {
       // Handle file not found or read errors
       if (error.code === 'ENOENT') {
+        console.warn(`[Image API] File not found: ${imagePath}`);
         return res.status(404).json({
           error: 'Image not found'
         });
       }
 
       // Handle other errors
-      console.error('Error serving image:', error);
+      console.error(`[Image API] Error serving image: ${imagePath}`, error.message);
       return res.status(500).json({
         error: 'Failed to serve image'
       });
