@@ -10,25 +10,13 @@
  * - Scroll-snap for smooth snapping to iteration columns
  */
 
-import { useEffect, useRef } from 'react';
 import IterationColumn from './IterationColumn';
 import './BeamSearchTimeline.css';
 
 export default function BeamSearchTimeline({
   candidatesByIteration,
-  survivalStatus,
-  autoScrollToLatest = true
+  survivalStatus
 }) {
-  const containerRef = useRef(null);
-  const latestIterationRef = useRef(null);
-
-  // Auto-scroll to latest iteration
-  useEffect(() => {
-    if (autoScrollToLatest && latestIterationRef.current) {
-      latestIterationRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-    }
-  }, [candidatesByIteration, autoScrollToLatest]);
-
   // Sort iterations numerically
   const sortedIterations = Object.keys(candidatesByIteration)
     .map(Number)
@@ -43,22 +31,15 @@ export default function BeamSearchTimeline({
   }
 
   return (
-    <div className="timeline-container" ref={containerRef}>
-      {sortedIterations.map((iterationNum, idx) => {
-        const isLatest = idx === sortedIterations.length - 1;
-        return (
-          <div
-            key={iterationNum}
-            ref={isLatest ? latestIterationRef : null}
-          >
-            <IterationColumn
-              iteration={iterationNum}
-              candidates={candidatesByIteration[iterationNum] || []}
-              survivalStatus={survivalStatus}
-            />
-          </div>
-        );
-      })}
+    <div className="timeline-container">
+      {sortedIterations.map((iterationNum) => (
+        <IterationColumn
+          key={iterationNum}
+          iteration={iterationNum}
+          candidates={candidatesByIteration[iterationNum] || []}
+          survivalStatus={survivalStatus}
+        />
+      ))}
     </div>
   );
 }

@@ -7,6 +7,7 @@
 .timeline-container {
   display: flex;
   overflow-x: auto;
+  overflow-y: hidden;
   gap: 2rem;
   padding: 1.5rem;
   background: #f8f9fa;
@@ -15,6 +16,8 @@
   scroll-snap-type: x mandatory;
   scroll-behavior: smooth;
   margin: 1rem 0;
+  height: auto;
+  max-height: fit-content;
 }
 
 /* Scrollbar styling for timeline */
