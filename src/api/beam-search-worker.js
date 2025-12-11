@@ -16,6 +16,8 @@ const { MODEL_PRICING } = require('../config/model-pricing.js');
 const activeJobs = new Map();
 // Map jobId to sessionId/metadata info
 const jobMetadataMap = new Map();
+// Map jobId to AbortController for cancellation
+const jobAbortControllers = new Map();
 
 /**
  * Start a beam search job in the background
@@ -60,6 +62,10 @@ export async function startBeamSearchJob(jobId, params) {
     pricing: MODEL_PRICING
   });
 
+  // Create abort controller for this job (enables cancellation)
+  const abortController = new AbortController();
+  jobAbortControllers.set(jobId, abortController);
+
   // Map jobId to sessionId and trackers for later retrieval
   jobMetadataMap.set(jobId, { sessionId, metadataTracker, tokenTracker });
 
@@ -100,6 +106,7 @@ export async function startBeamSearchJob(jobId, params) {
       temperature,
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking
+      abortSignal: abortController.signal, // Pass abort signal for cancellation
       // Progress callback - called after each iteration
       onIterationComplete: (iterationData) => {
         // Get current token usage for cost tracking
@@ -133,6 +140,18 @@ export async function startBeamSearchJob(jobId, params) {
         // Determine operation type based on iteration
         const operationType = candidate.metadata.iteration === 0 ? 'expansion' : 'refinement';
         const candidateId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+
+        console.log(`[Beam Search] Candidate processed: ${candidateId} (${operationType})`);
+
+        // Emit progress message to show this candidate is being processed/completed
+        emitProgress(jobId, {
+          type: 'operation',
+          operation: operationType,
+          candidateId,
+          status: 'completed',
+          message: `✓ ${candidateId}: Image generated, evaluating...`,
+          timestamp: new Date().toISOString()
+        });
 
         // Emit step message with current token counts
         const currentStats = tokenTracker.getStats();
@@ -169,6 +188,20 @@ export async function startBeamSearchJob(jobId, params) {
           timestamp: new Date().toISOString()
         });
 
+        // Build image URL - prefer local path to avoid OpenAI URL expiration
+        let imageUrl = null;
+        if (candidate.image?.localPath) {
+          // Extract filename from path (e.g., "iter0-cand0.png")
+          const filename = candidate.image.localPath.split(/[\\/]/).pop();
+          // Use API endpoint to serve from disk: /api/images/ses-HHMMSS/iter0-cand0.png
+          imageUrl = `/api/images/${sessionId}/${filename}`;
+          console.log(`[Beam Search] Image URL: ${imageUrl} (local)`);
+        } else if (candidate.image?.url) {
+          // Fallback to OpenAI URL (will expire after ~1 hour)
+          imageUrl = candidate.image.url;
+          console.log(`[Beam Search] Image URL: ${imageUrl} (OpenAI - will expire)`);
+        }
+
         // Emit candidate message
         emitProgress(jobId, {
           type: 'candidate',
@@ -177,11 +210,30 @@ export async function startBeamSearchJob(jobId, params) {
           // Support both modes
           score: candidate.totalScore,              // Legacy: numeric score (or null)
           ranking: candidate.ranking,               // Modern: rank object with reason
-          imageUrl: candidate.image?.url || null,
+          imageUrl,                                 // Use local path if available
           whatPrompt: candidate.whatPrompt,
           howPrompt: candidate.howPrompt,
           combined: candidate.combined,
           timestamp: new Date().toISOString()
+        });
+      },
+      // Ranking callback - called after ranking phase completes with all ranked candidates
+      onRankingComplete: (rankingData) => {
+        const { iteration, rankedCandidates } = rankingData;
+        // Emit ranking updates for all ranked candidates
+        rankedCandidates.forEach(candidate => {
+          if (candidate.ranking) {
+            emitProgress(jobId, {
+              type: 'ranked',
+              iteration: candidate.metadata.iteration,
+              candidateId: candidate.metadata.candidateId,
+              rank: candidate.ranking.rank,
+              reason: candidate.ranking.reason,
+              strengths: candidate.ranking.strengths,
+              weaknesses: candidate.ranking.weaknesses,
+              timestamp: new Date().toISOString()
+            });
+          }
         });
       }
     };
@@ -190,6 +242,24 @@ export async function startBeamSearchJob(jobId, params) {
     let result;
     let currentPrompt = prompt;
     let rephraseAttempted = false;
+
+    console.log(`[Beam Search] Starting job ${jobId} with config:`, {
+      beamWidth: n,
+      keepTop: m,
+      maxIterations: iterations,
+      hasOnCandidateProcessed: !!config.onCandidateProcessed,
+      hasOnIterationComplete: !!config.onIterationComplete,
+      hasOnRankingComplete: !!config.onRankingComplete
+    });
+
+    // Emit expansion phase start message - users see this immediately
+    emitProgress(jobId, {
+      type: 'operation',
+      operation: 'expansion',
+      status: 'starting',
+      message: `🚀 Expansion phase starting: generating ${n} candidates...`,
+      timestamp: new Date().toISOString()
+    });
 
     try {
       result = await beamSearch(currentPrompt, providers, config);
@@ -275,20 +345,42 @@ Provide ONLY the rephrased prompt, nothing else.`;
     });
 
   } catch (error) {
-    // Emit error event
-    emitProgress(jobId, {
-      type: 'error',
-      timestamp: new Date().toISOString(),
-      error: error.message
-    });
+    // Check if this is a cancellation (AbortError)
+    const isCancelled = error.name === 'AbortError' || error.message === 'Job cancelled';
 
-    // Update job status
-    activeJobs.set(jobId, {
-      status: 'failed',
-      startTime: activeJobs.get(jobId).startTime,
-      endTime: Date.now(),
-      error: error.message
-    });
+    // Emit appropriate event
+    if (isCancelled) {
+      emitProgress(jobId, {
+        type: 'cancelled',
+        timestamp: new Date().toISOString(),
+        message: 'Job was cancelled by user'
+      });
+
+      // Update job status
+      activeJobs.set(jobId, {
+        status: 'cancelled',
+        startTime: activeJobs.get(jobId).startTime,
+        endTime: Date.now()
+      });
+    } else {
+      // Regular error
+      emitProgress(jobId, {
+        type: 'error',
+        timestamp: new Date().toISOString(),
+        error: error.message
+      });
+
+      // Update job status
+      activeJobs.set(jobId, {
+        status: 'failed',
+        startTime: activeJobs.get(jobId).startTime,
+        endTime: Date.now(),
+        error: error.message
+      });
+    }
+  } finally {
+    // Clean up abort controller
+    jobAbortControllers.delete(jobId);
   }
 }
 
@@ -355,4 +447,24 @@ export async function getJobMetadata(jobId) {
   }
 
   return metadata;
+}
+
+/**
+ * Cancel a running beam search job
+ * @param {string} jobId - Job identifier
+ * @returns {boolean} True if job was cancelled, false if not found or already complete
+ */
+export function cancelBeamSearchJob(jobId) {
+  const abortController = jobAbortControllers.get(jobId);
+
+  if (!abortController) {
+    // Job not found or already completed
+    return false;
+  }
+
+  // Abort all pending operations
+  abortController.abort();
+
+  console.log(`[Beam Search] Job ${jobId} cancellation requested`);
+  return true;
 }
