@@ -110,19 +110,42 @@ function App() {
     }
   }, [currentStatus, jobStartTime]);
 
+  // Handle candidate messages - add images as they come in
+  useEffect(() => {
+    if (candidateMessages.length > images.length && currentStatus === 'running') {
+      const newCandidates = candidateMessages.slice(images.length);
+      const newImages = newCandidates
+        .filter((candidate) => candidate.imageUrl)
+        .map((candidate) => ({
+          id: `i${candidate.iteration}c${candidate.candidateId}`,
+          url: candidate.imageUrl,
+          score: candidate.score,
+          whatPrompt: candidate.whatPrompt,
+          howPrompt: candidate.howPrompt
+        }));
+
+      if (newImages.length > 0) {
+        setImages((prevImages) => [...prevImages, ...newImages]);
+      }
+    }
+  }, [candidateMessages, images.length, currentStatus]);
+
   // Handle completion messages
   useEffect(() => {
-    if (completeMessages.length > 0 && images.length === 0) {
+    if (completeMessages.length > 0) {
       const latestComplete = completeMessages[completeMessages.length - 1];
       setCurrentStatus('completed');
 
       if (latestComplete.result && latestComplete.result.bestCandidate) {
         const { bestCandidate } = latestComplete.result;
-        setImages([{
-          id: 'best-candidate',
-          url: bestCandidate.imageUrl,
-          score: bestCandidate.totalScore
-        }]);
+        // Only add best-candidate if we haven't already added candidates from iterations
+        if (images.length === 0) {
+          setImages([{
+            id: 'best-candidate',
+            url: bestCandidate.imageUrl,
+            score: bestCandidate.totalScore
+          }]);
+        }
       }
 
       // Fetch metadata for completed job
@@ -136,7 +159,7 @@ function App() {
           .catch((err) => console.error('Error fetching metadata:', err));
       }
     }
-  }, [completeMessages, images.length, currentJobId]);
+  }, [completeMessages, currentJobId]);
 
   // Handle error messages
   useEffect(() => {

@@ -133,6 +133,10 @@ export async function startBeamSearchJob(jobId, params) {
           iteration: candidate.metadata.iteration,
           candidateId: candidate.metadata.candidateId,
           score: candidate.totalScore,
+          imageUrl: candidate.image?.url || null,
+          whatPrompt: candidate.whatPrompt,
+          howPrompt: candidate.howPrompt,
+          combined: candidate.combined,
           timestamp: new Date().toISOString()
         });
       }
