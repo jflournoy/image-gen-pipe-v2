@@ -3,9 +3,10 @@
  * Main application component integrating BeamSearchForm and WebSocket
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import BeamSearchForm from './components/BeamSearchForm';
 import ImageGallery from './components/ImageGallery';
+import BeamSearchTimeline from './components/BeamSearchTimeline';
 import ProgressVisualization from './components/ProgressVisualization';
 import ErrorDisplay from './components/ErrorDisplay';
 import CandidateTreeVisualization from './components/CandidateTreeVisualization';
@@ -159,6 +160,41 @@ function App() {
     }
   }, [currentStatus, jobStartTime]);
 
+  // NEW: Aggregate candidates by iteration for timeline view
+  const candidatesByIteration = useMemo(() => {
+    const grouped = {};
+    candidateMessages.forEach(msg => {
+      if (!grouped[msg.iteration]) grouped[msg.iteration] = [];
+      grouped[msg.iteration].push({
+        id: `i${msg.iteration}c${msg.candidateId}`,
+        iteration: msg.iteration,
+        candidateId: msg.candidateId,
+        imageUrl: msg.imageUrl || null,
+        combined: msg.combined || null,  // FIX: Extract combined prompt
+        whatPrompt: msg.whatPrompt || null,
+        howPrompt: msg.howPrompt || null,
+        ranking: msg.ranking || null,
+        parentId: msg.parentId || null,
+        timestamp: msg.timestamp
+      });
+    });
+    return grouped;
+  }, [candidateMessages]);
+
+  // NEW: Calculate survival status from ranking data
+  // When ranked messages arrive, check if rank <= keepTop (survived)
+  const survivalStatus = useMemo(() => {
+    const status = {};
+    rankedMessages.forEach(msg => {
+      const id = `i${msg.iteration}c${msg.candidateId}`;
+      status[id] = {
+        survived: msg.rank <= (lastFormData?.m || 2),
+        rank: msg.rank
+      };
+    });
+    return status;
+  }, [rankedMessages, lastFormData]);
+
   // Handle candidate messages - add images as they come in
   useEffect(() => {
     if (candidateMessages.length > images.length && currentStatus === 'running') {
@@ -171,7 +207,8 @@ function App() {
           score: candidate.score,        // Keep for sorting/legacy
           ranking: candidate.ranking,    // Add ranking data
           whatPrompt: candidate.whatPrompt,
-          howPrompt: candidate.howPrompt
+          howPrompt: candidate.howPrompt,
+          combined: candidate.combined   // FIX: Extract combined prompt
         }));
 
       if (newImages.length > 0) {
@@ -345,6 +382,19 @@ function App() {
           />
         </section>
 
+        {/* During execution: Show horizontal timeline view */}
+        {currentStatus === 'running' && Object.keys(candidatesByIteration).length > 0 && (
+          <section className="timeline-section">
+            <h2>Real-Time Evolution Timeline</h2>
+            <BeamSearchTimeline
+              candidatesByIteration={candidatesByIteration}
+              survivalStatus={survivalStatus}
+              autoScrollToLatest={true}
+            />
+          </section>
+        )}
+
+        {/* Gallery view - shown after completion or as backup */}
         <section className="gallery-section">
           <ImageGallery
             images={images}
@@ -353,6 +403,7 @@ function App() {
           />
         </section>
 
+        {/* After completion: Show tree visualization and analysis */}
         {metadata && (
           <section className="visualization-section">
             <CandidateTreeVisualization metadata={metadata} />
