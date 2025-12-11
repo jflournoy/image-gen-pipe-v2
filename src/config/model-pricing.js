@@ -4,6 +4,11 @@
  * Centralized pricing data for all OpenAI models used in the image generation pipeline.
  * Pricing is per token (input tokens), sourced from official OpenAI API pricing page.
  *
+ * LIBRARY-WIDE DEFAULT: gpt-5 era models with FLEX pricing
+ * - All LLM operations use gpt-5-nano (expand, combine) or gpt-5-mini (refine)
+ * - Image generation: gpt-5-image-mini (primary) with fallback to gpt-image-1
+ * - Vision analysis: gpt-5-nano with FLEX tier (50% savings)
+ *
  * Last updated: December 2025
  * Source: https://openai.com/api/pricing/
  *
@@ -76,8 +81,14 @@ const MODEL_PRICING = {
   },
 
   // GPT Image models (multimodal image generation)
+  // Primary (library-wide default): gpt-5-image-mini (requires org registration)
+  // Fallback: gpt-image-1
+  'gpt-5-image-mini': {
+    input: 0.000002,              // $2.00 per 1M text input tokens (primary library default)
+    output: 0.000008              // $8.00 per 1M output tokens
+  },
   'gpt-image-1': {
-    input: 0.000005,              // $5.00 per 1M text input tokens
+    input: 0.000005,              // $5.00 per 1M text input tokens (fallback if org not registered)
     output: 0.00004               // $40.00 per 1M output tokens
   },
   'gpt-image-1-mini': {

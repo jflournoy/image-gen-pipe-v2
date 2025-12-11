@@ -4,11 +4,38 @@
  * Central configuration for switching between mock and real providers.
  * Supports environment variable configuration and runtime overrides.
  *
+ * Library-wide defaults: gpt-5 era models with FLEX pricing support
  * Model defaults updated December 2025 for cost optimization.
  * See docs/MODEL_SELECTION_GUIDE.md for pricing details.
  */
 
 require('dotenv').config({ override: true });
+
+/**
+ * Get the appropriate image model with soft fallback
+ * gpt-5-image-mini requires org registration; falls back to gpt-image-1 with warning
+ * @returns {string} Model name to use
+ */
+function getImageModel() {
+  const explicit = process.env.OPENAI_IMAGE_MODEL;
+  if (explicit) {
+    return explicit;
+  }
+
+  // Check if org is registered for gpt-5-image-mini (indicated by env var)
+  const orgRegisteredForGpt5 = process.env.OPENAI_ORG_REGISTERED_FOR_GPT5_IMAGE === 'true';
+
+  if (!orgRegisteredForGpt5) {
+    console.warn(
+      '[Provider Config] gpt-5-image-mini requires org registration. ' +
+      'Falling back to gpt-image-1. ' +
+      'Set OPENAI_ORG_REGISTERED_FOR_GPT5_IMAGE=true to use gpt-5-image-mini.'
+    );
+    return 'gpt-image-1';
+  }
+
+  return 'gpt-5-image-mini';
+}
 
 const providerConfig = {
   // Mode: 'mock' or 'real'
@@ -32,10 +59,12 @@ const providerConfig = {
   },
 
   // Image Provider Configuration
+  // Primary: gpt-5-image-mini (requires org registration)
+  // Fallback: gpt-image-1 (with console warning if fallback is used)
   image: {
     provider: process.env.IMAGE_PROVIDER || 'dalle',
     apiKey: process.env.OPENAI_API_KEY,
-    model: process.env.OPENAI_IMAGE_MODEL || 'gpt-5-image-mini'  // gpt-5-image-mini: $2.00/1M input tokens
+    model: getImageModel()  // Smart fallback from gpt-5-image-mini to gpt-image-1
   },
 
   // Vision Provider Configuration
@@ -54,3 +83,4 @@ const providerConfig = {
 };
 
 module.exports = providerConfig;
+module.exports.getImageModel = getImageModel;
