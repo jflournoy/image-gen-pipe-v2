@@ -25,6 +25,7 @@ function App() {
   const [retrying, setRetrying] = useState(false);
   const [metadata, setMetadata] = useState(null);
   const [tokenUsage, setTokenUsage] = useState(null);
+  const [estimatedCost, setEstimatedCost] = useState(null);
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = useCallback(async (formData) => {
@@ -37,6 +38,7 @@ function App() {
       setImages([]);
       setMetadata(null);
       setTokenUsage(null);
+      setEstimatedCost(null);
       setCurrentStatus('starting');
       setJobStartTime(Date.now());
       setLastFormData(formData); // Save for retry
@@ -143,6 +145,18 @@ function App() {
     }
   }, [errorMessages]);
 
+  // Update token usage and cost from iteration messages
+  useEffect(() => {
+    if (latestIteration) {
+      if (latestIteration.tokenUsage) {
+        setTokenUsage(latestIteration.tokenUsage);
+      }
+      if (latestIteration.estimatedCost) {
+        setEstimatedCost(latestIteration.estimatedCost);
+      }
+    }
+  }, [latestIteration]);
+
   return (
     <div className="app">
       <header className="app-header">
@@ -209,7 +223,8 @@ function App() {
           <CostDisplay
             status={currentStatus}
             params={lastFormData}
-            tokenUsage={tokenUsage}
+            tokenUsage={estimatedCost || tokenUsage}
+            finalCost={estimatedCost?.total}
           />
         </section>
 
