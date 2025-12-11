@@ -3,7 +3,9 @@
  * Displays progress information for beam search jobs with token tracking
  */
 
+import { useState } from 'react';
 import PropTypes from 'prop-types';
+import { getErrorSummary } from '../utils/error-formatter';
 import './ProgressVisualization.css';
 
 export default function ProgressVisualization({
@@ -21,10 +23,20 @@ export default function ProgressVisualization({
   estimatedCost,
   operationMessages = []
 }) {
+  const [showErrorDetails, setShowErrorDetails] = useState(false);
+
   // Don't render if no job is active
   if (!jobId && !status) {
     return null;
   }
+
+  // Format error message gracefully
+  const getFormattedError = () => {
+    if (!error) return null;
+    return getErrorSummary(error);
+  };
+
+  const formattedError = getFormattedError();
 
   // Calculate progress percentage
   const calculateProgress = () => {
@@ -192,9 +204,28 @@ export default function ProgressVisualization({
         </div>
       )}
 
-      {error && (
-        <div className="error-message" role="alert">
-          {error}
+      {formattedError && (
+        <div className={`error-message ${formattedError.isSafety ? 'safety-error' : ''}`} role="alert">
+          <div className="error-main">
+            <strong>{formattedError.message}</strong>
+          </div>
+          {formattedError.suggestion && (
+            <div className="error-suggestion">{formattedError.suggestion}</div>
+          )}
+          {formattedError.hasDetails && (
+            <div className="error-details-section">
+              <button
+                className="details-toggle"
+                onClick={() => setShowErrorDetails(!showErrorDetails)}
+                aria-expanded={showErrorDetails}
+              >
+                {showErrorDetails ? '▼' : '▶'} Technical Details
+              </button>
+              {showErrorDetails && (
+                <div className="error-details">{formattedError.details}</div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
