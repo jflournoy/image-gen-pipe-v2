@@ -9,7 +9,6 @@ import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
 const { beamSearch } = require('../orchestrator/beam-search.js');
 const MetadataTracker = require('../services/metadata-tracker.js');
-const { DEFAULT_OUTPUT_DIR } = require('../utils/output-path-manager.js');
 
 // Store active jobs
 const activeJobs = new Map();
