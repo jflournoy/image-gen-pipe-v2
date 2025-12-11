@@ -11,8 +11,8 @@
   scroll-snap-align: start;
   scroll-snap-stop: always;
   height: fit-content;
-  overflow-y: auto;
-  max-height: calc(100vh - 300px);
+  /* Don't constrain height - let container handle overflow */
+  /* Removed max-height calc which was truncating content */
 }
 
 .iteration-header {

@@ -8,7 +8,7 @@
 import CandidateCard from './CandidateCard';
 import './IterationColumn.css';
 
-export default function IterationColumn({ iteration, candidates, survivalStatus, loadingImageIds }) {
+export default function IterationColumn({ iteration, candidates, survivalStatus }) {
   return (
     <div className="iteration-column">
       <div className="iteration-header">
@@ -25,7 +25,6 @@ export default function IterationColumn({ iteration, candidates, survivalStatus,
               key={candidate.id}
               candidate={candidate}
               survivalStatus={survivalStatus[candidate.id]}
-              imageLoading={loadingImageIds?.includes(candidate.id)}
             />
           ))
         )}

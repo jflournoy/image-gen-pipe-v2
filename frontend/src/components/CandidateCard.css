@@ -145,28 +145,13 @@
   font-family: 'Courier New', monospace;
 }
 
-/* Connection Line Styling for Horizontal Layout */
-.candidate-card::after {
-  content: '';
-  position: absolute;
-  left: 100%;
-  top: 50%;
-  width: 2rem;
-  height: 2px;
-  background: linear-gradient(90deg, #666 0%, transparent 100%);
-  display: none; /* Will be shown via CSS when parent-child visible */
-}
-
-.candidate-card[data-parent]::before {
-  content: '';
-  position: absolute;
-  right: 100%;
-  top: 50%;
-  width: 2rem;
-  height: 2px;
-  background: linear-gradient(270deg, #666 0%, transparent 100%);
-  display: none; /* Will be shown via CSS when parent-child visible */
-}
+/* Connection Lines - TODO: Implement SVG or canvas for parent-child visualization
+   Currently stubbed out - consider implementing after MVP features are working
+   Options:
+   1. SVG overlay with bezier curves between card positions
+   2. Canvas-based drawing with requestAnimationFrame for performance
+   3. CSS Grid-based layout with explicit connection paths
+*/
 
 /* Responsive - Mobile */
 @media (max-width: 640px) {

@@ -413,7 +413,6 @@ function App() {
             <BeamSearchTimeline
               candidatesByIteration={candidatesByIteration}
               survivalStatus={survivalStatus}
-              autoScrollToLatest={true}
             />
           </section>
         )}
