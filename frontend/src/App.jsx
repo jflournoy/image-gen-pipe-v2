@@ -10,6 +10,7 @@ import BeamSearchTimeline from './components/BeamSearchTimeline';
 import ProgressVisualization from './components/ProgressVisualization';
 import ErrorDisplay from './components/ErrorDisplay';
 import CandidateTreeVisualization from './components/CandidateTreeVisualization';
+import JobSelector from './components/JobSelector';
 import CostDisplay from './components/CostDisplay';
 import useWebSocket from './hooks/useWebSocket';
 import { generateCandidateId } from './utils/candidateId';
@@ -29,6 +30,9 @@ function App() {
   const [metadata, setMetadata] = useState(null);
   const [tokenUsage, setTokenUsage] = useState(null);
   const [estimatedCost, setEstimatedCost] = useState(null);
+  const [showJobSelector, setShowJobSelector] = useState(false);
+  const [selectedSessionId, setSelectedSessionId] = useState(null);
+  const [selectedSessionMetadata, setSelectedSessionMetadata] = useState(null);
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = useCallback(async (formData) => {
@@ -110,6 +114,42 @@ function App() {
       setCancelling(false);
     }
   }, [currentJobId]);
+
+  // Handle selecting a previous job
+  const handleSelectJob = useCallback(async (jobData) => {
+    const { sessionId } = jobData;
+
+    try {
+      // Fetch the full metadata for this session
+      const response = await fetch(`http://localhost:3000/api/jobs/${sessionId}`);
+
+      if (!response.ok) {
+        console.error('Failed to fetch session metadata:', response.statusText);
+        setApiError({
+          message: 'Failed to load session metadata',
+          type: 'api'
+        });
+        return;
+      }
+
+      const sessionData = await response.json();
+      setSelectedSessionId(sessionId);
+      setSelectedSessionMetadata(sessionData.metadata);
+      setCurrentStatus('completed');
+      setShowJobSelector(false);
+
+      // Clear current job state
+      setCurrentJobId(null);
+      setImages([]);
+      setLastFormData(null);
+    } catch (err) {
+      console.error('Error loading session:', err);
+      setApiError({
+        message: 'Failed to load session: ' + err.message,
+        type: 'api'
+      });
+    }
+  }, []);
 
   // Get messages by type
   const startedMessages = getMessagesByType('started');
@@ -349,12 +389,40 @@ function App() {
     <div className="app">
       <header className="app-header">
         <h1>Beam Search Image Generator</h1>
-        <div className="connection-status">
-          WebSocket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+        <div className="header-controls">
+          <div className="connection-status">
+            WebSocket: {isConnected ? '🟢 Connected' : '🔴 Disconnected'}
+          </div>
+          <button
+            className="btn-previous-jobs"
+            onClick={() => setShowJobSelector(!showJobSelector)}
+            title="View previous jobs and results"
+          >
+            📋 Previous Jobs
+          </button>
         </div>
       </header>
 
       <main className="app-main">
+        {/* Job Selector Modal */}
+        {showJobSelector && (
+          <div className="modal-overlay">
+            <div className="modal-content">
+              <button
+                className="modal-close"
+                onClick={() => setShowJobSelector(false)}
+                aria-label="Close job selector"
+              >
+                ✕
+              </button>
+              <JobSelector
+                onSelectJob={handleSelectJob}
+                isLoading={false}
+              />
+            </div>
+          </div>
+        )}
+
         {/* WebSocket connection error */}
         {error && (
           <ErrorDisplay
@@ -443,9 +511,25 @@ function App() {
         </section>
 
         {/* After completion: Show tree visualization and analysis */}
-        {metadata && (
+        {(metadata || selectedSessionMetadata) && (
           <section className="visualization-section">
-            <CandidateTreeVisualization metadata={metadata} />
+            <CandidateTreeVisualization metadata={metadata || selectedSessionMetadata} />
+          </section>
+        )}
+
+        {/* Show back button when viewing a previous job */}
+        {selectedSessionId && (
+          <section className="back-section">
+            <button
+              className="btn-back"
+              onClick={() => {
+                setSelectedSessionId(null);
+                setSelectedSessionMetadata(null);
+                setCurrentStatus(null);
+              }}
+            >
+              ← Back to New Job
+            </button>
           </section>
         )}
       </main>
