@@ -9,6 +9,7 @@ import ImageGallery from './components/ImageGallery';
 import ProgressVisualization from './components/ProgressVisualization';
 import ErrorDisplay from './components/ErrorDisplay';
 import CandidateTreeVisualization from './components/CandidateTreeVisualization';
+import CostDisplay from './components/CostDisplay';
 import useWebSocket from './hooks/useWebSocket';
 import './App.css';
 
@@ -23,6 +24,7 @@ function App() {
   const [apiError, setApiError] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const [metadata, setMetadata] = useState(null);
+  const [tokenUsage, setTokenUsage] = useState(null);
   const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = useCallback(async (formData) => {
@@ -34,6 +36,7 @@ function App() {
       // Reset state for new job
       setImages([]);
       setMetadata(null);
+      setTokenUsage(null);
       setCurrentStatus('starting');
       setJobStartTime(Date.now());
       setLastFormData(formData); // Save for retry
@@ -201,6 +204,14 @@ function App() {
             />
           </section>
         )}
+
+        <section className="cost-section">
+          <CostDisplay
+            status={currentStatus}
+            params={lastFormData}
+            tokenUsage={tokenUsage}
+          />
+        </section>
 
         <section className="gallery-section">
           <ImageGallery
