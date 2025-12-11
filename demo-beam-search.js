@@ -428,10 +428,13 @@ async function demo() {
 
   // Initialize providers
   console.log('\n🔧 Initializing providers...');
+  const providerConfig = require('./src/config/provider-config.js');
   const providers = {
     llm: new OpenAILLMProvider(process.env.OPENAI_API_KEY),
     imageGen: new OpenAIImageProvider(process.env.OPENAI_API_KEY, { sessionId }),
-    vision: new OpenAIVisionProvider(process.env.OPENAI_API_KEY),
+    vision: new OpenAIVisionProvider(process.env.OPENAI_API_KEY, {
+      model: process.env.OPENAI_VISION_MODEL || providerConfig.vision.model
+    }),
     critiqueGen: new CritiqueGenerator({ apiKey: process.env.OPENAI_API_KEY }),
     imageRanker: new ImageRanker({
       apiKey: process.env.OPENAI_API_KEY,
@@ -485,9 +488,42 @@ async function demo() {
   console.log('\n📝 User Prompt: "' + userPrompt + '"');
   console.log('\n⏱️  Starting beam search...\n');
 
+  // Track progress for real-time feedback
+  let candidateCount = 0;
+  let iterationCount = 0;
+
+  // Callback for individual candidate processing
+  config.onCandidateProcessed = (candidate) => {
+    candidateCount++;
+    const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+    const hasImage = candidate.image?.url ? '✓' : '✗';
+    const score = candidate.totalScore ? ` (score: ${candidate.totalScore.toFixed(2)})` : '';
+    console.log(`  📦 Candidate ${globalId} processed${score} [${hasImage} image]`);
+  };
+
+  // Callback for iteration completion
+  config.onIterationComplete = (data) => {
+    iterationCount++;
+    const { iteration, candidates, topCandidates } = data;
+    console.log(`\n📊 Iteration ${iteration} complete:`);
+    console.log(`   Generated: ${candidates?.length || 0} candidates`);
+    console.log(`   Advanced: ${topCandidates?.length || 0} to next iteration`);
+
+    // Show top candidates from this iteration
+    if (topCandidates && topCandidates.length > 0) {
+      console.log(`   🏆 Top performers:`);
+      topCandidates.slice(0, 2).forEach((cand, idx) => {
+        const globalId = `i${cand.metadata.iteration}c${cand.metadata.candidateId}`;
+        const score = cand.totalScore ? cand.totalScore.toFixed(2) : '?';
+        console.log(`      ${idx + 1}. ${globalId} (score: ${score})`);
+      });
+    }
+    console.log();
+  };
+
   const startTime = Date.now();
 
-  // Run beam search
+  // Run beam search with callbacks
   const winner = await beamSearch(userPrompt, wrappedProviders, config);
 
   const endTime = Date.now();
@@ -692,6 +728,8 @@ async function demo() {
 
   console.log('\n⏱️  Performance:');
   console.log(`   • Total time: ${duration}s`);
+  console.log(`   • Total candidates processed: ${candidateCount}`);
+  console.log(`   • Iterations completed: ${iterationCount}`);
 
   console.log('\n📊 Session Metadata:');
   console.log(`   • Session ID: ${sessionId}`);
