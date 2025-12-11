@@ -23,6 +23,7 @@ function App() {
   const [lastFormData, setLastFormData] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [retrying, setRetrying] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
   const [metadata, setMetadata] = useState(null);
   const [tokenUsage, setTokenUsage] = useState(null);
   const [estimatedCost, setEstimatedCost] = useState(null);
@@ -84,14 +85,40 @@ function App() {
     }
   }, [lastFormData, handleFormSubmit]);
 
+  // Cancel job functionality
+  const handleCancel = useCallback(async () => {
+    if (!currentJobId) return;
+
+    setCancelling(true);
+    try {
+      const response = await fetch(`http://localhost:3000/api/jobs/${currentJobId}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (response.ok) {
+        setCurrentStatus('cancelled');
+        setCurrentJobId(null);
+      } else {
+        console.error('Failed to cancel job:', response.statusText);
+      }
+    } catch (err) {
+      console.error('Error cancelling job:', err);
+    } finally {
+      setCancelling(false);
+    }
+  }, [currentJobId]);
+
   // Get messages by type
   const startedMessages = getMessagesByType('started');
   const iterationMessages = getMessagesByType('iteration');
   const candidateMessages = getMessagesByType('candidate');
+  const rankedMessages = getMessagesByType('ranked');
   const operationMessages = getMessagesByType('operation');
   const stepMessages = getMessagesByType('step');
   const completeMessages = getMessagesByType('complete');
   const errorMessages = getMessagesByType('error');
+  const cancelledMessages = getMessagesByType('cancelled');
 
   // Calculate progress data from messages
   const latestIteration = iterationMessages[iterationMessages.length - 1];
@@ -100,9 +127,22 @@ function App() {
   const bestScore = latestIteration?.bestScore || 0;
   const currentOperation = operationMessages[operationMessages.length - 1];
 
-  // Combine operation and step messages for detailed progress display
-  // Steps provide finer-grained micro-progress with token counts
-  const allProgressMessages = [...operationMessages, ...stepMessages].sort((a, b) =>
+  // Combine all progress messages for detailed progress display
+  // Include started, operation, step, and iteration messages in chronological order
+  const allProgressMessages = [
+    ...startedMessages.map(msg => ({
+      ...msg,
+      type: 'operation',
+      message: `✓ Beam search job started: ${msg.params?.prompt?.substring(0, 50) || 'generating images'}...`
+    })),
+    ...operationMessages,
+    ...stepMessages,
+    ...iterationMessages.map(msg => ({
+      ...msg,
+      type: 'operation',
+      message: `✓ Iteration ${msg.iteration} complete: ${msg.candidatesCount} candidates ranked, top score: ${msg.bestScore?.toFixed(2) || '0'}`
+    }))
+  ].sort((a, b) =>
     new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
   );
 
@@ -139,6 +179,34 @@ function App() {
       }
     }
   }, [candidateMessages, images.length, currentStatus]);
+
+  // Handle ranked messages - update images with ranking data
+  // Ranked messages provide ranking info for candidates after ranking phase completes
+  useEffect(() => {
+    if (rankedMessages.length > 0) {
+      setImages((prevImages) =>
+        prevImages.map((image) => {
+          // Find matching ranked message for this image
+          const rankedMsg = rankedMessages.find(
+            (msg) => `i${msg.iteration}c${msg.candidateId}` === image.id
+          );
+
+          if (rankedMsg) {
+            return {
+              ...image,
+              ranking: {
+                rank: rankedMsg.rank,
+                reason: rankedMsg.reason,
+                strengths: rankedMsg.strengths,
+                weaknesses: rankedMsg.weaknesses
+              }
+            };
+          }
+          return image;
+        })
+      );
+    }
+  }, [rankedMessages]);
 
   // Handle completion messages
   useEffect(() => {
@@ -180,6 +248,13 @@ function App() {
       setCurrentStatus('error');
     }
   }, [errorMessages]);
+
+  // Handle cancelled messages
+  useEffect(() => {
+    if (cancelledMessages.length > 0) {
+      setCurrentStatus('cancelled');
+    }
+  }, [cancelledMessages]);
 
   // Update token usage and cost from iteration messages
   useEffect(() => {
@@ -255,6 +330,8 @@ function App() {
               tokenUsage={tokenUsage}
               estimatedCost={estimatedCost}
               operationMessages={allProgressMessages}
+              onCancel={handleCancel}
+              cancelling={cancelling}
             />
           </section>
         )}

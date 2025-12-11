@@ -21,7 +21,9 @@ export default function ProgressVisualization({
   currentOperation,
   tokenUsage,
   estimatedCost,
-  operationMessages = []
+  operationMessages = [],
+  onCancel,
+  cancelling = false
 }) {
   const [showErrorDetails, setShowErrorDetails] = useState(false);
 
@@ -97,11 +99,24 @@ export default function ProgressVisualization({
           <span className="status-badge">Status: {status}</span>
         </div>
 
-        {formattedElapsedTime && (
-          <div className="elapsed-time">
-            Elapsed: {formattedElapsedTime}
-          </div>
-        )}
+        <div className="progress-controls">
+          {formattedElapsedTime && (
+            <div className="elapsed-time">
+              Elapsed: {formattedElapsedTime}
+            </div>
+          )}
+
+          {status === 'running' && onCancel && (
+            <button
+              className="cancel-button"
+              onClick={onCancel}
+              disabled={cancelling}
+              title="Cancel this beam search job"
+            >
+              {cancelling ? '⏸ Cancelling...' : '⏹ Cancel'}
+            </button>
+          )}
+        </div>
       </div>
 
       {(totalIterations > 0 || currentIteration === 0) && (

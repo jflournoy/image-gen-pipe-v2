@@ -109,11 +109,15 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
   });
 
   // Filter out candidates without rankings (happens when keepTop < N)
-  // Then sort by rank (1 = best) and return top M
+  // Then sort by rank (1 = best)
   const candidatesWithRankings = rankedCandidates.filter(c => c.ranking !== undefined);
   candidatesWithRankings.sort((a, b) => a.ranking.rank - b.ranking.rank);
 
-  return candidatesWithRankings.slice(0, keepTop);
+  // Return object with both: allRanked (for frontend display) and topCandidates (for next iteration)
+  return {
+    allRanked: candidatesWithRankings,
+    topCandidates: candidatesWithRankings.slice(0, keepTop)
+  };
 }
 
 /**
@@ -284,6 +288,7 @@ async function processCandidateStream(
  * @param {number} config.beamWidth - Number of candidates to generate (N)
  * @param {number} [config.temperature=0.7] - Temperature for stochastic variation
  * @param {number} [config.alpha=0.7] - Scoring weight for alignment
+ * @param {Function} [config.onCandidateProcessed] - Callback invoked as each candidate completes
  * @returns {Promise<Array>} Array of N candidates
  */
 async function initialExpansion(
@@ -293,10 +298,17 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker, onCandidateProcessed, abortSignal } = config;
 
   // Rate limiters are initialized at module load time
   // They are reused across all jobs to maintain consistent metrics
+
+  // Check if already aborted
+  if (abortSignal?.aborted) {
+    throw new Error('Job cancelled');
+  }
+
+  console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}`);
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
@@ -354,11 +366,21 @@ async function initialExpansion(
     })
   );
 
+  // Check if aborted while generating prompts
+  if (abortSignal?.aborted) {
+    throw new Error('Job cancelled');
+  }
+
   // Stream all N candidates through the pipeline with rate limiting
   const candidates = await Promise.all(
     whatHowPairs.map(({ what, how }, i) => {
       // Create wrapper that applies rate limiting for image gen and vision
       const limitedProcessCandidateStream = async () => {
+        // Check if aborted before starting
+        if (abortSignal?.aborted) {
+          throw new Error('Job cancelled');
+        }
+
         // Combine prompts (no rate limiting needed)
         const combineResult = await llmProvider.combinePrompts(what, how);
         const combined = combineResult.combinedPrompt;
@@ -462,8 +484,8 @@ async function initialExpansion(
           });
         }
 
-        // Return complete candidate object
-        return {
+        // Create complete candidate object
+        const candidate = {
           whatPrompt: what,
           howPrompt: how,
           combined,
@@ -476,6 +498,17 @@ async function initialExpansion(
             dimension: 'what'
           }
         };
+
+        // Invoke callback immediately as candidate completes
+        // This enables real-time progress updates instead of waiting for all candidates
+        if (onCandidateProcessed) {
+          console.log(`[initialExpansion] Invoking callback for candidate ${i}`);
+          onCandidateProcessed(candidate);
+        } else {
+          console.log(`[initialExpansion] No callback for candidate ${i}`);
+        }
+
+        return candidate;
       };
 
       return limitedProcessCandidateStream();
@@ -496,6 +529,7 @@ async function initialExpansion(
  * @param {number} config.beamWidth - Total candidates to generate (N)
  * @param {number} config.keepTop - Number of parents (M)
  * @param {number} [config.alpha=0.7] - Scoring weight for alignment
+ * @param {Function} [config.onCandidateProcessed] - Callback invoked as each candidate completes
  * @param {number} iteration - Current iteration number
  * @returns {Promise<Array>} Array of N child candidates
  */
@@ -506,10 +540,16 @@ async function refinementIteration(
   visionProvider,
   critiqueGenProvider,
   config,
-  iteration
+  iteration,
+  userPrompt
 ) {
-  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker, skipVisionAnalysis } = config;
+  const { beamWidth: N, keepTop: M, alpha = 0.7, metadataTracker, tokenTracker, skipVisionAnalysis, onCandidateProcessed, abortSignal } = config;
   const expansionRatio = Math.floor(N / M);
+
+  // Check if already aborted
+  if (abortSignal?.aborted) {
+    throw new Error('Job cancelled');
+  }
 
   // Determine dimension: odd iterations refine WHAT, even refine HOW
   const dimension = iteration % 2 === 1 ? 'what' : 'how';
@@ -558,6 +598,11 @@ async function refinementIteration(
   const allChildren = await Promise.all(
     parentsWithCritiques.flatMap((parent, parentIdx) =>
       Array(expansionRatio).fill().map(async (_, childIdx) => {
+        // Check if aborted before processing this child
+        if (abortSignal?.aborted) {
+          throw new Error('Job cancelled');
+        }
+
         const candidateId = parentIdx * expansionRatio + childIdx;
 
         // Refine the selected dimension using critique
@@ -596,7 +641,7 @@ async function refinementIteration(
           : parent.howPrompt;
 
         // Stream child through pipeline
-        return processCandidateStream(
+        const candidate = await processCandidateStream(
           whatPrompt,
           howPrompt,
           llmProvider,
@@ -613,6 +658,14 @@ async function refinementIteration(
             skipVisionAnalysis
           }
         );
+
+        // Invoke callback immediately as candidate completes
+        // This enables real-time progress updates instead of waiting for all candidates
+        if (onCandidateProcessed) {
+          onCandidateProcessed(candidate);
+        }
+
+        return candidate;
       })
     )
   );
@@ -637,11 +690,12 @@ async function refinementIteration(
  * @param {Object} [config.metadataTracker] - Optional metadata tracker instance
  * @param {Function} [config.onIterationComplete] - Optional callback after each iteration
  * @param {Function} [config.onCandidateProcessed] - Optional callback for each candidate
+ * @param {Function} [config.onRankingComplete] - Optional callback with all ranked candidates after ranking
  * @returns {Promise<Object>} Best candidate after all iterations
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen, imageRanker } = providers;
-  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onCandidateProcessed, ensembleSize } = config;
+  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onCandidateProcessed, onRankingComplete, ensembleSize } = config;
 
   // Determine ranking strategy: Use comparative ranking if imageRanker provided
   const useComparativeRanking = imageRanker !== undefined;
@@ -653,6 +707,7 @@ async function beamSearch(userPrompt, providers, config) {
   };
 
   // Iteration 0: Initial expansion
+  // Note: onCandidateProcessed is called inside initialExpansion as each candidate completes
   let candidates = await initialExpansion(
     userPrompt,
     llm,
@@ -661,16 +716,24 @@ async function beamSearch(userPrompt, providers, config) {
     pipelineConfig
   );
 
-  // Notify about processed candidates (optional callback)
-  if (onCandidateProcessed) {
-    candidates.forEach(candidate => onCandidateProcessed(candidate));
-  }
-
   // Rank and select top M candidates
   // Use comparative ranking if imageRanker provided, otherwise use score-based ranking
   let topCandidates;
+  let rankingResults = null; // Store ranking results for emission in worker
+
   if (useComparativeRanking) {
-    topCandidates = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker });
+    rankingResults = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker });
+    topCandidates = rankingResults.topCandidates;
+    // Update candidates array to include ranking data for metadata tracking
+    candidates = rankingResults.allRanked;
+
+    // Emit ranking data for all ranked candidates so frontend can display rankings
+    if (onRankingComplete) {
+      onRankingComplete({
+        iteration: 0,
+        rankedCandidates: rankingResults.allRanked
+      });
+    }
   } else {
     topCandidates = rankAndSelect(candidates, keepTop);
   }
@@ -706,6 +769,7 @@ async function beamSearch(userPrompt, providers, config) {
   // Iterations 1+: Refinement
   for (let iteration = 1; iteration < maxIterations; iteration++) {
     // Generate N children from M parents
+    // Note: onCandidateProcessed is called inside refinementIteration as each candidate completes
     candidates = await refinementIteration(
       topCandidates,
       llm,
@@ -713,13 +777,9 @@ async function beamSearch(userPrompt, providers, config) {
       vision,
       critiqueGen,
       pipelineConfig,
-      iteration
+      iteration,
+      userPrompt
     );
-
-    // Notify about processed candidates (optional callback)
-    if (onCandidateProcessed) {
-      candidates.forEach(candidate => onCandidateProcessed(candidate));
-    }
 
     // Rank and select top M for next iteration
     // Include both parents and children to ensure best from ANY iteration survives
@@ -729,7 +789,17 @@ async function beamSearch(userPrompt, providers, config) {
     if (useComparativeRanking) {
       // Pass previous top candidates to avoid re-comparing known pairs
       const previousTop = topCandidates;
-      topCandidates = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker });
+      const iterationRankingResults = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker });
+      topCandidates = iterationRankingResults.topCandidates;
+      rankingResults = iterationRankingResults; // Store for emission
+
+      // Emit ranking data for all ranked candidates so frontend can display rankings
+      if (onRankingComplete) {
+        onRankingComplete({
+          iteration,
+          rankedCandidates: iterationRankingResults.allRanked
+        });
+      }
     } else {
       topCandidates = rankAndSelect(allCandidates, keepTop);
     }
