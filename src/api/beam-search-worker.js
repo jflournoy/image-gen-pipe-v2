@@ -125,6 +125,18 @@ export async function startBeamSearchJob(jobId, params) {
           totalScore: totalScore !== undefined ? totalScore.toFixed(2) : null,
           timestamp: new Date().toISOString()
         });
+
+        // When image generation completes, also emit a candidate message so image appears in gallery immediately
+        if (stage === 'imageGen' && status === 'complete' && imageUrl) {
+          const [iteration, candidateNum] = candidateId.match(/i(\d+)c(\d+)/).slice(1).map(Number);
+          emitProgress(jobId, {
+            type: 'candidate',
+            iteration,
+            candidateId: candidateNum,
+            imageUrl,
+            timestamp: new Date().toISOString()
+          });
+        }
       },
       // Progress callback - called after each iteration
       onIterationComplete: (iterationData) => {

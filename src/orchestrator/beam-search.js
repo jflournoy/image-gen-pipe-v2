@@ -225,7 +225,7 @@ async function processCandidateStream(
       stage: 'imageGen',
       status: 'starting',
       candidateId: candidateId_str,
-      message: `⬆️  ${candidateId_str}: Generating image with DALL-E...`
+      message: `⬆️  ${candidateId_str}: Generating image...`
     });
   }
 
@@ -529,7 +529,7 @@ async function initialExpansion(
             stage: 'imageGen',
             status: 'starting',
             candidateId: candidateId_str,
-            message: `⬆️  ${candidateId_str}: Generating image with DALL-E...`
+            message: `⬆️  ${candidateId_str}: Generating image...`
           });
         }
 
