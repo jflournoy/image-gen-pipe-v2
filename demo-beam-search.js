@@ -424,7 +424,7 @@ async function demo() {
   const sessionId = `ses-${hours}${minutes}${seconds}`;
 
   // Configuration
-  const userPrompt = 'a hyperreal photorealistic painting of the american west during sunset with a mysterious attractive woman subtly placed somewhere in the image. I want it to look like a photograph with subtle hints that it is a photoreal painting. i want to woman to be almost hidden but also intriguing, inviting, and attractive to the viewer. In fact, she should be gorgeous, please emphasize this. i want the american west to have a quality that is epic like the new frontier. Emphasize photorealism. Emphasize grandiousity.';
+  const userPrompt = 'an almost photoreal painting that feels a little bit like Bierstadt of a grandiose american landscape. there is a small and subtle but aluring female figure in the middle ground.';
 
   // Initialize providers
   console.log('\n🔧 Initializing providers...');
@@ -474,6 +474,7 @@ async function demo() {
     maxIterations: 3,    // Run 3 iterations (0, 1, 2)
     alpha: 0.7,          // 70% alignment, 30% aesthetic
     temperature: 0.8,    // Stochastic variation for diversity
+    ensembleSize: ensembleSize,  // Ensemble votes for ranking decisions
     metadataTracker,     // Add metadata tracker to config
     tokenTracker         // Add token tracker to config
     // Note: Rate limits use defaults from rate-limits.js automatically
@@ -499,6 +500,53 @@ async function demo() {
 
   // Display both finalists side by side
   const finalists = winner.finalists || [winner];
+
+  // Helper to show text with expansion indicator
+  const showText = (label, text, maxLength = 80) => {
+    if (!text) return;
+    if (text.length <= maxLength) {
+      console.log(`   ${label}: "${text}"`);
+    } else {
+      const abbrev = text.substring(0, maxLength);
+      const remaining = text.length - maxLength;
+      console.log(`   ${label}: "${abbrev}"`);
+      console.log(`   ${' '.repeat(label.length + 2)} [+${remaining} more characters]`);
+    }
+  };
+
+  // Helper to show comparative ranking explanation
+  const showComparativeRanking = (ranking, position) => {
+    if (!ranking || !ranking.ranks) return;
+
+    // Explain the rank scale
+    const rankLabel = position === 1 ? 'RANKED 1st' : 'RANKED 2nd';
+    const explanation = position === 1
+      ? 'Better on comparative evaluation'
+      : 'Ranked lower on comparative evaluation';
+
+    console.log(`   ⭐ ${rankLabel} (${explanation})`);
+
+    // Show what made this candidate rank this way
+    if (ranking.reason) {
+      showText(`   💡 Why`, ranking.reason, 100);
+    }
+
+    // Show strengths/weaknesses
+    if (ranking.strengths && ranking.strengths.length > 0) {
+      console.log(`   ✅ Strengths: ${ranking.strengths.slice(0, 3).join(', ')}`);
+      if (ranking.strengths.length > 3) {
+        console.log(`      [+${ranking.strengths.length - 3} more strengths]`);
+      }
+    }
+
+    if (ranking.weaknesses && ranking.weaknesses.length > 0) {
+      console.log(`   ⚠️  Weaknesses: ${ranking.weaknesses.slice(0, 3).join(', ')}`);
+      if (ranking.weaknesses.length > 3) {
+        console.log(`      [+${ranking.weaknesses.length - 3} more weaknesses]`);
+      }
+    }
+  };
+
   const displayFinalist = (candidate, position) => {
     const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
     const label = position === 1 ? '🥇 WINNER' : '🥈 RUNNER-UP';
@@ -506,34 +554,25 @@ async function demo() {
 
     console.log(`\n${label} (${globalId}):`);
 
-    // Show ranking scores
-    if (ranking.ranks) {
-      const r = ranking.ranks;
-      console.log(`   📊 Scores: align=${r.alignment?.toFixed(2) || '?'} aesth=${r.aesthetics?.toFixed(2) || '?'} combined=${r.combined?.toFixed(2) || '?'}`);
-    }
+    // Show comparative ranking explanation (NEW)
+    showComparativeRanking(ranking, position);
 
-    // Show prompts (abbreviated)
-    const whatAbbrev = candidate.whatPrompt.length > 60
-      ? candidate.whatPrompt.substring(0, 60) + '...'
-      : candidate.whatPrompt;
-    const howAbbrev = candidate.howPrompt.length > 60
-      ? candidate.howPrompt.substring(0, 60) + '...'
-      : candidate.howPrompt;
-    console.log(`   📝 WHAT: "${whatAbbrev}"`);
-    console.log(`   🎨 HOW: "${howAbbrev}"`);
+    // Show prompts (with expansion indicator)
+    showText(`   📝 WHAT`, candidate.whatPrompt, 80);
+    showText(`   🎨 HOW`, candidate.howPrompt, 80);
 
-    // Show image path
+    // Show image reference
     if (candidate.image?.localPath) {
-      console.log(`   🖼️  Image: ${candidate.image.localPath}`);
+      const fs = require('fs');
+      const exists = fs.existsSync(candidate.image.localPath);
+      const status = exists ? '✓ Found' : '✗ Missing';
+      console.log(`   🖼️  Image: ${candidate.image.localPath} [${status}]`);
+    } else {
+      console.log(`   🖼️  Image: No image URL available`);
     }
 
-    // Show ranking reason
-    if (ranking.reason) {
-      const reasonAbbrev = ranking.reason.length > 100
-        ? ranking.reason.substring(0, 100) + '...'
-        : ranking.reason;
-      console.log(`   💬 Ranking reason: ${reasonAbbrev}`);
-    }
+    // Show combined prompt
+    console.log(`   🔗 Combined: "${candidate.combined.substring(0, 100)}${candidate.combined.length > 100 ? '...' : ''}"`);
   };
 
   // Show both candidates
@@ -543,7 +582,7 @@ async function demo() {
 
   // Show why winner won (the comparison that decided it)
   console.log('\n' + '-'.repeat(80));
-  console.log('⚖️  WHY WINNER WON:');
+  console.log('⚖️  COMPARATIVE RANKING ANALYSIS:');
   console.log('-'.repeat(80));
 
   if (finalists.length >= 2) {
@@ -551,41 +590,37 @@ async function demo() {
     const runnerUp = finalists[1];
     const runnerRanking = runnerUp.ranking || {};
 
-    // Compare scores
-    if (winnerRanking.ranks && runnerRanking.ranks) {
-      const wR = winnerRanking.ranks;
-      const rR = runnerRanking.ranks;
-      const alignDiff = (rR.alignment || 0) - (wR.alignment || 0);
-      const aesthetDiff = (rR.aesthetics || 0) - (wR.aesthetics || 0);
-
-      console.log('\n   📈 Score comparison (lower = better):');
-      console.log(`      Winner combined:    ${wR.combined?.toFixed(2) || '?'}`);
-      console.log(`      Runner-up combined: ${rR.combined?.toFixed(2) || '?'}`);
-
-      if (alignDiff !== 0 || aesthetDiff !== 0) {
-        const factors = [];
-        if (alignDiff > 0) factors.push(`+${alignDiff.toFixed(2)} alignment`);
-        if (alignDiff < 0) factors.push(`${alignDiff.toFixed(2)} alignment`);
-        if (aesthetDiff > 0) factors.push(`+${aesthetDiff.toFixed(2)} aesthetics`);
-        if (aesthetDiff < 0) factors.push(`${aesthetDiff.toFixed(2)} aesthetics`);
-        console.log(`      Winner advantage: ${factors.join(', ')}`);
-      }
-    }
-
-    // Show strengths comparison
-    if (winnerRanking.strengths?.length > 0 || winnerRanking.winnerStrengths?.length > 0) {
-      const strengths = winnerRanking.strengths || winnerRanking.winnerStrengths || [];
-      console.log(`\n   ✅ Winner strengths: ${strengths.join(', ')}`);
-    }
-
-    if (runnerRanking.weaknesses?.length > 0 || runnerRanking.loserWeaknesses?.length > 0) {
-      const weaknesses = runnerRanking.weaknesses || runnerRanking.loserWeaknesses || [];
-      console.log(`   ⚠️  Runner-up weaknesses: ${weaknesses.join(', ')}`);
-    }
-
-    // Show the decisive comparison reason if available
+    // Show decisive reason from comparative ranking
     if (winnerRanking.reason) {
-      console.log(`\n   💡 Decision: ${winnerRanking.reason}`);
+      console.log('\n   💡 Comparison Decision:');
+      showText(`   `, winnerRanking.reason, 150);
+    }
+
+    // Show why winner was preferred
+    console.log('\n   🏆 Winner advantages:');
+    if (winnerRanking.strengths && winnerRanking.strengths.length > 0) {
+      winnerRanking.strengths.forEach((strength, idx) => {
+        console.log(`      ${idx + 1}. ${strength}`);
+      });
+    } else {
+      console.log('      No specific strengths recorded');
+    }
+
+    // Show what runner-up lacked
+    console.log('\n   📉 Runner-up weaknesses:');
+    if (runnerRanking.weaknesses && runnerRanking.weaknesses.length > 0) {
+      runnerRanking.weaknesses.forEach((weakness, idx) => {
+        console.log(`      ${idx + 1}. ${weakness}`);
+      });
+    } else {
+      console.log('      No specific weaknesses recorded');
+    }
+
+    // Show comparative dimensions if available
+    if (winnerRanking.alignment !== undefined || winnerRanking.aesthetics !== undefined) {
+      console.log('\n   📊 Comparative evaluation:');
+      console.log(`      Alignment: Winner preferred over runner-up`);
+      console.log(`      Aesthetics: Winner preferred over runner-up`);
     }
   } else {
     console.log('   Only one finalist - no comparison available');
