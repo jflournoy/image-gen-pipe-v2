@@ -233,11 +233,12 @@ export async function startBeamSearchJob(jobId, params) {
           console.log(`[Beam Search] Image URL: ${imageUrl} (OpenAI - will expire)`);
         }
 
-        // Emit candidate message
+        // Emit candidate message with complete data including lineage
         emitProgress(jobId, {
           type: 'candidate',
           iteration: candidate.metadata.iteration,
           candidateId: candidate.metadata.candidateId,
+          parentId: candidate.metadata.parentId || null,  // Include lineage information
           // Support both modes
           score: candidate.totalScore,              // Legacy: numeric score (or null)
           ranking: candidate.ranking,               // Modern: rank object with reason
