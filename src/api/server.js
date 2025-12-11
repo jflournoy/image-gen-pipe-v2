@@ -17,6 +17,8 @@ const { getMetrics: getRateLimiterMetrics } = require('../utils/rate-limiter-reg
 
 // Store WebSocket connections by jobId
 let jobSubscriptions = new Map();
+// Queue messages for jobs that haven't been subscribed to yet
+let jobMessageQueues = new Map();
 let wss = null;
 
 /**
@@ -25,6 +27,7 @@ let wss = null;
  */
 export function _resetWebSocketState() {
   jobSubscriptions.clear();
+  jobMessageQueues.clear();
   if (wss) {
     wss.clients.forEach(client => client.close());
     wss.close();
@@ -326,6 +329,17 @@ export function attachWebSocket(server) {
             type: 'subscribed',
             jobId: currentJobId
           }));
+
+          // Send any queued messages for this job (buffered before subscription)
+          if (jobMessageQueues.has(currentJobId)) {
+            const queue = jobMessageQueues.get(currentJobId);
+            console.log(`[WebSocket] Sending ${queue.length} queued messages for job ${currentJobId}`);
+            queue.forEach(queuedMessage => {
+              ws.send(JSON.stringify(queuedMessage));
+            });
+            // Clear the queue after sending
+            jobMessageQueues.delete(currentJobId);
+          }
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
@@ -352,8 +366,13 @@ export function attachWebSocket(server) {
  * @param {object} progressData - Progress data to send
  */
 export function emitProgress(jobId, progressData) {
+  // If no subscribers yet, queue the message for when they subscribe
   if (!jobSubscriptions.has(jobId)) {
-    return; // No subscribers for this job
+    if (!jobMessageQueues.has(jobId)) {
+      jobMessageQueues.set(jobId, []);
+    }
+    jobMessageQueues.get(jobId).push(progressData);
+    return;
   }
 
   const subscribers = jobSubscriptions.get(jobId);
