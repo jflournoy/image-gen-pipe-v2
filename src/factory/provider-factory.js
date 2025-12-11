@@ -19,6 +19,7 @@ const OpenAILLMProvider = require('../providers/openai-llm-provider');
 const OpenAIImageProvider = require('../providers/openai-image-provider');
 const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 const CritiqueGenerator = require('../services/critique-generator');
+const ImageRanker = require('../services/image-ranker');
 
 /**
  * Create an LLM provider instance
@@ -150,6 +151,32 @@ function createCritiqueGenerator(options = {}) {
 }
 
 /**
+ * Create an ImageRanker instance for comparative ranking
+ * @param {Object} options - Override configuration options
+ * @returns {ImageRanker|null} Image ranker instance or null for mock mode
+ */
+function createImageRanker(options = {}) {
+  const mode = options.mode || config.mode;
+
+  if (mode === 'mock') {
+    // For mock mode, return null to skip ranking (fall back to scoring)
+    return null;
+  }
+
+  // Real provider - ImageRanker always uses OpenAI
+  if (!config.llm.apiKey) {
+    throw new Error('OpenAI API key is required for ImageRanker. Set OPENAI_API_KEY environment variable.');
+  }
+
+  const ensembleSize = parseInt(process.env.ENSEMBLE_SIZE || '3', 10);
+
+  return new ImageRanker({
+    apiKey: config.llm.apiKey,
+    defaultEnsembleSize: ensembleSize
+  });
+}
+
+/**
  * Create all providers at once
  * @param {Object} options - Override configuration options
  * @returns {Object} Object with all provider instances
@@ -169,5 +196,6 @@ module.exports = {
   createVisionProvider,
   createScoringProvider,
   createCritiqueGenerator,
+  createImageRanker,
   createProviders
 };

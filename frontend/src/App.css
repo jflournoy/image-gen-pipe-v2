@@ -40,3 +40,22 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Image Gallery Styles */
+.image-info {
+  padding: 0.5rem;
+  text-align: center;
+}
+
+.image-id {
+  font-size: 0.875rem;
+  color: #6c757d;
+  font-family: monospace;
+}
+
+.image-rank {
+  font-size: 0.75rem;
+  color: #495057;
+  margin-top: 0.25rem;
+  font-weight: 500;
+}
