@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import PropTypes from 'prop-types';
 import ExpandableText from './ExpandableText';
 import LoadingSkeleton from './LoadingSkeleton';
 import './CandidateCard.css';
@@ -132,3 +133,22 @@ export default function CandidateCard({ candidate, survivalStatus }) {
     </div>
   );
 }
+
+CandidateCard.propTypes = {
+  candidate: PropTypes.shape({
+    id: PropTypes.string.isRequired,
+    iteration: PropTypes.number.isRequired,
+    candidateId: PropTypes.number.isRequired,
+    imageUrl: PropTypes.string,
+    combined: PropTypes.string,
+    whatPrompt: PropTypes.string,
+    howPrompt: PropTypes.string,
+    ranking: PropTypes.object,
+    parentId: PropTypes.number,
+    timestamp: PropTypes.string
+  }).isRequired,
+  survivalStatus: PropTypes.shape({
+    survived: PropTypes.bool.isRequired,
+    rank: PropTypes.number.isRequired
+  })
+};
