@@ -15,7 +15,7 @@ const { _resetWebSocketState } = require('../src/api/server.js');
 
 let server;
 
-describe('🔴 RED: Chain of Results Visualization', () => {
+describe('🟢 GREEN: Chain of Results Visualization', () => {
   before(async () => {
     server = await startServer(3000);
     attachWebSocket(server);
