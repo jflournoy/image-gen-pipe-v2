@@ -8,9 +8,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const { beamSearch } = require('../orchestrator/beam-search.js');
+const MetadataTracker = require('../services/metadata-tracker.js');
+const { DEFAULT_OUTPUT_DIR } = require('../utils/output-path-manager.js');
 
 // Store active jobs
 const activeJobs = new Map();
+// Map jobId to sessionId/metadata info
+const jobMetadataMap = new Map();
 
 /**
  * Start a beam search job in the background
@@ -34,8 +38,26 @@ export async function startBeamSearchJob(jobId, params) {
     temperature = 0.7
   } = params;
 
+  // Generate session ID in ses-HHMMSS format
+  const now = new Date();
+  const hours = String(now.getHours()).padStart(2, '0');
+  const minutes = String(now.getMinutes()).padStart(2, '0');
+  const seconds = String(now.getSeconds()).padStart(2, '0');
+  const sessionId = `ses-${hours}${minutes}${seconds}`;
+
+  // Initialize metadata tracker
+  const metadataTracker = new MetadataTracker({
+    sessionId,
+    userPrompt: prompt,
+    config: { beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature }
+  });
+  await metadataTracker.initialize();
+
+  // Map jobId to sessionId for later retrieval
+  jobMetadataMap.set(jobId, { sessionId, metadataTracker });
+
   // Mark job as running
-  activeJobs.set(jobId, { status: 'running', startTime: Date.now() });
+  activeJobs.set(jobId, { status: 'running', startTime: Date.now(), sessionId });
 
   try {
     // Create providers using factory (CommonJS module)
@@ -67,6 +89,7 @@ export async function startBeamSearchJob(jobId, params) {
       maxIterations: iterations,
       alpha,
       temperature,
+      metadataTracker, // Pass metadata tracker to beam search
       // Progress callback - called after each iteration
       onIterationComplete: (iterationData) => {
         emitProgress(jobId, {
@@ -149,4 +172,52 @@ export function getJobStatus(jobId) {
  */
 export function getActiveJobs() {
   return activeJobs;
+}
+
+/**
+ * Get metadata for a job by jobId
+ * @param {string} jobId - Job identifier
+ * @returns {Promise<Object|null>} Metadata object or null if not found
+ */
+export async function getJobMetadata(jobId) {
+  const metadataInfo = jobMetadataMap.get(jobId);
+  if (!metadataInfo) {
+    return null;
+  }
+
+  const { metadataTracker } = metadataInfo;
+  const metadata = await metadataTracker.getMetadata();
+
+  // Enrich metadata with job result if job is completed
+  const jobStatus = activeJobs.get(jobId);
+  if (jobStatus && jobStatus.status === 'completed' && jobStatus.result) {
+    const result = jobStatus.result;
+
+    // Add winner information
+    if (result) {
+      metadata.winner = {
+        candidateId: result.metadata?.candidateId || 0,
+        iteration: result.metadata?.iteration || 0,
+        whatPrompt: result.whatPrompt || '',
+        howPrompt: result.howPrompt || '',
+        combined: result.combined || '',
+        totalScore: result.totalScore || 0
+      };
+
+      // Add finalists (winner + runner-up if available)
+      if (result.finalists && result.finalists.length > 0) {
+        metadata.finalists = result.finalists.map(finalist => ({
+          candidateId: finalist.metadata?.candidateId || 0,
+          iteration: finalist.metadata?.iteration || 0,
+          whatPrompt: finalist.whatPrompt || '',
+          howPrompt: finalist.howPrompt || '',
+          combined: finalist.combined || '',
+          totalScore: finalist.totalScore || 0,
+          ranking: finalist.ranking
+        }));
+      }
+    }
+  }
+
+  return metadata;
 }

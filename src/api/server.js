@@ -9,7 +9,7 @@ import { WebSocketServer } from 'ws';
 import { readFile } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
-import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
+import { startBeamSearchJob, getJobStatus, getJobMetadata } from './beam-search-worker.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -93,6 +93,28 @@ export function createApp() {
     }
 
     res.status(200).json(status);
+  });
+
+  // Job metadata endpoint for chain visualization
+  app.get('/api/jobs/:jobId/metadata', async (req, res) => {
+    const { jobId } = req.params;
+
+    try {
+      const metadata = await getJobMetadata(jobId);
+
+      if (!metadata) {
+        return res.status(404).json({
+          error: 'Job not found'
+        });
+      }
+
+      res.status(200).json(metadata);
+    } catch (error) {
+      console.error(`Error fetching metadata for job ${jobId}:`, error);
+      res.status(500).json({
+        error: 'Failed to fetch metadata'
+      });
+    }
   });
 
   // Image serving endpoint
