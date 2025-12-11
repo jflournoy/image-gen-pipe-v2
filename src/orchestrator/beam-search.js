@@ -378,6 +378,18 @@ async function initialExpansion(
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
     Array(N).fill().map(async (_, i) => {
+      const candidateId_str = `i0c${i}`;
+
+      // Progress: Prompt expansion starting
+      if (onStepProgress) {
+        onStepProgress({
+          stage: 'expand',
+          status: 'starting',
+          candidateId: candidateId_str,
+          message: `📝 ${candidateId_str}: Expanding 'what' and 'how' prompts...`
+        });
+      }
+
       // Generate WHAT and HOW in parallel for each candidate with rate limiting
       const [what, how] = await Promise.all([
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
@@ -421,6 +433,16 @@ async function initialExpansion(
             dimension: 'how',
             operation: 'expand'
           }
+        });
+      }
+
+      // Progress: Prompt expansion complete
+      if (onStepProgress) {
+        onStepProgress({
+          stage: 'expand',
+          status: 'complete',
+          candidateId: candidateId_str,
+          message: `✓ ${candidateId_str}: Prompts expanded (what and how generated)`
         });
       }
 
