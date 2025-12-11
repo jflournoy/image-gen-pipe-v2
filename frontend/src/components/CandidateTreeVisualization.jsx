@@ -5,6 +5,7 @@
  * Shows how candidates are generated, ranked, and refined across iterations.
  */
 
+import ExpandableText from './ExpandableText'
 import styles from './CandidateTreeVisualization.module.css'
 
 export default function CandidateTreeVisualization({ metadata }) {
@@ -48,14 +49,18 @@ export default function CandidateTreeVisualization({ metadata }) {
                     </div>
 
                     <div className={styles.candidate_prompts}>
-                      <div className={styles.prompt_section}>
-                        <strong>WHAT:</strong>
-                        <p>{candidate.whatPrompt}</p>
-                      </div>
-                      <div className={styles.prompt_section}>
-                        <strong>HOW:</strong>
-                        <p>{candidate.howPrompt}</p>
-                      </div>
+                      <ExpandableText
+                        label="WHAT"
+                        text={candidate.whatPrompt}
+                        maxLength={60}
+                        showLabel={true}
+                      />
+                      <ExpandableText
+                        label="HOW"
+                        text={candidate.howPrompt}
+                        maxLength={60}
+                        showLabel={true}
+                      />
                     </div>
 
                     {candidate.parentId !== null && (
@@ -94,20 +99,107 @@ export default function CandidateTreeVisualization({ metadata }) {
         <section className={styles.finalists_section}>
           <h2>🥇 Finalists</h2>
           <div className={styles.finalists_grid}>
-            {metadata.finalists.map((finalist, idx) => (
-              <div key={idx} className={styles.finalist_card}>
-                <h3>{idx === 0 ? '🥇 Winner' : '🥈 Runner-up'}</h3>
-                <p>
-                  <strong>ID:</strong> i{finalist.iteration}c{finalist.candidateId}
-                </p>
-                <p>
-                  <strong>WHAT:</strong> {finalist.whatPrompt}
-                </p>
-                <p>
-                  <strong>HOW:</strong> {finalist.howPrompt}
-                </p>
-              </div>
-            ))}
+            {metadata.finalists.map((finalist, idx) => {
+              const ranking = finalist.ranking || {}
+              const position = idx + 1
+              const rankLabel = position === 1 ? '🥇 Winner' : '🥈 Runner-up'
+              const explanation = position === 1
+                ? 'Better on comparative evaluation'
+                : 'Ranked lower on comparative evaluation'
+
+              return (
+                <div key={idx} className={styles.finalist_card}>
+                  <h3>{rankLabel}</h3>
+                  <p>
+                    <strong>ID:</strong> i{finalist.iteration}c{finalist.candidateId}
+                  </p>
+
+                  {/* Comparative ranking explanation */}
+                  {ranking.reason && (
+                    <div className={styles.ranking_section}>
+                      <div className={styles.rank_status}>
+                        ⭐ RANKED {position === 1 ? '1st' : '2nd'} ({explanation})
+                      </div>
+                      <ExpandableText
+                        label="💡 Why"
+                        text={ranking.reason}
+                        maxLength={100}
+                        showLabel={true}
+                      />
+                    </div>
+                  )}
+
+                  {/* Strengths and weaknesses */}
+                  {(ranking.strengths?.length > 0 || ranking.weaknesses?.length > 0) && (
+                    <div className={styles.attributes_section}>
+                      {ranking.strengths && ranking.strengths.length > 0 && (
+                        <div className={styles.strengths}>
+                          <div className={styles.attr_label}>✅ Strengths</div>
+                          <div className={styles.attr_list}>
+                            {ranking.strengths.slice(0, 3).map((strength, i) => (
+                              <div key={i} className={styles.attr_item}>
+                                • {strength}
+                              </div>
+                            ))}
+                            {ranking.strengths.length > 3 && (
+                              <div className={styles.attr_item}>
+                                [+{ranking.strengths.length - 3} more strengths]
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {ranking.weaknesses && ranking.weaknesses.length > 0 && (
+                        <div className={styles.weaknesses}>
+                          <div className={styles.attr_label}>⚠️ Weaknesses</div>
+                          <div className={styles.attr_list}>
+                            {ranking.weaknesses.slice(0, 3).map((weakness, i) => (
+                              <div key={i} className={styles.attr_item}>
+                                • {weakness}
+                              </div>
+                            ))}
+                            {ranking.weaknesses.length > 3 && (
+                              <div className={styles.attr_item}>
+                                [+{ranking.weaknesses.length - 3} more weaknesses]
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Prompts */}
+                  <ExpandableText
+                    label="📝 WHAT"
+                    text={finalist.whatPrompt}
+                    maxLength={80}
+                    showLabel={true}
+                  />
+                  <ExpandableText
+                    label="🎨 HOW"
+                    text={finalist.howPrompt}
+                    maxLength={80}
+                    showLabel={true}
+                  />
+
+                  {/* Image status */}
+                  {finalist.image?.url && (
+                    <div className={styles.image_info}>
+                      <div className={styles.image_status}>
+                        🖼️ Image: <span className={styles.status_found}>✓ Found</span>
+                      </div>
+                      <img
+                        src={finalist.image.url}
+                        alt={`${rankLabel} Image`}
+                        className={styles.finalist_image}
+                      />
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </div>
         </section>
       )}
