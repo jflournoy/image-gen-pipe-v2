@@ -6,7 +6,7 @@
 import express from 'express';
 import { randomUUID } from 'node:crypto';
 import { WebSocketServer } from 'ws';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
 import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
@@ -163,6 +163,141 @@ export function createApp() {
       status: 'cancelling',
       message: 'Job cancellation in progress'
     });
+  });
+
+  // List available sessions/jobs endpoint
+  app.get('/api/jobs', async (req, res) => {
+    try {
+      const outputDir = join(process.cwd(), 'output');
+      const sessions = [];
+
+      // Scan output directory for date subdirectories (YYYY-MM-DD format)
+      let dates = [];
+      try {
+        dates = await readdir(outputDir);
+      } catch (error) {
+        // Output directory may not exist yet
+        if (error.code === 'ENOENT') {
+          return res.status(200).json({ sessions: [] });
+        }
+        throw error;
+      }
+
+      // Filter for date directories and scan for sessions
+      for (const dateDir of dates) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(dateDir)) continue;
+
+        const datePath = join(outputDir, dateDir);
+        let sessionDirs = [];
+
+        try {
+          sessionDirs = await readdir(datePath);
+        } catch (error) {
+          console.warn(`[Jobs API] Error reading date directory ${datePath}:`, error.message);
+          continue;
+        }
+
+        // Filter for session directories and read metadata
+        for (const sessionDir of sessionDirs) {
+          const sessionRegex = /^ses-\d{6}$/;
+          if (!sessionRegex.test(sessionDir)) continue;
+
+          const metadataPath = join(datePath, sessionDir, 'metadata.json');
+
+          try {
+            const metadataJson = await readFile(metadataPath, 'utf-8');
+            const metadata = JSON.parse(metadataJson);
+
+            sessions.push({
+              sessionId: sessionDir,
+              date: dateDir,
+              timestamp: metadata.timestamp,
+              userPrompt: metadata.userPrompt,
+              config: metadata.config,
+              finalWinner: metadata.finalWinner,
+              iterationCount: metadata.iterations ? metadata.iterations.length : 0
+            });
+          } catch (error) {
+            console.warn(`[Jobs API] Error reading metadata for ${sessionDir}:`, error.message);
+            // Continue scanning other sessions even if one fails
+          }
+        }
+      }
+
+      // Sort by timestamp, newest first
+      sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+      res.status(200).json({ sessions });
+    } catch (error) {
+      console.error('[Jobs API] Error listing jobs:', error);
+      res.status(500).json({
+        error: 'Failed to list jobs'
+      });
+    }
+  });
+
+  // Get session metadata endpoint
+  app.get('/api/jobs/:sessionId', async (req, res) => {
+    const { sessionId } = req.params;
+
+    // Validate sessionId format (ses-HHMMSS)
+    const sessionRegex = /^ses-\d{6}$/;
+    if (!sessionRegex.test(sessionId)) {
+      return res.status(400).json({
+        error: 'Invalid session ID format'
+      });
+    }
+
+    try {
+      const outputDir = join(process.cwd(), 'output');
+
+      // Try to find the session in any date directory (scan recent dates first)
+      let dates = [];
+      try {
+        dates = await readdir(outputDir);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({
+            error: 'Session not found'
+          });
+        }
+        throw error;
+      }
+
+      // Sort dates in descending order to check recent dates first
+      dates = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+
+      for (const dateDir of dates) {
+        const metadataPath = join(outputDir, dateDir, sessionId, 'metadata.json');
+
+        try {
+          const metadataJson = await readFile(metadataPath, 'utf-8');
+          const metadata = JSON.parse(metadataJson);
+
+          return res.status(200).json({
+            sessionId,
+            date: dateDir,
+            metadata
+          });
+        } catch (error) {
+          // File doesn't exist in this date directory, continue to next
+          if (error.code !== 'ENOENT') {
+            console.warn(`[Jobs API] Error reading metadata for ${sessionId}:`, error.message);
+          }
+        }
+      }
+
+      // Session not found in any date directory
+      res.status(404).json({
+        error: 'Session not found'
+      });
+    } catch (error) {
+      console.error(`[Jobs API] Error retrieving session ${sessionId}:`, error);
+      res.status(500).json({
+        error: 'Failed to retrieve session'
+      });
+    }
   });
 
   // Image serving endpoint: /api/images/:sessionId/:filename
