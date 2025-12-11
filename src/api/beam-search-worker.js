@@ -134,6 +134,31 @@ export async function startBeamSearchJob(jobId, params) {
         const operationType = candidate.metadata.iteration === 0 ? 'expansion' : 'refinement';
         const candidateId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
 
+        // Emit step message with current token counts
+        const currentStats = tokenTracker.getStats();
+        const currentCost = tokenTracker.getEstimatedCost();
+        emitProgress(jobId, {
+          type: 'step',
+          candidateId,
+          operation: operationType,
+          message: `Processed ${candidateId}: ${currentStats.llmTokens || 0} LLM tokens, ${currentStats.visionTokens || 0} vision tokens`,
+          tokenUsage: {
+            total: currentStats.totalTokens,
+            llm: currentStats.llmTokens,
+            vision: currentStats.visionTokens,
+            critique: currentStats.critiqueTokens,
+            imageGen: currentStats.imageGenTokens
+          },
+          estimatedCost: {
+            total: currentCost.total,
+            llm: currentCost.llm,
+            vision: currentCost.vision,
+            critique: currentCost.critique,
+            imageGen: currentCost.imageGen
+          },
+          timestamp: new Date().toISOString()
+        });
+
         // Emit operation start message (once per candidate)
         emitProgress(jobId, {
           type: 'operation',
