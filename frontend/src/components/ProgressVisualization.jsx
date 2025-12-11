@@ -178,14 +178,22 @@ export default function ProgressVisualization({
       {/* Operation History */}
       {recentOperations.length > 0 && (
         <div className="operation-history">
-          <div className="history-label">Recent Steps:</div>
+          <div className="history-label">🔄 Progress Log:</div>
           <div className="history-list">
             {recentOperations.map((op, idx) => (
-              <div key={idx} className="history-item">
+              <div
+                key={idx}
+                className={`history-item ${op.type === 'step' ? 'history-step' : 'history-operation'}`}
+              >
                 <span className="history-time">
                   {op.timestamp ? new Date(op.timestamp).toLocaleTimeString() : ''}
                 </span>
                 <span className="history-message">{op.message}</span>
+                {op.type === 'step' && op.tokenUsage && (
+                  <span className="history-tokens">
+                    {formatTokens(op.tokenUsage.total)} tokens
+                  </span>
+                )}
               </div>
             ))}
           </div>

@@ -247,6 +247,20 @@
   background: white;
   border-radius: 3px;
   border-left: 2px solid #0d6efd;
+  align-items: center;
+}
+
+/* Step messages: micro-progress with token counts (lighter styling) */
+.history-item.history-step {
+  border-left-color: #17a2b8;
+  background: #f0f7fb;
+}
+
+/* Operation messages: phase starts (bolder styling) */
+.history-item.history-operation {
+  border-left-color: #0d6efd;
+  background: white;
+  font-weight: 500;
 }
 
 .history-time {
@@ -259,6 +273,17 @@
 .history-message {
   flex: 1;
   color: #495057;
+}
+
+.history-tokens {
+  font-family: 'Courier New', monospace;
+  color: #17a2b8;
+  font-weight: 600;
+  flex-shrink: 0;
+  font-size: 0.75rem;
+  padding: 0.125rem 0.375rem;
+  background: rgba(23, 162, 184, 0.1);
+  border-radius: 2px;
 }
 
 .candidates-info,
