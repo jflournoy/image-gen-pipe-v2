@@ -12,6 +12,7 @@ import ErrorDisplay from './components/ErrorDisplay';
 import CandidateTreeVisualization from './components/CandidateTreeVisualization';
 import CostDisplay from './components/CostDisplay';
 import useWebSocket from './hooks/useWebSocket';
+import { generateCandidateId } from './utils/candidateId';
 import './App.css';
 
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:3000'
@@ -168,11 +169,12 @@ function App() {
 
     candidateMessages.forEach(msg => {
       const candidateKey = `${msg.iteration}-${msg.candidateId}`;
+      const candidateId = generateCandidateId(msg.iteration, msg.candidateId);
 
       // Create or merge candidate data
       if (!candidateMap[candidateKey]) {
         candidateMap[candidateKey] = {
-          id: `i${msg.iteration}c${msg.candidateId}`,
+          id: candidateId,
           iteration: msg.iteration,
           candidateId: msg.candidateId,
           imageUrl: null,
@@ -209,10 +211,11 @@ function App() {
   // When ranked messages arrive, check if rank <= keepTop (survived)
   const survivalStatus = useMemo(() => {
     const status = {};
+    const keepTopCount = lastFormData?.m || 2;
     rankedMessages.forEach(msg => {
-      const id = `i${msg.iteration}c${msg.candidateId}`;
+      const id = generateCandidateId(msg.iteration, msg.candidateId);
       status[id] = {
-        survived: msg.rank <= (lastFormData?.m || 2),
+        survived: msg.rank <= keepTopCount,
         rank: msg.rank
       };
     });
@@ -226,7 +229,7 @@ function App() {
       const newImages = newCandidates
         .filter((candidate) => candidate.imageUrl)
         .map((candidate) => ({
-          id: `i${candidate.iteration}c${candidate.candidateId}`,
+          id: generateCandidateId(candidate.iteration, candidate.candidateId),
           url: candidate.imageUrl,
           score: candidate.score,        // Keep for sorting/legacy
           ranking: candidate.ranking,    // Add ranking data
@@ -249,7 +252,7 @@ function App() {
         prevImages.map((image) => {
           // Find matching ranked message for this image
           const rankedMsg = rankedMessages.find(
-            (msg) => `i${msg.iteration}c${msg.candidateId}` === image.id
+            (msg) => generateCandidateId(msg.iteration, msg.candidateId) === image.id
           );
 
           if (rankedMsg) {
