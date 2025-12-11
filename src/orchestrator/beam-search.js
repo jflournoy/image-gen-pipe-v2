@@ -256,6 +256,9 @@ async function processCandidateStream(
       ? `/api/images/${options.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
       : image.url; // Fallback to OpenAI URL if local save failed
 
+    const filename = image.localPath ? image.localPath.split(/[\\/]/).pop() : 'unknown';
+    console.log(`[ProcessCandidate] Generated image for ${candidateId_str}: localPath=${image.localPath}, filename=${filename}, imageUrl=${imageUrl}`);
+
     onStepProgress({
       stage: 'imageGen',
       status: 'complete',
@@ -573,6 +576,9 @@ async function initialExpansion(
           const imageUrl = image.localPath
             ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
             : image.url; // Fallback to OpenAI URL if local save failed
+
+          const filename = image.localPath ? image.localPath.split(/[\\/]/).pop() : 'unknown';
+          console.log(`[InitialExpansion] Generated image for ${candidateId_str}: localPath=${image.localPath}, filename=${filename}, imageUrl=${imageUrl}`);
 
           onStepProgress({
             stage: 'imageGen',
