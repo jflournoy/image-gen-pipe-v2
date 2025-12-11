@@ -10,6 +10,15 @@ import CandidateCard from './CandidateCard';
 import './IterationColumn.css';
 
 export default function IterationColumn({ iteration, candidates, survivalStatus }) {
+  // Debug: Log which candidates are rendering and their image URLs
+  if (candidates.length > 0) {
+    const candidatesWithImages = candidates.filter(c => c.imageUrl);
+    const candidatesWithParents = candidates.filter(c => c.parentId !== null && c.parentId !== undefined);
+    if (candidatesWithImages.length > 0 || candidatesWithParents.length > 0) {
+      console.log(`[IterationColumn ${iteration}] ${candidates.length} candidates: ${candidatesWithImages.length} with images, ${candidatesWithParents.length} with parents`);
+    }
+  }
+
   return (
     <div className="iteration-column">
       <div className="iteration-header">
