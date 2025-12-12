@@ -3,15 +3,12 @@
  * Main application component integrating BeamSearchForm and WebSocket
  */
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import BeamSearchForm from './components/BeamSearchForm';
 import ImageGallery from './components/ImageGallery';
-import BeamSearchTimeline from './components/BeamSearchTimeline';
 import ProgressVisualization from './components/ProgressVisualization';
 import ErrorDisplay from './components/ErrorDisplay';
-import CandidateTreeVisualization from './components/CandidateTreeVisualization';
 import JobSelector from './components/JobSelector';
-import CostDisplay from './components/CostDisplay';
 import useWebSocket from './hooks/useWebSocket';
 import { generateCandidateId } from './utils/candidateId';
 import './App.css';
@@ -27,13 +24,11 @@ function App() {
   const [apiError, setApiError] = useState(null);
   const [retrying, setRetrying] = useState(false);
   const [cancelling, setCancelling] = useState(false);
-  const [metadata, setMetadata] = useState(null);
   const [tokenUsage, setTokenUsage] = useState(null);
   const [estimatedCost, setEstimatedCost] = useState(null);
   const [showJobSelector, setShowJobSelector] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState(null);
-  const [selectedSessionMetadata, setSelectedSessionMetadata] = useState(null);
-  const { isConnected, messages, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
+  const { isConnected, error, subscribe, getMessagesByType } = useWebSocket(WS_URL);
 
   const handleFormSubmit = useCallback(async (formData) => {
     try {
@@ -132,9 +127,8 @@ function App() {
         return;
       }
 
-      const sessionData = await response.json();
+      await response.json();
       setSelectedSessionId(sessionId);
-      setSelectedSessionMetadata(sessionData.metadata);
       setCurrentStatus('completed');
       setShowJobSelector(false);
 
@@ -152,12 +146,10 @@ function App() {
   }, []);
 
   // Get messages by type
-  const startedMessages = getMessagesByType('started');
   const iterationMessages = getMessagesByType('iteration');
   const candidateMessages = getMessagesByType('candidate');
   const rankedMessages = getMessagesByType('ranked');
   const operationMessages = getMessagesByType('operation');
-  const stepMessages = getMessagesByType('step');
   const completeMessages = getMessagesByType('complete');
   const errorMessages = getMessagesByType('error');
   const cancelledMessages = getMessagesByType('cancelled');
@@ -169,24 +161,6 @@ function App() {
   const bestScore = latestIteration?.bestScore || 0;
   const currentOperation = operationMessages[operationMessages.length - 1];
 
-  // Combine all progress messages for detailed progress display
-  // Include started, operation, step, and iteration messages in chronological order
-  const allProgressMessages = [
-    ...startedMessages.map(msg => ({
-      ...msg,
-      type: 'operation',
-      message: `✓ Beam search job started: ${msg.params?.prompt?.substring(0, 50) || 'generating images'}...`
-    })),
-    ...operationMessages,
-    ...stepMessages,
-    ...iterationMessages.map(msg => ({
-      ...msg,
-      type: 'operation',
-      message: `✓ Iteration ${msg.iteration} complete: ${msg.candidatesCount} candidates ranked, top score: ${msg.bestScore?.toFixed(2) || '0'}`
-    }))
-  ].sort((a, b) =>
-    new Date(a.timestamp || 0) - new Date(b.timestamp || 0)
-  );
 
   // Calculate elapsed time
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -201,79 +175,7 @@ function App() {
     }
   }, [currentStatus, jobStartTime]);
 
-  // NEW: Aggregate candidates by iteration for timeline view
-  // Merge updates for same candidate to avoid duplicates
-  const candidatesByIteration = useMemo(() => {
-    const grouped = {};
-    const candidateMap = {}; // Map to store latest version of each candidate
 
-    candidateMessages.forEach(msg => {
-      const candidateKey = `${msg.iteration}-${msg.candidateId}`;
-      const candidateId = generateCandidateId(msg.iteration, msg.candidateId);
-
-      // Create or merge candidate data
-      if (!candidateMap[candidateKey]) {
-        candidateMap[candidateKey] = {
-          id: candidateId,
-          iteration: msg.iteration,
-          candidateId: msg.candidateId,
-          imageUrl: null,
-          combined: null,
-          whatPrompt: null,
-          howPrompt: null,
-          ranking: null,
-          parentId: null,
-          timestamp: msg.timestamp
-        };
-      }
-
-      // Merge in new data (later messages override earlier ones)
-      const candidate = candidateMap[candidateKey];
-      if (msg.imageUrl) candidate.imageUrl = msg.imageUrl;
-      if (msg.combined) candidate.combined = msg.combined;
-      if (msg.whatPrompt) candidate.whatPrompt = msg.whatPrompt;
-      if (msg.howPrompt) candidate.howPrompt = msg.howPrompt;
-      if (msg.ranking) candidate.ranking = msg.ranking;
-      if (msg.parentId !== undefined) candidate.parentId = msg.parentId;
-      if (msg.timestamp) candidate.timestamp = msg.timestamp;
-    });
-
-    // Group candidates by iteration
-    Object.values(candidateMap).forEach(candidate => {
-      if (!grouped[candidate.iteration]) grouped[candidate.iteration] = [];
-      grouped[candidate.iteration].push(candidate);
-    });
-
-    return grouped;
-  }, [candidateMessages]);
-
-  // NEW: Calculate survival status from ranking data
-  // When ranked messages arrive, check if rank <= keepTop (survived)
-  const survivalStatus = useMemo(() => {
-    const status = {};
-    const keepTopCount = lastFormData?.m || 2;
-    rankedMessages.forEach(msg => {
-      const id = generateCandidateId(msg.iteration, msg.candidateId);
-      status[id] = {
-        survived: msg.rank <= keepTopCount,
-        rank: msg.rank
-      };
-    });
-    return status;
-  }, [rankedMessages, lastFormData]);
-
-  // Debug: Log candidate messages to understand what data we're receiving
-  useEffect(() => {
-    if (candidateMessages.length > 0 && currentStatus === 'running') {
-      const candidatesWithImages = candidateMessages.filter(m => m.imageUrl);
-      const candidatesWithParents = candidateMessages.filter(m => m.parentId !== undefined);
-      console.log(`[Timeline Debug] Candidates: ${candidateMessages.length} total, ${candidatesWithImages.length} with images, ${candidatesWithParents.length} with parentId`, {
-        sample: candidateMessages[candidateMessages.length - 1],
-        candidatesByIteration: Object.keys(candidatesByIteration).length,
-        totalCandidatesAggregated: Object.values(candidatesByIteration).reduce((sum, arr) => sum + arr.length, 0)
-      });
-    }
-  }, [candidateMessages, currentStatus, candidatesByIteration]);
 
   // Handle candidate messages - add images as they come in
   useEffect(() => {
@@ -343,18 +245,8 @@ function App() {
         }
       }
 
-      // Fetch metadata for completed job
-      if (currentJobId) {
-        fetch(`http://localhost:3000/api/jobs/${currentJobId}/metadata`)
-          .then((res) => {
-            if (res.ok) return res.json();
-            throw new Error('Failed to fetch metadata');
-          })
-          .then((data) => setMetadata(data))
-          .catch((err) => console.error('Error fetching metadata:', err));
-      }
     }
-  }, [completeMessages, currentJobId]);
+  }, [completeMessages, currentJobId, images.length]);
 
   // Get the latest error message from WebSocket backend
   const latestErrorMessage = errorMessages.length > 0 ? errorMessages[errorMessages.length - 1]?.message : null;
@@ -474,29 +366,9 @@ function App() {
               currentOperation={currentOperation}
               tokenUsage={tokenUsage}
               estimatedCost={estimatedCost}
-              operationMessages={allProgressMessages}
+              operationMessages={operationMessages}
               onCancel={handleCancel}
               cancelling={cancelling}
-            />
-          </section>
-        )}
-
-        <section className="cost-section">
-          <CostDisplay
-            status={currentStatus}
-            params={lastFormData}
-            tokenUsage={estimatedCost || tokenUsage}
-            finalCost={estimatedCost?.total}
-          />
-        </section>
-
-        {/* During execution: Show horizontal timeline view */}
-        {currentStatus === 'running' && Object.keys(candidatesByIteration).length > 0 && (
-          <section className="timeline-section">
-            <h2>Real-Time Evolution Timeline</h2>
-            <BeamSearchTimeline
-              candidatesByIteration={candidatesByIteration}
-              survivalStatus={survivalStatus}
             />
           </section>
         )}
@@ -510,13 +382,6 @@ function App() {
           />
         </section>
 
-        {/* After completion: Show tree visualization and analysis */}
-        {(metadata || selectedSessionMetadata) && (
-          <section className="visualization-section">
-            <CandidateTreeVisualization metadata={metadata || selectedSessionMetadata} />
-          </section>
-        )}
-
         {/* Show back button when viewing a previous job */}
         {selectedSessionId && (
           <section className="back-section">
@@ -524,7 +389,6 @@ function App() {
               className="btn-back"
               onClick={() => {
                 setSelectedSessionId(null);
-                setSelectedSessionMetadata(null);
                 setCurrentStatus(null);
               }}
             >
