@@ -221,7 +221,10 @@ export function createApp() {
               iterationCount: metadata.iterations ? metadata.iterations.length : 0
             });
           } catch (error) {
-            console.warn(`[Jobs API] Error reading metadata for ${sessionDir}:`, error.message);
+            // Only log non-ENOENT errors (file not found is expected for incomplete jobs)
+            if (error.code !== 'ENOENT') {
+              console.warn(`[Jobs API] Error reading metadata for ${sessionDir}:`, error.message);
+            }
             // Continue scanning other sessions even if one fails
           }
         }
