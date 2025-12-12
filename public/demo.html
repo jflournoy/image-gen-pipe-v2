@@ -3,137 +3,185 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Beam Search Image Generator</title>
-  <link rel="stylesheet" href="/demo.css">
+  <title>Beam Search Demo</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container { max-width: 900px; margin: 0 auto; }
+    h1 { color: #333; }
+
+    .form-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+    }
+
+    .form-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #555;
+    }
+
+    input, textarea {
+      width: 100%;
+      padding: 8px;
+      font-family: monospace;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 60px;
+    }
+
+    .params-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 15px;
+    }
+
+    button {
+      padding: 10px 20px;
+      font-size: 14px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+    }
+
+    .btn-start {
+      background: #4CAF50;
+      color: white;
+    }
+
+    .btn-start:hover:not(:disabled) {
+      background: #45a049;
+    }
+
+    .btn-stop {
+      background: #f44336;
+      color: white;
+    }
+
+    .btn-stop:hover:not(:disabled) {
+      background: #da190b;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .messages-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    .messages-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .messages-log {
+      background: #000;
+      color: #0f0;
+      padding: 15px;
+      border-radius: 4px;
+      font-size: 12px;
+      max-height: 500px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      line-height: 1.5;
+    }
+
+    .message {
+      margin-bottom: 5px;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .message.info { color: #0f0; }
+    .message.event { color: #0ff; }
+    .message.error { color: #f00; }
+    .message.warning { color: #ff0; }
+
+    .status {
+      display: inline-block;
+      padding: 5px 10px;
+      border-radius: 3px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .status.idle { background: #ddd; color: #666; }
+    .status.running { background: #4CAF50; color: white; }
+    .status.error { background: #f44336; color: white; }
+  </style>
 </head>
 <body>
-  <div class="demo-container">
-    <!-- Header -->
-    <header class="demo-header">
-      <h1>Beam Search Image Generator</h1>
-      <p class="subtitle">Interactive demo of AI-powered image refinement through iterative beam search</p>
-    </header>
+  <div class="container">
+    <h1>Beam Search Demo - Real-time Messages</h1>
 
-    <!-- Form Section -->
-    <section id="form-section" class="form-section">
-      <h2>Configure & Start</h2>
-      <form id="demo-form">
+    <div class="form-section">
+      <h2>Configuration</h2>
+      <div class="form-group">
+        <label for="prompt">Prompt:</label>
+        <textarea id="prompt" placeholder="Enter your prompt here...">A beautiful sunset over mountains</textarea>
+      </div>
+
+      <div class="params-grid">
         <div class="form-group">
-          <label for="prompt">Prompt:</label>
-          <textarea
-            id="prompt"
-            name="prompt"
-            rows="3"
-            placeholder="Describe the image you want to generate..."
-            required></textarea>
-          <small>Be descriptive and specific for better results</small>
+          <label for="n">Beam Width (N):</label>
+          <input type="number" id="n" value="4" min="2" max="8">
         </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="beamWidth">Beam Width (N):</label>
-            <input type="number" id="beamWidth" name="beamWidth" min="2" max="8" value="4" required>
-            <small>Candidates per iteration (2-8)</small>
-          </div>
-          <div class="form-group">
-            <label for="keepTop">Keep Top (M):</label>
-            <input type="number" id="keepTop" name="keepTop" min="1" max="4" value="2" required>
-            <small>Best candidates to advance (1-4)</small>
-          </div>
-          <div class="form-group">
-            <label for="maxIterations">Max Iterations:</label>
-            <input type="number" id="maxIterations" name="maxIterations" min="1" max="5" value="3" required>
-            <small>Refinement rounds (1-5)</small>
-          </div>
+        <div class="form-group">
+          <label for="m">Keep Top (M):</label>
+          <input type="number" id="m" value="2" min="1" max="4">
         </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="alpha">Alpha:</label>
-            <input type="number" id="alpha" name="alpha" min="0" max="1" step="0.1" value="0.7" required>
-            <small>Alignment weight (0-1)</small>
-          </div>
-          <div class="form-group">
-            <label for="temperature">Temperature:</label>
-            <input type="number" id="temperature" name="temperature" min="0" max="2" step="0.1" value="0.8" required>
-            <small>Diversity/creativity (0-2)</small>
-          </div>
-          <div class="form-group">
-            <label for="ensembleSize">Ensemble Votes:</label>
-            <input type="number" id="ensembleSize" name="ensembleSize" min="1" max="5" value="3" required>
-            <small>Votes per comparison (1-5)</small>
-          </div>
+        <div class="form-group">
+          <label for="maxIterations">Max Iterations:</label>
+          <input type="number" id="maxIterations" value="2" min="1" max="5">
         </div>
-
-        <div class="form-actions">
-          <button type="submit" id="start-btn" class="btn btn-primary">Start Demo</button>
-          <button type="button" id="cancel-btn" class="btn btn-danger" disabled>Cancel</button>
+        <div class="form-group">
+          <label for="alpha">Alpha:</label>
+          <input type="number" id="alpha" value="0.7" min="0" max="1" step="0.1">
         </div>
-      </form>
-    </section>
-
-    <!-- Progress Section (hidden until job starts) -->
-    <section id="progress-section" class="progress-section" style="display:none;">
-      <div class="progress-header">
-        <h2>Progress</h2>
-        <span id="status-badge" class="status-badge">Initializing...</span>
-      </div>
-
-      <div class="progress-bar-container">
-        <div id="progress-bar" class="progress-bar"></div>
-        <span id="progress-percent">0%</span>
-      </div>
-
-      <div class="progress-metrics">
-        <div class="metric">
-          <span class="metric-label">Iteration:</span>
-          <span id="iteration-text" class="metric-value">0/0</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Elapsed:</span>
-          <span id="elapsed-text" class="metric-value">0s</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Tokens:</span>
-          <span id="tokens-text" class="metric-value">0</span>
-        </div>
-        <div class="metric">
-          <span class="metric-label">Cost:</span>
-          <span id="cost-text" class="metric-value">$0.00</span>
+        <div class="form-group">
+          <label for="temperature">Temperature:</label>
+          <input type="number" id="temperature" value="0.8" min="0" max="2" step="0.1">
         </div>
       </div>
 
-      <div class="status-message">
-        <p id="status-message">Initializing...</p>
+      <div style="margin-top: 15px;">
+        <button id="startBtn" class="btn-start">Start Beam Search</button>
+        <button id="stopBtn" class="btn-stop" disabled>Stop</button>
       </div>
-    </section>
+    </div>
 
-    <!-- Lineage Section (hidden until candidates appear) -->
-    <section id="lineage-section" class="lineage-section" style="display:none;">
-      <h2>Candidate Lineage</h2>
-      <svg id="lineage-svg" class="lineage-svg"></svg>
-      <p class="lineage-help">Shows parent-child relationships and scores as the search progresses</p>
-    </section>
-
-    <!-- Images Section (hidden until images appear) -->
-    <section id="images-section" class="images-section" style="display:none;">
-      <h2>Generated Images</h2>
-      <div id="images-grid" class="images-grid"></div>
-    </section>
-
-    <!-- Results Section (hidden until completion) -->
-    <section id="results-section" class="results-section" style="display:none;">
-      <h2>Final Results</h2>
-      <div id="results-content" class="results-content"></div>
-    </section>
-
-    <!-- Error Section -->
-    <section id="error-section" class="error-section" style="display:none;">
-      <div class="error-alert">
-        <h3>Error</h3>
-        <p id="error-message"></p>
+    <div class="messages-section">
+      <div class="messages-header">
+        <h2>Messages</h2>
+        <span id="status" class="status idle">Idle</span>
       </div>
-    </section>
+      <div id="messages" class="messages-log"></div>
+    </div>
   </div>
 
   <script src="/demo.js"></script>
