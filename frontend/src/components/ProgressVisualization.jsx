@@ -1,11 +1,9 @@
 /**
- * @file ProgressVisualization Component (TDD GREEN)
- * Displays progress information for beam search jobs with token tracking
+ * @file ProgressVisualization Component
+ * Simple progress display for beam search jobs
  */
 
-import { useState } from 'react';
 import PropTypes from 'prop-types';
-import { getErrorSummary } from '../utils/error-formatter';
 import './ProgressVisualization.css';
 
 export default function ProgressVisualization({
@@ -13,242 +11,104 @@ export default function ProgressVisualization({
   status,
   currentIteration = 0,
   totalIterations = 0,
-  candidatesProcessed,
-  totalCandidates,
   bestScore,
   elapsedTime,
   error,
-  currentOperation,
   tokenUsage,
   estimatedCost,
-  operationMessages = [],
   onCancel,
   cancelling = false
 }) {
-  const [showErrorDetails, setShowErrorDetails] = useState(false);
-
-  // Don't render if no job is active
   if (!jobId && !status) {
     return null;
   }
 
-  // Format error message gracefully
-  const getFormattedError = () => {
-    if (!error) return null;
-    return getErrorSummary(error);
-  };
+  const progressPercent = totalIterations > 0
+    ? Math.min(100, (currentIteration / totalIterations) * 100)
+    : 0;
 
-  const formattedError = getFormattedError();
-
-  // Calculate progress percentage
-  const calculateProgress = () => {
-    if (totalIterations === 0) return 0;
-    const progress = (currentIteration / totalIterations) * 100;
-    return Math.min(100, Math.max(0, progress)); // Clamp between 0-100
-  };
-
-  const progressPercent = calculateProgress();
-
-  // Format elapsed time
   const formatElapsedTime = (ms) => {
     if (!ms) return null;
-
     const seconds = Math.floor(ms / 1000);
-    if (seconds < 60) {
-      return `${seconds}s`;
-    }
-
+    if (seconds < 60) return `${seconds}s`;
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = seconds % 60;
     return `${minutes}m ${remainingSeconds}s`;
   };
 
-  const formattedElapsedTime = formatElapsedTime(elapsedTime);
-
-  // Format token counts with commas
   const formatTokens = (tokens) => {
     if (tokens === undefined || tokens === null) return '0';
     return tokens.toLocaleString();
   };
 
-  // Format cost as currency
   const formatCost = (cost) => {
     if (cost === undefined || cost === null) return '$0.00';
     return `$${cost.toFixed(4)}`;
   };
 
-  // Get recent progress messages (last 15 for better visibility of micro-progress)
-  const recentOperations = operationMessages.slice(-15);
-
-  // Determine CSS classes
-  const containerClasses = [
-    'progress-visualization',
-    status
-  ].filter(Boolean).join(' ');
-
-  const progressBarClasses = [
-    'progress-bar-fill',
-    status === 'running' && 'animated'
-  ].filter(Boolean).join(' ');
-
   return (
-    <div className={containerClasses} role="status" aria-live="polite">
+    <div className="progress-visualization" role="status" aria-live="polite">
       <div className="progress-header">
-        <div className="progress-info">
-          <span className="job-id">Job: {jobId}</span>
-          <span className="status-badge">Status: {status}</span>
-        </div>
-
-        <div className="progress-controls">
-          {formattedElapsedTime && (
-            <div className="elapsed-time">
-              Elapsed: {formattedElapsedTime}
-            </div>
-          )}
-
-          {status === 'running' && onCancel && (
-            <button
-              className="cancel-button"
-              onClick={onCancel}
-              disabled={cancelling}
-              title="Cancel this beam search job"
-            >
-              {cancelling ? '⏸ Cancelling...' : '⏹ Cancel'}
-            </button>
-          )}
-        </div>
+        <span className="job-id">Job: {jobId}</span>
+        <span className="status-badge">Status: {status}</span>
       </div>
 
-      {(totalIterations > 0 || currentIteration === 0) && (
-        <div className="iteration-info">
-          <span>Iteration {currentIteration} of {totalIterations}</span>
-          <span className="progress-percent">{Math.round(progressPercent)}%</span>
-        </div>
-      )}
-
-      {(totalIterations > 0 || currentIteration === 0) && (
-        <div className="progress-bar">
-          <div
-            className={progressBarClasses}
-            style={{ width: `${progressPercent}%` }}
-            role="progressbar"
-            aria-valuenow={progressPercent}
-            aria-valuemin="0"
-            aria-valuemax="100"
-          />
-        </div>
-      )}
-
-      {currentOperation && (
-        <div className="operation-info">
-          <span className="operation-label">Processing:</span>
-          <span className="operation-message">{currentOperation.message}</span>
-        </div>
-      )}
-
-      {/* Token Usage and Cost Display */}
-      {(tokenUsage || estimatedCost) && (
-        <div className="tokens-cost-section">
-          <div className="tokens-grid">
-            {tokenUsage?.llm !== undefined && (
-              <div className="token-item">
-                <span className="token-label">LLM Tokens:</span>
-                <span className="token-value">{formatTokens(tokenUsage.llm)}</span>
-              </div>
-            )}
-            {tokenUsage?.vision !== undefined && (
-              <div className="token-item">
-                <span className="token-label">Vision Tokens:</span>
-                <span className="token-value">{formatTokens(tokenUsage.vision)}</span>
-              </div>
-            )}
-            {tokenUsage?.imageGen !== undefined && (
-              <div className="token-item">
-                <span className="token-label">ImageGen Tokens:</span>
-                <span className="token-value">{formatTokens(tokenUsage.imageGen)}</span>
-              </div>
-            )}
-            {tokenUsage?.critique !== undefined && (
-              <div className="token-item">
-                <span className="token-label">Critique Tokens:</span>
-                <span className="token-value">{formatTokens(tokenUsage.critique)}</span>
-              </div>
-            )}
-            {tokenUsage?.total !== undefined && (
-              <div className="token-item token-total">
-                <span className="token-label">Total Tokens:</span>
-                <span className="token-value">{formatTokens(tokenUsage.total)}</span>
-              </div>
-            )}
-            {estimatedCost?.total !== undefined && (
-              <div className="token-item cost-item">
-                <span className="token-label">Estimated Cost:</span>
-                <span className="token-value cost-value">{formatCost(estimatedCost.total)}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Operation History */}
-      {recentOperations.length > 0 && (
-        <div className="operation-history">
-          <div className="history-label">🔄 Progress Log:</div>
-          <div className="history-list">
-            {recentOperations.map((op, idx) => (
-              <div
-                key={idx}
-                className={`history-item ${op.type === 'step' ? 'history-step' : 'history-operation'}`}
-              >
-                <span className="history-time">
-                  {op.timestamp ? new Date(op.timestamp).toLocaleTimeString() : ''}
-                </span>
-                <span className="history-message">{op.message}</span>
-                {op.type === 'step' && op.tokenUsage && (
-                  <span className="history-tokens">
-                    {formatTokens(op.tokenUsage.total)} tokens
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(candidatesProcessed !== undefined && totalCandidates !== undefined) && (
-        <div className="candidates-info">
-          Candidates: {candidatesProcessed} / {totalCandidates}
-        </div>
-      )}
-
-      {bestScore !== undefined && (
-        <div className="best-score">
-          Best score: {bestScore}
-        </div>
-      )}
-
-      {formattedError && (
-        <div className={`error-message ${formattedError.isSafety ? 'safety-error' : ''}`} role="alert">
-          <div className="error-main">
-            <strong>{formattedError.message}</strong>
-          </div>
-          {formattedError.suggestion && (
-            <div className="error-suggestion">{formattedError.suggestion}</div>
-          )}
-          {formattedError.hasDetails && (
-            <div className="error-details-section">
-              <button
-                className="details-toggle"
-                onClick={() => setShowErrorDetails(!showErrorDetails)}
-                aria-expanded={showErrorDetails}
-              >
-                {showErrorDetails ? '▼' : '▶'} Technical Details
-              </button>
-              {showErrorDetails && (
-                <div className="error-details">{formattedError.details}</div>
-              )}
+      <div className="progress-content">
+        {totalIterations > 0 && (
+          <>
+            <div className="progress-info">
+              <div>Iteration {currentIteration} of {totalIterations}</div>
+              <div className="progress-percent">{Math.round(progressPercent)}%</div>
             </div>
+
+            <div className="progress-bar">
+              <div
+                className="progress-bar-fill"
+                style={{ width: `${progressPercent}%` }}
+                role="progressbar"
+                aria-valuenow={progressPercent}
+                aria-valuemin="0"
+                aria-valuemax="100"
+              />
+            </div>
+          </>
+        )}
+
+        <div className="progress-stats">
+          {formatElapsedTime(elapsedTime) && (
+            <span className="stat">Elapsed: {formatElapsedTime(elapsedTime)}</span>
           )}
+          {bestScore !== undefined && (
+            <span className="stat">Best Score: {bestScore.toFixed(2)}</span>
+          )}
+          {estimatedCost?.total !== undefined && (
+            <span className="stat">Cost: {formatCost(estimatedCost.total)}</span>
+          )}
+        </div>
+
+        {(tokenUsage?.total !== undefined || estimatedCost?.total !== undefined) && (
+          <div className="tokens-info">
+            {tokenUsage?.total !== undefined && (
+              <span>Tokens: {formatTokens(tokenUsage.total)}</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {status === 'running' && onCancel && (
+        <button
+          className="cancel-button"
+          onClick={onCancel}
+          disabled={cancelling}
+          title="Cancel this beam search job"
+        >
+          {cancelling ? 'Cancelling...' : 'Cancel'}
+        </button>
+      )}
+
+      {error && (
+        <div className="error-message" role="alert">
+          <strong>Error:</strong> {error}
         </div>
       )}
     </div>
@@ -257,36 +117,18 @@ export default function ProgressVisualization({
 
 ProgressVisualization.propTypes = {
   jobId: PropTypes.string,
-  status: PropTypes.oneOf(['running', 'completed', 'error']),
+  status: PropTypes.oneOf(['running', 'completed', 'error', 'cancelled']),
   currentIteration: PropTypes.number,
   totalIterations: PropTypes.number,
-  candidatesProcessed: PropTypes.number,
-  totalCandidates: PropTypes.number,
   bestScore: PropTypes.number,
   elapsedTime: PropTypes.number,
   error: PropTypes.string,
-  currentOperation: PropTypes.shape({
-    message: PropTypes.string,
-    operation: PropTypes.string,
-    candidateId: PropTypes.string,
-    status: PropTypes.string
-  }),
   tokenUsage: PropTypes.shape({
-    llm: PropTypes.number,
-    vision: PropTypes.number,
-    imageGen: PropTypes.number,
-    critique: PropTypes.number,
     total: PropTypes.number
   }),
   estimatedCost: PropTypes.shape({
-    llm: PropTypes.number,
-    vision: PropTypes.number,
-    imageGen: PropTypes.number,
-    critique: PropTypes.number,
     total: PropTypes.number
   }),
-  operationMessages: PropTypes.arrayOf(PropTypes.shape({
-    message: PropTypes.string,
-    timestamp: PropTypes.string
-  }))
+  onCancel: PropTypes.func,
+  cancelling: PropTypes.bool
 };

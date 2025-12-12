@@ -10,6 +10,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
 import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
+import demoRouter from './demo-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -45,6 +46,7 @@ export function createApp() {
 
   // Middleware
   app.use(express.json());
+  app.use(express.static('public'));
 
   // Health check endpoint
   app.get('/health', (req, res) => {
@@ -382,42 +384,7 @@ export function createApp() {
     res.status(200).json(metrics);
   });
 
-  app.post('/api/demo/start', (req, res) => {
-    const { prompt, beamWidth, keepTop, maxIterations } = req.body;
-    const jobId = randomUUID();
-
-    // Start beam search with demo config
-    startBeamSearchJob(jobId, {
-      prompt,
-      n: beamWidth,
-      m: keepTop,
-      iterations: maxIterations
-    }).catch(error => {
-      console.error(`Error in demo job ${jobId}:`, error);
-    });
-
-    res.status(200).json({
-      jobId,
-      config: {
-        rateLimits: rateLimitConfig.defaults
-      }
-    });
-  });
-
-  app.get('/api/demo/progress/:jobId', (req, res) => {
-    const { jobId } = req.params;
-    const status = getJobStatus(jobId);
-
-    if (!status) {
-      return res.status(404).json({ error: 'Job not found' });
-    }
-
-    const metrics = getRateLimiterMetrics();
-    res.status(200).json({
-      ...status,
-      rateLimitStatus: metrics
-    });
-  });
+  // Demo endpoints are handled by demoRouter below
 
   app.get('/demo', async (req, res) => {
     try {
@@ -429,6 +396,9 @@ export function createApp() {
       res.status(500).json({ error: 'Failed to serve demo page' });
     }
   });
+
+  // Register demo routes
+  app.use('/api/demo', demoRouter);
 
   return app;
 }
