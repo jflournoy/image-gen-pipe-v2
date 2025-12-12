@@ -20,6 +20,7 @@ function App() {
   const [jobStartTime, setJobStartTime] = useState(null);
   const [currentStatus, setCurrentStatus] = useState(null);
   const [images, setImages] = useState([]);
+  const [metadata, setMetadata] = useState(null);
   const [lastFormData, setLastFormData] = useState(null);
   const [apiError, setApiError] = useState(null);
   const [retrying, setRetrying] = useState(false);
