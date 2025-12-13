@@ -153,6 +153,29 @@ class MockLLMProvider {
       }
     };
   }
+
+  /**
+   * Generate text using a simple prompt (general-purpose text generation)
+   * @param {string} userPrompt - The user's prompt
+   * @param {Object} options - Generation options
+   * @param {string} [options.systemPrompt] - Optional system prompt
+   * @param {number} [options.maxTokens=500] - Maximum tokens to generate
+   * @param {number} [options.temperature=0.7] - Temperature for randomness
+   * @returns {Promise<string>} Generated text
+   */
+  async generateText(userPrompt, options = {}) {
+    // Validate prompt
+    if (!userPrompt || typeof userPrompt !== 'string' || userPrompt.trim() === '') {
+      throw new Error('User prompt is required');
+    }
+
+    // Simulate API delay
+    await new Promise(resolve => setTimeout(resolve, 10));
+
+    // Return a mock rephrased version of the prompt
+    // This is useful for safety retry testing
+    return `[rephrased] ${userPrompt.substring(0, 100)}`;
+  }
 }
 
 module.exports = MockLLMProvider;
