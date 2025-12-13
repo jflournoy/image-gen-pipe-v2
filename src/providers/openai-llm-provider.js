@@ -522,6 +522,69 @@ Output ONLY the refined prompt, no preamble or commentary.`;
       }
     }
   }
+
+  /**
+   * Generate text using a simple prompt (general-purpose text generation)
+   * @param {string} userPrompt - The user's prompt
+   * @param {Object} options - Generation options
+   * @param {string} [options.systemPrompt] - Optional system prompt
+   * @param {number} [options.maxTokens=500] - Maximum tokens to generate
+   * @param {number} [options.temperature=0.7] - Temperature for randomness
+   * @returns {Promise<string>} Generated text
+   */
+  async generateText(userPrompt, options = {}) {
+    const {
+      systemPrompt = 'You are a helpful assistant.',
+      maxTokens = 500,
+      temperature = 0.7
+    } = options;
+
+    // Validate prompt
+    if (!userPrompt || typeof userPrompt !== 'string' || userPrompt.trim() === '') {
+      throw new Error('User prompt is required');
+    }
+
+    // Use the default model for general text generation
+    const selectedModel = this.model;
+
+    // Get model capabilities
+    const capabilities = this._getModelCapabilities(selectedModel);
+
+    const messages = [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ];
+
+    try {
+      const apiParams = this._buildChatParams(
+        selectedModel,
+        messages,
+        temperature,
+        maxTokens
+      );
+
+      const completion = await this.client.chat.completions.create(apiParams);
+
+      if (!completion.choices || completion.choices.length === 0) {
+        throw new Error('OpenAI API returned no choices');
+      }
+
+      const message = completion.choices[0].message;
+
+      // Check for refusal (model declined to respond)
+      if (message?.refusal) {
+        throw new Error(`Model refused: ${message.refusal}`);
+      }
+
+      if (!message || !message.content) {
+        throw new Error('OpenAI API returned empty content');
+      }
+
+      return message.content.trim();
+    } catch (error) {
+      throw new Error(`OpenAI API error: ${error.message}`);
+    }
+  }
 }
 
 module.exports = OpenAILLMProvider;
