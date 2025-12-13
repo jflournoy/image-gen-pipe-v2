@@ -21,6 +21,150 @@ registerLimiter('imageGen', imageGenLimiter);
 registerLimiter('vision', visionLimiter);
 
 /**
+ * Check if an error is a safety violation
+ * @param {Error} error - The error to check
+ * @returns {boolean} True if the error is a safety violation
+ */
+function isSafetyViolation(error) {
+  const message = error.message || '';
+  return message.includes('safety') ||
+         message.includes('safety_violations') ||
+         message.includes('content policy') ||
+         message.includes('rejected');
+}
+
+/**
+ * Generate image with automatic safety violation retry
+ * If the prompt triggers a safety violation, uses LLM to rephrase and retries once
+ * @param {string} prompt - The combined prompt to generate an image from
+ * @param {Object} imageGenProvider - Image generation provider instance
+ * @param {Object} llmProvider - LLM provider for rephrasing on safety violations
+ * @param {Object} options - Generation options
+ * @param {Function} [options.onStepProgress] - Progress callback for status updates
+ * @param {string} [options.candidateId] - Candidate ID for logging
+ * @returns {Promise<Object>} Generated image result
+ */
+async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvider, options = {}) {
+  const { onStepProgress, candidateId, ...genOptions } = options;
+
+  try {
+    // First attempt - generate with original prompt
+    return await imageGenLimiter.execute(() =>
+      imageGenProvider.generateImage(prompt, genOptions)
+    );
+  } catch (error) {
+    // Check if this is a safety violation
+    if (!isSafetyViolation(error)) {
+      // Not a safety error, re-throw
+      throw error;
+    }
+
+    // Emit progress: safety violation detected, attempting rephrase
+    if (onStepProgress) {
+      onStepProgress({
+        stage: 'safety',
+        status: 'rephrasing',
+        candidateId,
+        message: `⚠️ ${candidateId}: Safety violation - rephrasing prompt...`
+      });
+    }
+
+    console.log(`[SafetyRetry] ${candidateId}: Safety violation detected, attempting rephrase. Error: ${error.message}`);
+
+    // Extract specific violation type from error message if available
+    // e.g., "safety_violations=[sexual]" -> "sexual"
+    const violationMatch = error.message.match(/safety_violations=\[([^\]]+)\]/);
+    const violationType = violationMatch ? violationMatch[1] : 'content policy';
+
+    // Use LLM to rephrase the prompt to be safer
+    const rephraseSystemPrompt = `You are a prompt safety expert. The following image generation prompt was flagged by a content safety system.
+Your task is to rephrase it to be appropriate while preserving the user's original artistic intent.
+
+IMPORTANT:
+- Keep the core visual concept and composition
+- Remove or replace any potentially problematic elements
+- Maintain the artistic style and mood where possible
+- Return ONLY the rephrased prompt, nothing else`;
+
+    const rephraseUserPrompt = `Original prompt (flagged for safety): "${prompt}"
+
+Safety system error: ${error.message}
+Violation type: ${violationType}
+
+Rephrase this to avoid the "${violationType}" violation while keeping the artistic intent:`;
+
+    try {
+      const rephraseResult = await llmLimiter.execute(() =>
+        llmProvider.generateText(rephraseUserPrompt, {
+          systemPrompt: rephraseSystemPrompt,
+          maxTokens: 500,
+          temperature: 0.7
+        })
+      );
+
+      const rephrasedPrompt = rephraseResult.trim();
+      console.log(`[SafetyRetry] ${candidateId}: Rephrased prompt: "${rephrasedPrompt.substring(0, 100)}..."`);
+
+      // Emit progress: retrying with rephrased prompt
+      if (onStepProgress) {
+        onStepProgress({
+          stage: 'safety',
+          status: 'retrying',
+          candidateId,
+          message: `🔄 ${candidateId}: Retrying with rephrased prompt...`
+        });
+      }
+
+      // Second attempt - generate with rephrased prompt
+      const result = await imageGenLimiter.execute(() =>
+        imageGenProvider.generateImage(rephrasedPrompt, genOptions)
+      );
+
+      // Emit progress: safety retry succeeded
+      if (onStepProgress) {
+        onStepProgress({
+          stage: 'safety',
+          status: 'success',
+          candidateId,
+          message: `✓ ${candidateId}: Safety retry succeeded`
+        });
+      }
+
+      // Mark that this image used a rephrased prompt
+      result.metadata = result.metadata || {};
+      result.metadata.safetyRephrased = true;
+      result.metadata.originalPrompt = prompt;
+      result.metadata.rephrasedPrompt = rephrasedPrompt;
+
+      return result;
+    } catch (rephraseError) {
+      // LLM rephrasing failed - likely the LLM also refused to engage with the content
+      console.error(`[SafetyRetry] ${candidateId}: LLM rephrase failed: ${rephraseError.message}`);
+
+      // Determine if this was an LLM refusal vs other error
+      const isLLMRefusal = rephraseError.message.includes('refused') ||
+                          rephraseError.message.includes('empty content');
+
+      const failureReason = isLLMRefusal
+        ? 'Content too problematic to rephrase'
+        : rephraseError.message;
+
+      if (onStepProgress) {
+        onStepProgress({
+          stage: 'safety',
+          status: 'failed',
+          candidateId,
+          message: `✗ ${candidateId}: ${failureReason}`
+        });
+      }
+
+      // Throw original error so caller knows what triggered the issue
+      throw error;
+    }
+  }
+}
+
+/**
  * Rank candidates by total score and select top M
  * @param {Array<Object>} candidates - Candidates with totalScore property
  * @param {number} keepTop - Number of top candidates to keep
@@ -229,8 +373,17 @@ async function processCandidateStream(
     });
   }
 
-  // Stage 2: Generate image (starts as soon as combine finishes)
-  const image = await imageGenProvider.generateImage(combined, options);
+  // Stage 2: Generate image with automatic safety retry
+  const image = await generateImageWithSafetyRetry(
+    combined,
+    imageGenProvider,
+    llmProvider,
+    {
+      ...options,
+      onStepProgress,
+      candidateId: candidateId_str
+    }
+  );
 
   // Track image generation
   if (tokenTracker && image.metadata) {
@@ -468,7 +621,7 @@ async function initialExpansion(
 
   // Stream all N candidates through the pipeline with rate limiting
   const candidates = await Promise.all(
-    whatHowPairs.map(({ what, how }, i) => {
+    whatHowPairs.map(async ({ what, how }, i) => {
       // Create wrapper that applies rate limiting for image gen and vision
       const limitedProcessCandidateStream = async () => {
         // Check if aborted before starting
@@ -541,15 +694,20 @@ async function initialExpansion(
           });
         }
 
-        // Generate image with rate limiting
-        const image = await imageGenLimiter.execute(() =>
-          imageGenProvider.generateImage(combined, {
+        // Generate image with automatic safety retry
+        const image = await generateImageWithSafetyRetry(
+          combined,
+          imageGenProvider,
+          llmProvider,
+          {
             iteration: 0,
-            candidateId: i,
+            candidateNum: i,
             dimension: 'what',
             alpha,
-            sessionId: config.sessionId
-          })
+            sessionId: config.sessionId,
+            onStepProgress,
+            candidateId: candidateId_str
+          }
         );
 
         // Track image generation
@@ -681,11 +839,40 @@ async function initialExpansion(
         return candidate;
       };
 
-      return limitedProcessCandidateStream();
+      // Wrap in try-catch for graceful error recovery
+      try {
+        return await limitedProcessCandidateStream();
+      } catch (error) {
+        // Log the error but don't crash the entire job
+        const candidateId_str = `i0c${i}`;
+        console.error(`[initialExpansion] Candidate ${candidateId_str} failed: ${error.message}`);
+
+        // Emit error message so user sees what happened
+        if (onStepProgress) {
+          onStepProgress({
+            stage: 'error',
+            status: 'failed',
+            candidateId: candidateId_str,
+            message: `⚠️ ${candidateId_str}: Failed - ${error.message}`
+          });
+        }
+
+        // Return null to indicate this candidate failed (will be filtered out)
+        return null;
+      }
     })
   );
 
-  return candidates;
+  // Filter out failed candidates (nulls)
+  const successfulCandidates = candidates.filter(c => c !== null);
+
+  // Check if we have enough candidates to continue
+  if (successfulCandidates.length === 0) {
+    throw new Error('All candidates failed during initial expansion. Check prompts for safety violations.');
+  }
+
+  console.log(`[initialExpansion] ${successfulCandidates.length}/${N} candidates succeeded`);
+  return successfulCandidates;
 }
 
 /**
@@ -768,81 +955,115 @@ async function refinementIteration(
   const allChildren = await Promise.all(
     parentsWithCritiques.flatMap((parent, parentIdx) =>
       Array(expansionRatio).fill().map(async (_, childIdx) => {
-        // Check if aborted before processing this child
-        if (abortSignal?.aborted) {
-          throw new Error('Job cancelled');
-        }
-
         const candidateId = parentIdx * expansionRatio + childIdx;
+        const candidateId_str = `i${iteration}c${candidateId}`;
 
-        // Refine the selected dimension using critique
-        const refinedResult = await llmProvider.refinePrompt(
-          dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-          {
-            operation: 'refine',
-            dimension,
-            critique: parent.critique,
-            userPrompt
+        // Wrap in try-catch for graceful error recovery
+        try {
+          // Check if aborted before processing this child
+          if (abortSignal?.aborted) {
+            throw new Error('Job cancelled');
           }
-        );
 
-        // Track refine tokens
-        if (tokenTracker && refinedResult.metadata?.tokensUsed) {
-          tokenTracker.recordUsage({
-            provider: 'llm',
-            operation: 'refine',
-            tokens: refinedResult.metadata.tokensUsed,
-            metadata: {
-              model: refinedResult.metadata.model,
+          // Refine the selected dimension using critique
+          const refinedResult = await llmProvider.refinePrompt(
+            dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
+            {
+              operation: 'refine',
+              dimension,
+              critique: parent.critique,
+              userPrompt
+            }
+          );
+
+          // Track refine tokens
+          if (tokenTracker && refinedResult.metadata?.tokensUsed) {
+            tokenTracker.recordUsage({
+              provider: 'llm',
+              operation: 'refine',
+              tokens: refinedResult.metadata.tokensUsed,
+              metadata: {
+                model: refinedResult.metadata.model,
+                iteration,
+                candidateId,
+                dimension,
+                operation: 'refine'
+              }
+            });
+          }
+
+          // Construct new prompts: refine selected dimension, inherit other
+          const whatPrompt = dimension === 'what'
+            ? refinedResult.refinedPrompt
+            : parent.whatPrompt;
+          const howPrompt = dimension === 'how'
+            ? refinedResult.refinedPrompt
+            : parent.howPrompt;
+
+          // Stream child through pipeline
+          const candidate = await processCandidateStream(
+            whatPrompt,
+            howPrompt,
+            llmProvider,
+            imageGenProvider,
+            visionProvider,
+            {
               iteration,
               candidateId,
               dimension,
-              operation: 'refine'
+              parentId: parent.metadata.candidateId,
+              alpha,
+              metadataTracker,
+              tokenTracker,
+              skipVisionAnalysis,
+              onStepProgress,
+              sessionId: config.sessionId
             }
-          });
-        }
+          );
 
-        // Construct new prompts: refine selected dimension, inherit other
-        const whatPrompt = dimension === 'what'
-          ? refinedResult.refinedPrompt
-          : parent.whatPrompt;
-        const howPrompt = dimension === 'how'
-          ? refinedResult.refinedPrompt
-          : parent.howPrompt;
-
-        // Stream child through pipeline
-        const candidate = await processCandidateStream(
-          whatPrompt,
-          howPrompt,
-          llmProvider,
-          imageGenProvider,
-          visionProvider,
-          {
-            iteration,
-            candidateId,
-            dimension,
-            parentId: parent.metadata.candidateId,
-            alpha,
-            metadataTracker,
-            tokenTracker,
-            skipVisionAnalysis,
-            onStepProgress,
-            sessionId: config.sessionId
+          // Invoke callback immediately as candidate completes
+          // This enables real-time progress updates instead of waiting for all candidates
+          if (onCandidateProcessed) {
+            onCandidateProcessed(candidate);
           }
-        );
 
-        // Invoke callback immediately as candidate completes
-        // This enables real-time progress updates instead of waiting for all candidates
-        if (onCandidateProcessed) {
-          onCandidateProcessed(candidate);
+          return candidate;
+        } catch (error) {
+          // Don't catch cancellation errors - let them propagate
+          if (error.message === 'Job cancelled') {
+            throw error;
+          }
+
+          // Log the error but don't crash the entire job
+          console.error(`[refinementIteration] Candidate ${candidateId_str} failed: ${error.message}`);
+
+          // Emit error message so user sees what happened
+          if (onStepProgress) {
+            onStepProgress({
+              stage: 'error',
+              status: 'failed',
+              candidateId: candidateId_str,
+              message: `⚠️ ${candidateId_str}: Failed - ${error.message}`
+            });
+          }
+
+          // Return null to indicate this candidate failed (will be filtered out)
+          return null;
         }
-
-        return candidate;
       })
     )
   );
 
-  return allChildren;
+  // Filter out failed candidates (nulls)
+  const successfulChildren = allChildren.filter(c => c !== null);
+
+  // Check if we have enough candidates to continue
+  if (successfulChildren.length === 0) {
+    throw new Error(`All candidates failed during refinement iteration ${iteration}. Check prompts for safety violations.`);
+  }
+
+  console.log(`[refinementIteration] Iteration ${iteration}: ${successfulChildren.length}/${allChildren.length} candidates succeeded`);
+  return successfulChildren;
 }
 
 /**
