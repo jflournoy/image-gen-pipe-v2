@@ -53,6 +53,13 @@ router.post('/start', async (req, res) => {
     try {
       nValidated = validateParam(n, 2, 8, 'Beam width (n)');
       mValidated = validateParam(m, 1, Math.floor(nValidated / 2) || 1, 'Keep top (m)');
+
+      // Ensure N is divisible by M for even expansion
+      // Each of M parents generates N/M children per iteration
+      if (nValidated % mValidated !== 0) {
+        throw new Error(`Beam width (${nValidated}) must be divisible by keep top (${mValidated}). Try n=${mValidated * Math.floor(nValidated / mValidated)} or m=${nValidated / Math.ceil(nValidated / mValidated)}`);
+      }
+
       iterationsValidated = validateParam(maxIterations, 1, 5, 'Max iterations');
       alphaValidated = validateParam(alpha, 0, 1, 'Alpha');
       tempValidated = validateParam(temperature, 0, 2, 'Temperature');

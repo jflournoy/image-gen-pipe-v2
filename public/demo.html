@@ -133,6 +133,404 @@
     .status.idle { background: #ddd; color: #666; }
     .status.running { background: #4CAF50; color: white; }
     .status.error { background: #f44336; color: white; }
+
+    .images-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 1px solid #ddd;
+    }
+
+    .images-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .image-card {
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      overflow: hidden;
+      background: #f9f9f9;
+      cursor: pointer;
+      transition: transform 0.2s, box-shadow 0.2s;
+    }
+
+    .image-card:hover {
+      transform: scale(1.05);
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+    }
+
+    .image-card img {
+      width: 100%;
+      height: 100px;
+      object-fit: cover;
+      display: block;
+    }
+
+    .image-card-label {
+      padding: 5px;
+      font-size: 11px;
+      text-align: center;
+      color: #666;
+      border-top: 1px solid #eee;
+    }
+
+    /* Winner Showcase Styles */
+    .showcase-section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      border: 2px solid #4CAF50;
+      margin-top: 20px;
+      display: none;
+    }
+
+    .showcase-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .showcase-header h2 {
+      margin: 0;
+      color: #333;
+    }
+
+    .topn-selector {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+    }
+
+    .topn-selector input {
+      width: 50px;
+      padding: 4px 8px;
+      text-align: center;
+    }
+
+    .total-count {
+      color: #666;
+    }
+
+    .showcase-cost {
+      background: #f0f7f0;
+      padding: 10px 15px;
+      border-radius: 4px;
+      margin-bottom: 15px;
+      font-size: 14px;
+      color: #2e7d32;
+    }
+
+    .cost-breakdown {
+      color: #666;
+      font-size: 12px;
+      margin-left: 10px;
+    }
+
+    .showcase-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 20px;
+    }
+
+    .showcase-card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: #fafafa;
+      position: relative;
+    }
+
+    .showcase-card.winner {
+      border-color: #ffd700;
+      border-width: 2px;
+      background: linear-gradient(135deg, #fffef0 0%, #fff 100%);
+    }
+
+    .showcase-rank {
+      position: absolute;
+      top: -10px;
+      left: 15px;
+      font-size: 24px;
+      background: white;
+      padding: 0 5px;
+    }
+
+    .showcase-image {
+      margin: 10px 0;
+      text-align: center;
+    }
+
+    .showcase-image img {
+      max-width: 100%;
+      max-height: 200px;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: transform 0.2s;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+
+    .showcase-image img:hover {
+      transform: scale(1.02);
+    }
+
+    .showcase-id {
+      font-weight: bold;
+      font-size: 16px;
+      color: #333;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    .showcase-reason {
+      font-style: italic;
+      color: #555;
+      padding: 10px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .showcase-feedback {
+      font-size: 12px;
+      padding: 8px;
+      border-radius: 4px;
+      margin-bottom: 8px;
+    }
+
+    .showcase-feedback.strengths {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .showcase-feedback.weaknesses {
+      background: #fff3e0;
+      color: #e65100;
+    }
+
+    .showcase-lineage {
+      font-size: 12px;
+      color: #666;
+      padding: 8px;
+      background: #f5f5f5;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      font-family: monospace;
+    }
+
+    .showcase-prompts {
+      font-size: 12px;
+      margin-top: 10px;
+    }
+
+    .showcase-prompts summary {
+      cursor: pointer;
+      color: #1976d2;
+      font-weight: bold;
+      padding: 5px 0;
+    }
+
+    .showcase-prompts summary:hover {
+      text-decoration: underline;
+    }
+
+    .prompt-section {
+      margin: 10px 0;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 4px;
+      border-left: 3px solid #ddd;
+    }
+
+    .prompt-label {
+      font-weight: bold;
+      color: #555;
+      margin-bottom: 5px;
+      font-size: 11px;
+      text-transform: uppercase;
+    }
+
+    .prompt-text {
+      font-family: monospace;
+      font-size: 11px;
+      line-height: 1.5;
+      color: #333;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    /* Unranked candidate styling */
+    .showcase-card.unranked {
+      opacity: 0.7;
+      border-style: dashed;
+    }
+
+    .unranked-badge {
+      font-size: 10px;
+      background: #999;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-left: 5px;
+      font-weight: normal;
+    }
+
+    .unranked-reason {
+      color: #999;
+      font-style: normal;
+    }
+
+    /* Live cost indicator */
+    .cost-indicator {
+      background: #e3f2fd;
+      color: #1565c0;
+      padding: 3px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-left: 10px;
+    }
+
+    /* Full Ranking Summary Styles */
+    .ranking-summary {
+      margin-bottom: 20px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      padding: 15px;
+    }
+
+    .ranking-summary summary {
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 16px;
+      color: #333;
+      padding: 5px 0;
+    }
+
+    .ranking-summary summary:hover {
+      color: #1976d2;
+    }
+
+    .ranking-table-container {
+      overflow-x: auto;
+      margin-top: 15px;
+    }
+
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    .ranking-table th,
+    .ranking-table td {
+      padding: 8px 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    .ranking-table th {
+      background: #e0e0e0;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .ranking-table tr:hover {
+      background: #f5f5f5;
+    }
+
+    .ranking-table .rank-gold {
+      background: linear-gradient(90deg, #fff9e6 0%, #fff 100%);
+    }
+
+    .ranking-table .rank-silver {
+      background: linear-gradient(90deg, #f5f5f5 0%, #fff 100%);
+    }
+
+    .ranking-table .rank-bronze {
+      background: linear-gradient(90deg, #fff3e0 0%, #fff 100%);
+    }
+
+    .ranking-table .unranked-row {
+      opacity: 0.6;
+      color: #666;
+    }
+
+    .rank-cell {
+      font-weight: bold;
+      text-align: center;
+      width: 60px;
+    }
+
+    .candidate-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .ranking-thumb {
+      width: 40px;
+      height: 40px;
+      object-fit: cover;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+
+    .ranking-thumb:hover {
+      transform: scale(1.1);
+    }
+
+    .iter-cell {
+      color: #666;
+      font-size: 11px;
+    }
+
+    .lineage-cell {
+      font-family: monospace;
+      font-size: 11px;
+      color: #555;
+    }
+
+    .reason-cell {
+      font-style: italic;
+      color: #666;
+      max-width: 300px;
+    }
+
+    /* Iteration Summary */
+    .iteration-summary {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #ddd;
+    }
+
+    .iteration-summary h4 {
+      margin: 0 0 10px 0;
+      color: #333;
+    }
+
+    .iteration-group {
+      margin: 8px 0;
+      padding: 8px;
+      background: white;
+      border-radius: 4px;
+      font-size: 12px;
+    }
+
+    .ranked-list {
+      color: #2e7d32;
+    }
+
+    .unranked-list {
+      color: #999;
+    }
   </style>
 </head>
 <body>
@@ -148,12 +546,19 @@
 
       <div class="params-grid">
         <div class="form-group">
-          <label for="n">Beam Width (N):</label>
-          <input type="number" id="n" value="4" min="2" max="8">
+          <label for="beamWidth">Beam Width (N):</label>
+          <select id="beamWidth">
+            <option value="2">2 candidates</option>
+            <option value="4" selected>4 candidates</option>
+            <option value="6">6 candidates</option>
+            <option value="8">8 candidates</option>
+          </select>
         </div>
         <div class="form-group">
-          <label for="m">Keep Top (M):</label>
-          <input type="number" id="m" value="2" min="1" max="4">
+          <label for="keepTop">Keep Top (M):</label>
+          <select id="keepTop">
+            <!-- Populated dynamically based on beam width -->
+          </select>
         </div>
         <div class="form-group">
           <label for="maxIterations">Max Iterations:</label>
@@ -178,9 +583,17 @@
     <div class="messages-section">
       <div class="messages-header">
         <h2>Messages</h2>
-        <span id="status" class="status idle">Idle</span>
+        <div style="display: flex; gap: 10px; align-items: center;">
+          <span id="status" class="status idle">Idle</span>
+          <button id="clearBtn" style="padding: 5px 10px; font-size: 12px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear</button>
+        </div>
       </div>
       <div id="messages" class="messages-log"></div>
+    </div>
+
+    <div class="images-section" style="display: none;">
+      <h2>Generated Images</h2>
+      <div id="images-grid" class="images-grid"></div>
     </div>
   </div>
 
