@@ -16,6 +16,125 @@ let candidates = new Map(); // candidateId -> full candidate data
 let rankings = new Map();   // candidateId -> ranking data
 let currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
 
+// Job reconnection state
+let reconnectionBannerId = 'reconnection-banner';
+
+/**
+ * Save pending job to localStorage for reconnection on page reload
+ */
+function savePendingJob(jobId) {
+  const jobState = {
+    jobId,
+    startTime: new Date().toISOString()
+  };
+  localStorage.setItem('pendingJob', JSON.stringify(jobState));
+  console.log(`[Reconnection] Saved pending job: ${jobId}`);
+}
+
+/**
+ * Clear pending job from localStorage
+ */
+function clearPendingJob() {
+  localStorage.removeItem('pendingJob');
+  console.log('[Reconnection] Cleared pending job from localStorage');
+}
+
+/**
+ * Get pending job from localStorage if it exists
+ */
+function getPendingJob() {
+  const jobData = localStorage.getItem('pendingJob');
+  if (!jobData) return null;
+  try {
+    return JSON.parse(jobData);
+  } catch (e) {
+    console.warn('[Reconnection] Failed to parse pending job:', e);
+    return null;
+  }
+}
+
+/**
+ * Build reconnection banner HTML
+ */
+function buildReconnectionBanner(jobId, startTime) {
+  const elapsedMs = Date.now() - new Date(startTime).getTime();
+  const elapsedMinutes = Math.floor(elapsedMs / 60000);
+  const elapsedSeconds = Math.floor((elapsedMs % 60000) / 1000);
+  const timeStr = elapsedMinutes > 0 ? `${elapsedMinutes}m ${elapsedSeconds}s` : `${elapsedSeconds}s`;
+
+  return `
+    <div id="${reconnectionBannerId}" class="reconnection-banner">
+      <div class="reconnection-content">
+        <span>🔄 Job <strong>${jobId.substring(0, 12)}</strong> is still running</span>
+        <span class="reconnection-time">(${timeStr} elapsed)</span>
+      </div>
+      <div class="reconnection-actions">
+        <button onclick="handleReconnect('${jobId}')" class="reconnect-btn">Reconnect</button>
+        <button onclick="handleNewJob()" class="cancel-btn">New Job</button>
+      </div>
+    </div>
+  `;
+}
+
+/**
+ * Handle reconnect button click
+ */
+function handleReconnect(jobId) {
+  console.log(`[Reconnection] User chose to reconnect to ${jobId}`);
+  const banner = document.getElementById(reconnectionBannerId);
+  if (banner) banner.remove();
+
+  currentJobId = jobId;
+  addMessage(`🔄 Reconnecting to job: ${jobId}`, 'event');
+
+  // Disable form inputs
+  startBtn.disabled = true;
+  stopBtn.disabled = false;
+  document.getElementById('prompt').disabled = true;
+  beamWidthSelect.disabled = true;
+  keepTopSelect.disabled = true;
+  document.getElementById('maxIterations').disabled = true;
+  document.getElementById('alpha').disabled = true;
+  document.getElementById('temperature').disabled = true;
+
+  // Reconnect to WebSocket
+  connectWebSocket();
+}
+
+/**
+ * Handle new job button click
+ */
+function handleNewJob() {
+  console.log('[Reconnection] User chose to start a new job');
+  const banner = document.getElementById(reconnectionBannerId);
+  if (banner) banner.remove();
+
+  clearPendingJob();
+  addMessage('Starting new beam search...', 'event');
+}
+
+/**
+ * Check for pending jobs on page load
+ */
+function checkForPendingJob() {
+  const pendingJob = getPendingJob();
+  if (!pendingJob) return;
+
+  console.log(`[Reconnection] Found pending job: ${pendingJob.jobId}`);
+
+  // Create and show reconnection banner
+  const banner = document.createElement('div');
+  banner.innerHTML = buildReconnectionBanner(pendingJob.jobId, pendingJob.startTime);
+
+  // Insert banner at the top of the container
+  const container = document.querySelector('.container');
+  if (container && container.firstChild) {
+    container.insertBefore(banner.firstChild, container.firstChild);
+  }
+
+  addMessage(`🔄 Detected pending job: ${pendingJob.jobId}`, 'info');
+}
+
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
 const messagesDiv = document.getElementById('messages');
@@ -403,6 +522,7 @@ async function startBeamSearch() {
 
     const data = await response.json();
     currentJobId = data.jobId;
+    savePendingJob(currentJobId); // Save for reconnection on reload
     addMessage(`Job started: ${currentJobId}`, 'event');
 
     // Disable form inputs
@@ -476,6 +596,7 @@ function connectWebSocket() {
 
 // Stop beam search
 function stopBeamSearch() {
+  clearPendingJob(); // Clear from localStorage when job stops
   currentJobId = null;
   if (ws) {
     ws.close();
@@ -1096,6 +1217,9 @@ function clearState() {
 jobSelect.addEventListener('change', onJobSelectChange);
 loadJobBtn.addEventListener('click', loadSelectedJob);
 refreshJobsBtn.addEventListener('click', loadJobsList);
+
+// Check for pending jobs and show reconnection banner if needed
+checkForPendingJob();
 
 // Load jobs list on page load
 loadJobsList();
