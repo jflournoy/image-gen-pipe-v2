@@ -642,7 +642,15 @@ function showWinnerShowcase() {
   // Build full ranking summary
   const rankingSummary = buildRankingSummary(rankedCandidates);
 
+  // Build lineage visualization if available
+  const lineageHTML = buildLineageVisualization(allCandidates[0]?.jobData || {
+    lineage: allCandidates[0]?.lineage || null,
+    date: null,
+    sessionId: null
+  });
+
   showcaseSection.innerHTML = `
+    ${lineageHTML}
     <div class="showcase-header">
       <h2>🏆 Top Results</h2>
       <div class="topn-selector">
@@ -765,6 +773,332 @@ function showWinnerShowcase() {
   // Scroll to showcase
   showcaseSection.scrollIntoView({ behavior: 'smooth' });
 }
+
+/**
+ * Build visual lineage HTML showing the winner's path from root to final
+ * Displays candidate evolution across iterations
+ * @param {Object} jobData - Job metadata with lineage array
+ * @returns {string} HTML for the lineage visualization
+ */
+function buildLineageVisualization(jobData) {
+  if (!jobData.lineage || jobData.lineage.length === 0) {
+    return ''; // No lineage to display
+  }
+
+  const lineageSteps = jobData.lineage.map((step, idx) => {
+    const isWinner = idx === jobData.lineage.length - 1;
+    const imageUrl = step.imageUrl || `/api/demo/images/${jobData.date}/${jobData.sessionId}/iter${step.iteration}-cand${step.candidateId}.png`;
+
+    return `
+      <div class="lineage-step" data-iteration="${step.iteration}" data-candidate="${step.candidateId}">
+        <div class="lineage-image">
+          <img src="${imageUrl}" alt="i${step.iteration}c${step.candidateId}"
+               onerror="this.style.backgroundColor='#eee'">
+        </div>
+        <div class="lineage-label">
+          <span>i${step.iteration}c${step.candidateId}</span>
+          <span class="lineage-iteration">Iteration ${step.iteration}</span>
+          ${isWinner ? '<span class="winner-badge">🏆 Winner</span>' : ''}
+        </div>
+        ${!isWinner ? '<div class="lineage-arrow"></div>' : ''}
+      </div>
+    `;
+  }).join('');
+
+  return `
+    <div class="lineage-section">
+      <h3>🧬 Winner's Lineage - Path Through the Beam Search</h3>
+      <div class="lineage-timeline">
+        ${lineageSteps}
+      </div>
+      <p style="font-size: 12px; color: #666; margin: 10px 0 0 0;">
+        Shows the winning candidate selected at each iteration, from root (iteration 0) to final winner
+      </p>
+    </div>
+  `;
+}
+
+/**
+ * Build rankings from saved metadata for historical jobs
+ * Uses lineage, finalWinner, and survived fields to infer rankings
+ */
+function buildRankingsFromMetadata(jobData) {
+  rankings.clear();
+
+  if (!jobData.iterations || jobData.iterations.length === 0) {
+    return;
+  }
+
+  let currentRank = 1;
+
+  // 1. Final winner gets rank 1
+  if (jobData.finalWinner) {
+    const winnerId = `i${jobData.finalWinner.iteration}c${jobData.finalWinner.candidateId}`;
+    rankings.set(winnerId, {
+      rank: currentRank++,
+      reason: 'Final winner from beam search'
+    });
+
+    // Update candidate with ranking
+    const winner = candidates.get(winnerId);
+    if (winner) {
+      candidates.set(winnerId, { ...winner, ranking: rankings.get(winnerId) });
+    }
+  }
+
+  // 2. Process lineage (ancestors of winner) - assign ranks in reverse order
+  if (jobData.lineage && jobData.lineage.length > 1) {
+    // Lineage goes from oldest to newest, so reverse to assign ranks
+    // Skip the last element (that's the final winner, already ranked)
+    for (let i = jobData.lineage.length - 2; i >= 0; i--) {
+      const ancestor = jobData.lineage[i];
+      const ancestorId = `i${ancestor.iteration}c${ancestor.candidateId}`;
+
+      // Don't overwrite if already ranked
+      if (!rankings.has(ancestorId)) {
+        rankings.set(ancestorId, {
+          rank: currentRank++,
+          reason: `Lineage ancestor (iteration ${ancestor.iteration})`
+        });
+
+        const cand = candidates.get(ancestorId);
+        if (cand) {
+          candidates.set(ancestorId, { ...cand, ranking: rankings.get(ancestorId) });
+        }
+      }
+    }
+  }
+
+  // 3. Find other survivors (survived their round but not in lineage)
+  const survivors = [];
+  for (const iter of jobData.iterations) {
+    for (const cand of (iter.candidates || [])) {
+      const globalId = `i${iter.iteration}c${cand.candidateId}`;
+
+      // Skip already ranked (finalWinner or lineage)
+      if (rankings.has(globalId)) continue;
+
+      // If survived, add to survivors list
+      if (cand.survived) {
+        survivors.push({
+          id: globalId,
+          iteration: iter.iteration,
+          candidateId: cand.candidateId,
+          totalScore: cand.totalScore
+        });
+      }
+    }
+  }
+
+  // Sort survivors by iteration (higher = more refined) then by totalScore
+  survivors.sort((a, b) => {
+    if (a.iteration !== b.iteration) return b.iteration - a.iteration;
+    // If totalScore available, use it
+    if (a.totalScore !== null && b.totalScore !== null) {
+      return b.totalScore - a.totalScore;
+    }
+    return a.candidateId - b.candidateId;
+  });
+
+  // Assign ranks to survivors
+  for (const survivor of survivors) {
+    rankings.set(survivor.id, {
+      rank: currentRank++,
+      reason: `Survived iteration ${survivor.iteration}`
+    });
+
+    const cand = candidates.get(survivor.id);
+    if (cand) {
+      candidates.set(survivor.id, { ...cand, ranking: rankings.get(survivor.id) });
+    }
+  }
+
+  console.log(`[Demo] Built rankings for ${rankings.size} candidates from metadata`);
+}
+
+// ===== Job Browser =====
+const jobSelect = document.getElementById('jobSelect');
+const loadJobBtn = document.getElementById('loadJobBtn');
+const refreshJobsBtn = document.getElementById('refreshJobsBtn');
+const jobInfo = document.getElementById('jobInfo');
+let jobsList = []; // Store full job data for reference
+
+/**
+ * Load list of available jobs from API
+ */
+async function loadJobsList() {
+  try {
+    jobSelect.disabled = true;
+    const response = await fetch('/api/demo/jobs');
+    if (!response.ok) {
+      throw new Error(`Failed to fetch jobs: ${response.status}`);
+    }
+    const data = await response.json();
+    jobsList = data.sessions || [];
+
+    // Clear and repopulate select
+    jobSelect.innerHTML = '<option value="">-- Select a previous job --</option>';
+
+    jobsList.forEach(job => {
+      const option = document.createElement('option');
+      option.value = job.sessionId;
+
+      // Format: [date] sessionId - prompt preview
+      const promptPreview = (job.userPrompt || '').substring(0, 40);
+      option.textContent = `[${job.date}] ${job.sessionId} - ${promptPreview}...`;
+      jobSelect.appendChild(option);
+    });
+
+    addMessage(`Loaded ${jobsList.length} previous jobs`, 'event');
+  } catch (err) {
+    console.error('[Demo] Failed to load jobs:', err);
+    addMessage(`Failed to load jobs: ${err.message}`, 'error');
+  } finally {
+    jobSelect.disabled = false;
+  }
+}
+
+/**
+ * Handle job selection change - show job info preview
+ */
+function onJobSelectChange() {
+  const sessionId = jobSelect.value;
+  loadJobBtn.disabled = !sessionId;
+
+  if (sessionId) {
+    const job = jobsList.find(j => j.sessionId === sessionId);
+    if (job) {
+      document.getElementById('jobDate').textContent = `${job.date} ${job.timestamp?.substring(11, 19) || ''}`;
+      document.getElementById('jobConfig').textContent = `N=${job.config?.beamWidth}, M=${job.config?.keepTop}, ${job.iterationCount} iters`;
+      document.getElementById('jobPrompt').textContent = job.userPrompt || 'No prompt';
+      jobInfo.style.display = 'block';
+    }
+  } else {
+    jobInfo.style.display = 'none';
+  }
+}
+
+/**
+ * Load and display a historical job
+ */
+async function loadSelectedJob() {
+  const sessionId = jobSelect.value;
+  if (!sessionId) return;
+
+  const job = jobsList.find(j => j.sessionId === sessionId);
+  if (!job) return;
+
+  loadJobBtn.disabled = true;
+  loadJobBtn.textContent = 'Loading...';
+
+  try {
+    // Fetch full job metadata
+    const response = await fetch(`/api/demo/jobs/${sessionId}`);
+    if (!response.ok) {
+      throw new Error(`Failed to load job: ${response.status}`);
+    }
+    const fullJob = await response.json();
+
+    // Clear current state
+    clearState();
+
+    // Add message about loading historical job
+    addMessage(`📂 Loading historical job: ${sessionId}`, 'event');
+    addMessage(`Prompt: ${fullJob.userPrompt?.substring(0, 80)}...`, 'info');
+
+    // Store lineage data for visualization
+    const lineageMap = {};
+    if (fullJob.lineage) {
+      fullJob.lineage.forEach(step => {
+        lineageMap[step.candidateId] = step;
+      });
+    }
+
+    // Populate candidates from metadata
+    if (fullJob.iterations) {
+      for (const iter of fullJob.iterations) {
+        for (const cand of (iter.candidates || [])) {
+          const globalId = `i${iter.iteration}c${cand.candidateId}`;
+
+          // Build image URL (using date-aware endpoint)
+          let imageUrl = null;
+          if (cand.image?.localPath) {
+            // Extract filename from local path
+            const filename = cand.image.localPath.split('/').pop();
+            imageUrl = `/api/demo/images/${job.date}/${sessionId}/${filename}`;
+          } else if (cand.image?.url?.startsWith('data:')) {
+            // Use base64 directly
+            imageUrl = cand.image.url;
+          }
+
+          candidates.set(globalId, {
+            id: globalId,
+            iteration: iter.iteration,
+            candidateId: cand.candidateId,
+            parentId: cand.parentId,
+            whatPrompt: cand.whatPrompt,
+            howPrompt: cand.howPrompt,
+            combined: cand.combined,
+            imageUrl: imageUrl,
+            totalScore: cand.totalScore,
+            evaluation: cand.evaluation,
+            survived: cand.survived,
+            jobData: fullJob,  // Attach full job data for lineage visualization
+            date: job.date,
+            sessionId: sessionId
+          });
+
+          // Add to image grid if has image
+          if (imageUrl) {
+            addImageThumbnail(iter.iteration, cand.candidateId, imageUrl);
+          }
+        }
+      }
+    }
+
+    // Build rankings from metadata
+    buildRankingsFromMetadata(fullJob);
+
+    addMessage(`✓ Loaded ${candidates.size} candidates from ${fullJob.iterations?.length || 0} iterations`, 'event');
+
+    // Show images section and winner showcase
+    imagesSection.style.display = 'block';
+    showWinnerShowcase();
+
+  } catch (err) {
+    console.error('[Demo] Failed to load job:', err);
+    addMessage(`Failed to load job: ${err.message}`, 'error');
+  } finally {
+    loadJobBtn.disabled = false;
+    loadJobBtn.textContent = 'Load Job';
+  }
+}
+
+/**
+ * Clear current state for loading a new job
+ */
+function clearState() {
+  candidates.clear();
+  rankings.clear();
+  seenImages.clear();
+  currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
+  messagesDiv.innerHTML = '';
+  imagesGrid.innerHTML = '';
+
+  // Hide showcase if exists
+  const showcaseSection = document.getElementById('showcase-section');
+  if (showcaseSection) {
+    showcaseSection.style.display = 'none';
+  }
+}
+
+// Event listeners for job browser
+jobSelect.addEventListener('change', onJobSelectChange);
+loadJobBtn.addEventListener('click', loadSelectedJob);
+refreshJobsBtn.addEventListener('click', loadJobsList);
+
+// Load jobs list on page load
+loadJobsList();
 
 // Initial message
 addMessage('Ready. Configure parameters and click "Start Beam Search"', 'event');
