@@ -6,13 +6,8 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import fs, { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const router = express.Router();
 
@@ -165,7 +160,7 @@ router.get('/images/:sessionId/:filename', async (req, res) => {
     }
 
     // Validate filename - only allow PNG files, no path traversal
-    if (!/^[a-zA-Z0-9_\-\.]+\.png$/.test(filename)) {
+    if (!/^[a-zA-Z0-9_.-]+\.png$/.test(filename)) {
       return res.status(400).json({
         error: 'Invalid filename format',
         filename,
@@ -199,6 +194,220 @@ router.get('/images/:sessionId/:filename', async (req, res) => {
         sessionId,
         filename,
         path: imagePath
+      });
+    }
+
+    // Set cache headers (1 hour)
+    res.set('Cache-Control', 'public, max-age=3600');
+    res.set('Content-Type', 'image/png');
+
+    // Stream the file
+    const fileStream = fs.createReadStream(imagePath);
+    fileStream.pipe(res);
+
+    fileStream.on('error', (err) => {
+      console.error(`[Demo] Error streaming image ${imagePath}:`, err);
+      if (!res.headersSent) {
+        res.status(500).json({
+          error: 'Failed to serve image',
+          message: err.message
+        });
+      }
+    });
+  } catch (err) {
+    console.error('[Demo] Error serving demo image:', err);
+    if (!res.headersSent) {
+      res.status(500).json({
+        error: 'Failed to serve image',
+        message: err.message
+      });
+    }
+  }
+});
+
+/**
+ * GET /api/demo/jobs
+ * List all historical beam search jobs
+ */
+router.get('/jobs', async (req, res) => {
+  try {
+    const outputDir = path.join(process.cwd(), 'output');
+
+    // Get all date directories
+    let dates = [];
+    try {
+      dates = await fsPromises.readdir(outputDir);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return res.json({ sessions: [] });
+      }
+      throw error;
+    }
+
+    // Filter valid date directories and sort descending (newest first)
+    dates = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+
+    const sessions = [];
+
+    for (const dateDir of dates) {
+      const datePath = path.join(outputDir, dateDir);
+
+      let sessionDirs = [];
+      try {
+        sessionDirs = await fsPromises.readdir(datePath);
+      } catch {
+        continue;
+      }
+
+      // Filter valid session directories
+      sessionDirs = sessionDirs.filter(s => /^ses-\d{6}$/.test(s));
+
+      for (const sessionId of sessionDirs) {
+        const metadataPath = path.join(datePath, sessionId, 'metadata.json');
+
+        try {
+          const metadataJson = await fsPromises.readFile(metadataPath, 'utf-8');
+          const metadata = JSON.parse(metadataJson);
+
+          sessions.push({
+            sessionId,
+            date: dateDir,
+            timestamp: metadata.timestamp,
+            userPrompt: metadata.userPrompt,
+            config: metadata.config,
+            finalWinner: metadata.finalWinner,
+            iterationCount: metadata.iterations?.length || 0
+          });
+        } catch {
+          // Skip sessions without valid metadata
+        }
+      }
+    }
+
+    // Sort by timestamp descending
+    sessions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json({ sessions });
+  } catch (err) {
+    console.error('[Demo] Error listing jobs:', err);
+    res.status(500).json({
+      error: 'Failed to list jobs',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/demo/jobs/:sessionId
+ * Get detailed metadata for a specific job
+ */
+router.get('/jobs/:sessionId', async (req, res) => {
+  const { sessionId } = req.params;
+
+  // Validate sessionId format (ses-HHMMSS)
+  if (!/^ses-\d{6}$/.test(sessionId)) {
+    return res.status(400).json({
+      error: 'Invalid session ID format',
+      sessionId
+    });
+  }
+
+  try {
+    const outputDir = path.join(process.cwd(), 'output');
+
+    // Get all date directories
+    let dates = [];
+    try {
+      dates = await fsPromises.readdir(outputDir);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return res.status(404).json({ error: 'Session not found' });
+      }
+      throw error;
+    }
+
+    // Sort dates descending (most recent first)
+    dates = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+
+    for (const dateDir of dates) {
+      const metadataPath = path.join(outputDir, dateDir, sessionId, 'metadata.json');
+
+      try {
+        const metadataJson = await fsPromises.readFile(metadataPath, 'utf-8');
+        const metadata = JSON.parse(metadataJson);
+
+        return res.json({
+          sessionId,
+          date: dateDir,
+          ...metadata
+        });
+      } catch {
+        // Not in this date directory
+      }
+    }
+
+    res.status(404).json({ error: 'Session not found' });
+  } catch (err) {
+    console.error(`[Demo] Error getting job ${sessionId}:`, err);
+    res.status(500).json({
+      error: 'Failed to get job',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * GET /api/demo/images/:date/:sessionId/:filename
+ * Serve image file from any date (for viewing old jobs)
+ */
+router.get('/images/:date/:sessionId/:filename', async (req, res) => {
+  try {
+    const { date, sessionId, filename } = req.params;
+
+    // Validate date format (YYYY-MM-DD)
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      return res.status(400).json({
+        error: 'Invalid date format',
+        date,
+        message: 'Date must be in YYYY-MM-DD format'
+      });
+    }
+
+    // Validate session ID format (ses-HHMMSS)
+    if (!/^ses-\d{6}$/.test(sessionId)) {
+      return res.status(400).json({
+        error: 'Invalid session ID format',
+        sessionId
+      });
+    }
+
+    // Validate filename - only allow PNG files, no path traversal
+    if (!/^[a-zA-Z0-9_.-]+\.png$/.test(filename)) {
+      return res.status(400).json({
+        error: 'Invalid filename format',
+        filename,
+        message: 'Only PNG files are allowed'
+      });
+    }
+
+    // Full path: output/YYYY-MM-DD/ses-HHMMSS/filename.png
+    const imagePath = path.join(
+      process.cwd(),
+      'output',
+      date,
+      sessionId,
+      filename
+    );
+
+    // Verify file exists
+    try {
+      await fsPromises.access(imagePath);
+    } catch {
+      return res.status(404).json({
+        error: 'Image not found',
+        date,
+        sessionId,
+        filename
       });
     }
 
