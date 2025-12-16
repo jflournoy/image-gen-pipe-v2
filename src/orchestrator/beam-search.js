@@ -718,12 +718,12 @@ async function initialExpansion(
           llmProvider,
           {
             iteration: 0,
-            candidateNum: i,
+            candidateId: i,
             dimension: 'what',
             alpha,
             sessionId: config.sessionId,
             onStepProgress,
-            candidateId: candidateId_str
+            candidateIdStr: candidateId_str
           }
         );
 
