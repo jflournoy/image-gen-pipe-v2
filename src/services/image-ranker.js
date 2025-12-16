@@ -54,6 +54,9 @@ class ImageRanker {
 
     // Token tracking for cost monitoring
     this.accumulatedTokens = 0;
+
+    // Error tracking for graceful degradation
+    this.errors = [];
   }
 
   /**
@@ -67,19 +70,54 @@ class ImageRanker {
    * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
    */
   async rankImages(images, prompt, options = {}) {
-    // Reset token counter for this ranking session
+    // Reset token counter and error tracking for this ranking session
     this.resetTokenCount();
+    this.resetErrors();
 
-    // Always use transitive pairwise ranking for consistency
-    // This ensures the same algorithm regardless of image count
-    const rankings = await this.rankPairwiseTransitive(images, prompt, options);
+    const gracefulDegradation = options.gracefulDegradation ?? false;
 
-    // Attach accumulated tokens as metadata
-    const tokensUsed = this.getAccumulatedTokens();
-    return {
-      rankings,
-      metadata: { tokensUsed }
-    };
+    try {
+      // Always use transitive pairwise ranking for consistency
+      // This ensures the same algorithm regardless of image count
+      const rankings = await this.rankPairwiseTransitive(images, prompt, options);
+
+      // Check if any errors occurred during ranking
+      if (this.errors.length > 0 && !gracefulDegradation) {
+        // With graceful degradation disabled, throw on any error
+        const firstError = this.errors[0];
+        throw new Error(firstError.message);
+      }
+
+      // Attach accumulated tokens and errors as metadata
+      const tokensUsed = this.getAccumulatedTokens();
+      return {
+        rankings,
+        metadata: {
+          tokensUsed,
+          errors: this.errors.length > 0 ? this.errors : undefined
+        }
+      };
+    } catch (error) {
+      // If graceful degradation is disabled, rethrow
+      if (!gracefulDegradation) {
+        throw error;
+      }
+
+      // With graceful degradation, return empty rankings with error metadata
+      this.recordError({
+        message: error.message,
+        type: 'ranking_failure',
+        fatal: true
+      });
+
+      return {
+        rankings: [],
+        metadata: {
+          tokensUsed: this.getAccumulatedTokens(),
+          errors: this.errors
+        }
+      };
+    }
   }
 
   /**
@@ -343,24 +381,36 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         }
       } else {
         // Need to compare directly (with ensemble voting for reliability)
-        const comparison = await this.compareWithEnsemble(champion, challenger, prompt, options);
+        try {
+          const comparison = await this.compareWithEnsemble(champion, challenger, prompt, options);
 
-        // Record comparison in graph
-        graph.recordComparison(champion.candidateId, challenger.candidateId, comparison.winner);
+          // Record comparison in graph
+          graph.recordComparison(champion.candidateId, challenger.candidateId, comparison.winner);
 
-        if (comparison.winner === 'A') {
-          championReason = comparison.reason;
-          // Store winner's ranks and feedback
-          championRanks = comparison.aggregatedRanks?.A || comparison.ranks?.A;
-          championStrengths = comparison.aggregatedFeedback?.A?.strengths || [];
-          championWeaknesses = comparison.aggregatedFeedback?.A?.weaknesses || [];
-        } else {
-          champion = challenger;
-          championReason = comparison.reason;
-          // Store winner's ranks and feedback
-          championRanks = comparison.aggregatedRanks?.B || comparison.ranks?.B;
-          championStrengths = comparison.aggregatedFeedback?.B?.strengths || [];
-          championWeaknesses = comparison.aggregatedFeedback?.B?.weaknesses || [];
+          if (comparison.winner === 'A') {
+            championReason = comparison.reason;
+            // Store winner's ranks and feedback
+            championRanks = comparison.aggregatedRanks?.A || comparison.ranks?.A;
+            championStrengths = comparison.aggregatedFeedback?.A?.strengths || [];
+            championWeaknesses = comparison.aggregatedFeedback?.A?.weaknesses || [];
+          } else {
+            champion = challenger;
+            championReason = comparison.reason;
+            // Store winner's ranks and feedback
+            championRanks = comparison.aggregatedRanks?.B || comparison.ranks?.B;
+            championStrengths = comparison.aggregatedFeedback?.B?.strengths || [];
+            championWeaknesses = comparison.aggregatedFeedback?.B?.weaknesses || [];
+          }
+        } catch (error) {
+          // If comparison fails, record error and keep current champion
+          this.recordError({
+            message: error.message,
+            type: 'comparison_failure',
+            candidateA: champion.candidateId,
+            candidateB: challenger.candidateId,
+            fatal: false
+          });
+          championReason = `Comparison with ${challenger.candidateId} failed, keeping current champion`;
         }
       }
     }
@@ -411,14 +461,26 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
           winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
         }
       } else {
-        // New comparison needed
-        const comparison = await this.compareWithEnsemble(a, b, prompt, options);
-        graph.recordComparison(a.candidateId, b.candidateId, comparison.winner);
+        // New comparison needed - handle errors gracefully
+        try {
+          const comparison = await this.compareWithEnsemble(a, b, prompt, options);
+          graph.recordComparison(a.candidateId, b.candidateId, comparison.winner);
 
-        if (comparison.winner === 'A') {
-          winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
-        } else {
-          winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
+          if (comparison.winner === 'A') {
+            winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
+          } else {
+            winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
+          }
+        } catch (error) {
+          // Record error but continue with remaining comparisons
+          this.recordError({
+            message: error.message,
+            type: 'comparison_failure',
+            candidateA: a.candidateId,
+            candidateB: b.candidateId,
+            fatal: false
+          });
+          // Skip this pair - don't record any wins for failed comparisons
         }
       }
     }
@@ -812,6 +874,24 @@ Compare images A and B. Rank both on alignment (prompt match) and aesthetics (vi
    */
   resetTokenCount() {
     this.accumulatedTokens = 0;
+  }
+
+  /**
+   * Record an error for graceful degradation
+   * @param {Object} error - Error information
+   */
+  recordError(error) {
+    this.errors.push({
+      ...error,
+      timestamp: new Date().toISOString()
+    });
+  }
+
+  /**
+   * Reset error tracking
+   */
+  resetErrors() {
+    this.errors = [];
   }
 }
 
