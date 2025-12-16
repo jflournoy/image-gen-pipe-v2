@@ -222,12 +222,26 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
 
   // Get comparative rankings from ImageRanker with keepTop optimization
   // Pass known comparisons to avoid re-comparing parents from same iteration
+  // Enable graceful degradation to prevent single vision API failures from crashing entire beam search
   const { ensembleSize, tokenTracker } = options;
-  const rankResult = await imageRanker.rankImages(images, userPrompt, { keepTop, knownComparisons, ensembleSize });
+  const rankResult = await imageRanker.rankImages(images, userPrompt, {
+    keepTop,
+    knownComparisons,
+    ensembleSize,
+    gracefulDegradation: true
+  });
 
   // Handle both old format (array) and new format (object with metadata)
   const rankings = Array.isArray(rankResult) ? rankResult : rankResult.rankings;
   const rankingMetadata = !Array.isArray(rankResult) ? rankResult.metadata : {};
+
+  // Log any errors that occurred during ranking (graceful degradation)
+  if (rankingMetadata.errors && rankingMetadata.errors.length > 0) {
+    console.warn(`[BeamSearch] Ranking completed with ${rankingMetadata.errors.length} error(s):`);
+    rankingMetadata.errors.forEach((err, idx) => {
+      console.warn(`  ${idx + 1}. ${err.type}: ${err.message}`);
+    });
+  }
 
   // Record vision tokens if tokenTracker is provided
   if (tokenTracker && rankingMetadata.tokensUsed) {
@@ -1088,7 +1102,7 @@ async function refinementIteration(
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen, imageRanker } = providers;
-  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onCandidateProcessed, onRankingComplete, ensembleSize } = config;
+  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onRankingComplete, ensembleSize } = config;
 
   // Determine ranking strategy: Use comparative ranking if imageRanker provided
   const useComparativeRanking = imageRanker !== undefined;
