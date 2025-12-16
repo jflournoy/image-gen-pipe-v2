@@ -11,6 +11,7 @@ const { beamSearch } = require('../orchestrator/beam-search.js');
 const MetadataTracker = require('../services/metadata-tracker.js');
 const TokenTracker = require('../utils/token-tracker.js');
 const { MODEL_PRICING } = require('../config/model-pricing.js');
+const { getDateString } = require('../utils/timezone.js');
 
 // Store active jobs
 const activeJobs = new Map();
@@ -364,7 +365,7 @@ Provide ONLY the rephrased prompt, nothing else.`;
     // Get full metadata including lineage for emission
     const fullMetadata = metadataTracker ? await metadataTracker.getMetadata() : null;
 
-    // Emit completion event
+    // Emit completion event with date for image URL construction
     emitProgress(jobId, {
       type: 'complete',
       timestamp: new Date().toISOString(),
@@ -380,7 +381,8 @@ Provide ONLY the rephrased prompt, nothing else.`;
       metadata: fullMetadata ? {
         lineage: fullMetadata.lineage,
         sessionId: fullMetadata.sessionId,
-        finalWinner: fullMetadata.finalWinner
+        finalWinner: fullMetadata.finalWinner,
+        date: getDateString() // Include today's date for image URL construction
       } : null
     });
 
