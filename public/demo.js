@@ -54,7 +54,7 @@ function getPendingJob() {
 }
 
 /**
- * Build reconnection banner HTML
+ * Build reconnection banner HTML (no leading/trailing whitespace to avoid text nodes)
  */
 function buildReconnectionBanner(jobId, startTime) {
   const elapsedMs = Date.now() - new Date(startTime).getTime();
@@ -62,18 +62,7 @@ function buildReconnectionBanner(jobId, startTime) {
   const elapsedSeconds = Math.floor((elapsedMs % 60000) / 1000);
   const timeStr = elapsedMinutes > 0 ? `${elapsedMinutes}m ${elapsedSeconds}s` : `${elapsedSeconds}s`;
 
-  return `
-    <div id="${reconnectionBannerId}" class="reconnection-banner" style="position: relative; z-index: 1000; width: 100%; box-sizing: border-box;">
-      <div class="reconnection-content">
-        <span>🔄 Job <strong>${jobId.substring(0, 12)}</strong> is still running</span>
-        <span class="reconnection-time">(${timeStr} elapsed)</span>
-      </div>
-      <div class="reconnection-actions">
-        <button onclick="handleReconnect('${jobId}')" class="reconnect-btn">Reconnect</button>
-        <button onclick="handleNewJob()" class="cancel-btn">New Job</button>
-      </div>
-    </div>
-  `;
+  return `<div id="${reconnectionBannerId}" class="reconnection-banner" style="position: relative; z-index: 1000; width: 100%; box-sizing: border-box;"><div class="reconnection-content"><span>🔄 Job <strong>${jobId.substring(0, 12)}</strong> is still running</span><span class="reconnection-time">(${timeStr} elapsed)</span></div><div class="reconnection-actions"><button onclick="handleReconnect('${jobId}')" class="reconnect-btn">Reconnect</button><button onclick="handleNewJob()" class="cancel-btn">New Job</button></div></div>`;
 }
 
 /**
@@ -122,7 +111,7 @@ function checkForPendingJob() {
 
   console.log(`[Reconnection] Found pending job: ${pendingJob.jobId}`);
 
-  // Use setTimeout to ensure DOM is ready - increase delay to account for page load
+  // Use setTimeout to ensure DOM is ready
   setTimeout(() => {
     // Create and show reconnection banner
     const bannerHTML = buildReconnectionBanner(pendingJob.jobId, pendingJob.startTime);
@@ -130,43 +119,35 @@ function checkForPendingJob() {
     // Insert banner at the top of the container
     const container = document.querySelector('.container');
     if (container) {
-      // Create a temporary wrapper to parse HTML
+      // Parse HTML into a temporary container
       const temp = document.createElement('div');
-      temp.innerHTML = bannerHTML;
-      const bannerElement = temp.firstChild;
+      temp.innerHTML = bannerHTML.trim();
 
-      // Insert the banner as the first child of container
-      if (container.firstChild) {
+      // Get the banner element (should be the only child after trim)
+      const bannerElement = temp.querySelector(`#${reconnectionBannerId}`);
+
+      if (bannerElement && container.firstChild) {
+        // Insert banner as the first child
         container.insertBefore(bannerElement, container.firstChild);
-      } else {
-        container.appendChild(bannerElement);
-      }
+        console.log('[Reconnection] Banner inserted into DOM');
 
-      // Verify it was inserted
-      const insertedBanner = document.getElementById(reconnectionBannerId);
-      if (insertedBanner) {
-        console.log('[Reconnection] Banner inserted into DOM and verified');
-        console.log('[Reconnection] Banner element:', insertedBanner);
-        console.log('[Reconnection] Banner display:', window.getComputedStyle(insertedBanner).display);
+        // Verify visibility
+        const displayed = window.getComputedStyle(bannerElement).display;
+        console.log(`[Reconnection] Banner display: ${displayed}`);
+      } else if (bannerElement) {
+        container.appendChild(bannerElement);
+        console.log('[Reconnection] Banner appended to DOM');
       } else {
-        console.error('[Reconnection] Banner not found in DOM after insertion!');
+        console.error('[Reconnection] Failed to parse banner element from HTML');
       }
     } else {
       console.warn('[Reconnection] Container not found for banner');
-      // Try alternate selector
-      const body = document.body;
-      if (body) {
-        console.log('[Reconnection] Found body, using it as fallback');
-        const temp = document.createElement('div');
-        temp.innerHTML = bannerHTML;
-        body.insertBefore(temp.firstChild, body.firstChild);
-      }
     }
 
     if (typeof addMessage === 'function') {
       addMessage(`🔄 Detected pending job: ${pendingJob.jobId}`, 'info');
     }
-  }, 200); // Increased delay to account for async page load
+  }, 200); // Allow time for DOM to be interactive
 }
 
 const startBtn = document.getElementById('startBtn');
