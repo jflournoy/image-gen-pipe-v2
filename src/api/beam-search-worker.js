@@ -353,6 +353,17 @@ Provide ONLY the rephrased prompt, nothing else.`;
       }
     }
 
+    // Mark final winner in metadata and get full metadata with lineage
+    if (metadataTracker) {
+      metadataTracker.markFinalWinner({
+        iteration: result.metadata?.iteration,
+        candidateId: result.metadata?.candidateId
+      });
+    }
+
+    // Get full metadata including lineage for emission
+    const fullMetadata = metadataTracker ? await metadataTracker.getMetadata() : null;
+
     // Emit completion event
     emitProgress(jobId, {
       type: 'complete',
@@ -365,7 +376,12 @@ Provide ONLY the rephrased prompt, nothing else.`;
           totalScore: result.totalScore,
           imageUrl: result.image.url
         }
-      }
+      },
+      metadata: fullMetadata ? {
+        lineage: fullMetadata.lineage,
+        sessionId: fullMetadata.sessionId,
+        finalWinner: fullMetadata.finalWinner
+      } : null
     });
 
     // Update job status
