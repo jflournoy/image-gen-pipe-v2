@@ -93,7 +93,11 @@ function handleReconnect(jobId) {
     if (pendingJob.params.maxIterations) document.getElementById('maxIterations').value = pendingJob.params.maxIterations;
     if (pendingJob.params.alpha) document.getElementById('alpha').value = pendingJob.params.alpha;
     if (pendingJob.params.temperature) document.getElementById('temperature').value = pendingJob.params.temperature;
-    addMessage(`🔄 Reconnecting to job: ${jobId} (Settings restored)`, 'event');
+
+    // Display restored settings in message
+    const settingsStr = `N=${pendingJob.params.n}, M=${pendingJob.params.m}, Iterations=${pendingJob.params.maxIterations}, α=${pendingJob.params.alpha}, T=${pendingJob.params.temperature}`;
+    addMessage(`🔄 Reconnecting to job: ${jobId}`, 'event');
+    addMessage(`📋 Restored settings: ${settingsStr}`, 'info');
   } else {
     addMessage(`🔄 Reconnecting to job: ${jobId}`, 'event');
   }
@@ -409,6 +413,9 @@ function formatMessage(msg) {
   }
 
   if (msg.type === 'complete') {
+    // Clear pending job now that it's complete
+    clearPendingJob();
+
     // Show final cost summary
     const costSummary = currentCost.total > 0
       ? ` | Total cost: ${formatCost(currentCost.total)}`
