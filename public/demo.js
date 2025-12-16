@@ -63,7 +63,7 @@ function buildReconnectionBanner(jobId, startTime) {
   const timeStr = elapsedMinutes > 0 ? `${elapsedMinutes}m ${elapsedSeconds}s` : `${elapsedSeconds}s`;
 
   return `
-    <div id="${reconnectionBannerId}" class="reconnection-banner">
+    <div id="${reconnectionBannerId}" class="reconnection-banner" style="position: relative; z-index: 1000; width: 100%; box-sizing: border-box;">
       <div class="reconnection-content">
         <span>🔄 Job <strong>${jobId.substring(0, 12)}</strong> is still running</span>
         <span class="reconnection-time">(${timeStr} elapsed)</span>
@@ -122,7 +122,7 @@ function checkForPendingJob() {
 
   console.log(`[Reconnection] Found pending job: ${pendingJob.jobId}`);
 
-  // Use setTimeout to ensure DOM is ready
+  // Use setTimeout to ensure DOM is ready - increase delay to account for page load
   setTimeout(() => {
     // Create and show reconnection banner
     const bannerHTML = buildReconnectionBanner(pendingJob.jobId, pendingJob.startTime);
@@ -133,23 +133,40 @@ function checkForPendingJob() {
       // Create a temporary wrapper to parse HTML
       const temp = document.createElement('div');
       temp.innerHTML = bannerHTML;
+      const bannerElement = temp.firstChild;
 
       // Insert the banner as the first child of container
       if (container.firstChild) {
-        container.insertBefore(temp.firstChild, container.firstChild);
+        container.insertBefore(bannerElement, container.firstChild);
       } else {
-        container.appendChild(temp.firstChild);
+        container.appendChild(bannerElement);
       }
 
-      console.log('[Reconnection] Banner inserted into DOM');
+      // Verify it was inserted
+      const insertedBanner = document.getElementById(reconnectionBannerId);
+      if (insertedBanner) {
+        console.log('[Reconnection] Banner inserted into DOM and verified');
+        console.log('[Reconnection] Banner element:', insertedBanner);
+        console.log('[Reconnection] Banner display:', window.getComputedStyle(insertedBanner).display);
+      } else {
+        console.error('[Reconnection] Banner not found in DOM after insertion!');
+      }
     } else {
       console.warn('[Reconnection] Container not found for banner');
+      // Try alternate selector
+      const body = document.body;
+      if (body) {
+        console.log('[Reconnection] Found body, using it as fallback');
+        const temp = document.createElement('div');
+        temp.innerHTML = bannerHTML;
+        body.insertBefore(temp.firstChild, body.firstChild);
+      }
     }
 
     if (typeof addMessage === 'function') {
       addMessage(`🔄 Detected pending job: ${pendingJob.jobId}`, 'info');
     }
-  }, 100); // Small delay to ensure DOM is ready
+  }, 200); // Increased delay to account for async page load
 }
 
 const startBtn = document.getElementById('startBtn');
