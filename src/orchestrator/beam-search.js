@@ -154,8 +154,8 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
         onStepProgress({
           stage: 'safety',
           status: 'failed',
-          candidateId,
-          message: `✗ ${candidateId}: ${failureReason}`
+          candidateId: candidateIdStr,
+          message: `✗ ${candidateIdStr}: ${failureReason}`
         });
       }
 
