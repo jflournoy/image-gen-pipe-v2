@@ -21,14 +21,23 @@ let reconnectionBannerId = 'reconnection-banner';
 
 /**
  * Save pending job to localStorage for reconnection on page reload
+ * @param {string} jobId - The job ID
+ * @param {Object} params - Job parameters (n, m, maxIterations, alpha, temperature)
  */
-function savePendingJob(jobId) {
+function savePendingJob(jobId, params = {}) {
   const jobState = {
     jobId,
-    startTime: new Date().toISOString()
+    startTime: new Date().toISOString(),
+    params: {
+      n: params.n,
+      m: params.m,
+      maxIterations: params.maxIterations,
+      alpha: params.alpha,
+      temperature: params.temperature
+    }
   };
   localStorage.setItem('pendingJob', JSON.stringify(jobState));
-  console.log(`[Reconnection] Saved pending job: ${jobId}`);
+  console.log(`[Reconnection] Saved pending job: ${jobId} with params:`, jobState.params);
 }
 
 /**
@@ -74,7 +83,20 @@ function handleReconnect(jobId) {
   if (banner) banner.remove();
 
   currentJobId = jobId;
-  addMessage(`🔄 Reconnecting to job: ${jobId}`, 'event');
+
+  // Restore settings from the pending job state
+  const pendingJob = getPendingJob();
+  if (pendingJob && pendingJob.params) {
+    console.log('[Reconnection] Restoring job settings:', pendingJob.params);
+    if (pendingJob.params.n) beamWidthSelect.value = pendingJob.params.n;
+    if (pendingJob.params.m) keepTopSelect.value = pendingJob.params.m;
+    if (pendingJob.params.maxIterations) document.getElementById('maxIterations').value = pendingJob.params.maxIterations;
+    if (pendingJob.params.alpha) document.getElementById('alpha').value = pendingJob.params.alpha;
+    if (pendingJob.params.temperature) document.getElementById('temperature').value = pendingJob.params.temperature;
+    addMessage(`🔄 Reconnecting to job: ${jobId} (Settings restored)`, 'event');
+  } else {
+    addMessage(`🔄 Reconnecting to job: ${jobId}`, 'event');
+  }
 
   // Disable form inputs
   startBtn.disabled = true;
@@ -537,7 +559,7 @@ async function startBeamSearch() {
 
     const data = await response.json();
     currentJobId = data.jobId;
-    savePendingJob(currentJobId); // Save for reconnection on reload
+    savePendingJob(currentJobId, params); // Save job and settings for reconnection on reload
     addMessage(`Job started: ${currentJobId}`, 'event');
 
     // Disable form inputs
