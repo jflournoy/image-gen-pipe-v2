@@ -603,7 +603,7 @@ function connectWebSocket() {
 
     ws.onclose = () => {
       addMessage('WebSocket disconnected', 'warning');
-      stopBeamSearch();
+      stopBeamSearch(false); // Don't clear pending job on connection loss
     };
   } catch (err) {
     addMessage(`Connection error: ${err.message}`, 'error');
@@ -612,8 +612,11 @@ function connectWebSocket() {
 }
 
 // Stop beam search
-function stopBeamSearch() {
-  clearPendingJob(); // Clear from localStorage when job stops
+// userInitiated: true if user explicitly stopped (clear pending job), false if connection lost (preserve it)
+function stopBeamSearch(userInitiated = true) {
+  if (userInitiated) {
+    clearPendingJob(); // Only clear when user explicitly stops the job
+  }
   currentJobId = null;
   if (ws) {
     ws.close();
@@ -640,7 +643,7 @@ function stopBeamSearch() {
 
 // Event listeners
 startBtn.addEventListener('click', startBeamSearch);
-stopBtn.addEventListener('click', stopBeamSearch);
+stopBtn.addEventListener('click', () => stopBeamSearch(true)); // User explicitly stopping
 document.getElementById('clearBtn').addEventListener('click', () => {
   messagesDiv.innerHTML = '';
   addMessage('Log cleared', 'event');
