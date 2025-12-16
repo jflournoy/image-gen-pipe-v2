@@ -16,6 +16,9 @@ let candidates = new Map(); // candidateId -> full candidate data
 let rankings = new Map();   // candidateId -> ranking data
 let currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
 
+// Job metadata (including lineage) from live runs
+let jobMetadata = null; // Stores metadata with lineage from complete message
+
 // Job reconnection state
 let reconnectionBannerId = 'reconnection-banner';
 
@@ -416,6 +419,12 @@ function formatMessage(msg) {
     // Clear pending job now that it's complete
     clearPendingJob();
 
+    // Store metadata (including lineage) from complete message
+    if (msg.metadata) {
+      jobMetadata = msg.metadata;
+      console.log('[Demo] Stored job metadata with lineage:', jobMetadata);
+    }
+
     // Show final cost summary
     const costSummary = currentCost.total > 0
       ? ` | Total cost: ${formatCost(currentCost.total)}`
@@ -522,6 +531,7 @@ async function startBeamSearch() {
     candidates.clear();
     rankings.clear();
     currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
+    jobMetadata = null; // Reset job metadata for new job
     imagesGrid.innerHTML = '';
     imagesSection.style.display = 'none';
 
@@ -818,11 +828,13 @@ function showWinnerShowcase() {
   const rankingSummary = buildRankingSummary(rankedCandidates);
 
   // Build lineage visualization if available
-  const lineageHTML = buildLineageVisualization(allCandidates[0]?.jobData || {
+  // Use jobMetadata from live run, fallback to jobData from historical job, or empty
+  const lineageVisualizationData = jobMetadata || allCandidates[0]?.jobData || {
     lineage: allCandidates[0]?.lineage || null,
     date: null,
     sessionId: null
-  });
+  };
+  const lineageHTML = buildLineageVisualization(lineageVisualizationData);
 
   showcaseSection.innerHTML = `
     ${lineageHTML}

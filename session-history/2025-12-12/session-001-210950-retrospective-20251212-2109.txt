@@ -1,0 +1,46 @@
+# Claude Code Session - 2025-12-12 21:09:50
+
+## Session Metadata
+- **Date**: 2025-12-12
+- **Time**: 21:09:50
+- **Session Number**: 001
+- **Session Type**: manual
+- **Description**: retrospective-20251212-2109
+
+## Git Activity
+**Branch**: main
+
+### Recent Commits (20)
+- `6a66ea8` refactor: rebuild demo from scratch - minimal real-time message viewer
+- `9c306d1` fix: suppress ENOENT warnings in Jobs API for metadata files
+- `95a4801` fix: add missing metadata state to App component
+- `24ae327` feat: implement complete beam search demo frontend and backend
+- `4530809` fix: use absolute URL for /api/jobs endpoint in JobSelector
+- `bd049a4` feat: implement job discovery and reconnection
+- `ed1dac5` fix: improve UI layout and text wrapping
+- `a8f5dc8` fix: move debug useEffect after candidatesByIteration declaration
+- `663cfb7` debug: add comprehensive logging for image and lineage data flow
+- `cec220b` fix: add parentId to candidate WebSocket messages for lineage tracking
+- ... and 10 more
+
+### Working Directory Changes (6 files)
+- **Modified**: public/demo.html
+- **Modified**: public/demo.js
+- **Modified**: src/api/demo-routes.js
+- **Modified**: src/orchestrator/beam-search.js
+- **Modified**: src/providers/mock-llm-provider.js
+- **Modified**: src/providers/openai-llm-provider.js
+
+## Test Results
+- Tests not run in this session
+
+## Session Summary
+This session captured at 12/12/2025, 21:09:50
+
+### Description
+retrospective-20251212-2109
+
+### Metrics
+- Commits: 20
+- Files changed: 6
+- Tests: 0/0 passing
