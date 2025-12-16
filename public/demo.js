@@ -122,17 +122,34 @@ function checkForPendingJob() {
 
   console.log(`[Reconnection] Found pending job: ${pendingJob.jobId}`);
 
-  // Create and show reconnection banner
-  const banner = document.createElement('div');
-  banner.innerHTML = buildReconnectionBanner(pendingJob.jobId, pendingJob.startTime);
+  // Use setTimeout to ensure DOM is ready
+  setTimeout(() => {
+    // Create and show reconnection banner
+    const bannerHTML = buildReconnectionBanner(pendingJob.jobId, pendingJob.startTime);
 
-  // Insert banner at the top of the container
-  const container = document.querySelector('.container');
-  if (container && container.firstChild) {
-    container.insertBefore(banner.firstChild, container.firstChild);
-  }
+    // Insert banner at the top of the container
+    const container = document.querySelector('.container');
+    if (container) {
+      // Create a temporary wrapper to parse HTML
+      const temp = document.createElement('div');
+      temp.innerHTML = bannerHTML;
 
-  addMessage(`🔄 Detected pending job: ${pendingJob.jobId}`, 'info');
+      // Insert the banner as the first child of container
+      if (container.firstChild) {
+        container.insertBefore(temp.firstChild, container.firstChild);
+      } else {
+        container.appendChild(temp.firstChild);
+      }
+
+      console.log('[Reconnection] Banner inserted into DOM');
+    } else {
+      console.warn('[Reconnection] Container not found for banner');
+    }
+
+    if (typeof addMessage === 'function') {
+      addMessage(`🔄 Detected pending job: ${pendingJob.jobId}`, 'info');
+    }
+  }, 100); // Small delay to ensure DOM is ready
 }
 
 const startBtn = document.getElementById('startBtn');
