@@ -45,7 +45,8 @@ function isSafetyViolation(error) {
  * @returns {Promise<Object>} Generated image result
  */
 async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvider, options = {}) {
-  const { onStepProgress, candidateId, ...genOptions } = options;
+  const { onStepProgress, ...genOptions } = options;
+  const { candidateId } = options; // Extract for logging, but keep in genOptions
 
   try {
     // First attempt - generate with original prompt

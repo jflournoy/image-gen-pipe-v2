@@ -271,6 +271,17 @@ class OpenAIImageProvider {
       dimension
     } = options;
 
+    // Debug logging for image saving
+    if (process.env.DEBUG_IMAGE_SAVING) {
+      console.log('[OpenAIImageProvider] generateImage called with:', {
+        iteration,
+        candidateId,
+        dimension,
+        saveLocally: this.saveLocally,
+        willSave: this.saveLocally && iteration !== undefined && candidateId !== undefined && dimension
+      });
+    }
+
     // Use model-specific defaults if not provided or if invalid for this model
     const quality = requestedQuality && this.validQualities.includes(requestedQuality)
       ? requestedQuality
