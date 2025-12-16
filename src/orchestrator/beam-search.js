@@ -45,8 +45,8 @@ function isSafetyViolation(error) {
  * @returns {Promise<Object>} Generated image result
  */
 async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvider, options = {}) {
-  const { onStepProgress, ...genOptions } = options;
-  const { candidateId } = options; // Extract for logging, but keep in genOptions
+  const { onStepProgress, candidateIdStr, ...genOptions } = options;
+  // Use candidateIdStr for logging/progress messages, keep numeric candidateId in genOptions for image saving
 
   try {
     // First attempt - generate with original prompt
@@ -65,12 +65,12 @@ async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvide
       onStepProgress({
         stage: 'safety',
         status: 'rephrasing',
-        candidateId,
-        message: `⚠️ ${candidateId}: Safety violation - rephrasing prompt...`
+        candidateId: candidateIdStr,
+        message: `⚠️ ${candidateIdStr}: Safety violation - rephrasing prompt...`
       });
     }
 
-    console.log(`[SafetyRetry] ${candidateId}: Safety violation detected, attempting rephrase. Error: ${error.message}`);
+    console.log(`[SafetyRetry] ${candidateIdStr}: Safety violation detected, attempting rephrase. Error: ${error.message}`);
 
     // Extract specific violation type from error message if available
     // e.g., "safety_violations=[sexual]" -> "sexual"
@@ -104,15 +104,15 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
       );
 
       const rephrasedPrompt = rephraseResult.trim();
-      console.log(`[SafetyRetry] ${candidateId}: Rephrased prompt: "${rephrasedPrompt.substring(0, 100)}..."`);
+      console.log(`[SafetyRetry] ${candidateIdStr}: Rephrased prompt: "${rephrasedPrompt.substring(0, 100)}..."`);
 
       // Emit progress: retrying with rephrased prompt
       if (onStepProgress) {
         onStepProgress({
           stage: 'safety',
           status: 'retrying',
-          candidateId,
-          message: `🔄 ${candidateId}: Retrying with rephrased prompt...`
+          candidateId: candidateIdStr,
+          message: `🔄 ${candidateIdStr}: Retrying with rephrased prompt...`
         });
       }
 
@@ -126,8 +126,8 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
         onStepProgress({
           stage: 'safety',
           status: 'success',
-          candidateId,
-          message: `✓ ${candidateId}: Safety retry succeeded`
+          candidateId: candidateIdStr,
+          message: `✓ ${candidateIdStr}: Safety retry succeeded`
         });
       }
 
@@ -140,7 +140,7 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
       return result;
     } catch (rephraseError) {
       // LLM rephrasing failed - likely the LLM also refused to engage with the content
-      console.error(`[SafetyRetry] ${candidateId}: LLM rephrase failed: ${rephraseError.message}`);
+      console.error(`[SafetyRetry] ${candidateIdStr}: LLM rephrase failed: ${rephraseError.message}`);
 
       // Determine if this was an LLM refusal vs other error
       const isLLMRefusal = rephraseError.message.includes('refused') ||
@@ -396,7 +396,9 @@ async function processCandidateStream(
     {
       ...options,
       onStepProgress,
-      candidateId: candidateId_str
+      // Don't override candidateId with string - keep numeric for image saving
+      // The string version is only used for progress messages
+      candidateIdStr: candidateId_str
     }
   );
 
