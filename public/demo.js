@@ -612,6 +612,13 @@ function connectWebSocket() {
           addMessage(formatted.text, formatted.type);
         }
 
+        // Handle subscription errors - job not found or already completed
+        if (msg.type === 'error') {
+          console.log('[Reconnection] Received error message:', msg.message);
+          // Clear the stale pending job since it's no longer valid
+          clearPendingJob();
+        }
+
         // Extract and display image if this is a candidate message with an image URL
         if (msg.type === 'candidate' && msg.imageUrl) {
           const iteration = msg.iteration !== undefined ? msg.iteration : 0;
