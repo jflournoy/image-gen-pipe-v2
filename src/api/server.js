@@ -430,7 +430,46 @@ export function attachWebSocket(server) {
         if (message.type === 'subscribe' && message.jobId) {
           currentJobId = message.jobId;
 
-          // Add this connection to the job's subscription list
+          // Validate that the job exists and is still running
+          const jobStatus = getJobStatus(currentJobId);
+
+          if (!jobStatus) {
+            // Job not found - could be already completed or never existed
+            console.log(`[WebSocket] Subscribe failed: Job ${currentJobId} not found`);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'Job not found or already completed. Please start a new job.',
+              jobId: currentJobId
+            }));
+            ws.close(1000, 'Job not found');
+            return;
+          }
+
+          if (jobStatus.status === 'completed') {
+            // Job has already finished
+            console.log(`[WebSocket] Subscribe failed: Job ${currentJobId} already completed`);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'This job has already completed. Results are available in the job browser.',
+              jobId: currentJobId
+            }));
+            ws.close(1000, 'Job completed');
+            return;
+          }
+
+          if (jobStatus.status === 'cancelled') {
+            // Job was cancelled
+            console.log(`[WebSocket] Subscribe failed: Job ${currentJobId} was cancelled`);
+            ws.send(JSON.stringify({
+              type: 'error',
+              message: 'This job was cancelled. Please start a new job.',
+              jobId: currentJobId
+            }));
+            ws.close(1000, 'Job cancelled');
+            return;
+          }
+
+          // Job is valid and running - add this connection to the job's subscription list
           if (!jobSubscriptions.has(currentJobId)) {
             jobSubscriptions.set(currentJobId, new Set());
           }
