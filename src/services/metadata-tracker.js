@@ -36,6 +36,10 @@ class MetadataTracker {
       finalWinner: null,
       lineage: null
     };
+
+    // Write queue to serialize metadata writes and prevent file contention
+    // Multiple candidates writing in parallel would cause file lock issues
+    this.writeQueue = Promise.resolve();
   }
 
   /**
@@ -66,13 +70,21 @@ class MetadataTracker {
 
   /**
    * Write current metadata to disk
+   * Uses a write queue to serialize writes and prevent file contention
+   * when multiple candidates are processed in parallel.
    * @returns {Promise<void>}
    * @private
    */
   async _writeMetadata() {
-    const metadataPath = this._getMetadataPath();
-    const json = JSON.stringify(this.metadata, null, 2);
-    await fs.writeFile(metadataPath, json, 'utf8');
+    // Queue the write operation to prevent concurrent writes to same file
+    this.writeQueue = this.writeQueue.then(async () => {
+      const metadataPath = this._getMetadataPath();
+      const json = JSON.stringify(this.metadata, null, 2);
+      await fs.writeFile(metadataPath, json, 'utf8');
+    });
+
+    // Wait for this write to complete before returning
+    await this.writeQueue;
   }
 
   /**
