@@ -38,15 +38,20 @@ function createLLMProvider(options = {}) {
 
   switch (provider) {
     case 'openai':
-      if (!config.llm.apiKey) {
+      // Use provided apiKey option, fall back to config
+      const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
+      if (!apiKey) {
         throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
       }
-      return new OpenAILLMProvider(config.llm.apiKey, {
+      const instance = new OpenAILLMProvider(apiKey, {
         model: config.llm.model,
         models: config.llm.models,  // Operation-specific models for cost optimization
         maxRetries: config.llm.maxRetries,
         timeout: config.llm.timeout
       });
+      // Store apiKey on instance for testing
+      instance.apiKey = apiKey;
+      return instance;
 
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
@@ -71,12 +76,17 @@ function createImageProvider(options = {}) {
   switch (provider) {
     case 'dalle':
     case 'openai':
-      if (!config.image.apiKey) {
+      // Use provided apiKey option, fall back to config
+      const apiKey = 'apiKey' in options ? options.apiKey : config.image.apiKey;
+      if (!apiKey) {
         throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
       }
-      return new OpenAIImageProvider(config.image.apiKey, {
+      const instance = new OpenAIImageProvider(apiKey, {
         model: config.image.model
       });
+      // Store apiKey on instance for testing
+      instance.apiKey = apiKey;
+      return instance;
 
     default:
       throw new Error(`Unknown image provider: ${provider}`);
@@ -101,14 +111,19 @@ function createVisionProvider(options = {}) {
   switch (provider) {
     case 'openai':
     case 'gpt-vision':
-      if (!config.llm.apiKey) {
+      // Use provided apiKey option, fall back to config
+      const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
+      if (!apiKey) {
         throw new Error('OpenAI API key is required. Set OPENAI_API_KEY environment variable.');
       }
-      return new OpenAIVisionProvider(config.llm.apiKey, {
+      const instance = new OpenAIVisionProvider(apiKey, {
         model: options.model || config.vision?.model || 'gpt-5-nano',
         maxRetries: options.maxRetries || 3,
         timeout: options.timeout || 30000
       });
+      // Store apiKey on instance for testing
+      instance.apiKey = apiKey;
+      return instance;
 
     default:
       throw new Error(`Unknown vision provider: ${provider}`);
@@ -142,12 +157,15 @@ function createCritiqueGenerator(options = {}) {
   // Real critique generator (uses OpenAI for LLM-based critique)
   // Use explicit undefined check to allow passing undefined to override config
   const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
-  return new CritiqueGenerator({
+  const instance = new CritiqueGenerator({
     apiKey,
     model: options.model || 'gpt-4o-mini',
     maxRetries: options.maxRetries || config.llm.maxRetries,
     timeout: options.timeout || config.llm.timeout
   });
+  // Store apiKey on instance for testing
+  instance.apiKey = apiKey;
+  return instance;
 }
 
 /**
@@ -164,16 +182,21 @@ function createImageRanker(options = {}) {
   }
 
   // Real provider - ImageRanker always uses OpenAI
-  if (!config.llm.apiKey) {
+  // Use provided apiKey option, fall back to config
+  const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
+  if (!apiKey) {
     throw new Error('OpenAI API key is required for ImageRanker. Set OPENAI_API_KEY environment variable.');
   }
 
   const ensembleSize = parseInt(process.env.ENSEMBLE_SIZE || '3', 10);
 
-  return new ImageRanker({
-    apiKey: config.llm.apiKey,
+  const instance = new ImageRanker({
+    apiKey,
     defaultEnsembleSize: ensembleSize
   });
+  // Store apiKey on instance for testing
+  instance.apiKey = apiKey;
+  return instance;
 }
 
 /**
