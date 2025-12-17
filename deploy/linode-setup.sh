@@ -34,15 +34,9 @@ fi
 
 # Gather user input
 echo -e "${YELLOW}Configuration:${NC}"
-read -p "Enter your OpenAI API key: " OPENAI_API_KEY
+echo -e "${GREEN}NOTE: Users will provide their own OpenAI API keys (no server key stored)${NC}"
 read -p "Enter domain name (or leave blank for IP access): " DOMAIN_NAME
 read -p "Enter email for Let's Encrypt (or leave blank to skip HTTPS): " LETSENCRYPT_EMAIL
-
-# Validate OpenAI API key
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo -e "${RED}Error: OpenAI API key is required${NC}"
-    exit 1
-fi
 
 echo ""
 echo -e "${GREEN}✓ Configuration saved${NC}"
@@ -92,9 +86,6 @@ echo ""
 # Step 5: Create .env file
 echo -e "${YELLOW}Step 5: Creating .env configuration...${NC}"
 cat > "$APP_DIR/.env" << EOF
-# OpenAI Configuration
-OPENAI_API_KEY=$OPENAI_API_KEY
-
 # Server Configuration
 NODE_ENV=production
 PORT=3000
@@ -103,12 +94,17 @@ PORT=3000
 SESSION_HISTORY_DIR=$APP_DIR/session-history
 IMAGES_DIR=$APP_DIR/session-history
 
+# OpenAI API Key
+# NOTE: Users provide their own API keys via X-OpenAI-API-Key header
+# Do NOT set OPENAI_API_KEY here - this ensures all API calls use user-provided keys only
+# OPENAI_API_KEY=
+
 # Logging (optional)
 LOG_LEVEL=info
 EOF
 
 chmod 600 "$APP_DIR/.env"
-echo -e "${GREEN}✓ .env file created${NC}"
+echo -e "${GREEN}✓ .env file created (no server API key stored)${NC}"
 echo ""
 
 # Step 6: Create systemd service
@@ -255,6 +251,13 @@ else
     echo -e "  ${GREEN}http://$IP${NC}"
 fi
 echo ""
+echo -e "${GREEN}API Key Configuration:${NC}"
+echo -e "  ${YELLOW}Users must provide their own OpenAI API keys${NC}"
+echo "  - No server API key is configured"
+echo "  - Keys are passed via X-OpenAI-API-Key header"
+echo "  - Keys are NOT stored on the server"
+echo "  - Each user is responsible for their own costs"
+echo ""
 echo -e "${GREEN}Useful commands:${NC}"
 echo "  View logs:           journalctl -u image-gen-pipe -f"
 echo "  Restart service:     systemctl restart image-gen-pipe"
@@ -263,8 +266,8 @@ echo "  Update app:          cd $APP_DIR && git pull origin main && npm install 
 echo ""
 echo -e "${GREEN}Next steps:${NC}"
 echo "  1. Test the app at the URL above"
-echo "  2. Start a beam search job to verify it's working"
-echo "  3. Check logs if you encounter issues"
+echo "  2. When starting a beam search, you'll be asked for your OpenAI API key"
+echo "  3. Check logs if you encounter issues: journalctl -u image-gen-pipe -f"
 echo ""
 
 # Create an update script for convenience

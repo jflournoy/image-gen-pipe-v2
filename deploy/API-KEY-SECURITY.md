@@ -115,40 +115,52 @@ socket.on('generateImage', async (prompt, options) => {
 
 ---
 
-## Implementation: API Key Proxy (Easiest First Step)
+## Implementation: API Key Proxy (User-Provided Only)
 
-Here's the minimal change to support user-provided keys:
+User **must** provide their own API key - no server fallback.
 
-### 1. Frontend - Add Key Input
+### 1. Frontend - Add Key Input (Required)
 
 ```html
 <!-- In demo.html -->
 <div class="api-key-section">
   <label>
-    OpenAI API Key:
-    <input type="password" id="apiKey" placeholder="sk-...">
-    <small>Your key stays in your session only</small>
+    OpenAI API Key: <span style="color: red;">*</span>
+    <input type="password" id="apiKey" placeholder="sk-..." required>
+    <small>
+      Required. Your key stays in your browser session only and is sent directly
+      to OpenAI via HTTPS. Not stored on our server.
+    </small>
   </label>
+  <small style="color: #666;">
+    Don't have a key? Get one at <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a>
+  </small>
 </div>
 ```
 
-### 2. Frontend - Send Key with Request
+### 2. Frontend - Validate & Send Key
 
 ```javascript
 // In demo.js
 async function startBeamSearch() {
-  const apiKey = document.getElementById('apiKey').value;
+  const apiKey = document.getElementById('apiKey').value?.trim();
 
+  // Require API key - no fallback to server key
   if (!apiKey) {
-    // Fall back to server's key if user doesn't provide one
-    // (for backward compatibility)
+    addMessage('Error: OpenAI API key is required', 'error');
+    return;
+  }
+
+  if (!apiKey.startsWith('sk-')) {
+    addMessage('Error: Invalid API key format. Should start with sk-', 'error');
+    return;
   }
 
   const response = await fetch('/api/beam-search/start', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'X-OpenAI-API-Key': apiKey  // Send user's key
+      'X-OpenAI-API-Key': apiKey  // User's key (required)
     },
     body: JSON.stringify({ prompt, n, m, iterations, alpha, temperature })
   });
@@ -157,53 +169,65 @@ async function startBeamSearch() {
 }
 ```
 
-### 3. Backend - Accept User Key
+### 3. Backend - Require User Key
+
+```javascript
+// In src/api/routes/beam-search.js
+app.post('/api/beam-search/start', (req, res) => {
+  const apiKey = req.headers['x-openai-api-key']?.trim();
+
+  // Require user's API key - NO FALLBACK
+  if (!apiKey) {
+    return res.status(401).json({
+      error: 'Missing API key. Provide X-OpenAI-API-Key header with your OpenAI API key.'
+    });
+  }
+
+  // Validate format (basic check)
+  if (!apiKey.startsWith('sk-')) {
+    return res.status(400).json({
+      error: 'Invalid API key format. Should start with sk-'
+    });
+  }
+
+  // Pass user's key to beam search
+  startBeamSearchJob(jobId, req.body, apiKey);
+  res.json({ jobId });
+});
+```
+
+### 4. Backend - Use Only User's Key
 
 ```javascript
 // In beam-search-worker.js
 export async function startBeamSearchJob(jobId, params, userApiKey) {
-  const apiKey = userApiKey || process.env.OPENAI_API_KEY;
+  // NEVER use server's API key - only user-provided key
+  if (!userApiKey) {
+    throw new Error('User API key is required');
+  }
 
-  // Create providers with user's key
   const providers = {
-    llm: createLLMProvider({ apiKey }),
-    imageGen: createImageProvider({ apiKey }),
-    vision: createVisionProvider({ apiKey }),
-    critiqueGen: createCritiqueGenerator({ apiKey }),
-    imageRanker: createImageRanker({ apiKey })
+    llm: createLLMProvider({ apiKey: userApiKey }),
+    imageGen: createImageProvider({ apiKey: userApiKey }),
+    vision: createVisionProvider({ apiKey: userApiKey }),
+    critiqueGen: createCritiqueGenerator({ apiKey: userApiKey }),
+    imageRanker: createImageRanker({ apiKey: userApiKey })
   };
 
   // ... rest of beam search
 }
 ```
 
-### 4. Middleware - Extract & Validate Key
+### 5. Never Store or Log Key
 
 ```javascript
-// In src/api/routes/beam-search.js
-app.post('/api/beam-search/start', (req, res) => {
-  let apiKey = req.headers['x-openai-api-key'];
+// ✅ GOOD - Log without key
+console.log(`[Beam Search] Starting job ${jobId} with user-provided API key`);
+emitProgress(jobId, { message: 'Starting beam search...' });
 
-  // Validate format (basic check)
-  if (apiKey && !apiKey.startsWith('sk-')) {
-    return res.status(400).json({
-      error: 'Invalid API key format. Should start with sk-'
-    });
-  }
-
-  // Use user's key if provided, else server's
-  apiKey = apiKey || process.env.OPENAI_API_KEY;
-
-  if (!apiKey) {
-    return res.status(400).json({
-      error: 'No API key provided. Include X-OpenAI-API-Key header or set OPENAI_API_KEY env var'
-    });
-  }
-
-  // Pass to beam search
-  startBeamSearchJob(jobId, req.body, apiKey);
-  res.json({ jobId });
-});
+// ❌ BAD - Never do this
+console.log(`API Key: ${userApiKey}`);
+console.log(`Starting with key: ${userApiKey}`);
 ```
 
 ---
@@ -277,13 +301,15 @@ This way:
 
 ## Production Deployment Checklist
 
-- [ ] Frontend form has API key input
+- [ ] Frontend form has API key input (required field)
 - [ ] Backend accepts `X-OpenAI-API-Key` header
-- [ ] Falls back to `OPENAI_API_KEY` env var if header empty
+- [ ] Backend rejects requests WITHOUT API key header
+- [ ] `OPENAI_API_KEY` env var is NOT set (no server key)
 - [ ] HTTPS enforced (not HTTP)
-- [ ] API key never logged or stored
+- [ ] API key never logged or stored on server
 - [ ] Rate limiting configured
 - [ ] Privacy policy mentions key handling
-- [ ] Tests pass with both user-provided and server keys
+- [ ] Tests pass with user-provided keys
+- [ ] Setup script does NOT ask for server API key
 
 Would you like me to implement the API Key Proxy pattern in your code?
