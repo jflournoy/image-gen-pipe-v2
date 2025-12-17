@@ -44,7 +44,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     m = 2,
     iterations = 2,
     alpha = 0.7,
-    temperature = 0.7
+    temperature = 0.7,
+    models
   } = params;
 
   // Generate session ID in ses-HHMMSS format
@@ -89,11 +90,26 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     } = require('../factory/provider-factory.js');
 
     const providers = {
-      llm: createLLMProvider({ apiKey: userApiKey }),
-      imageGen: createImageProvider({ apiKey: userApiKey }),
-      vision: createVisionProvider({ apiKey: userApiKey }),
-      critiqueGen: createCritiqueGenerator({ apiKey: userApiKey }),
-      imageRanker: createImageRanker({ apiKey: userApiKey })
+      llm: createLLMProvider({
+        apiKey: userApiKey,
+        ...(models?.llm && { model: models.llm })
+      }),
+      imageGen: createImageProvider({
+        apiKey: userApiKey,
+        ...(models?.imageGen && { model: models.imageGen })
+      }),
+      vision: createVisionProvider({
+        apiKey: userApiKey,
+        ...(models?.vision && { model: models.vision })
+      }),
+      critiqueGen: createCritiqueGenerator({
+        apiKey: userApiKey,
+        ...(models?.llm && { model: models.llm })
+      }),
+      imageRanker: createImageRanker({
+        apiKey: userApiKey,
+        ...(models?.vision && { model: models.vision })
+      })
     };
 
     // Emit start event
