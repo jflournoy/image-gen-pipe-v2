@@ -345,9 +345,11 @@ function formatMessage(msg) {
       });
     }
 
-    // Store ranking data
+    // Store ranking data (including global rank for cross-iteration ordering)
     const rankingData = {
       rank: msg.rank,
+      globalRank: msg.globalRank,
+      globalRankNote: msg.globalRankNote,
       reason: msg.reason,
       strengths: msg.strengths || [],
       weaknesses: msg.weaknesses || []
@@ -363,9 +365,39 @@ function formatMessage(msg) {
       ranking: rankingData
     });
 
+    // Display global rank if available, otherwise iteration rank
+    const displayRank = msg.globalRank !== undefined ? msg.globalRank : rank;
+    const tiedNote = msg.globalRankNote === 'tied_at_floor' ? ' (tied)' : '';
     return {
-      text: `🏆 ${globalId} ranked #${rank}${reason}`,
+      text: `🏆 ${globalId} ranked #${displayRank}${tiedNote}${reason}`,
       type: 'info'
+    };
+  }
+
+  // Handle global ranking updates (complete cross-iteration ranking)
+  if (msg.type === 'globalRanking') {
+    console.log(`[Demo] Received global ranking for iteration ${msg.iteration}:`, msg.candidates?.length, 'candidates');
+    // Update candidates with global rank data
+    if (msg.candidates) {
+      msg.candidates.forEach(c => {
+        const globalId = `i${c.iteration}c${c.candidateId}`;
+        const existing = candidates.get(globalId) || {};
+        const existingRanking = existing.ranking || {};
+        candidates.set(globalId, {
+          ...existing,
+          id: globalId,
+          imageUrl: c.imageUrl || existing.imageUrl,
+          ranking: {
+            ...existingRanking,
+            globalRank: c.globalRank,
+            globalRankNote: c.globalRankNote
+          }
+        });
+      });
+    }
+    return {
+      text: `📊 Global ranking updated (${msg.candidates?.length || 0} candidates)`,
+      type: 'event'
     };
   }
 
@@ -779,13 +811,14 @@ function showWinnerShowcase() {
   console.log('[Demo] All candidates in Map:', Array.from(candidates.entries()));
   console.log('[Demo] All rankings in Map:', Array.from(rankings.entries()));
 
-  // Get ALL candidates with images, sorted by rank (if available) then by iteration desc
+  // Get ALL candidates with images, sorted by global rank (cross-iteration) if available
   const allCandidates = Array.from(candidates.values())
     .filter(c => c.imageUrl) // Must have an image
     .sort((a, b) => {
-      // First sort by rank (lower is better, unranked goes last)
-      const rankA = a.ranking?.rank ?? 999;
-      const rankB = b.ranking?.rank ?? 999;
+      // First sort by global rank (cross-iteration ordering, lower is better)
+      // Use globalRank if available, fall back to iteration rank
+      const rankA = a.ranking?.globalRank ?? a.ranking?.rank ?? 999;
+      const rankB = b.ranking?.globalRank ?? b.ranking?.rank ?? 999;
       if (rankA !== rankB) return rankA - rankB;
 
       // Then by iteration (higher is more refined)
@@ -797,7 +830,7 @@ function showWinnerShowcase() {
 
   console.log('[Demo] Filtered candidates with images:', allCandidates.length);
   allCandidates.forEach(c => {
-    console.log(`[Demo]   ${c.id}: rank=${c.ranking?.rank}, parentId=${c.parentId}, lineage=${buildLineage(c.id)}`);
+    console.log(`[Demo]   ${c.id}: globalRank=${c.ranking?.globalRank}, rank=${c.ranking?.rank}, note=${c.ranking?.globalRankNote}, parentId=${c.parentId}`);
   });
 
   if (allCandidates.length === 0) {
@@ -868,11 +901,15 @@ function showWinnerShowcase() {
           <tbody>
             ${rankedCandidates.map((c) => {
               const lineage = buildLineage(c.id);
-              const rank = c.ranking?.rank;
-              const displayRank = rank !== undefined ? `#${rank}` : `—`;
+              // Use globalRank for display (cross-iteration), fall back to iteration rank
+              const globalRank = c.ranking?.globalRank;
+              const iterRank = c.ranking?.rank;
+              const rank = globalRank ?? iterRank;
+              const isTiedAtFloor = c.ranking?.globalRankNote === 'tied_at_floor';
+              const displayRank = rank !== undefined ? `#${rank}${isTiedAtFloor ? ' (tied)' : ''}` : `—`;
               const rankClass = rank === 1 ? 'rank-gold' : rank === 2 ? 'rank-silver' : rank === 3 ? 'rank-bronze' : '';
               return `
-                <tr class="${!rank ? 'unranked-row' : ''} ${rankClass}">
+                <tr class="${rank === undefined ? 'unranked-row' : ''} ${rankClass}">
                   <td class="rank-cell">${displayRank}</td>
                   <td class="candidate-cell">
                     <img src="${c.imageUrl}" alt="${c.id}" class="ranking-thumb" onclick="window.open('${c.imageUrl}', '_blank')">
@@ -880,7 +917,7 @@ function showWinnerShowcase() {
                   </td>
                   <td class="iter-cell">iter ${c.iteration}</td>
                   <td class="lineage-cell">${lineage}</td>
-                  <td class="reason-cell">${c.ranking?.reason || (rank ? 'No reason' : 'Eliminated')}</td>
+                  <td class="reason-cell">${c.ranking?.reason || (rank !== undefined ? 'No reason' : 'Not ranked')}</td>
                 </tr>
               `;
             }).join('')}
@@ -893,13 +930,19 @@ function showWinnerShowcase() {
     <div class="showcase-grid">
       ${topCandidates.map((candidate, index) => {
         const ranking = candidate.ranking || {};
-        const hasRank = ranking.rank !== undefined;
+        // Use globalRank for display (cross-iteration), fall back to iteration rank
+        const globalRank = ranking.globalRank;
+        const iterRank = ranking.rank;
+        const rank = globalRank ?? iterRank;
+        const hasRank = rank !== undefined;
+        const isTiedAtFloor = ranking.globalRankNote === 'tied_at_floor';
         const lineage = buildLineage(candidate.id);
 
         // Medal for ranked candidates, number for others
         let medal;
         if (hasRank) {
-          medal = ranking.rank === 1 ? '🥇' : ranking.rank === 2 ? '🥈' : ranking.rank === 3 ? '🥉' : `#${ranking.rank}`;
+          const tiedSuffix = isTiedAtFloor ? ' (tied)' : '';
+          medal = rank === 1 ? '🥇' : rank === 2 ? '🥈' : rank === 3 ? '🥉' : `#${rank}${tiedSuffix}`;
         } else {
           medal = `#${index + 1}`;
         }
@@ -915,7 +958,7 @@ function showWinnerShowcase() {
             ${hasRank ? `
               <div class="showcase-reason">${ranking.reason || 'Ranked but no reason provided'}</div>
             ` : `
-              <div class="showcase-reason unranked-reason">Not in final ranking (eliminated in earlier round)</div>
+              <div class="showcase-reason unranked-reason">Not in final ranking</div>
             `}
 
             ${ranking.strengths?.length ? `
