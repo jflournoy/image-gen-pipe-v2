@@ -836,6 +836,97 @@
         flex: 1;
       }
     }
+
+    /* Image Modal Popup */
+    .image-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      animation: fadeIn 0.2s ease;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    .image-modal.active {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal-content {
+      position: relative;
+      background-color: white;
+      padding: 20px;
+      border-radius: 8px;
+      max-width: 90vw;
+      max-height: 90vh;
+      overflow: auto;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { transform: scale(0.9); opacity: 0; }
+      to { transform: scale(1); opacity: 1; }
+    }
+
+    .modal-close {
+      position: absolute;
+      top: 10px;
+      right: 15px;
+      font-size: 28px;
+      font-weight: bold;
+      color: #999;
+      cursor: pointer;
+      background: none;
+      border: none;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .modal-close:hover {
+      color: #333;
+    }
+
+    .modal-image {
+      max-width: 100%;
+      max-height: calc(90vh - 60px);
+      display: block;
+      margin: 0 auto;
+    }
+
+    .modal-info {
+      text-align: center;
+      margin-top: 15px;
+      color: #666;
+      font-size: 14px;
+    }
+
+    /* Make images clickable */
+    .ranking-thumb,
+    .showcase-image img,
+    .lineage-image img {
+      cursor: pointer;
+      transition: opacity 0.2s ease;
+    }
+
+    .ranking-thumb:hover,
+    .showcase-image img:hover,
+    .lineage-image img:hover {
+      opacity: 0.8;
+    }
   </style>
 </head>
 <body>
@@ -916,6 +1007,15 @@
     <div class="images-section" style="display: none;">
       <h2>Generated Images</h2>
       <div id="images-grid" class="images-grid"></div>
+    </div>
+  </div>
+
+  <!-- Image Preview Modal -->
+  <div id="imageModal" class="image-modal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeImageModal()">&times;</button>
+      <img id="modalImage" class="modal-image" alt="Preview">
+      <div class="modal-info" id="modalInfo"></div>
     </div>
   </div>
 
