@@ -996,6 +996,30 @@
         </div>
       </div>
 
+      <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
+        <h3 style="margin-top: 0;">Model Selection (Optional)</h3>
+        <div class="params-grid">
+          <div class="form-group">
+            <label for="llmModel">LLM Model:</label>
+            <select id="llmModel">
+              <option value="">Default (from server)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="imageModel">Image Generation Model:</label>
+            <select id="imageModel">
+              <option value="">Default (from server)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="visionModel">Vision Model:</label>
+            <select id="visionModel">
+              <option value="">Default (from server)</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
       <div style="margin-top: 15px;">
         <button id="startBtn" class="btn-start">Start Beam Search</button>
         <button id="stopBtn" class="btn-stop" disabled>Stop</button>
