@@ -30,9 +30,14 @@ const jobAbortControllers = new Map();
  * @param {number} [params.iterations=2] - Maximum iterations
  * @param {number} [params.alpha=0.7] - Scoring weight for alignment
  * @param {number} [params.temperature=0.7] - Temperature for variation
+ * @param {string} userApiKey - User-provided OpenAI API key (required, no fallback)
  * @returns {Promise<void>}
  */
-export async function startBeamSearchJob(jobId, params) {
+export async function startBeamSearchJob(jobId, params, userApiKey) {
+  // Require user's API key - NO FALLBACK to server key
+  if (!userApiKey || typeof userApiKey !== 'string' || userApiKey.trim() === '') {
+    throw new Error('User API key is required. A valid OpenAI API key must be provided.');
+  }
   const {
     prompt,
     n = 4,
@@ -84,11 +89,11 @@ export async function startBeamSearchJob(jobId, params) {
     } = require('../factory/provider-factory.js');
 
     const providers = {
-      llm: createLLMProvider(),
-      imageGen: createImageProvider(),
-      vision: createVisionProvider(),
-      critiqueGen: createCritiqueGenerator(),
-      imageRanker: createImageRanker()
+      llm: createLLMProvider({ apiKey: userApiKey }),
+      imageGen: createImageProvider({ apiKey: userApiKey }),
+      vision: createVisionProvider({ apiKey: userApiKey }),
+      critiqueGen: createCritiqueGenerator({ apiKey: userApiKey }),
+      imageRanker: createImageRanker({ apiKey: userApiKey })
     };
 
     // Emit start event
