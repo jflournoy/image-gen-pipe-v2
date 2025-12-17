@@ -40,7 +40,7 @@ The script will:
 - Install Node.js 20
 - Clone your repository
 - Install dependencies
-- Create `.env` configuration
+- Create `.env` configuration (no server API key stored)
 - Set up systemd service (auto-restart on failure)
 - Install and configure Nginx (reverse proxy)
 - Optionally set up HTTPS with Let's Encrypt
@@ -50,10 +50,11 @@ The script will:
 When the script runs, you'll be asked for:
 
 ```
-OpenAI API Key: sk-... (required)
 Domain Name: your-domain.com (optional, for HTTPS)
 Email for Let's Encrypt: your@email.com (optional, for HTTPS)
 ```
+
+**Note:** No OpenAI API key is needed during setup. Users provide their own keys when using the app.
 
 ### 4. Access Your App
 
@@ -265,9 +266,9 @@ systemctl start fail2ban
 apt update && apt upgrade
 ```
 
-### 4. Rotate API Keys
+### 4. HTTPS Only
 
-Periodically rotate your OpenAI API key in `.env`
+Ensure users must use HTTPS when providing their OpenAI API keys. This is handled automatically by the setup script with Let's Encrypt.
 
 ## Need Help?
 
