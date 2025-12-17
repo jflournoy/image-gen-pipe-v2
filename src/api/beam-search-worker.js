@@ -252,8 +252,8 @@ export async function startBeamSearchJob(jobId, params) {
       },
       // Ranking callback - called after ranking phase completes with all ranked candidates
       onRankingComplete: (rankingData) => {
-        const { iteration, rankedCandidates } = rankingData;
-        // Emit ranking updates for all ranked candidates
+        const { iteration, rankedCandidates, allGlobalRanked } = rankingData;
+        // Emit ranking updates for all ranked candidates (includes global rank)
         rankedCandidates.forEach(candidate => {
           if (candidate.ranking) {
             emitProgress(jobId, {
@@ -261,6 +261,8 @@ export async function startBeamSearchJob(jobId, params) {
               iteration: candidate.metadata.iteration,
               candidateId: candidate.metadata.candidateId,
               rank: candidate.ranking.rank,
+              globalRank: candidate.globalRank,
+              globalRankNote: candidate.globalRankNote,
               reason: candidate.ranking.reason,
               strengths: candidate.ranking.strengths,
               weaknesses: candidate.ranking.weaknesses,
@@ -268,6 +270,24 @@ export async function startBeamSearchJob(jobId, params) {
             });
           }
         });
+
+        // Emit complete global ranking list for final display
+        if (allGlobalRanked && allGlobalRanked.length > 0) {
+          emitProgress(jobId, {
+            type: 'globalRanking',
+            iteration,
+            candidates: allGlobalRanked.map(c => ({
+              iteration: c.metadata.iteration,
+              candidateId: c.metadata.candidateId,
+              globalRank: c.globalRank,
+              globalRankNote: c.globalRankNote,
+              imageUrl: c.image?.localPath
+                ? `/api/images/${sessionId}/${c.image.localPath.split(/[\\/]/).pop()}`
+                : c.image?.url
+            })),
+            timestamp: new Date().toISOString()
+          });
+        }
       }
     };
 
@@ -366,6 +386,8 @@ Provide ONLY the rephrased prompt, nothing else.`;
     const fullMetadata = metadataTracker ? await metadataTracker.getMetadata() : null;
 
     // Emit completion event with date for image URL construction
+    // Include allGlobalRanked for final ranking display
+    const allGlobalRanked = result.allGlobalRanked || [];
     emitProgress(jobId, {
       type: 'complete',
       timestamp: new Date().toISOString(),
@@ -382,7 +404,16 @@ Provide ONLY the rephrased prompt, nothing else.`;
         lineage: fullMetadata.lineage,
         sessionId: fullMetadata.sessionId,
         finalWinner: fullMetadata.finalWinner,
-        date: getDateString() // Include today's date for image URL construction
+        date: getDateString(), // Include today's date for image URL construction
+        allGlobalRanked: allGlobalRanked.map(c => ({
+          iteration: c.metadata.iteration,
+          candidateId: c.metadata.candidateId,
+          globalRank: c.globalRank,
+          globalRankNote: c.globalRankNote,
+          imageUrl: c.image?.localPath
+            ? `/api/images/${sessionId}/${c.image.localPath.split(/[\\/]/).pop()}`
+            : c.image?.url
+        }))
       } : null
     });
 
