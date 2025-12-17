@@ -56,6 +56,21 @@ export function createApp() {
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
     const { prompt, n, m, iterations, alpha, temperature } = req.body;
+    const userApiKey = req.headers['x-openai-api-key'];
+
+    // Validate API key is present
+    if (!userApiKey || !userApiKey.trim()) {
+      return res.status(401).json({
+        error: 'Missing API key. Provide X-OpenAI-API-Key header with your OpenAI API key.'
+      });
+    }
+
+    // Validate API key format
+    if (!userApiKey.startsWith('sk-')) {
+      return res.status(400).json({
+        error: 'Invalid API key format. Should start with sk-'
+      });
+    }
 
     // Validate required parameters
     if (!prompt) {
@@ -68,6 +83,7 @@ export function createApp() {
     const jobId = randomUUID();
 
     // Start beam search job in background (non-blocking)
+    // Pass user-provided API key - no server fallback
     startBeamSearchJob(jobId, {
       prompt,
       n,
@@ -75,7 +91,7 @@ export function createApp() {
       iterations,
       alpha,
       temperature
-    }).catch(error => {
+    }, userApiKey).catch(error => {
       console.error(`Error in beam search job ${jobId}:`, error);
     });
 
