@@ -166,6 +166,83 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
 }
 
 /**
+ * Compute global ranks across all iterations
+ *
+ * Rules:
+ * 1. Iteration 0: All candidates get sequential global ranks (1 to N)
+ * 2. Iteration 1+:
+ *    - Children that rank above ALL parents: get sequential global ranks
+ *    - Parents: maintain their relative order, shifted by children above them
+ *    - Children that rank below ANY parent: tied at floor rank (worst from iteration 0)
+ *
+ * @param {Array<Object>} rankedCandidates - Candidates sorted by within-iteration rank
+ * @param {Array<Object>} parents - Previous top candidates (parents for this iteration)
+ * @param {number} floorRank - The worst rank from iteration 0 (N for beamWidth N)
+ * @param {number} iteration - Current iteration number
+ * @returns {Array<Object>} Candidates with globalRank assigned
+ */
+function computeGlobalRanks(rankedCandidates, parents, floorRank, iteration) {
+  if (iteration === 0) {
+    // Iteration 0: Sequential global ranks for all
+    return rankedCandidates.map((candidate, idx) => ({
+      ...candidate,
+      globalRank: idx + 1
+    }));
+  }
+
+  // Create a Set of parent IDs for quick lookup
+  const parentIds = new Set(
+    parents.map(p => `i${p.metadata.iteration}c${p.metadata.candidateId}`)
+  );
+
+  // Find the position of the worst-ranked parent in the current ranking
+  let worstParentPosition = -1;
+  for (let i = 0; i < rankedCandidates.length; i++) {
+    const candidateId = `i${rankedCandidates[i].metadata.iteration}c${rankedCandidates[i].metadata.candidateId}`;
+    if (parentIds.has(candidateId)) {
+      worstParentPosition = i;
+    }
+  }
+
+  // If no parents found (shouldn't happen), treat all as above parents
+  if (worstParentPosition === -1) {
+    return rankedCandidates.map((candidate, idx) => ({
+      ...candidate,
+      globalRank: idx + 1
+    }));
+  }
+
+  // Assign global ranks
+  let currentGlobalRank = 1;
+  const result = [];
+
+  for (let i = 0; i < rankedCandidates.length; i++) {
+    const candidate = rankedCandidates[i];
+    const candidateId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+    const isParent = parentIds.has(candidateId);
+    const isBelowWorstParent = i > worstParentPosition;
+
+    if (isBelowWorstParent && !isParent) {
+      // Child ranked below worst parent: tied at floor rank
+      result.push({
+        ...candidate,
+        globalRank: floorRank,
+        globalRankNote: 'tied_at_floor'
+      });
+    } else {
+      // Above or at parent level, or is a parent: sequential global rank
+      result.push({
+        ...candidate,
+        globalRank: currentGlobalRank
+      });
+      currentGlobalRank++;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Rank candidates by total score and select top M
  * @param {Array<Object>} candidates - Candidates with totalScore property
  * @param {number} keepTop - Number of top candidates to keep
@@ -1106,7 +1183,7 @@ async function refinementIteration(
  */
 async function beamSearch(userPrompt, providers, config) {
   const { llm, imageGen, vision, critiqueGen, imageRanker } = providers;
-  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onRankingComplete, ensembleSize } = config;
+  const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onRankingComplete, ensembleSize, beamWidth } = config;
 
   // Determine ranking strategy: Use comparative ranking if imageRanker provided
   const useComparativeRanking = imageRanker !== undefined;
@@ -1116,6 +1193,12 @@ async function beamSearch(userPrompt, providers, config) {
     ...config,
     skipVisionAnalysis: useComparativeRanking
   };
+
+  // Global ranking state
+  // Floor rank = beamWidth (worst rank from iteration 0, where all eliminated candidates live)
+  const floorRank = beamWidth || config.beamWidth || 4;
+  // Accumulate all candidates with global ranks across iterations
+  let allGlobalRanked = [];
 
   // Iteration 0: Initial expansion
   // Note: onCandidateProcessed is called inside initialExpansion as each candidate completes
@@ -1138,11 +1221,16 @@ async function beamSearch(userPrompt, providers, config) {
     // Update candidates array to include ranking data for metadata tracking
     candidates = rankingResults.allRanked;
 
-    // Emit ranking data for all ranked candidates so frontend can display rankings
+    // Compute global ranks for iteration 0
+    const globalRanked = computeGlobalRanks(rankingResults.allRanked, [], floorRank, 0);
+    allGlobalRanked = globalRanked;
+
+    // Emit ranking data with global ranks
     if (onRankingComplete) {
       onRankingComplete({
         iteration: 0,
-        rankedCandidates: rankingResults.allRanked
+        rankedCandidates: globalRanked,
+        allGlobalRanked: globalRanked
       });
     }
   } else {
@@ -1204,11 +1292,28 @@ async function beamSearch(userPrompt, providers, config) {
       topCandidates = iterationRankingResults.topCandidates;
       rankingResults = iterationRankingResults; // Store for emission
 
-      // Emit ranking data for all ranked candidates so frontend can display rankings
+      // Compute global ranks for this iteration
+      // Parents are the previous top candidates (from before this iteration)
+      const globalRanked = computeGlobalRanks(iterationRankingResults.allRanked, previousTop, floorRank, iteration);
+
+      // Merge with previous global rankings:
+      // - Keep eliminated candidates from previous iterations (they're not in this ranking)
+      // - Replace candidates that appear in this iteration with their updated global ranks
+      const currentIds = new Set(
+        globalRanked.map(c => `i${c.metadata.iteration}c${c.metadata.candidateId}`)
+      );
+      const previousEliminated = allGlobalRanked.filter(c => {
+        const id = `i${c.metadata.iteration}c${c.metadata.candidateId}`;
+        return !currentIds.has(id);
+      });
+      allGlobalRanked = [...globalRanked, ...previousEliminated];
+
+      // Emit ranking data with global ranks
       if (onRankingComplete) {
         onRankingComplete({
           iteration,
-          rankedCandidates: iterationRankingResults.allRanked
+          rankedCandidates: globalRanked,
+          allGlobalRanked: allGlobalRanked
         });
       }
     } else {
@@ -1254,9 +1359,13 @@ async function beamSearch(userPrompt, providers, config) {
     });
   }
 
-  // Return best candidate with all finalists for comparison display
+  // Sort all global ranked candidates by their global rank for final display
+  allGlobalRanked.sort((a, b) => a.globalRank - b.globalRank);
+
+  // Return best candidate with all finalists and complete global ranking
   // Attach finalists to winner for backward compatibility
   winner.finalists = topCandidates;
+  winner.allGlobalRanked = allGlobalRanked;
   return winner;
 }
 
@@ -1264,6 +1373,7 @@ module.exports = {
   rankAndSelect,
   rankAndSelectComparative,
   calculateTotalScore,
+  computeGlobalRanks,
   processCandidateStream,
   initialExpansion,
   refinementIteration,
