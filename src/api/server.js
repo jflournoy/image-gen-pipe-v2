@@ -16,6 +16,7 @@ const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
 const { getMetrics: getRateLimiterMetrics } = require('../utils/rate-limiter-registry.js');
 const { getDateString } = require('../utils/timezone.js');
+const providerConfig = require('../config/provider-config.js');
 
 // Store WebSocket connections by jobId
 let jobSubscriptions = new Map();
@@ -53,9 +54,32 @@ export function createApp() {
     res.status(200).json({ status: 'ok', timestamp: new Date().toISOString() });
   });
 
+  // Available models endpoint - exposes configurable model options to frontend
+  app.get('/api/available-models', (req, res) => {
+    res.status(200).json({
+      llm: {
+        default: providerConfig.llm.model,
+        options: ['gpt-5-nano', 'gpt-5-mini', 'gpt-4-turbo'],
+        operations: {
+          expand: providerConfig.llm.models.expand,
+          refine: providerConfig.llm.models.refine,
+          combine: providerConfig.llm.models.combine
+        }
+      },
+      imageGen: {
+        default: providerConfig.image.model,
+        options: ['gpt-5-image-mini', 'gpt-image-1-mini', 'gpt-image-1']
+      },
+      vision: {
+        default: providerConfig.vision.model,
+        options: ['gpt-5-nano', 'gpt-5-mini']
+      }
+    });
+  });
+
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha, temperature } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature, models } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
     // Validate API key is present
@@ -90,7 +114,8 @@ export function createApp() {
       m,
       iterations,
       alpha,
-      temperature
+      temperature,
+      models // Pass user-selected models (if provided)
     }, userApiKey).catch(error => {
       console.error(`Error in beam search job ${jobId}:`, error);
     });
@@ -99,7 +124,7 @@ export function createApp() {
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha, temperature }
+      params: { prompt, n, m, iterations, alpha, temperature, models }
     });
   });
 
