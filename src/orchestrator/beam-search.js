@@ -267,12 +267,13 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
     };
   });
 
-  // Filter out candidates without rankings (happens when keepTop < N)
-  // Then sort by rank (1 = best)
+  // All candidates should have rankings through complete transitivity hierarchy
+  // Filter out any without rankings (should not happen in normal operation)
+  // Then sort by rank (1 = best) to get complete hierarchy
   const candidatesWithRankings = rankedCandidates.filter(c => c.ranking !== undefined);
   candidatesWithRankings.sort((a, b) => a.ranking.rank - b.ranking.rank);
 
-  // Return object with both: allRanked (for frontend display) and topCandidates (for next iteration)
+  // Return object with both: allRanked (complete hierarchy for frontend) and topCandidates (survivors for next iteration)
   return {
     allRanked: candidatesWithRankings,
     topCandidates: candidatesWithRankings.slice(0, keepTop)
