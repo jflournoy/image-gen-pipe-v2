@@ -23,6 +23,54 @@ let jobMetadata = null; // Stores metadata with lineage from complete message
 let reconnectionBannerId = 'reconnection-banner';
 
 /**
+ * Open image preview modal
+ * @param {string} imageUrl - URL of the image to preview
+ * @param {string} [imageId] - Optional identifier for the image (e.g., candidate ID)
+ */
+function openImageModal(imageUrl, imageId = '') {
+  const modal = document.getElementById('imageModal');
+  const modalImage = document.getElementById('modalImage');
+  const modalInfo = document.getElementById('modalInfo');
+
+  modalImage.src = imageUrl;
+  modalInfo.textContent = imageId ? `Preview: ${imageId}` : '';
+  modal.classList.add('active');
+
+  // Allow Escape key to close
+  document.addEventListener('keydown', handleEscapeKey);
+}
+
+/**
+ * Close image preview modal
+ */
+function closeImageModal() {
+  const modal = document.getElementById('imageModal');
+  modal.classList.remove('active');
+  document.removeEventListener('keydown', handleEscapeKey);
+}
+
+/**
+ * Handle Escape key press to close modal
+ */
+function handleEscapeKey(event) {
+  if (event.key === 'Escape') {
+    closeImageModal();
+  }
+}
+
+/**
+ * Close modal when clicking outside the image
+ */
+document.addEventListener('DOMContentLoaded', () => {
+  const modal = document.getElementById('imageModal');
+  modal.addEventListener('click', (event) => {
+    if (event.target === modal) {
+      closeImageModal();
+    }
+  });
+});
+
+/**
  * Save pending job to localStorage for reconnection on page reload
  * @param {string} jobId - The job ID
  * @param {Object} params - Job parameters (n, m, maxIterations, alpha, temperature)
@@ -912,7 +960,7 @@ function showWinnerShowcase() {
                 <tr class="${rank === undefined ? 'unranked-row' : ''} ${rankClass}">
                   <td class="rank-cell">${displayRank}</td>
                   <td class="candidate-cell">
-                    <img src="${c.imageUrl}" alt="${c.id}" class="ranking-thumb" onclick="window.open('${c.imageUrl}', '_blank')">
+                    <img src="${c.imageUrl}" alt="${c.id}" class="ranking-thumb" onclick="openImageModal('${c.imageUrl}', '${c.id}')">
                     <span>${c.id}</span>
                   </td>
                   <td class="iter-cell">iter ${c.iteration}</td>
@@ -951,7 +999,7 @@ function showWinnerShowcase() {
           <div class="showcase-card ${index === 0 ? 'winner' : ''} ${!hasRank ? 'unranked' : ''}">
             <div class="showcase-rank">${medal}</div>
             <div class="showcase-image">
-              <img src="${candidate.imageUrl}" alt="${candidate.id}" onclick="window.open('${candidate.imageUrl}', '_blank')">
+              <img src="${candidate.imageUrl}" alt="${candidate.id}" onclick="openImageModal('${candidate.imageUrl}', '${candidate.id}')">
             </div>
             <div class="showcase-id">${candidate.id}${!hasRank ? ' <span class="unranked-badge">unranked</span>' : ''}</div>
 
@@ -1023,6 +1071,7 @@ function buildLineageVisualization(jobData) {
       <div class="lineage-step" data-iteration="${step.iteration}" data-candidate="${step.candidateId}">
         <div class="lineage-image">
           <img src="${imageUrl}" alt="i${step.iteration}c${step.candidateId}"
+               onclick="openImageModal('${imageUrl}', 'i${step.iteration}c${step.candidateId}')"
                onerror="this.style.backgroundColor='#eee'">
         </div>
         <div class="lineage-label">
