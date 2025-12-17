@@ -42,11 +42,14 @@ describe('🔴 RED: Front-End Model Selection (TDD)', () => {
 
   describe('Issue 2: Frontend UI displays model selection', () => {
     test('should have model selection controls in HTML', async () => {
-      const response = await fetch('http://localhost:3000');
-      const html = await response.text();
+      // Check the HTML file directly instead of via server
+      const fs = require('fs');
+      const path = require('path');
+      const htmlPath = path.join(__dirname, '../public/demo.html');
+      const html = fs.readFileSync(htmlPath, 'utf8');
       assert.ok(
-        html.includes('modelSelect') || html.includes('model-select'),
-        'Should have model selection element'
+        html.includes('llmModel') && html.includes('imageModel') && html.includes('visionModel'),
+        'Should have LLM, image, and vision model selection elements'
       );
     });
 
