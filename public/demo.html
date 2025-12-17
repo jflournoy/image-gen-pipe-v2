@@ -953,6 +953,15 @@
     <div class="form-section">
       <h2>Configuration</h2>
       <div class="form-group">
+        <label for="apiKey">OpenAI API Key <span style="color: red;">*</span>:</label>
+        <input type="password" id="apiKey" placeholder="sk-..." required>
+        <small style="display: block; margin-top: 5px; color: #666;">
+          Required. Your key stays in your browser session only and is sent directly to OpenAI via HTTPS.
+          Not stored on our server. Get a key at <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a>
+        </small>
+      </div>
+
+      <div class="form-group">
         <label for="prompt">Prompt:</label>
         <textarea id="prompt" placeholder="Enter your prompt here...">A beautiful sunset over mountains</textarea>
       </div>

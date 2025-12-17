@@ -62,6 +62,12 @@ function handleEscapeKey(event) {
  * Close modal when clicking outside the image
  */
 document.addEventListener('DOMContentLoaded', () => {
+  // Restore API key from sessionStorage
+  const savedApiKey = sessionStorage.getItem('openaiApiKey');
+  if (savedApiKey) {
+    document.getElementById('apiKey').value = savedApiKey;
+  }
+
   const modal = document.getElementById('imageModal');
   modal.addEventListener('click', (event) => {
     if (event.target === modal) {
@@ -592,6 +598,17 @@ function setStatus(status) {
 // Start beam search
 async function startBeamSearch() {
   try {
+    // Validate API key
+    const apiKey = document.getElementById('apiKey').value?.trim();
+    if (!apiKey) {
+      addMessage('Error: OpenAI API key is required', 'error');
+      return;
+    }
+    if (!apiKey.startsWith('sk-')) {
+      addMessage('Error: Invalid API key format. Should start with sk-', 'error');
+      return;
+    }
+
     const prompt = document.getElementById('prompt').value.trim();
     if (!prompt) {
       addMessage('Error: Prompt is required', 'error');
@@ -633,10 +650,16 @@ async function startBeamSearch() {
     addMessage(`Starting beam search with: N=${params.n}, M=${params.m}, Iterations=${params.maxIterations}`, 'event');
     setStatus('running');
 
+    // Save API key to sessionStorage for this session
+    sessionStorage.setItem('openaiApiKey', apiKey);
+
     // Start the job via API
-    const response = await fetch('http://localhost:3000/api/demo/start', {
+    const response = await fetch('/api/beam-search', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-OpenAI-API-Key': apiKey
+      },
       body: JSON.stringify(params)
     });
 
@@ -664,6 +687,7 @@ async function startBeamSearch() {
     // Disable form inputs
     startBtn.disabled = true;
     stopBtn.disabled = false;
+    document.getElementById('apiKey').disabled = true;
     document.getElementById('prompt').disabled = true;
     beamWidthSelect.disabled = true;
     keepTopSelect.disabled = true;
@@ -751,6 +775,7 @@ function stopBeamSearch(userInitiated = true) {
 
   startBtn.disabled = false;
   stopBtn.disabled = true;
+  document.getElementById('apiKey').disabled = false;
   document.getElementById('prompt').disabled = false;
   beamWidthSelect.disabled = false;
   keepTopSelect.disabled = false;
