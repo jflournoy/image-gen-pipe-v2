@@ -267,7 +267,9 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
       const ranked = [];
       const remaining = [...images];
 
-      for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
+      // Rank ALL candidates through complete transitivity hierarchy
+      // This ensures every image has a definitive rank relative to all others
+      for (let rank = 1; rank <= images.length; rank++) {
         if (remaining.length === 0) break;
 
         if (remaining.length === 1) {
@@ -306,11 +308,12 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
       return ranked;
     } else {
-      // Tournament-style selection for top K (original approach)
+      // Tournament-style selection - rank ALL candidates for complete hierarchy
       const ranked = [];
       const remaining = [...images];
 
-      for (let rank = 1; rank <= Math.min(keepTop, images.length); rank++) {
+      // Rank ALL candidates so every image is in the final hierarchy
+      for (let rank = 1; rank <= images.length; rank++) {
         if (remaining.length === 0) break;
 
         if (remaining.length === 1) {
