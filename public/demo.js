@@ -59,6 +59,66 @@ function handleEscapeKey(event) {
 }
 
 /**
+ * Populate a select dropdown with model options
+ * @param {string} selectId - ID of the select element
+ * @param {string[]} options - Array of model option strings
+ * @param {string} defaultValue - Current default model name
+ */
+function populateSelect(selectId, options, defaultValue) {
+  const select = document.getElementById(selectId);
+  if (!select) return;
+
+  // Clear existing options except the first one (default option)
+  while (select.options.length > 1) {
+    select.remove(1);
+  }
+
+  // Add model options
+  options.forEach(option => {
+    const optEl = document.createElement('option');
+    optEl.value = option;
+    optEl.textContent = option;
+    select.appendChild(optEl);
+  });
+
+  // Update the "Default" option text to show the actual default
+  select.options[0].textContent = `Default (${defaultValue})`;
+}
+
+/**
+ * Load available models from the API and populate the dropdowns
+ */
+async function loadAvailableModels() {
+  try {
+    const response = await fetch('/api/available-models');
+    if (!response.ok) {
+      console.warn('[Models] Failed to fetch available models:', response.status);
+      return;
+    }
+
+    const data = await response.json();
+    console.log('[Models] Loaded available models:', data);
+
+    // Populate LLM model dropdown
+    if (data.llm) {
+      populateSelect('llmModel', data.llm.options, data.llm.default);
+    }
+
+    // Populate image generation model dropdown
+    if (data.imageGen) {
+      populateSelect('imageModel', data.imageGen.options, data.imageGen.default);
+    }
+
+    // Populate vision model dropdown
+    if (data.vision) {
+      populateSelect('visionModel', data.vision.options, data.vision.default);
+    }
+  } catch (error) {
+    console.warn('[Models] Error loading available models:', error);
+  }
+}
+
+/**
  * Close modal when clicking outside the image
  */
 document.addEventListener('DOMContentLoaded', () => {
@@ -67,6 +127,9 @@ document.addEventListener('DOMContentLoaded', () => {
   if (savedApiKey) {
     document.getElementById('apiKey').value = savedApiKey;
   }
+
+  // Load available models from server
+  loadAvailableModels();
 
   const modal = document.getElementById('imageModal');
   modal.addEventListener('click', (event) => {
@@ -624,6 +687,19 @@ async function startBeamSearch() {
       alpha: parseFloat(document.getElementById('alpha').value),
       temperature: parseFloat(document.getElementById('temperature').value)
     };
+
+    // Add selected models (if user selected non-default options)
+    const llmModelValue = document.getElementById('llmModel').value;
+    const imageModelValue = document.getElementById('imageModel').value;
+    const visionModelValue = document.getElementById('visionModel').value;
+
+    if (llmModelValue || imageModelValue || visionModelValue) {
+      params.models = {
+        ...(llmModelValue && { llm: llmModelValue }),
+        ...(imageModelValue && { imageGen: imageModelValue }),
+        ...(visionModelValue && { vision: visionModelValue })
+      };
+    }
 
     // Reset all tracking for new job
     seenImages.clear();
