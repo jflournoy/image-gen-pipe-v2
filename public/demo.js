@@ -566,6 +566,8 @@ function addImageThumbnail(iteration, candidateId, imageUrl) {
   const img = document.createElement('img');
   img.src = imageUrl;
   img.alt = `i${iteration}c${candidateId}`;
+  img.style.cursor = 'pointer';
+  img.onclick = () => openImageModal(imageUrl, `i${iteration}c${candidateId}`);
   img.onerror = () => {
     // If image fails to load, show error placeholder
     img.style.backgroundColor = '#fee';
