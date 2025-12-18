@@ -27,6 +27,7 @@ let isConnected = false;
 let isJobRunning = false;
 let lastMessageTime = Date.now();
 let heartbeatCheckInterval = null;
+let heartbeatWarningShown = false;
 
 /**
  * Update connection health indicator
@@ -85,9 +86,10 @@ function startHeartbeatMonitoring() {
     const timeSinceLastMessage = Date.now() - lastMessageTime;
     const timeout = 15000; // 15 seconds
 
-    if (timeSinceLastMessage > timeout) {
+    if (timeSinceLastMessage > timeout && !heartbeatWarningShown) {
       console.warn('[Heartbeat] No messages for 15s, backend may have crashed');
       addMessage('⚠️ No updates received for 15s - backend may be unresponsive', 'warning');
+      heartbeatWarningShown = true; // Only show warning once until messages resume
 
       // Update connection status but don't disconnect yet
       // (WebSocket close event will handle full disconnect)
@@ -103,6 +105,7 @@ function stopHeartbeatMonitoring() {
     clearInterval(heartbeatCheckInterval);
     heartbeatCheckInterval = null;
   }
+  heartbeatWarningShown = false; // Reset for next job
 }
 
 /**
@@ -1214,6 +1217,7 @@ function connectWebSocket() {
     ws.onmessage = (event) => {
       // Update last message time for heartbeat monitoring
       lastMessageTime = Date.now();
+      heartbeatWarningShown = false; // Reset warning flag when messages resume
 
       try {
         const msg = JSON.parse(event.data);
