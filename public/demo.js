@@ -77,24 +77,25 @@ function startHeartbeatMonitoring() {
     clearInterval(heartbeatCheckInterval);
   }
 
-  // Check every 5 seconds
+  // Check every 10 seconds
   heartbeatCheckInterval = setInterval(() => {
     if (!isJobRunning) {
       return; // Don't check if no job running
     }
 
     const timeSinceLastMessage = Date.now() - lastMessageTime;
-    const timeout = 15000; // 15 seconds
+    // Use 35s timeout to accommodate initial image generation (typically 20-40s per image)
+    const timeout = 35000; // 35 seconds
 
     if (timeSinceLastMessage > timeout && !heartbeatWarningShown) {
-      console.warn('[Heartbeat] No messages for 15s, backend may have crashed');
-      addMessage('⚠️ No updates received for 15s - backend may be unresponsive', 'warning');
+      console.warn('[Heartbeat] No messages for 35s, backend may have crashed');
+      addMessage('⚠️ No updates received for 35s - backend may be unresponsive', 'warning');
       heartbeatWarningShown = true; // Only show warning once until messages resume
 
       // Update connection status but don't disconnect yet
       // (WebSocket close event will handle full disconnect)
     }
-  }, 5000);
+  }, 10000);
 }
 
 /**
