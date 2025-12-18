@@ -22,6 +22,89 @@ let jobMetadata = null; // Stores metadata with lineage from complete message
 // Job reconnection state
 let reconnectionBannerId = 'reconnection-banner';
 
+// Connection health tracking
+let isConnected = false;
+let isJobRunning = false;
+let lastMessageTime = Date.now();
+let heartbeatCheckInterval = null;
+
+/**
+ * Update connection health indicator
+ * Shows spinner only when job is running AND connected
+ */
+function updateConnectionIndicator() {
+  const indicator = document.getElementById('connectionIndicator');
+  const spinner = document.getElementById('connectionSpinner');
+  const statusText = document.getElementById('connectionStatus');
+
+  if (!indicator || !spinner || !statusText) return;
+
+  // Determine state
+  const showSpinner = isJobRunning && isConnected;
+
+  // Update spinner
+  if (showSpinner) {
+    spinner.classList.add('active');
+  } else {
+    spinner.classList.remove('active');
+  }
+
+  // Update indicator class and text
+  indicator.classList.remove('connected', 'disconnected', 'active');
+
+  if (isJobRunning && isConnected) {
+    indicator.classList.add('active');
+    statusText.textContent = 'Processing...';
+  } else if (!isConnected && isJobRunning) {
+    indicator.classList.add('disconnected');
+    statusText.textContent = 'Disconnected';
+  } else if (isConnected && !isJobRunning) {
+    indicator.classList.add('connected');
+    statusText.textContent = 'Connected';
+  } else {
+    statusText.textContent = 'Ready';
+  }
+}
+
+/**
+ * Start heartbeat monitoring to detect backend crashes
+ * If no messages received for 15 seconds during job, mark as potentially crashed
+ */
+function startHeartbeatMonitoring() {
+  // Clear any existing interval
+  if (heartbeatCheckInterval) {
+    clearInterval(heartbeatCheckInterval);
+  }
+
+  // Check every 5 seconds
+  heartbeatCheckInterval = setInterval(() => {
+    if (!isJobRunning) {
+      return; // Don't check if no job running
+    }
+
+    const timeSinceLastMessage = Date.now() - lastMessageTime;
+    const timeout = 15000; // 15 seconds
+
+    if (timeSinceLastMessage > timeout) {
+      console.warn('[Heartbeat] No messages for 15s, backend may have crashed');
+      addMessage('⚠️ No updates received for 15s - backend may be unresponsive', 'warning');
+
+      // Update connection status but don't disconnect yet
+      // (WebSocket close event will handle full disconnect)
+    }
+  }, 5000);
+}
+
+/**
+ * Stop heartbeat monitoring
+ */
+function stopHeartbeatMonitoring() {
+  if (heartbeatCheckInterval) {
+    clearInterval(heartbeatCheckInterval);
+    heartbeatCheckInterval = null;
+  }
+}
+
 /**
  * Open image preview modal
  * @param {string} imageUrl - URL of the image to preview
@@ -326,6 +409,12 @@ function handleReconnect(jobId) {
   if (banner) banner.remove();
 
   currentJobId = jobId;
+
+  // Mark job as running and start monitoring
+  isJobRunning = true;
+  lastMessageTime = Date.now();
+  startHeartbeatMonitoring();
+  updateConnectionIndicator();
 
   // Restore settings from the pending job state
   const pendingJob = getPendingJob();
@@ -741,6 +830,11 @@ function formatMessage(msg) {
     // Clear pending job now that it's complete
     clearPendingJob();
 
+    // Mark job as no longer running
+    isJobRunning = false;
+    stopHeartbeatMonitoring();
+    updateConnectionIndicator();
+
     // Store metadata (including lineage) from complete message
     if (msg.metadata) {
       jobMetadata = msg.metadata;
@@ -762,6 +856,11 @@ function formatMessage(msg) {
   }
 
   if (msg.type === 'cancelled') {
+    // Mark job as no longer running
+    isJobRunning = false;
+    stopHeartbeatMonitoring();
+    updateConnectionIndicator();
+
     return {
       text: `⏸ Job cancelled`,
       type: 'warning'
@@ -1068,6 +1167,12 @@ async function startBeamSearch() {
     savePendingJob(currentJobId, params); // Save job and settings for reconnection on reload
     addMessage(`Job started: ${currentJobId}`, 'event');
 
+    // Mark job as running and start monitoring
+    isJobRunning = true;
+    lastMessageTime = Date.now();
+    startHeartbeatMonitoring();
+    updateConnectionIndicator();
+
     // Disable form inputs
     startBtn.disabled = true;
     stopBtn.disabled = false;
@@ -1095,6 +1200,8 @@ function connectWebSocket() {
     ws = new WebSocket(WS_URL);
 
     ws.onopen = () => {
+      isConnected = true;
+      updateConnectionIndicator();
       addMessage('WebSocket connected', 'event');
       // Subscribe to this job
       ws.send(JSON.stringify({
@@ -1105,6 +1212,9 @@ function connectWebSocket() {
     };
 
     ws.onmessage = (event) => {
+      // Update last message time for heartbeat monitoring
+      lastMessageTime = Date.now();
+
       try {
         const msg = JSON.parse(event.data);
         const formatted = formatMessage(msg);
@@ -1133,15 +1243,21 @@ function connectWebSocket() {
     };
 
     ws.onerror = (err) => {
+      isConnected = false;
+      updateConnectionIndicator();
       addMessage(`WebSocket error: ${err}`, 'error');
       setStatus('error');
     };
 
     ws.onclose = () => {
+      isConnected = false;
+      updateConnectionIndicator();
       addMessage('WebSocket disconnected', 'warning');
       stopBeamSearch(false); // Don't clear pending job on connection loss
     };
   } catch (err) {
+    isConnected = false;
+    updateConnectionIndicator();
     addMessage(`Connection error: ${err.message}`, 'error');
     setStatus('error');
   }
@@ -1153,6 +1269,12 @@ function stopBeamSearch(userInitiated = true) {
   if (userInitiated) {
     clearPendingJob(); // Only clear when user explicitly stops the job
   }
+
+  // Mark job as not running and stop monitoring
+  isJobRunning = false;
+  stopHeartbeatMonitoring();
+  updateConnectionIndicator();
+
   currentJobId = null;
   if (ws) {
     ws.close();

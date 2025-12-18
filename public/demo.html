@@ -132,7 +132,52 @@
 
     .status.idle { background: #ddd; color: #666; }
     .status.running { background: #4CAF50; color: white; }
-    .status.error { background: #f44336; color: white; }
+    .status.error { background: #f44336; color: #666; }
+
+    /* Connection Health Indicator */
+    .connection-indicator {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      padding: 5px 10px;
+      border-radius: 3px;
+      background: #f0f0f0;
+      color: #666;
+    }
+
+    .connection-indicator.connected {
+      background: #e8f5e9;
+      color: #2e7d32;
+    }
+
+    .connection-indicator.disconnected {
+      background: #ffebee;
+      color: #c62828;
+    }
+
+    .connection-indicator.active {
+      background: #e3f2fd;
+      color: #1565c0;
+    }
+
+    .spinner {
+      width: 14px;
+      height: 14px;
+      border: 2px solid rgba(0, 0, 0, 0.1);
+      border-top-color: currentColor;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: none;
+    }
+
+    .spinner.active {
+      display: block;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
 
     .images-section {
       background: white;
@@ -953,6 +998,10 @@
       <div class="messages-header">
         <h2>Messages</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
+          <div id="connectionIndicator" class="connection-indicator">
+            <div id="connectionSpinner" class="spinner"></div>
+            <span id="connectionStatus">Ready</span>
+          </div>
           <span id="status" class="status idle">Idle</span>
           <button id="clearBtn" style="padding: 5px 10px; font-size: 12px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear</button>
         </div>
