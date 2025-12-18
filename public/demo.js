@@ -72,6 +72,104 @@ const modelPricing = {
 };
 
 /**
+ * Model pricing per-token rates (in dollars per 1M tokens)
+ */
+const modelRates = {
+  // LLM models (text tokens)
+  'gpt-5-nano': { input: 0.025, output: 0.0025 },
+  'gpt-5-mini': { input: 0.125, output: 0.0125 },
+  'gpt-5': { input: 0.625, output: 0.0625 },
+  'gpt-5.1': { input: 0.625, output: 0.0625 },
+  // Vision models (image tokens)
+  'gpt-image-1-mini': { input: 2.50, output: 8.00 },
+  'gpt-image-1': { input: 10.00, output: 40.00 }
+};
+
+/**
+ * Estimate cost for a beam search run based on parameters
+ * @param {number} n - Beam width (candidates at iteration 0)
+ * @param {number} m - Keep top (candidates at subsequent iterations)
+ * @param {number} maxIterations - Total iterations
+ * @param {string} llmModel - LLM model name (for prompt generation)
+ * @param {string} visionModel - Vision model name (for image ranking)
+ * @returns {Object} { llm, vision, imageGen, total }
+ */
+function estimateCost(n, m, maxIterations, llmModel, visionModel) {
+  // Default models if not specified
+  const llm = llmModel || 'gpt-5-mini';
+  const vision = visionModel || 'gpt-image-1-mini';
+
+  // Get pricing rates, fallback to mini if not found
+  const llmRate = modelRates[llm] || modelRates['gpt-5-mini'];
+  const visionRate = modelRates[vision] || modelRates['gpt-image-1-mini'];
+
+  // Estimated token counts per operation
+  // These are based on typical usage patterns from beam search operations
+  const llmInputTokens = 500;  // Average prompt input tokens per operation
+  const llmOutputTokens = 150; // Average output tokens per operation
+
+  const visionInputTokens = 1000;  // Image tokens for vision analysis per image
+  const visionOutputTokens = 50;   // Output tokens per vision evaluation
+
+  // Calculate number of operations
+  // Iteration 0: n candidates (image generation)
+  // Iterations 1+: m candidates each (image generation)
+  const totalImages = n + (maxIterations - 1) * m;
+
+  // LLM operations: expand + refine per candidate per iteration
+  // Each image generation needs 2 LLM calls (expand and refine)
+  const llmOperations = totalImages * 2;
+
+  // Vision operations: one evaluation per image
+  const visionOperations = totalImages;
+
+  // Calculate costs
+  const llmCost = (llmOperations * llmInputTokens * llmRate.input +
+                   llmOperations * llmOutputTokens * llmRate.output) / 1_000_000;
+
+  const visionCost = (visionOperations * visionInputTokens * visionRate.input +
+                      visionOperations * visionOutputTokens * visionRate.output) / 1_000_000;
+
+  // Image generation cost (placeholder, actual cost comes from OpenAI separately)
+  // Typically ~$0.025-0.10 per image depending on model
+  const imageGenCost = totalImages * 0.04; // Average estimate
+
+  return {
+    llm: llmCost,
+    vision: visionCost,
+    imageGen: imageGenCost,
+    total: llmCost + visionCost + imageGenCost,
+    breakdown: {
+      totalImages,
+      llmOperations,
+      visionOperations
+    }
+  };
+}
+
+/**
+ * Update the cost estimate display based on current parameters
+ */
+function updateCostEstimate() {
+  const n = parseInt(beamWidthSelect.value) || 4;
+  const m = parseInt(keepTopSelect.value) || 2;
+  const maxIterations = parseInt(document.getElementById('maxIterations').value) || 5;
+  const llmModel = document.getElementById('llmModel').value || 'gpt-5-mini';
+
+  // Calculate costs for both mini and standard models
+  const costMini = estimateCost(n, m, maxIterations, llmModel, 'gpt-image-1-mini');
+  const costStandard = estimateCost(n, m, maxIterations, llmModel, 'gpt-image-1');
+
+  const costSummary = document.getElementById('costSummary');
+  if (costSummary) {
+    const breakdown = costMini.breakdown;
+    const summaryText = `With N=${n}, M=${m}, ${maxIterations} iterations: ~${breakdown.totalImages} images evaluated. ` +
+                        `Estimated cost: <strong>$${costMini.total.toFixed(2)}</strong> (mini) or <strong>$${costStandard.total.toFixed(2)}</strong> (standard ranking)`;
+    costSummary.innerHTML = summaryText;
+  }
+}
+
+/**
  * Populate a select dropdown with model options
  * @param {string} selectId - ID of the select element
  * @param {string[]} options - Array of model option strings
@@ -149,6 +247,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load available models from server
   loadAvailableModels();
+
+  // Initialize cost estimate display
+  updateCostEstimate();
 
   const modal = document.getElementById('imageModal');
   modal.addEventListener('click', (event) => {
@@ -373,7 +474,10 @@ function updateKeepTopOptions() {
 }
 
 // Initialize keepTop options and listen for beamWidth changes
-beamWidthSelect.addEventListener('change', updateKeepTopOptions);
+beamWidthSelect.addEventListener('change', () => {
+  updateKeepTopOptions();
+  updateCostEstimate();
+});
 updateKeepTopOptions(); // Initialize on page load
 
 // Sync alpha slider and number input
@@ -409,6 +513,11 @@ temperatureNumber.addEventListener('change', (e) => {
   temperatureNumber.value = val;
   temperatureValue.textContent = val.toFixed(1);
 });
+
+// Update cost estimate when parameters change
+keepTopSelect.addEventListener('change', updateCostEstimate);
+document.getElementById('maxIterations').addEventListener('change', updateCostEstimate);
+document.getElementById('llmModel').addEventListener('change', updateCostEstimate);
 
 // Format cost as currency
 function formatCost(cost) {
