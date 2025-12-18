@@ -109,16 +109,37 @@ function stopHeartbeatMonitoring() {
   heartbeatWarningShown = false; // Reset for next job
 }
 
-// Track current image index in modal for navigation
+// Track current image index and context for modal navigation
 let currentModalImageIndex = -1;
+let currentModalContext = 'grid'; // 'grid' or 'showcase'
+
+/**
+ * Open image modal from showcase context
+ * Finds the clicked image's index among all showcase images
+ * @param {HTMLElement} imgElement - The clicked image element
+ */
+function openShowcaseImageModal(imgElement) {
+  const showcaseSection = document.getElementById('showcase-section');
+  if (!showcaseSection) return;
+
+  // Get all clickable images in showcase (ranking table + showcase cards)
+  const rankingThumbs = Array.from(showcaseSection.querySelectorAll('.ranking-thumb'));
+  const showcaseImages = Array.from(showcaseSection.querySelectorAll('.showcase-image img'));
+  const allShowcaseImages = [...rankingThumbs, ...showcaseImages];
+
+  const index = allShowcaseImages.indexOf(imgElement);
+  const imageId = imgElement.alt || 'Showcase image';
+  openImageModal(imgElement.src, imageId, index, 'showcase');
+}
 
 /**
  * Open image preview modal
  * @param {string} imageUrl - URL of the image to preview
  * @param {string} [imageId] - Optional identifier for the image (e.g., candidate ID)
- * @param {number} [imageIndex] - Index in the gallery for arrow key navigation
+ * @param {number} [imageIndex] - Index in the collection for arrow key navigation
+ * @param {string} [context] - Context: 'grid' (generated images) or 'showcase' (top results)
  */
-function openImageModal(imageUrl, imageId = '', imageIndex = -1) {
+function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid') {
   const modal = document.getElementById('imageModal');
   const modalImage = document.getElementById('modalImage');
   const modalInfo = document.getElementById('modalInfo');
@@ -127,6 +148,7 @@ function openImageModal(imageUrl, imageId = '', imageIndex = -1) {
   modalInfo.textContent = imageId ? `Preview: ${imageId}` : '';
   modal.classList.add('active');
   currentModalImageIndex = imageIndex;
+  currentModalContext = context;
 
   // Allow Escape and arrow keys for navigation
   document.addEventListener('keydown', handleModalKeydown);
@@ -143,6 +165,24 @@ function closeImageModal() {
 }
 
 /**
+ * Get clickable images from the current context (grid or showcase)
+ */
+function getContextImages() {
+  if (currentModalContext === 'showcase') {
+    // Get all showcase images (ranking table thumbnails + showcase cards)
+    const showcaseSection = document.getElementById('showcase-section');
+    if (!showcaseSection) return [];
+    // Combine ranking table thumbnails and showcase card images
+    const rankingThumbs = Array.from(showcaseSection.querySelectorAll('.ranking-thumb'));
+    const showcaseImages = Array.from(showcaseSection.querySelectorAll('.showcase-image img'));
+    return [...rankingThumbs, ...showcaseImages];
+  } else {
+    // Get grid images (as cards for consistency with existing code)
+    return getImageCards();
+  }
+}
+
+/**
  * Handle keydown events in modal (Escape to close, arrows to navigate)
  */
 function handleModalKeydown(event) {
@@ -152,8 +192,8 @@ function handleModalKeydown(event) {
   }
 
   // Arrow key navigation between images
-  const cards = getImageCards();
-  if (cards.length === 0 || currentModalImageIndex < 0) return;
+  const images = getContextImages();
+  if (images.length === 0 || currentModalImageIndex < 0) return;
 
   let newIndex = currentModalImageIndex;
 
@@ -162,16 +202,24 @@ function handleModalKeydown(event) {
     newIndex = currentModalImageIndex > 0 ? currentModalImageIndex - 1 : currentModalImageIndex;
   } else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
     event.preventDefault();
-    newIndex = currentModalImageIndex < cards.length - 1 ? currentModalImageIndex + 1 : currentModalImageIndex;
+    newIndex = currentModalImageIndex < images.length - 1 ? currentModalImageIndex + 1 : currentModalImageIndex;
   }
 
   if (newIndex !== currentModalImageIndex) {
     // Navigate to new image
-    const card = cards[newIndex];
-    const img = card.querySelector('img');
-    const label = card.querySelector('.image-card-label');
-    if (img && label) {
-      openImageModal(img.src, label.textContent, newIndex);
+    if (currentModalContext === 'showcase') {
+      // Showcase images are direct img elements
+      const img = images[newIndex];
+      const imageId = img.alt || `Image ${newIndex + 1}`;
+      openImageModal(img.src, imageId, newIndex, 'showcase');
+    } else {
+      // Grid images are wrapped in cards
+      const card = images[newIndex];
+      const img = card.querySelector('img');
+      const label = card.querySelector('.image-card-label');
+      if (img && label) {
+        openImageModal(img.src, label.textContent, newIndex, 'grid');
+      }
     }
   }
 }
@@ -1426,7 +1474,7 @@ function showWinnerShowcase() {
                 <tr class="${rank === undefined ? 'unranked-row' : ''} ${rankClass}">
                   <td class="rank-cell">${displayRank}</td>
                   <td class="candidate-cell">
-                    <img src="${c.imageUrl}" alt="${c.id}" class="ranking-thumb" onclick="openImageModal('${c.imageUrl}', '${c.id}')">
+                    <img src="${c.imageUrl}" alt="${c.id}" class="ranking-thumb" onclick="openShowcaseImageModal(this)">
                     <span>${c.id}</span>
                   </td>
                   <td class="iter-cell">iter ${c.iteration}</td>
@@ -1465,7 +1513,7 @@ function showWinnerShowcase() {
           <div class="showcase-card ${index === 0 ? 'winner' : ''} ${!hasRank ? 'unranked' : ''}">
             <div class="showcase-rank">${medal}</div>
             <div class="showcase-image">
-              <img src="${candidate.imageUrl}" alt="${candidate.id}" onclick="openImageModal('${candidate.imageUrl}', '${candidate.id}')">
+              <img src="${candidate.imageUrl}" alt="${candidate.id}" onclick="openShowcaseImageModal(this)">
             </div>
             <div class="showcase-id">${candidate.id}${!hasRank ? ' <span class="unranked-badge">unranked</span>' : ''}</div>
 
