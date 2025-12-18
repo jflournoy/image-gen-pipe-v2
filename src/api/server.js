@@ -59,7 +59,7 @@ export function createApp() {
     res.status(200).json({
       llm: {
         default: providerConfig.llm.model,
-        options: ['gpt-5-nano', 'gpt-5-mini', 'gpt-4-turbo'],
+        options: ['gpt-5-nano', 'gpt-5-mini', 'gpt-5', 'gpt-5.1'],
         operations: {
           expand: providerConfig.llm.models.expand,
           refine: providerConfig.llm.models.refine,
@@ -68,11 +68,11 @@ export function createApp() {
       },
       imageGen: {
         default: providerConfig.image.model,
-        options: ['gpt-5-image-mini', 'gpt-image-1-mini', 'gpt-image-1']
+        options: ['gpt-image-1-mini', 'gpt-image-1']
       },
       vision: {
         default: providerConfig.vision.model,
-        options: ['gpt-5-nano', 'gpt-5-mini']
+        options: ['gpt-5-nano', 'gpt-5-mini', 'gpt-5', 'gpt-5.1']
       }
     });
   });
