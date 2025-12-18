@@ -899,6 +899,22 @@
   <div class="container">
     <h1>Beam Search Demo - Real-time Messages</h1>
 
+    <div style="background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
+      <h3 style="margin-top: 0; color: #0066cc;">🔍 What is Beam Search?</h3>
+      <p style="margin: 10px 0; line-height: 1.6;">
+        Beam Search is an iterative refinement algorithm that explores multiple candidate solutions in parallel:
+      </p>
+      <ul style="margin: 10px 0; padding-left: 20px; line-height: 1.8;">
+        <li><strong>Iteration 0:</strong> Generate N initial candidates exploring different creative directions</li>
+        <li><strong>Iterations 1+:</strong> Keep the best M candidates and refine each one further</li>
+        <li><strong>Ranking:</strong> Uses pairwise image comparison to find the highest-quality final result</li>
+        <li><strong>Result:</strong> Returns the winning candidate that evolved through multiple iterations</li>
+      </ul>
+      <p style="margin: 10px 0; font-size: 13px; color: #666;">
+        💡 Think of it like a tournament: Start with many competitors, eliminate weaker ones each round, and refine the best ones.
+      </p>
+    </div>
+
     <div class="form-section">
       <h2>Configuration</h2>
       <div class="form-group">
@@ -913,6 +929,10 @@
       <div class="form-group">
         <label for="prompt">Prompt:</label>
         <textarea id="prompt" placeholder="Enter your prompt here...">A beautiful sunset over mountains</textarea>
+        <small style="display: block; margin-top: 5px; color: #666;">
+          Describe what you want to generate. Be specific with styles, composition, and mood.
+          <br>Examples: "A serene forest lake with autumn colors, oil painting style" or "A futuristic city at night, cyberpunk aesthetic"
+        </small>
       </div>
 
       <div class="params-grid">
@@ -924,12 +944,18 @@
             <option value="6">6 candidates</option>
             <option value="8">8 candidates</option>
           </select>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            How many diverse initial candidates to generate. More = broader exploration but higher cost.
+          </small>
         </div>
         <div class="form-group">
           <label for="keepTop">Keep Top (M):</label>
           <select id="keepTop">
             <!-- Populated dynamically based on beam width -->
           </select>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            How many best candidates to keep for refinement each iteration. Lower = more filtering, faster convergence.
+          </small>
         </div>
         <div class="form-group">
           <label for="maxIterations">Max Iterations (1-5):</label>
@@ -940,45 +966,82 @@
             <option value="4">4 iterations</option>
             <option value="5" selected>5 iterations (default)</option>
           </select>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            Number of refinement rounds. More iterations = better quality but higher cost and time.
+          </small>
         </div>
         <div class="form-group">
           <label for="alpha">Alpha (0-1): <span id="alphaValue">0.6</span></label>
           <input type="range" id="alpha" min="0" max="1" step="0.1" value="0.6">
           <input type="number" id="alphaNumber" min="0" max="1" step="0.1" value="0.6" style="width: 60px; margin-left: 10px;">
+          <small style="display: block; margin-top: 5px; color: #666;">
+            <strong>Low (0.0-0.3):</strong> Prioritize refining existing ideas
+            | <strong>Medium (0.4-0.6):</strong> Balance exploration and refinement
+            | <strong>High (0.7-1.0):</strong> Generate diverse new variations
+          </small>
         </div>
         <div class="form-group">
           <label for="temperature">Temperature (0-1): <span id="temperatureValue">1.0</span></label>
           <input type="range" id="temperature" min="0" max="1" step="0.05" value="1.0">
           <input type="number" id="temperatureNumber" min="0" max="1" step="0.05" value="1.0" style="width: 60px; margin-left: 10px;">
+          <small style="display: block; margin-top: 5px; color: #666;">
+            Randomness in prompt generation. <strong>Low (0.0-0.3):</strong> Predictable, focused
+            | <strong>High (0.7-1.0):</strong> Creative, diverse
+          </small>
         </div>
       </div>
 
       <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
         <h3 style="margin-top: 0;">Model Selection (Optional)</h3>
         <p style="font-size: 12px; color: #666; margin: 0 0 15px 0;">
-          Hover over labels to see pricing. <span id="costSummary">Calculating...</span>
+          Choose which AI models to use. Default models work great for most users.
+          <br><strong style="color: #333;">📊 Estimated Cost: </strong><span id="costSummary">Calculating...</span>
         </p>
         <div class="params-grid">
           <div class="form-group">
-            <label for="llmModel" title="nano: $0.025/1M in, $0.0025/1M out | mini: $0.125/$0.0125 | gpt-5: $0.625/$0.0625 | gpt-5.1: $0.625/$0.0625">LLM Model:</label>
+            <label for="llmModel">LLM Model:</label>
             <select id="llmModel">
               <option value="">Default (gpt-5-mini)</option>
             </select>
+            <small style="display: block; margin-top: 5px; color: #666;">
+              Used for generating and refining prompts at each iteration.
+              <br><span style="font-size: 11px;">nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M</span>
+            </small>
           </div>
           <div class="form-group">
-            <label for="imageModel" title="Vision/Ranking Model - Input: $2.50-10/1M, Output: $8-40/1M (image tokens). gpt-image-1-mini requires org registration.">Image Ranking:</label>
+            <label for="imageModel">Image Ranking Model:</label>
             <select id="imageModel">
               <option value="">Default (gpt-image-1-mini - requires org registration)</option>
             </select>
-            <small style="display: block; margin-top: 5px; color: #999;">gpt-image-1-mini requires OpenAI org registration. Use gpt-image-1 if unavailable.</small>
+            <small style="display: block; margin-top: 5px; color: #666;">
+              Compares generated images to find the best candidate at each iteration.
+              <br><span style="font-size: 11px;">mini: $2.50/1M in, $8/1M out | standard: $10/1M in, $40/1M out</span>
+            </small>
           </div>
           <div class="form-group">
-            <label for="visionModel" title="nano: $0.025/1M in, $0.0025/1M out | mini: $0.125/$0.0125 | gpt-5: $0.625/$0.0625 | gpt-5.1: $0.625/$0.0625">Vision Model:</label>
+            <label for="visionModel">Vision Analysis Model:</label>
             <select id="visionModel">
               <option value="">Default (gpt-5-nano)</option>
             </select>
+            <small style="display: block; margin-top: 5px; color: #666;">
+              Analyzes images to provide critiques and suggestions for refinement.
+              <br><span style="font-size: 11px;">nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M</span>
+            </small>
           </div>
         </div>
+      </div>
+
+      <div style="margin-top: 20px; background: #fff8dc; border: 1px solid #ffd700; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+        <p style="margin: 0 0 10px 0; font-weight: bold; color: #b8860b;">
+          💰 Cost Considerations:
+        </p>
+        <ul style="margin: 0; padding-left: 20px; font-size: 13px; color: #666;">
+          <li>Estimated cost is shown above and updates as you change parameters</li>
+          <li>Image generation costs ~$0.04 per image (varies by size/quality)</li>
+          <li>Ranking with image comparison models is the largest cost component</li>
+          <li>Start with N=4, M=2, Iterations=2 for quick/cheap testing (~$0.50)</li>
+          <li>Use N=2, M=1, Iterations=1 for minimal cost exploration (~$0.15)</li>
+        </ul>
       </div>
 
       <div style="margin-top: 15px;">
@@ -989,7 +1052,7 @@
 
     <div class="messages-section">
       <div class="messages-header">
-        <h2>Messages</h2>
+        <h2>Real-Time Progress</h2>
         <div style="display: flex; gap: 10px; align-items: center;">
           <div id="connectionIndicator" class="connection-indicator">
             <div id="connectionSpinner" class="spinner"></div>
@@ -998,6 +1061,10 @@
           <span id="status" class="status idle">Idle</span>
           <button id="clearBtn" style="padding: 5px 10px; font-size: 12px; background: #999; color: white; border: none; border-radius: 3px; cursor: pointer;">Clear</button>
         </div>
+      </div>
+      <div style="background: #f9f9f9; border-bottom: 1px solid #ddd; padding: 10px 15px; font-size: 12px; color: #666;">
+        <strong>What you'll see:</strong>
+        🔄 Iteration progress | 📊 Ranking comparisons | ✅ Completion status | 💬 Live cost updates | 🎨 Generated images appear above
       </div>
       <div id="messages" class="messages-log"></div>
     </div>
