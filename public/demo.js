@@ -230,8 +230,14 @@ function handleReconnect(jobId) {
     if (pendingJob.params.n) beamWidthSelect.value = pendingJob.params.n;
     if (pendingJob.params.m) keepTopSelect.value = pendingJob.params.m;
     if (pendingJob.params.maxIterations) document.getElementById('maxIterations').value = pendingJob.params.maxIterations;
-    if (pendingJob.params.alpha) document.getElementById('alpha').value = pendingJob.params.alpha;
-    if (pendingJob.params.temperature) document.getElementById('temperature').value = pendingJob.params.temperature;
+    if (pendingJob.params.alpha) {
+      document.getElementById('alpha').value = pendingJob.params.alpha;
+      document.getElementById('alphaNumber').value = pendingJob.params.alpha;
+    }
+    if (pendingJob.params.temperature) {
+      document.getElementById('temperature').value = pendingJob.params.temperature;
+      document.getElementById('temperatureNumber').value = pendingJob.params.temperature;
+    }
 
     // Display restored settings in message
     const settingsStr = `N=${pendingJob.params.n}, M=${pendingJob.params.m}, Iterations=${pendingJob.params.maxIterations}, α=${pendingJob.params.alpha}, T=${pendingJob.params.temperature}`;
@@ -249,7 +255,9 @@ function handleReconnect(jobId) {
   keepTopSelect.disabled = true;
   document.getElementById('maxIterations').disabled = true;
   document.getElementById('alpha').disabled = true;
+  document.getElementById('alphaNumber').disabled = true;
   document.getElementById('temperature').disabled = true;
+  document.getElementById('temperatureNumber').disabled = true;
 
   // Reconnect to WebSocket
   connectWebSocket();
@@ -364,6 +372,40 @@ function updateKeepTopOptions() {
 // Initialize keepTop options and listen for beamWidth changes
 beamWidthSelect.addEventListener('change', updateKeepTopOptions);
 updateKeepTopOptions(); // Initialize on page load
+
+// Sync alpha slider and number input
+const alphaSlider = document.getElementById('alpha');
+const alphaNumber = document.getElementById('alphaNumber');
+const alphaValue = document.getElementById('alphaValue');
+
+alphaSlider.addEventListener('input', (e) => {
+  alphaNumber.value = e.target.value;
+  alphaValue.textContent = e.target.value;
+});
+
+alphaNumber.addEventListener('change', (e) => {
+  const val = Math.min(1, Math.max(0, parseFloat(e.target.value) || 0.6));
+  alphaSlider.value = val;
+  alphaNumber.value = val;
+  alphaValue.textContent = val.toFixed(1);
+});
+
+// Sync temperature slider and number input
+const temperatureSlider = document.getElementById('temperature');
+const temperatureNumber = document.getElementById('temperatureNumber');
+const temperatureValue = document.getElementById('temperatureValue');
+
+temperatureSlider.addEventListener('input', (e) => {
+  temperatureNumber.value = e.target.value;
+  temperatureValue.textContent = e.target.value;
+});
+
+temperatureNumber.addEventListener('change', (e) => {
+  const val = Math.min(2, Math.max(0, parseFloat(e.target.value) || 1.0));
+  temperatureSlider.value = val;
+  temperatureNumber.value = val;
+  temperatureValue.textContent = val.toFixed(1);
+});
 
 // Format cost as currency
 function formatCost(cost) {
@@ -788,7 +830,9 @@ async function startBeamSearch() {
     keepTopSelect.disabled = true;
     document.getElementById('maxIterations').disabled = true;
     document.getElementById('alpha').disabled = true;
+    document.getElementById('alphaNumber').disabled = true;
     document.getElementById('temperature').disabled = true;
+    document.getElementById('temperatureNumber').disabled = true;
 
     // Connect to WebSocket
     connectWebSocket();
@@ -876,7 +920,9 @@ function stopBeamSearch(userInitiated = true) {
   keepTopSelect.disabled = false;
   document.getElementById('maxIterations').disabled = false;
   document.getElementById('alpha').disabled = false;
+  document.getElementById('alphaNumber').disabled = false;
   document.getElementById('temperature').disabled = false;
+  document.getElementById('temperatureNumber').disabled = false;
 
   // Reset images gallery for next job
   seenImages.clear();
