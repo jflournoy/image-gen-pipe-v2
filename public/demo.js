@@ -508,10 +508,10 @@ temperatureSlider.addEventListener('input', (e) => {
 });
 
 temperatureNumber.addEventListener('change', (e) => {
-  const val = Math.min(2, Math.max(0, parseFloat(e.target.value) || 1.0));
+  const val = Math.min(1, Math.max(0, parseFloat(e.target.value) || 1.0));
   temperatureSlider.value = val;
   temperatureNumber.value = val;
-  temperatureValue.textContent = val.toFixed(1);
+  temperatureValue.textContent = val.toFixed(2);
 });
 
 // Update cost estimate when parameters change
