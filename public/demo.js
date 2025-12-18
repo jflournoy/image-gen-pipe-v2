@@ -122,10 +122,11 @@ function openShowcaseImageModal(imgElement) {
   const showcaseSection = document.getElementById('showcase-section');
   if (!showcaseSection) return;
 
-  // Get all clickable images in showcase (ranking table + showcase cards)
+  // Get all clickable images in showcase (lineage + ranking table + showcase cards)
+  const lineageImages = Array.from(showcaseSection.querySelectorAll('.lineage-image img'));
   const rankingThumbs = Array.from(showcaseSection.querySelectorAll('.ranking-thumb'));
   const showcaseImages = Array.from(showcaseSection.querySelectorAll('.showcase-image img'));
-  const allShowcaseImages = [...rankingThumbs, ...showcaseImages];
+  const allShowcaseImages = [...lineageImages, ...rankingThumbs, ...showcaseImages];
 
   const index = allShowcaseImages.indexOf(imgElement);
   const imageId = imgElement.alt || 'Showcase image';
@@ -169,13 +170,14 @@ function closeImageModal() {
  */
 function getContextImages() {
   if (currentModalContext === 'showcase') {
-    // Get all showcase images (ranking table thumbnails + showcase cards)
+    // Get all showcase images (lineage + ranking table thumbnails + showcase cards)
     const showcaseSection = document.getElementById('showcase-section');
     if (!showcaseSection) return [];
-    // Combine ranking table thumbnails and showcase card images
+    // Combine lineage images, ranking table thumbnails, and showcase card images
+    const lineageImages = Array.from(showcaseSection.querySelectorAll('.lineage-image img'));
     const rankingThumbs = Array.from(showcaseSection.querySelectorAll('.ranking-thumb'));
     const showcaseImages = Array.from(showcaseSection.querySelectorAll('.showcase-image img'));
-    return [...rankingThumbs, ...showcaseImages];
+    return [...lineageImages, ...rankingThumbs, ...showcaseImages];
   } else {
     // Get grid images (as cards for consistency with existing code)
     return getImageCards();
@@ -1585,7 +1587,7 @@ function buildLineageVisualization(jobData) {
       <div class="lineage-step" data-iteration="${step.iteration}" data-candidate="${step.candidateId}">
         <div class="lineage-image">
           <img src="${imageUrl}" alt="i${step.iteration}c${step.candidateId}"
-               onclick="openImageModal('${imageUrl}', 'i${step.iteration}c${step.candidateId}')"
+               onclick="openShowcaseImageModal(this)"
                onerror="this.style.backgroundColor='#eee'">
         </div>
         <div class="lineage-label">
