@@ -118,7 +118,7 @@ let currentModalContext = 'grid'; // 'grid' or 'showcase'
  * Finds the clicked image's index among all showcase images
  * @param {HTMLElement} imgElement - The clicked image element
  */
-function openShowcaseImageModal(imgElement) {
+window.openShowcaseImageModal = function(imgElement) {
   const showcaseSection = document.getElementById('showcase-section');
   if (!showcaseSection) return;
 
@@ -131,7 +131,7 @@ function openShowcaseImageModal(imgElement) {
   const index = allShowcaseImages.indexOf(imgElement);
   const imageId = imgElement.alt || 'Showcase image';
   openImageModal(imgElement.src, imageId, index, 'showcase');
-}
+};
 
 /**
  * Open image preview modal
@@ -335,6 +335,57 @@ function updateCostEstimate() {
                         `Estimated cost: <strong>$${costMini.total.toFixed(2)}</strong> (mini) or <strong>$${costStandard.total.toFixed(2)}</strong> (standard ranking)`;
     costSummary.innerHTML = summaryText;
   }
+
+  // Update iteration warning
+  updateIterationWarning(n, m, maxIterations, costMini);
+}
+
+/**
+ * Update the iteration warning display based on parameter combination costs
+ * @param {number} n - Beam width (candidates at iteration 0)
+ * @param {number} m - Keep top (candidates at subsequent iterations)
+ * @param {number} maxIterations - Total iterations
+ * @param {Object} costData - Cost estimation result with breakdown
+ */
+function updateIterationWarning(n, m, maxIterations, costData) {
+  const warningBox = document.getElementById('iterationWarning');
+  const warningMsg = document.getElementById('warningMessage');
+
+  if (!warningBox || !warningMsg) return;
+
+  // Calculate pairwise comparison count per iteration
+  const comparisonsPerIteration = m * (m - 1) / 2;
+  const totalComparisons = comparisonsPerIteration * (maxIterations - 1); // -1 because first iteration is generation only
+
+  const { breakdown } = costData;
+  const totalImages = breakdown.totalImages;
+
+  // Determine if we should show warning
+  let showWarning = false;
+  let warningText = '';
+
+  // Warning 1: High total images
+  if (totalImages > 60) {
+    showWarning = true;
+    warningText = `<strong>Very High Comparison Overhead:</strong> You're evaluating ~${totalImages} images. This requires ${totalComparisons} pairwise comparisons, which is the most expensive operation. Reduce Keep Top (M=${m}) or Iterations (${maxIterations}) to lower costs.`;
+  }
+  // Warning 2: M too high with moderate iterations
+  else if (m >= 5 && maxIterations >= 3) {
+    showWarning = true;
+    warningText = `<strong>Expensive Configuration:</strong> Keep Top (M=${m}) with ${maxIterations} iterations creates ${totalComparisons} comparisons. Consider reducing M to 2-4 or iterations to 2.`;
+  }
+  // Warning 3: Moderate high cost
+  else if (totalComparisons > 30) {
+    showWarning = true;
+    warningText = `<strong>Elevated Comparison Cost:</strong> ${totalComparisons} pairwise comparisons needed. Each comparison uses the vision model (expensive). Consider lower Keep Top or fewer iterations.`;
+  }
+
+  if (showWarning) {
+    warningMsg.innerHTML = warningText;
+    warningBox.style.display = 'block';
+  } else {
+    warningBox.style.display = 'none';
+  }
 }
 
 /**
@@ -485,7 +536,7 @@ function buildReconnectionBanner(jobId, startTime) {
 /**
  * Handle reconnect button click
  */
-function handleReconnect(jobId) {
+window.handleReconnect = function(jobId) {
   console.log(`[Reconnection] User chose to reconnect to ${jobId}`);
   const banner = document.getElementById(reconnectionBannerId);
   if (banner) banner.remove();
@@ -536,19 +587,19 @@ function handleReconnect(jobId) {
 
   // Reconnect to WebSocket
   connectWebSocket();
-}
+};
 
 /**
  * Handle new job button click
  */
-function handleNewJob() {
+window.handleNewJob = function() {
   console.log('[Reconnection] User chose to start a new job');
   const banner = document.getElementById(reconnectionBannerId);
   if (banner) banner.remove();
 
   clearPendingJob();
   addMessage('Starting new beam search...', 'event');
-}
+};
 
 /**
  * Check for pending jobs on page load
@@ -963,7 +1014,7 @@ function formatMessage(msg) {
     updateConnectionIndicator();
 
     return {
-      text: `⏸ Job cancelled`,
+      text: '⏸ Job cancelled',
       type: 'warning'
     };
   }
@@ -1346,7 +1397,7 @@ function buildRankingSummary(allCandidates) {
     const ranked = candidates.filter(c => c.ranking?.rank !== undefined);
     const unranked = candidates.filter(c => c.ranking?.rank === undefined);
 
-    html += `<div class="iteration-group">`;
+    html += '<div class="iteration-group">';
     html += `<strong>Iteration ${iter}</strong>: ${candidates.length} candidates`;
 
     if (ranked.length > 0) {
@@ -1362,7 +1413,7 @@ function buildRankingSummary(allCandidates) {
       html += `<br><span class="unranked-list">Eliminated: ${unrankedList}</span>`;
     }
 
-    html += `</div>`;
+    html += '</div>';
   });
 
   html += '</div>';
@@ -1470,7 +1521,7 @@ function showWinnerShowcase() {
               const iterRank = c.ranking?.rank;
               const rank = globalRank ?? iterRank;
               const isTiedAtFloor = c.ranking?.globalRankNote === 'tied_at_floor';
-              const displayRank = rank !== undefined ? `#${rank}${isTiedAtFloor ? ' (tied)' : ''}` : `—`;
+              const displayRank = rank !== undefined ? `#${rank}${isTiedAtFloor ? ' (tied)' : ''}` : '—';
               const rankClass = rank === 1 ? 'rank-gold' : rank === 2 ? 'rank-silver' : rank === 3 ? 'rank-bronze' : '';
               return `
                 <tr class="${rank === undefined ? 'unranked-row' : ''} ${rankClass}">
@@ -1611,24 +1662,6 @@ function buildLineageVisualization(jobData) {
       </p>
     </div>
   `;
-}
-
-/**
- * Clear current state
- */
-function clearState() {
-  candidates.clear();
-  rankings.clear();
-  seenImages.clear();
-  currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
-  messagesDiv.innerHTML = '';
-  imagesGrid.innerHTML = '';
-
-  // Hide showcase if exists
-  const showcaseSection = document.getElementById('showcase-section');
-  if (showcaseSection) {
-    showcaseSection.style.display = 'none';
-  }
 }
 
 // Check for pending jobs and show reconnection banner if needed
