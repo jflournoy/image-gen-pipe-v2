@@ -902,23 +902,24 @@
 
       <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
         <h3 style="margin-top: 0;">Model Selection (Optional)</h3>
+        <p style="font-size: 12px; color: #666; margin: 0 0 15px 0;">Hover over labels to see pricing. Leave empty to use server defaults.</p>
         <div class="params-grid">
           <div class="form-group">
-            <label for="llmModel">LLM Model:</label>
+            <label for="llmModel" title="nano: $0.025/1M in, $0.0025/1M out | mini: $0.125/$0.0125 | gpt-5: $0.625/$0.0625 | gpt-5.1: $0.625/$0.0625">LLM Model:</label>
             <select id="llmModel">
-              <option value="">Default (from server)</option>
+              <option value="">Default (gpt-5-mini)</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="imageModel">Image Generation Model:</label>
+            <label for="imageModel" title="mini: $2.50 | standard: $10.00">Image Generation:</label>
             <select id="imageModel">
-              <option value="">Default (from server)</option>
+              <option value="">Default (gpt-image-1-mini)</option>
             </select>
           </div>
           <div class="form-group">
-            <label for="visionModel">Vision Model:</label>
+            <label for="visionModel" title="nano: $0.025/1M in, $0.0025/1M out | mini: $0.125/$0.0125 | gpt-5: $0.625/$0.0625 | gpt-5.1: $0.625/$0.0625">Vision Model:</label>
             <select id="visionModel">
-              <option value="">Default (from server)</option>
+              <option value="">Default (gpt-5-nano)</option>
             </select>
           </div>
         </div>

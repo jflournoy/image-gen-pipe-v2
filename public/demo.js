@@ -59,6 +59,18 @@ function handleEscapeKey(event) {
 }
 
 /**
+ * Pricing information for models (per token or per image)
+ */
+const modelPricing = {
+  'gpt-5-nano': 'Input: $0.025/1M, Output: $0.0025/1M',
+  'gpt-5-mini': 'Input: $0.125/1M, Output: $0.0125/1M',
+  'gpt-5': 'Input: $0.625/1M, Output: $0.0625/1M',
+  'gpt-5.1': 'Input: $0.625/1M, Output: $0.0625/1M',
+  'gpt-image-1-mini': 'Cost per image',
+  'gpt-image-1': 'Cost per image'
+};
+
+/**
  * Populate a select dropdown with model options
  * @param {string} selectId - ID of the select element
  * @param {string[]} options - Array of model option strings
@@ -73,11 +85,17 @@ function populateSelect(selectId, options, defaultValue) {
     select.remove(1);
   }
 
-  // Add model options
+  // Add model options with pricing info
   options.forEach(option => {
     const optEl = document.createElement('option');
     optEl.value = option;
     optEl.textContent = option;
+
+    // Add pricing as title tooltip
+    if (modelPricing[option]) {
+      optEl.title = modelPricing[option];
+    }
+
     select.appendChild(optEl);
   });
 
