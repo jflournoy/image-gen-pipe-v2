@@ -156,6 +156,9 @@ document.addEventListener('DOMContentLoaded', () => {
       closeImageModal();
     }
   });
+
+  // Add keyboard listener for image gallery navigation
+  document.addEventListener('keydown', handleImageNavigation);
 });
 
 /**
@@ -672,6 +675,118 @@ function addMessage(text, type = 'info') {
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
+// Image gallery navigation state
+let selectedImageIndex = -1;
+
+// Get all image cards in the gallery
+function getImageCards() {
+  return Array.from(imagesGrid.querySelectorAll('.image-card'));
+}
+
+// Calculate grid layout: returns { cols: number of columns, rows: number of rows }
+function getGridLayout() {
+  const cards = getImageCards();
+  if (cards.length === 0) return { cols: 0, rows: 0 };
+
+  // Get grid dimensions from computed styles
+  const gridStyle = window.getComputedStyle(imagesGrid);
+  const templateColumns = gridStyle.gridTemplateColumns;
+
+  // Count columns by splitting on spaces
+  // "repeat(auto-fill, minmax(100px, 1fr))" becomes list of column widths
+  const columnWidths = templateColumns.split(' ');
+  const cols = columnWidths.length;
+
+  const rows = Math.ceil(cards.length / cols);
+  return { cols: Math.max(1, cols), rows };
+}
+
+// Get index of image at position (row, col) in the grid
+function getIndexFromGridPosition(row, col) {
+  const { cols } = getGridLayout();
+  return row * cols + col;
+}
+
+// Get (row, col) position from image index
+function getGridPositionFromIndex(index) {
+  const { cols } = getGridLayout();
+  const row = Math.floor(index / cols);
+  const col = index % cols;
+  return { row, col };
+}
+
+// Select image at index and scroll into view
+function selectImageAtIndex(index) {
+  const cards = getImageCards();
+  if (index < 0 || index >= cards.length) return;
+
+  // Clear previous selection
+  if (selectedImageIndex >= 0 && selectedImageIndex < cards.length) {
+    cards[selectedImageIndex].classList.remove('selected');
+  }
+
+  // Select new image
+  selectedImageIndex = index;
+  const selectedCard = cards[index];
+  selectedCard.classList.add('selected');
+  selectedCard.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+
+  console.log(`[Nav] Selected image at index ${index}`);
+}
+
+// Handle arrow key navigation
+function handleImageNavigation(event) {
+  // Only handle if images are visible and gallery has cards
+  if (imagesSection.style.display === 'none') return;
+
+  const cards = getImageCards();
+  if (cards.length === 0) return;
+
+  // Start navigation if no image selected yet
+  if (selectedImageIndex < 0) {
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) {
+      selectImageAtIndex(0);
+      event.preventDefault();
+    }
+    return;
+  }
+
+  const { cols } = getGridLayout();
+  const { row, col } = getGridPositionFromIndex(selectedImageIndex);
+  let newIndex = selectedImageIndex;
+
+  if (event.key === 'ArrowLeft') {
+    event.preventDefault();
+    newIndex = col > 0 ? selectedImageIndex - 1 : selectedImageIndex;
+  } else if (event.key === 'ArrowRight') {
+    event.preventDefault();
+    newIndex = col < cols - 1 && selectedImageIndex + 1 < cards.length
+      ? selectedImageIndex + 1
+      : selectedImageIndex;
+  } else if (event.key === 'ArrowUp') {
+    event.preventDefault();
+    newIndex = row > 0 ? selectedImageIndex - cols : selectedImageIndex;
+  } else if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    const newRow = row + 1;
+    const newIndexCandidate = newRow * cols + col;
+    newIndex = newIndexCandidate < cards.length ? newIndexCandidate : selectedImageIndex;
+  } else if (event.key === 'Escape') {
+    // Clear selection on Escape
+    event.preventDefault();
+    if (selectedImageIndex >= 0) {
+      cards[selectedImageIndex].classList.remove('selected');
+      selectedImageIndex = -1;
+      console.log('[Nav] Cleared image selection');
+    }
+    return;
+  }
+
+  if (newIndex !== selectedImageIndex) {
+    selectImageAtIndex(newIndex);
+  }
+}
+
 // Add image thumbnail to gallery
 function addImageThumbnail(iteration, candidateId, imageUrl) {
   if (!imageUrl) return;
@@ -697,11 +812,22 @@ function addImageThumbnail(iteration, candidateId, imageUrl) {
   img.src = imageUrl;
   img.alt = `i${iteration}c${candidateId}`;
   img.style.cursor = 'pointer';
-  img.onclick = () => openImageModal(imageUrl, `i${iteration}c${candidateId}`);
-  img.onerror = () => {
-    // If image fails to load, show error placeholder
-    img.style.backgroundColor = '#fee';
-    img.textContent = 'Error';
+  img.onclick = () => {
+    // On click, select this image for keyboard navigation
+    const allCards = getImageCards();
+    const clickedIndex = allCards.indexOf(card);
+    selectImageAtIndex(clickedIndex);
+  };
+  img.onmouseenter = () => {
+    // Show clickable state
+    img.style.opacity = '0.8';
+  };
+  img.onmouseleave = () => {
+    img.style.opacity = '1';
+  };
+  img.ondblclick = () => {
+    // Double-click to open modal
+    openImageModal(imageUrl, `i${iteration}c${candidateId}`);
   };
 
   const label = document.createElement('div');
@@ -711,6 +837,17 @@ function addImageThumbnail(iteration, candidateId, imageUrl) {
   card.appendChild(img);
   card.appendChild(label);
   imagesGrid.appendChild(card);
+}
+
+// Clear image selection when starting new job
+function clearImageSelection() {
+  if (selectedImageIndex >= 0) {
+    const cards = getImageCards();
+    if (selectedImageIndex < cards.length) {
+      cards[selectedImageIndex].classList.remove('selected');
+    }
+    selectedImageIndex = -1;
+  }
 }
 
 // Update status indicator
@@ -768,6 +905,7 @@ async function startBeamSearch() {
     rankings.clear();
     currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
     jobMetadata = null; // Reset job metadata for new job
+    clearImageSelection(); // Clear any selected image
     imagesGrid.innerHTML = '';
     imagesSection.style.display = 'none';
 
@@ -925,6 +1063,7 @@ function stopBeamSearch(userInitiated = true) {
   document.getElementById('temperatureNumber').disabled = false;
 
   // Reset images gallery for next job
+  clearImageSelection();
   seenImages.clear();
   imagesGrid.innerHTML = '';
   imagesSection.style.display = 'none';
@@ -1272,6 +1411,7 @@ function clearState() {
   candidates.clear();
   rankings.clear();
   seenImages.clear();
+  clearImageSelection();
   currentCost = { total: 0, llm: 0, vision: 0, imageGen: 0 };
   messagesDiv.innerHTML = '';
   imagesGrid.innerHTML = '';
