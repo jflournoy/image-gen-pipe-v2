@@ -914,10 +914,11 @@
             </select>
           </div>
           <div class="form-group">
-            <label for="imageModel" title="Vision/Ranking Model - Input: $2.50-10/1M, Output: $8-40/1M (image tokens)">Image Ranking:</label>
+            <label for="imageModel" title="Vision/Ranking Model - Input: $2.50-10/1M, Output: $8-40/1M (image tokens). gpt-image-1-mini requires org registration.">Image Ranking:</label>
             <select id="imageModel">
-              <option value="">Default (gpt-image-1-mini)</option>
+              <option value="">Default (gpt-image-1-mini - requires org registration)</option>
             </select>
+            <small style="display: block; margin-top: 5px; color: #999;">gpt-image-1-mini requires OpenAI org registration. Use gpt-image-1 if unavailable.</small>
           </div>
           <div class="form-group">
             <label for="visionModel" title="nano: $0.025/1M in, $0.0025/1M out | mini: $0.125/$0.0125 | gpt-5: $0.625/$0.0625 | gpt-5.1: $0.625/$0.0625">Vision Model:</label>
