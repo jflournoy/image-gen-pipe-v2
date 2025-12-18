@@ -24,6 +24,8 @@ coverage/
 .env
 .env.local
 .env.*.local
+.seekrit_key
+.seekrit_key.pem
 
 # Local Claude settings (user-specific)
 .claude/workflows/
