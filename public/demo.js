@@ -785,13 +785,22 @@ function formatMessage(msg) {
   }
 
   if (msg.type === 'operation') {
+    // Update cost display on operations
+    updateCostDisplay();
+
+    // If backend provided a custom message, use it
+    if (msg.message) {
+      return {
+        text: msg.message,
+        type: 'info'
+      };
+    }
+
+    // Otherwise construct message from parts
     const candId = msg.candidateId || '?';
     const op = msg.operation || '?';
     const status = msg.status || 'processing';
     const statusEmoji = status === 'completed' ? '✓' : '⟳';
-
-    // Update cost display on operations
-    updateCostDisplay();
 
     return {
       text: `${statusEmoji} ${op.charAt(0).toUpperCase() + op.slice(1)} ${candId}`,
