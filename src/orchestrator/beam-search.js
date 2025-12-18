@@ -301,12 +301,24 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
   // Get comparative rankings from ImageRanker with keepTop optimization
   // Pass known comparisons to avoid re-comparing parents from same iteration
   // Enable graceful degradation to prevent single vision API failures from crashing entire beam search
-  const { ensembleSize, tokenTracker } = options;
+  const { ensembleSize, tokenTracker, onStepProgress } = options;
   const rankResult = await imageRanker.rankImages(images, userPrompt, {
     keepTop,
     knownComparisons,
     ensembleSize,
-    gracefulDegradation: true
+    gracefulDegradation: true,
+    onProgress: (progressData) => {
+      // Emit ranking progress updates via WebSocket
+      if (onStepProgress) {
+        const { completed, total, candidateA, candidateB, winner, inferred, error } = progressData;
+        onStepProgress({
+          stage: 'ranking',
+          status: 'progress',
+          message: `🔄 Ranking: Comparing ${candidateA} vs ${candidateB} (${completed}/${total})${inferred ? ' (inferred)' : ''}${error ? ' (failed)' : ''}`,
+          progress: { completed, total }
+        });
+      }
+    }
   });
 
   // Handle both old format (array) and new format (object with metadata)
@@ -1216,7 +1228,7 @@ async function beamSearch(userPrompt, providers, config) {
   let rankingResults = null; // Store ranking results for emission in worker
 
   if (useComparativeRanking) {
-    rankingResults = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker });
+    rankingResults = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker, onStepProgress });
     topCandidates = rankingResults.topCandidates;
     // Update candidates array to include ranking data for metadata tracking
     candidates = rankingResults.allRanked;
@@ -1288,7 +1300,7 @@ async function beamSearch(userPrompt, providers, config) {
     if (useComparativeRanking) {
       // Pass previous top candidates to avoid re-comparing known pairs
       const previousTop = topCandidates;
-      const iterationRankingResults = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker });
+      const iterationRankingResults = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker, onStepProgress });
       topCandidates = iterationRankingResults.topCandidates;
       rankingResults = iterationRankingResults; // Store for emission
 

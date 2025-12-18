@@ -452,6 +452,8 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
     // Compare all pairs (with ensemble if specified)
     const winCounts = new Map(candidates.map(c => [c.candidateId, 0]));
+    const totalPairs = pairs.length;
+    let completedPairs = 0;
 
     for (const { a, b } of pairs) {
       // Skip if already compared
@@ -462,6 +464,19 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
           winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
         } else {
           winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
+        }
+        completedPairs++;
+
+        // Report progress (inferred comparison)
+        if (options.onProgress) {
+          options.onProgress({
+            type: 'comparison',
+            completed: completedPairs,
+            total: totalPairs,
+            candidateA: a.candidateId,
+            candidateB: b.candidateId,
+            inferred: true
+          });
         }
       } else {
         // New comparison needed - handle errors gracefully
@@ -474,6 +489,20 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
           } else {
             winCounts.set(b.candidateId, (winCounts.get(b.candidateId) || 0) + 1);
           }
+          completedPairs++;
+
+          // Report progress (actual comparison)
+          if (options.onProgress) {
+            options.onProgress({
+              type: 'comparison',
+              completed: completedPairs,
+              total: totalPairs,
+              candidateA: a.candidateId,
+              candidateB: b.candidateId,
+              winner: comparison.winner === 'A' ? a.candidateId : b.candidateId,
+              inferred: false
+            });
+          }
         } catch (error) {
           // Record error but continue with remaining comparisons
           this.recordError({
@@ -483,6 +512,19 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
             candidateB: b.candidateId,
             fatal: false
           });
+          completedPairs++;
+
+          // Report progress (failed comparison)
+          if (options.onProgress) {
+            options.onProgress({
+              type: 'comparison',
+              completed: completedPairs,
+              total: totalPairs,
+              candidateA: a.candidateId,
+              candidateB: b.candidateId,
+              error: true
+            });
+          }
           // Skip this pair - don't record any wins for failed comparisons
         }
       }
