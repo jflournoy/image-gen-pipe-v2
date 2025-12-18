@@ -958,16 +958,22 @@
           </small>
         </div>
         <div class="form-group">
-          <label for="maxIterations">Max Iterations (1-5):</label>
+          <label for="maxIterations">Max Iterations (1-10):</label>
           <select id="maxIterations">
             <option value="1">1 iteration</option>
             <option value="2">2 iterations</option>
             <option value="3">3 iterations</option>
             <option value="4">4 iterations</option>
             <option value="5" selected>5 iterations (default)</option>
+            <option value="6">6 iterations</option>
+            <option value="7">7 iterations</option>
+            <option value="8">8 iterations</option>
+            <option value="9">9 iterations</option>
+            <option value="10">10 iterations</option>
           </select>
           <small style="display: block; margin-top: 5px; color: #666;">
             Number of refinement rounds. More iterations = better quality but higher cost and time.
+            <br>⚠️ Keep Top (M) especially impacts costs—each higher M with multiple iterations multiplies comparison overhead.
           </small>
         </div>
         <div class="form-group">
@@ -1030,6 +1036,13 @@
             </small>
           </div>
         </div>
+      </div>
+
+      <div id="iterationWarning" style="display: none; margin-top: 20px; background: #ffe4e1; border: 2px solid #ff6347; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
+        <p style="margin: 0 0 10px 0; font-weight: bold; color: #c41e3a;">
+          ⚠️ High Comparison Cost Warning
+        </p>
+        <p id="warningMessage" style="margin: 0; font-size: 13px; color: #666;"></p>
       </div>
 
       <div style="margin-top: 20px; background: #fff8dc; border: 1px solid #ffd700; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
