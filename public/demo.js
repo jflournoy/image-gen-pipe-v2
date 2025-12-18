@@ -835,7 +835,17 @@ function formatMessage(msg) {
       };
     }
 
-    // Don't display other step messages separately, just track cost
+    // Show step messages if they have a custom message
+    // This provides visibility during long-running operations like image generation
+    if (msg.message) {
+      const msgType = msg.status === 'complete' ? 'event' : 'info';
+      return {
+        text: msg.message,
+        type: msgType
+      };
+    }
+
+    // Don't display generic step messages without custom message
     return null;
   }
 
