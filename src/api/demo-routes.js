@@ -55,7 +55,7 @@ router.post('/start', async (req, res) => {
         throw new Error(`Beam width (${nValidated}) must be divisible by keep top (${mValidated}). Try n=${mValidated * Math.floor(nValidated / mValidated)} or m=${nValidated / Math.ceil(nValidated / mValidated)}`);
       }
 
-      iterationsValidated = validateParam(maxIterations, 1, 5, 'Max iterations');
+      iterationsValidated = validateParam(maxIterations, 1, 10, 'Max iterations');
       alphaValidated = validateParam(alpha, 0, 1, 'Alpha');
       tempValidated = validateParam(temperature, 0, 2, 'Temperature');
       ensembleValidated = validateParam(ensembleSize, 1, 5, 'Ensemble size');
