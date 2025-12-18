@@ -59,15 +59,16 @@ function handleEscapeKey(event) {
 }
 
 /**
- * Pricing information for models (per token or per image)
+ * Pricing information for models
+ * LLM = text tokens, Vision = image tokens
  */
 const modelPricing = {
-  'gpt-5-nano': 'Input: $0.025/1M, Output: $0.0025/1M',
-  'gpt-5-mini': 'Input: $0.125/1M, Output: $0.0125/1M',
-  'gpt-5': 'Input: $0.625/1M, Output: $0.0625/1M',
-  'gpt-5.1': 'Input: $0.625/1M, Output: $0.0625/1M',
-  'gpt-image-1-mini': 'Cost per image',
-  'gpt-image-1': 'Cost per image'
+  'gpt-5-nano': 'Input: $0.025/1M, Output: $0.0025/1M (text tokens)',
+  'gpt-5-mini': 'Input: $0.125/1M, Output: $0.0125/1M (text tokens)',
+  'gpt-5': 'Input: $0.625/1M, Output: $0.0625/1M (text tokens)',
+  'gpt-5.1': 'Input: $0.625/1M, Output: $0.0625/1M (text tokens)',
+  'gpt-image-1-mini': 'Input: $2.50/1M, Cached: $0.25/1M, Output: $8.00/1M (image tokens)',
+  'gpt-image-1': 'Input: $10.00/1M, Cached: $2.50/1M, Output: $40.00/1M (image tokens)'
 };
 
 /**
