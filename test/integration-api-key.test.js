@@ -22,7 +22,7 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check API key header extraction
       assert.ok(
-        serverContent.includes("req.headers['x-openai-api-key']"),
+        serverContent.includes('req.headers[\'x-openai-api-key\']'),
         'Server should extract X-OpenAI-API-Key header'
       );
 
@@ -34,7 +34,7 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check 400 response for invalid format
       assert.ok(
-        serverContent.includes("!userApiKey.startsWith('sk-')"),
+        serverContent.includes('!userApiKey.startsWith(\'sk-\')'),
         'Server should validate API key format'
       );
 
@@ -96,7 +96,7 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
         );
 
         assert.ok(
-          factoryContent.includes("'apiKey' in options"),
+          factoryContent.includes('\'apiKey\' in options'),
           `${provider} should check for apiKey in options`
         );
       });
@@ -108,7 +108,7 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check API key is required
       assert.ok(
-        demoContent.includes("document.getElementById('apiKey')"),
+        demoContent.includes('document.getElementById(\'apiKey\')'),
         'Frontend should get API key from input'
       );
 
@@ -120,13 +120,13 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check format validation
       assert.ok(
-        demoContent.includes("!apiKey.startsWith('sk-')"),
+        demoContent.includes('!apiKey.startsWith(\'sk-\')'),
         'Frontend should validate API key format'
       );
 
       // Check header injection
       assert.ok(
-        demoContent.includes("'X-OpenAI-API-Key'"),
+        demoContent.includes('\'X-OpenAI-API-Key\''),
         'Frontend should send API key in request header'
       );
     });
@@ -137,13 +137,13 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check API key input field exists
       assert.ok(
-        htmlContent.includes("id=\"apiKey\""),
+        htmlContent.includes('id="apiKey"'),
         'HTML should have API key input field'
       );
 
       // Check it's a password input
       assert.ok(
-        htmlContent.includes("type=\"password\"") && htmlContent.includes('apiKey'),
+        htmlContent.includes('type="password"') && htmlContent.includes('apiKey'),
         'API key field should be password type'
       );
 
@@ -238,8 +238,8 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Should NOT attempt to use OPENAI_API_KEY from env in /api/beam-search route
       const beamSearchSection = serverContent.slice(
-        serverContent.indexOf("app.post('/api/beam-search'"),
-        serverContent.indexOf("app.post('/api/beam-search'") + 2000
+        serverContent.indexOf('app.post(\'/api/beam-search\''),
+        serverContent.indexOf('app.post(\'/api/beam-search\'') + 2000
       );
 
       const hasEnvFallback = /process\.env\.OPENAI_API_KEY/.test(beamSearchSection);

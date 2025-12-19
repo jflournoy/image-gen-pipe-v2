@@ -5,7 +5,7 @@
  * from root candidate to final selection across iterations.
  */
 
-const { describe, test, before } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 
 /**
@@ -46,7 +46,7 @@ describe('Visual Lineage Rendering (TDD RED)', () => {
 
   test('should generate HTML for lineage timeline', () => {
     // This would test the HTML generation
-    const { lineage, finalWinner } = mockLineageData;
+    const { lineage } = mockLineageData;
 
     // Expected structure
     const expectedHTML = `
@@ -103,7 +103,7 @@ describe('Lineage Integration with Winner Showcase', () => {
       <div class="lineage-section">
         <h3>🧬 Winner's Lineage - Path Through the Beam Search</h3>
         <div class="lineage-timeline">
-          ${mockJobData.lineage.map((step, idx) => `
+          ${mockJobData.lineage.map((step, _idx) => `
             <div class="lineage-step" data-iteration="${step.iteration}">
               <div class="lineage-image">
                 <img src="${step.imageUrl}" alt="i${step.iteration}c${step.candidateId}">

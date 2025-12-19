@@ -122,7 +122,7 @@ describe('🔴 RED: Beam Search Worker - API Key Integration', () => {
           { prompt: 'test', n: 1, m: 1, iterations: 1 },
           testApiKey
         );
-      } catch (e) {
+      } catch (_e) { // eslint-disable-line no-unused-vars
         // Ignore errors from incomplete mock setup, we just care about apiKey passing
       }
 
@@ -170,7 +170,7 @@ describe('🔴 RED: Beam Search Worker - API Key Integration', () => {
           { prompt: 'test', n: 1, m: 1, iterations: 1 },
           userApiKey
         );
-      } catch (e) {
+      } catch (_e) { // eslint-disable-line no-unused-vars
         // Ignore errors, we only care about apiKey passing
       }
 

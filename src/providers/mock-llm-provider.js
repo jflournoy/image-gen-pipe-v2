@@ -163,7 +163,7 @@ class MockLLMProvider {
    * @param {number} [options.temperature=0.7] - Temperature for randomness
    * @returns {Promise<string>} Generated text
    */
-  async generateText(userPrompt, options = {}) {
+  async generateText(userPrompt, _options = {}) {
     // Validate prompt
     if (!userPrompt || typeof userPrompt !== 'string' || userPrompt.trim() === '') {
       throw new Error('User prompt is required');

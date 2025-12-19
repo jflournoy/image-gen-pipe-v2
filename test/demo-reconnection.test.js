@@ -187,7 +187,6 @@ describe('Reconnection UI Banner', () => {
   });
 
   test('should handle reconnect button click', () => {
-    const jobId = 'job-777777';
     let userAction = null;
 
     // Simulate button click handlers

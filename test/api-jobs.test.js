@@ -5,7 +5,6 @@
  * NOTE: These tests require a server to be running on port 3000
  * Start the server with: npm run demo
  */
-/* global fetch */
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert');

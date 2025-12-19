@@ -4,6 +4,17 @@
 # Debug test files
 test-ensemble-debug.js
 test-multi-image-ranking.js
+test-local-storage.js
+
+# Demo/Example files (archived)
+demo-beam-search.js
+demo.js
+demo-prompt-fidelity.js
+demo-single-iteration.js
+demo-token-tracking.js
+
+# Built/minified files
+frontend/dist/
 
 # Node modules
 node_modules/
