@@ -2,7 +2,16 @@ import js from '@eslint/js';
 
 export default [
   {
-    ignores: ['.history/**', 'test-ensemble-debug.js', 'test-multi-image-ranking.js', 'node_modules/**', 'output/**', 'session-history/**']
+    ignores: [
+      '.history/**',
+      'test-ensemble-debug.js',
+      'test-multi-image-ranking.js',
+      'node_modules/**',
+      'output/**',
+      'session-history/**',
+      'frontend/dist/**',
+      'archive/**'
+    ]
   },
   js.configs.recommended,
   {
@@ -38,12 +47,35 @@ export default [
       globals: {
         describe: 'readonly',
         it: 'readonly',
+        test: 'readonly',
         expect: 'readonly',
         beforeEach: 'readonly',
         afterEach: 'readonly',
         beforeAll: 'readonly',
         afterAll: 'readonly',
-        jest: 'readonly'
+        jest: 'readonly',
+        fetch: 'readonly'
+      }
+    }
+  },
+  {
+    files: ['public/**/*.js'],
+    languageOptions: {
+      globals: {
+        document: 'readonly',
+        window: 'readonly',
+        WebSocket: 'readonly',
+        localStorage: 'readonly',
+        sessionStorage: 'readonly',
+        fetch: 'readonly'
+      }
+    }
+  },
+  {
+    files: ['src/api/beam-search-worker.js'],
+    languageOptions: {
+      globals: {
+        AbortController: 'readonly'
       }
     }
   }

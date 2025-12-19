@@ -370,7 +370,7 @@ Provide ONLY the rephrased prompt, nothing else.`;
           // Emit rephrase success message
           emitProgress(jobId, {
             type: 'operation',
-            message: `✓ Prompt rephrased - retrying with safer version`,
+            message: '✓ Prompt rephrased - retrying with safer version',
             status: 'processing',
             timestamp: new Date().toISOString()
           });
@@ -381,11 +381,11 @@ Provide ONLY the rephrased prompt, nothing else.`;
           // Emit note that rephrasing helped
           emitProgress(jobId, {
             type: 'operation',
-            message: `✓ Rephrased prompt accepted - proceeding with beam search`,
+            message: '✓ Rephrased prompt accepted - proceeding with beam search',
             status: 'success',
             timestamp: new Date().toISOString()
           });
-        } catch (rephraseError) {
+        } catch (_e) { // eslint-disable-line no-unused-vars
           // If rephrase attempt fails, throw the original error
           throw error;
         }

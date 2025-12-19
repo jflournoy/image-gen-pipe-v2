@@ -95,7 +95,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
 
   describe('Issue 1.1: Reject requests without API key header', () => {
     test('should reject POST /api/beam-search without X-OpenAI-API-Key header', async () => {
-      const { app } = await setup();
+      await setup();
 
       try {
         const response = await fetch(`${baseUrl}/api/beam-search`, {
@@ -113,7 +113,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
     });
 
     test('should reject with descriptive error message', async () => {
-      const { app } = await setup();
+      await setup();
 
       try {
         const response = await fetch(`${baseUrl}/api/beam-search`, {
@@ -135,7 +135,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
 
   describe('Issue 1.2: Reject invalid API key format', () => {
     test('should reject API key not starting with sk-', async () => {
-      const { app } = await setup();
+      await setup();
 
       try {
         const response = await fetch(`${baseUrl}/api/beam-search`, {
@@ -156,7 +156,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
     });
 
     test('should reject whitespace-only API key', async () => {
-      const { app } = await setup();
+      await setup();
 
       try {
         const response = await fetch(`${baseUrl}/api/beam-search`, {
@@ -177,7 +177,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
 
   describe('Issue 1.3: Accept valid API key and pass to worker', () => {
     test('should accept valid API key starting with sk-', async () => {
-      const { app, capturedApiKey } = await setup();
+      await setup();
 
       try {
         const response = await fetch(`${baseUrl}/api/beam-search`, {
@@ -198,7 +198,7 @@ describe('🔴 RED: Backend API Route - API Key Validation', () => {
     });
 
     test('should pass API key to worker function', async () => {
-      const { app, capturedApiKey } = await setup();
+      await setup();
 
       try {
         const testApiKey = 'sk-user-provided-key';

@@ -5,7 +5,6 @@
  * beam search iterations. Shows how candidates are generated, ranked,
  * and refined across iterations.
  */
-/* global fetch */
 
 const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert');

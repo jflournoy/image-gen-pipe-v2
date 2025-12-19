@@ -245,7 +245,6 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
    * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
    */
   async rankPairwiseTransitive(images, prompt, options = {}) {
-    const keepTop = options.keepTop || images.length;
     const knownComparisons = options.knownComparisons || [];
 
     // Comparison graph: tracks A > B relationships and infers transitivity

@@ -548,7 +548,8 @@ Output ONLY the refined prompt, no preamble or commentary.`;
     const selectedModel = this.model;
 
     // Get model capabilities
-    const capabilities = this._getModelCapabilities(selectedModel);
+    // (capabilities retrieved but not currently used - may be needed for future optimization)
+    this._getModelCapabilities(selectedModel);
 
     const messages = [
       { role: 'system', content: systemPrompt },

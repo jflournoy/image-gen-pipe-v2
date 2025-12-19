@@ -310,7 +310,7 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
     onProgress: (progressData) => {
       // Emit ranking progress updates via WebSocket
       if (onStepProgress) {
-        const { completed, total, candidateA, candidateB, winner, inferred, error } = progressData;
+        const { completed, total, candidateA, candidateB, inferred, error } = progressData;
         onStepProgress({
           stage: 'ranking',
           status: 'progress',

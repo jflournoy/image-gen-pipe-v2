@@ -11,7 +11,7 @@
  * 4. Invalid JSON response
  */
 
-const { describe, test, before } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 const ImageRanker = require('../../src/services/image-ranker.js');
 
@@ -28,7 +28,7 @@ class MockOpenAIWithFailures {
   get chat() {
     return {
       completions: {
-        create: async (params) => {
+        create: async (_params) => {
           this.failureCount++;
 
           // Simulate failure modes

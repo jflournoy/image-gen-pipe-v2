@@ -511,7 +511,7 @@ async function demo() {
 
     // Show top candidates from this iteration
     if (topCandidates && topCandidates.length > 0) {
-      console.log(`   🏆 Top performers:`);
+      console.log('   🏆 Top performers:');
       topCandidates.slice(0, 2).forEach((cand, idx) => {
         const globalId = `i${cand.metadata.iteration}c${cand.metadata.candidateId}`;
         const score = cand.totalScore ? cand.totalScore.toFixed(2) : '?';
@@ -564,7 +564,7 @@ async function demo() {
 
     // Show what made this candidate rank this way
     if (ranking.reason) {
-      showText(`   💡 Why`, ranking.reason, 100);
+      showText('   💡 Why', ranking.reason, 100);
     }
 
     // Show strengths/weaknesses
@@ -594,8 +594,8 @@ async function demo() {
     showComparativeRanking(ranking, position);
 
     // Show prompts (with expansion indicator)
-    showText(`   📝 WHAT`, candidate.whatPrompt, 80);
-    showText(`   🎨 HOW`, candidate.howPrompt, 80);
+    showText('   📝 WHAT', candidate.whatPrompt, 80);
+    showText('   🎨 HOW', candidate.howPrompt, 80);
 
     // Show image reference
     if (candidate.image?.localPath) {
@@ -604,7 +604,7 @@ async function demo() {
       const status = exists ? '✓ Found' : '✗ Missing';
       console.log(`   🖼️  Image: ${candidate.image.localPath} [${status}]`);
     } else {
-      console.log(`   🖼️  Image: No image URL available`);
+      console.log('   🖼️  Image: No image URL available');
     }
 
     // Show combined prompt
@@ -629,7 +629,7 @@ async function demo() {
     // Show decisive reason from comparative ranking
     if (winnerRanking.reason) {
       console.log('\n   💡 Comparison Decision:');
-      showText(`   `, winnerRanking.reason, 150);
+      showText('   ', winnerRanking.reason, 150);
     }
 
     // Show why winner was preferred
@@ -655,8 +655,8 @@ async function demo() {
     // Show comparative dimensions if available
     if (winnerRanking.alignment !== undefined || winnerRanking.aesthetics !== undefined) {
       console.log('\n   📊 Comparative evaluation:');
-      console.log(`      Alignment: Winner preferred over runner-up`);
-      console.log(`      Aesthetics: Winner preferred over runner-up`);
+      console.log('      Alignment: Winner preferred over runner-up');
+      console.log('      Aesthetics: Winner preferred over runner-up');
     }
   } else {
     console.log('   Only one finalist - no comparison available');

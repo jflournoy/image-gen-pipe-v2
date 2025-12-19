@@ -37,7 +37,7 @@ function createLLMProvider(options = {}) {
   const provider = options.provider || config.llm.provider;
 
   switch (provider) {
-    case 'openai':
+    case 'openai': {
       // Use provided apiKey option, fall back to config
       const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
       if (!apiKey) {
@@ -52,6 +52,7 @@ function createLLMProvider(options = {}) {
       // Store apiKey on instance for testing
       instance.apiKey = apiKey;
       return instance;
+    }
 
     default:
       throw new Error(`Unknown LLM provider: ${provider}`);
@@ -75,7 +76,7 @@ function createImageProvider(options = {}) {
 
   switch (provider) {
     case 'dalle':
-    case 'openai':
+    case 'openai': {
       // Use provided apiKey option, fall back to config
       const apiKey = 'apiKey' in options ? options.apiKey : config.image.apiKey;
       if (!apiKey) {
@@ -87,6 +88,7 @@ function createImageProvider(options = {}) {
       // Store apiKey on instance for testing
       instance.apiKey = apiKey;
       return instance;
+    }
 
     default:
       throw new Error(`Unknown image provider: ${provider}`);
@@ -110,7 +112,7 @@ function createVisionProvider(options = {}) {
 
   switch (provider) {
     case 'openai':
-    case 'gpt-vision':
+    case 'gpt-vision': {
       // Use provided apiKey option, fall back to config
       const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
       if (!apiKey) {
@@ -124,6 +126,7 @@ function createVisionProvider(options = {}) {
       // Store apiKey on instance for testing
       instance.apiKey = apiKey;
       return instance;
+    }
 
     default:
       throw new Error(`Unknown vision provider: ${provider}`);
