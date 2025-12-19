@@ -490,7 +490,7 @@ function savePendingJob(jobId, params = {}) {
     params: {
       n: params.n,
       m: params.m,
-      maxIterations: params.maxIterations,
+      maxIterations: params.iterations,
       alpha: params.alpha,
       temperature: params.temperature
     }
@@ -1119,7 +1119,7 @@ async function startBeamSearch() {
       prompt,
       n: parseInt(beamWidthSelect.value),
       m: parseInt(keepTopSelect.value),
-      maxIterations: parseInt(document.getElementById('maxIterations').value),
+      iterations: parseInt(document.getElementById('maxIterations').value),
       alpha: parseFloat(document.getElementById('alpha').value),
       temperature: parseFloat(document.getElementById('temperature').value)
     };
@@ -1159,7 +1159,7 @@ async function startBeamSearch() {
       costDisplay.textContent = '';
     }
 
-    addMessage(`Starting beam search with: N=${params.n}, M=${params.m}, Iterations=${params.maxIterations}`, 'event');
+    addMessage(`Starting beam search with: N=${params.n}, M=${params.m}, Iterations=${params.iterations}`, 'event');
     setStatus('running');
 
     // Save API key to sessionStorage for this session
