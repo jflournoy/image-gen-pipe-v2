@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Beam Search Demo</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
   <style>
     * { box-sizing: border-box; }
     body {
@@ -13,7 +14,21 @@
       background: #f5f5f5;
     }
     .container { max-width: 900px; margin: 0 auto; }
-    h1 { color: #333; }
+    h1 {
+      color: #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 a {
+      color: #333;
+      text-decoration: none;
+      font-size: 24px;
+      transition: color 0.2s;
+    }
+    h1 a:hover {
+      color: #0066cc;
+    }
 
     .form-section {
       background: white;
@@ -897,7 +912,12 @@
 </head>
 <body>
   <div class="container">
-    <h1>Beam Search Demo - Real-time Messages</h1>
+    <h1>
+      <span>Beam Search Demo - Real-time Messages</span>
+      <a href="https://github.com/jflournoy/image-gen-pipe-v2" target="_blank" rel="noopener noreferrer" title="View on GitHub">
+        <i class="fab fa-github"></i>
+      </a>
+    </h1>
 
     <div style="background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
       <h3 style="margin-top: 0; color: #0066cc;">🔍 What is Beam Search?</h3>
