@@ -1,6 +1,6 @@
 #!/bin/bash
-# <UDF name="domain_name" Label="Domain Name (optional)" placeholder="demo.johnflournoy.science" />
-# <UDF name="letsencrypt_email" Label="Email for Let's Encrypt (optional)" placeholder="your@email.com" />
+# <UDF name="domain_name" label="Domain Name - leave blank for IP access" default="" example="demo.example.com" />
+# <UDF name="letsencrypt_email" label="Email for SSL certificate - leave blank to skip HTTPS" default="" example="you@example.com" />
 
 #############################################################################
 # Linode StackScript for Image Gen Pipe V2
