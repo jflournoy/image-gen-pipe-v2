@@ -11,8 +11,8 @@
 # Or use the script directly with:
 # curl -sSL https://raw.githubusercontent.com/jflournoy/image-gen-pipe-v2/main/deploy/linode-stackscript.sh | bash
 #
-# This script sets up a fresh Ubuntu 22.04 Linode with:
-# - Node.js 20
+# This script sets up a fresh Ubuntu 22.04 or 24.04 Linode with:
+# - Node.js 22
 # - Your app deployed and running as a systemd service
 # - Nginx reverse proxy with WebSocket support
 # - Optional HTTPS with Let's Encrypt
@@ -50,8 +50,8 @@ echo -e "${GREEN}[OK] System updated${NC}"
 echo ""
 
 # Step 2: Install Node.js
-echo -e "${YELLOW}Step 2: Installing Node.js 20...${NC}"
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+echo -e "${YELLOW}Step 2: Installing Node.js 22...${NC}"
+curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
 apt install -y nodejs
 
 echo -e "${GREEN}[OK] Node.js installed: $(node --version)${NC}"
@@ -75,7 +75,7 @@ echo ""
 
 # Step 4: Install dependencies
 echo -e "${YELLOW}Step 4: Installing Node dependencies...${NC}"
-npm install --production
+npm ci --omit=dev --ignore-scripts
 
 echo -e "${GREEN}[OK] Dependencies installed${NC}"
 echo ""
@@ -273,7 +273,7 @@ cat > "$APP_DIR/update.sh" << 'UPDATE_SCRIPT'
 # Quick update script
 cd /var/www/image-gen-pipe-v2
 git pull origin main
-npm install --production
+npm ci --omit=dev --ignore-scripts
 systemctl restart image-gen-pipe
 echo "[OK] App updated and service restarted"
 journalctl -u image-gen-pipe -n 10
