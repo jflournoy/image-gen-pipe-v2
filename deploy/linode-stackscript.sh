@@ -6,7 +6,7 @@
 # Linode StackScript for Image Gen Pipe V2
 #
 # Copy and paste this entire script into:
-# Linode Dashboard → Create → StackScript → Paste here
+# Linode Dashboard > Create > StackScript > Paste here
 #
 # Or use the script directly with:
 # curl -sSL https://raw.githubusercontent.com/jflournoy/image-gen-pipe-v2/main/deploy/linode-stackscript.sh | bash
