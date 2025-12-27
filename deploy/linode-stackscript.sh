@@ -46,7 +46,7 @@ apt update
 apt upgrade -y
 apt install -y curl wget git build-essential
 
-echo -e "${GREEN}✓ System updated${NC}"
+echo -e "${GREEN}[OK] System updated${NC}"
 echo ""
 
 # Step 2: Install Node.js
@@ -54,7 +54,7 @@ echo -e "${YELLOW}Step 2: Installing Node.js 20...${NC}"
 curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
 apt install -y nodejs
 
-echo -e "${GREEN}✓ Node.js installed: $(node --version)${NC}"
+echo -e "${GREEN}[OK] Node.js installed: $(node --version)${NC}"
 echo ""
 
 # Step 3: Create app directory and clone repo
@@ -70,14 +70,14 @@ else
     git pull origin main
 fi
 
-echo -e "${GREEN}✓ Repository cloned${NC}"
+echo -e "${GREEN}[OK] Repository cloned${NC}"
 echo ""
 
 # Step 4: Install dependencies
 echo -e "${YELLOW}Step 4: Installing Node dependencies...${NC}"
 npm install --production
 
-echo -e "${GREEN}✓ Dependencies installed${NC}"
+echo -e "${GREEN}[OK] Dependencies installed${NC}"
 echo ""
 
 # Step 5: Create .env file
@@ -101,7 +101,7 @@ LOG_LEVEL=info
 EOF
 
 chmod 600 "$APP_DIR/.env"
-echo -e "${GREEN}✓ .env file created (no server API key stored)${NC}"
+echo -e "${GREEN}[OK] .env file created (no server API key stored)${NC}"
 echo ""
 
 # Step 6: Create systemd service
@@ -136,9 +136,9 @@ systemctl start image-gen-pipe
 sleep 2
 
 if systemctl is-active --quiet image-gen-pipe; then
-    echo -e "${GREEN}✓ Systemd service created and running${NC}"
+    echo -e "${GREEN}[OK] Systemd service created and running${NC}"
 else
-    echo -e "${RED}✗ Service failed to start. Check logs:${NC}"
+    echo -e "${RED}[FAIL] Service failed to start. Check logs:${NC}"
     journalctl -u image-gen-pipe -n 20
     exit 1
 fi
@@ -200,9 +200,9 @@ ln -sf /etc/nginx/sites-available/image-gen-pipe /etc/nginx/sites-enabled/
 # Test and restart Nginx
 if nginx -t; then
     systemctl restart nginx
-    echo -e "${GREEN}✓ Nginx configured and running${NC}"
+    echo -e "${GREEN}[OK] Nginx configured and running${NC}"
 else
-    echo -e "${RED}✗ Nginx configuration error${NC}"
+    echo -e "${RED}[FAIL] Nginx configuration error${NC}"
     exit 1
 fi
 echo ""
@@ -213,10 +213,10 @@ if [ -n "$LETSENCRYPT_EMAIL" ] && [ -n "$DOMAIN_NAME" ]; then
     apt install -y certbot python3-certbot-nginx
 
     certbot certonly --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --nginx || {
-        echo -e "${YELLOW}⚠ HTTPS setup skipped (certbot may need manual configuration)${NC}"
+        echo -e "${YELLOW}[WARN] HTTPS setup skipped (certbot may need manual configuration)${NC}"
     }
 
-    echo -e "${GREEN}✓ HTTPS configured${NC}"
+    echo -e "${GREEN}[OK] HTTPS configured${NC}"
     echo ""
 else
     if [ -z "$DOMAIN_NAME" ]; then
@@ -275,7 +275,7 @@ cd /var/www/image-gen-pipe-v2
 git pull origin main
 npm install --production
 systemctl restart image-gen-pipe
-echo "✓ App updated and service restarted"
+echo "[OK] App updated and service restarted"
 journalctl -u image-gen-pipe -n 10
 UPDATE_SCRIPT
 
