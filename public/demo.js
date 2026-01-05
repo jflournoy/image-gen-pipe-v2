@@ -112,6 +112,7 @@ function stopHeartbeatMonitoring() {
 // Track current image index and context for modal navigation
 let currentModalImageIndex = -1;
 let currentModalContext = 'grid'; // 'grid' or 'showcase'
+let currentModalImageId = ''; // Track current image ID for prompt display
 
 /**
  * Open image modal from showcase context
@@ -144,12 +145,25 @@ function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid
   const modal = document.getElementById('imageModal');
   const modalImage = document.getElementById('modalImage');
   const modalInfo = document.getElementById('modalInfo');
+  const showPromptsBtn = document.getElementById('showPromptsBtn');
 
   modalImage.src = imageUrl;
   modalInfo.textContent = imageId ? `Preview: ${imageId}` : '';
   modal.classList.add('active');
   currentModalImageIndex = imageIndex;
   currentModalContext = context;
+  currentModalImageId = imageId;
+
+  // Show/hide prompts button based on whether we have candidate data
+  if (showPromptsBtn) {
+    const candidate = candidates.get(imageId);
+    if (candidate && (candidate.whatPrompt || candidate.howPrompt || candidate.combined)) {
+      showPromptsBtn.style.display = 'block';
+      showPromptsBtn.disabled = false;
+    } else {
+      showPromptsBtn.style.display = 'none';
+    }
+  }
 
   // Allow Escape and arrow keys for navigation
   document.addEventListener('keydown', handleModalKeydown);
@@ -162,7 +176,110 @@ function closeImageModal() {
   const modal = document.getElementById('imageModal');
   modal.classList.remove('active');
   currentModalImageIndex = -1;
+  currentModalImageId = '';
   document.removeEventListener('keydown', handleModalKeydown);
+}
+
+/**
+ * Show prompts for the currently previewed image
+ */
+window.showPromptsForCurrentImage = function() {
+  if (!currentModalImageId) {
+    console.warn('No image ID available for prompts');
+    return;
+  }
+
+  const candidate = candidates.get(currentModalImageId);
+  if (!candidate) {
+    console.warn('No candidate data found for', currentModalImageId);
+    return;
+  }
+
+  const modal = document.getElementById('promptsModal');
+  const title = document.getElementById('promptsModalTitle');
+  const body = document.getElementById('promptsModalBody');
+
+  // Set title
+  title.textContent = `Prompts for ${currentModalImageId}`;
+
+  // Build prompts HTML
+  let html = '';
+
+  // Add metadata
+  html += '<div class="prompt-meta">';
+  html += `<strong>Candidate ID:</strong> ${currentModalImageId}<br>`;
+  if (candidate.iteration !== undefined) {
+    html += `<strong>Iteration:</strong> ${candidate.iteration}<br>`;
+  }
+  if (candidate.ranking?.rank !== undefined) {
+    html += `<strong>Rank:</strong> ${candidate.ranking.rank}<br>`;
+  }
+  if (candidate.score !== undefined) {
+    html += `<strong>Score:</strong> ${candidate.score.toFixed(4)}<br>`;
+  }
+  if (candidate.parentId) {
+    html += `<strong>Parent:</strong> ${candidate.parentId}`;
+  }
+  html += '</div>';
+
+  // Add prompts
+  if (candidate.combined) {
+    html += '<div class="prompt-section">';
+    html += '<h3>Combined Prompt</h3>';
+    html += `<p>${escapeHtml(candidate.combined)}</p>`;
+    html += '</div>';
+  }
+
+  if (candidate.whatPrompt) {
+    html += '<div class="prompt-section">';
+    html += '<h3>What Prompt (Content)</h3>';
+    html += `<p>${escapeHtml(candidate.whatPrompt)}</p>`;
+    html += '</div>';
+  }
+
+  if (candidate.howPrompt) {
+    html += '<div class="prompt-section">';
+    html += '<h3>How Prompt (Style)</h3>';
+    html += `<p>${escapeHtml(candidate.howPrompt)}</p>`;
+    html += '</div>';
+  }
+
+  if (!candidate.combined && !candidate.whatPrompt && !candidate.howPrompt) {
+    html += '<p style="color: #999; text-align: center;">No prompt data available for this candidate.</p>';
+  }
+
+  body.innerHTML = html;
+  modal.classList.add('active');
+
+  // Allow Escape key to close
+  document.addEventListener('keydown', handlePromptsModalKeydown);
+};
+
+/**
+ * Close prompts modal
+ */
+window.closePromptsModal = function() {
+  const modal = document.getElementById('promptsModal');
+  modal.classList.remove('active');
+  document.removeEventListener('keydown', handlePromptsModalKeydown);
+};
+
+/**
+ * Handle keyboard events for prompts modal
+ */
+function handlePromptsModalKeydown(e) {
+  if (e.key === 'Escape') {
+    window.closePromptsModal();
+  }
+}
+
+/**
+ * Escape HTML to prevent XSS
+ */
+function escapeHtml(text) {
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
 }
 
 /**
