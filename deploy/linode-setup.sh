@@ -6,14 +6,17 @@
 # Usage: curl -sSL https://raw.githubusercontent.com/jflournoy/image-gen-pipe-v2/main/deploy/linode-setup.sh | bash
 # Or: bash linode-setup.sh
 #
-# This script sets up a fresh Ubuntu 22.04 Linode with:
-# - Node.js 20
+# This script sets up a fresh Ubuntu 22.04 or 24.04 Linode with:
+# - Node.js 22
 # - Your app deployed and running as a systemd service
-# - Nginx reverse proxy
+# - Nginx reverse proxy with WebSocket support
 # - Optional HTTPS with Let's Encrypt
 #############################################################################
 
 set -e  # Exit on error
+
+# Ensure non-interactive mode for apt
+export DEBIAN_FRONTEND=noninteractive
 
 # Color output
 RED='\033[0;31m'
@@ -32,31 +35,35 @@ if [[ $EUID -ne 0 ]]; then
    exit 1
 fi
 
-# Gather user input
-echo -e "${YELLOW}Configuration:${NC}"
-echo -e "${GREEN}NOTE: Users will provide their own OpenAI API keys (no server key stored)${NC}"
-read -p "Enter domain name (or leave blank for IP access): " DOMAIN_NAME
-read -p "Enter email for Let's Encrypt (or leave blank to skip HTTPS): " LETSENCRYPT_EMAIL
+# Gather user input (can be set via environment variables or interactively)
+if [ -z "$DOMAIN_NAME" ] && [ -z "$LETSENCRYPT_EMAIL" ]; then
+    echo -e "${YELLOW}Configuration:${NC}"
+    echo -e "${GREEN}NOTE: Users will provide their own OpenAI API keys (no server key stored)${NC}"
+    read -p "Enter domain name (or leave blank for IP access): " DOMAIN_NAME
+    read -p "Enter email for Let's Encrypt (or leave blank to skip HTTPS): " LETSENCRYPT_EMAIL
+fi
 
 echo ""
-echo -e "${GREEN}✓ Configuration saved${NC}"
+echo -e "${YELLOW}Configuration:${NC}"
+echo "Domain: ${DOMAIN_NAME:-'(IP access only)'}"
+echo "Email: ${LETSENCRYPT_EMAIL:-'(HTTPS disabled)'}"
 echo ""
 
 # Step 1: Update system
 echo -e "${YELLOW}Step 1: Updating system packages...${NC}"
-apt update
-apt upgrade -y
-apt install -y curl wget git build-essential
+apt-get update
+apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+apt-get install -y curl wget git build-essential
 
-echo -e "${GREEN}✓ System updated${NC}"
+echo -e "${GREEN}[OK] System updated${NC}"
 echo ""
 
 # Step 2: Install Node.js
-echo -e "${YELLOW}Step 2: Installing Node.js 20...${NC}"
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
-apt install -y nodejs
+echo -e "${YELLOW}Step 2: Installing Node.js 22...${NC}"
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get install -y nodejs
 
-echo -e "${GREEN}✓ Node.js installed: $(node --version)${NC}"
+echo -e "${GREEN}[OK] Node.js installed: $(node --version)${NC}"
 echo ""
 
 # Step 3: Create app directory and clone repo
@@ -65,7 +72,6 @@ APP_DIR="/var/www/image-gen-pipe-v2"
 mkdir -p "$APP_DIR"
 cd "$APP_DIR"
 
-# Check if already cloned
 if [ ! -d ".git" ]; then
     git clone https://github.com/jflournoy/image-gen-pipe-v2.git .
 else
@@ -73,14 +79,14 @@ else
     git pull origin main
 fi
 
-echo -e "${GREEN}✓ Repository cloned${NC}"
+echo -e "${GREEN}[OK] Repository cloned${NC}"
 echo ""
 
 # Step 4: Install dependencies
 echo -e "${YELLOW}Step 4: Installing Node dependencies...${NC}"
-npm install --production
+npm ci --omit=dev --ignore-scripts
 
-echo -e "${GREEN}✓ Dependencies installed${NC}"
+echo -e "${GREEN}[OK] Dependencies installed${NC}"
 echo ""
 
 # Step 5: Create .env file
@@ -104,7 +110,7 @@ LOG_LEVEL=info
 EOF
 
 chmod 600 "$APP_DIR/.env"
-echo -e "${GREEN}✓ .env file created (no server API key stored)${NC}"
+echo -e "${GREEN}[OK] .env file created (no server API key stored)${NC}"
 echo ""
 
 # Step 6: Create systemd service
@@ -139,9 +145,9 @@ systemctl start image-gen-pipe
 sleep 2
 
 if systemctl is-active --quiet image-gen-pipe; then
-    echo -e "${GREEN}✓ Systemd service created and running${NC}"
+    echo -e "${GREEN}[OK] Systemd service created and running${NC}"
 else
-    echo -e "${RED}✗ Service failed to start. Check logs:${NC}"
+    echo -e "${RED}[FAIL] Service failed to start. Check logs:${NC}"
     journalctl -u image-gen-pipe -n 20
     exit 1
 fi
@@ -149,7 +155,7 @@ echo ""
 
 # Step 7: Install and configure Nginx
 echo -e "${YELLOW}Step 7: Installing Nginx...${NC}"
-apt install -y nginx
+apt-get install -y nginx
 
 # Determine server name
 if [ -n "$DOMAIN_NAME" ]; then
@@ -203,9 +209,9 @@ ln -sf /etc/nginx/sites-available/image-gen-pipe /etc/nginx/sites-enabled/
 # Test and restart Nginx
 if nginx -t; then
     systemctl restart nginx
-    echo -e "${GREEN}✓ Nginx configured and running${NC}"
+    echo -e "${GREEN}[OK] Nginx configured and running${NC}"
 else
-    echo -e "${RED}✗ Nginx configuration error${NC}"
+    echo -e "${RED}[FAIL] Nginx configuration error${NC}"
     exit 1
 fi
 echo ""
@@ -213,13 +219,13 @@ echo ""
 # Step 8: Setup HTTPS (optional)
 if [ -n "$LETSENCRYPT_EMAIL" ] && [ -n "$DOMAIN_NAME" ]; then
     echo -e "${YELLOW}Step 8: Setting up HTTPS with Let's Encrypt...${NC}"
-    apt install -y certbot python3-certbot-nginx
+    apt-get install -y certbot python3-certbot-nginx
 
     certbot certonly --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --nginx || {
-        echo -e "${YELLOW}⚠ HTTPS setup skipped (certbot may need manual configuration)${NC}"
+        echo -e "${YELLOW}[WARN] HTTPS setup skipped (certbot may need manual configuration)${NC}"
     }
 
-    echo -e "${GREEN}✓ HTTPS configured${NC}"
+    echo -e "${GREEN}[OK] HTTPS configured${NC}"
     echo ""
 else
     if [ -z "$DOMAIN_NAME" ]; then
@@ -276,9 +282,9 @@ cat > "$APP_DIR/update.sh" << 'UPDATE_SCRIPT'
 # Quick update script
 cd /var/www/image-gen-pipe-v2
 git pull origin main
-npm install --production
+npm ci --omit=dev --ignore-scripts
 systemctl restart image-gen-pipe
-echo "✓ App updated and service restarted"
+echo "[OK] App updated and service restarted"
 journalctl -u image-gen-pipe -n 10
 UPDATE_SCRIPT
 
