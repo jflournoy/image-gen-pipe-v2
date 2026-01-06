@@ -215,7 +215,8 @@ if [ -n "$LETSENCRYPT_EMAIL" ] && [ -n "$DOMAIN_NAME" ]; then
     echo -e "${YELLOW}Step 8: Setting up HTTPS with Let's Encrypt...${NC}"
     apt-get install -y certbot python3-certbot-nginx
 
-    certbot certonly --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --nginx || {
+    # Use certbot --nginx (without certonly) to both get cert AND configure nginx
+    certbot --nginx --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --redirect || {
         echo -e "${YELLOW}[WARN] HTTPS setup skipped (certbot may need manual configuration)${NC}"
     }
 
