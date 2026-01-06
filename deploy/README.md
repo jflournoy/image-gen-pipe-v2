@@ -37,12 +37,12 @@ bash deploy/linode-setup.sh
 
 The script will:
 - Update system packages
-- Install Node.js 20
+- Install Node.js 22
 - Clone your repository
 - Install dependencies
 - Create `.env` configuration (no server API key stored)
 - Set up systemd service (auto-restart on failure)
-- Install and configure Nginx (reverse proxy)
+- Install and configure Nginx (reverse proxy with WebSocket support)
 - Optionally set up HTTPS with Let's Encrypt
 
 ### 3. Configuration Prompts
@@ -105,7 +105,7 @@ Or manually:
 ```bash
 cd /var/www/image-gen-pipe-v2
 git pull origin main
-npm install --production
+npm ci --omit=dev --ignore-scripts
 systemctl restart image-gen-pipe
 ```
 
