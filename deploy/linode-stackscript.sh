@@ -20,6 +20,9 @@
 
 set -e  # Exit on error
 
+# Ensure non-interactive mode for apt
+export DEBIAN_FRONTEND=noninteractive
+
 # Color output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -42,17 +45,17 @@ echo ""
 
 # Step 1: Update system
 echo -e "${YELLOW}Step 1: Updating system packages...${NC}"
-apt update
-apt upgrade -y
-apt install -y curl wget git build-essential
+apt-get update
+apt-get upgrade -y -o Dpkg::Options::="--force-confdef" -o Dpkg::Options::="--force-confold"
+apt-get install -y curl wget git build-essential
 
 echo -e "${GREEN}[OK] System updated${NC}"
 echo ""
 
 # Step 2: Install Node.js
 echo -e "${YELLOW}Step 2: Installing Node.js 22...${NC}"
-curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-apt install -y nodejs
+curl -fsSL https://deb.nodesource.com/setup_22.x | bash -
+apt-get install -y nodejs
 
 echo -e "${GREEN}[OK] Node.js installed: $(node --version)${NC}"
 echo ""
@@ -146,7 +149,7 @@ echo ""
 
 # Step 7: Install and configure Nginx
 echo -e "${YELLOW}Step 7: Installing Nginx...${NC}"
-apt install -y nginx
+apt-get install -y nginx
 
 # Determine server name
 if [ -n "$DOMAIN_NAME" ]; then
@@ -210,7 +213,7 @@ echo ""
 # Step 8: Setup HTTPS (optional)
 if [ -n "$LETSENCRYPT_EMAIL" ] && [ -n "$DOMAIN_NAME" ]; then
     echo -e "${YELLOW}Step 8: Setting up HTTPS with Let's Encrypt...${NC}"
-    apt install -y certbot python3-certbot-nginx
+    apt-get install -y certbot python3-certbot-nginx
 
     certbot certonly --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --nginx || {
         echo -e "${YELLOW}[WARN] HTTPS setup skipped (certbot may need manual configuration)${NC}"
