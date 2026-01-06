@@ -430,6 +430,19 @@ export function createApp() {
 
   // Demo endpoints are handled by demoRouter below
 
+  // Serve demo at root path
+  app.get('/', async (req, res) => {
+    try {
+      const demoPath = join(process.cwd(), 'public', 'demo.html');
+      const html = await readFile(demoPath, 'utf-8');
+      res.status(200).send(html);
+    } catch (error) {
+      console.error('Error serving demo page:', error);
+      res.status(500).json({ error: 'Failed to serve demo page' });
+    }
+  });
+
+  // Also keep /demo for backwards compatibility
   app.get('/demo', async (req, res) => {
     try {
       const demoPath = join(process.cwd(), 'public', 'demo.html');
