@@ -591,8 +591,19 @@ export function startServer(port = 3000) {
         reject(err);
       } else {
         console.log(`🚀 Server running on http://localhost:${port}`);
+        // Attach WebSocket server after HTTP server starts
+        attachWebSocket(server);
         resolve(server);
       }
     });
+  });
+}
+
+// Start server when run directly (not imported)
+if (import.meta.url === `file://${process.argv[1]}`) {
+  const PORT = process.env.PORT || 3000;
+  startServer(PORT).catch(error => {
+    console.error('Failed to start server:', error);
+    process.exit(1);
   });
 }
