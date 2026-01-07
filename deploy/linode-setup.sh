@@ -446,6 +446,10 @@ cd /var/www/image-gen-pipe-v2
 echo "Pulling latest changes..."
 sudo -u nodeapp git pull origin main
 
+# Fix ownership of entire directory (in case root created files)
+echo "Fixing file ownership..."
+chown -R nodeapp:nodeapp /var/www/image-gen-pipe-v2
+
 # Install dependencies as nodeapp user
 echo "Installing dependencies..."
 sudo -u nodeapp npm ci --omit=dev --ignore-scripts
