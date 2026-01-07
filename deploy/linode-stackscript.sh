@@ -107,8 +107,22 @@ chmod 600 "$APP_DIR/.env"
 echo -e "${GREEN}[OK] .env file created (no server API key stored)${NC}"
 echo ""
 
-# Step 6: Create systemd service
-echo -e "${YELLOW}Step 6: Setting up systemd service...${NC}"
+# Step 6: Create dedicated user for Node.js app (SECURITY FIX)
+echo -e "${YELLOW}Step 6: Creating dedicated user for security...${NC}"
+if ! id -u nodeapp > /dev/null 2>&1; then
+    useradd --system --no-create-home --shell /bin/false nodeapp
+    echo -e "${GREEN}[OK] Created nodeapp user${NC}"
+else
+    echo -e "${GREEN}[OK] nodeapp user already exists${NC}"
+fi
+
+# Set ownership of app directory
+chown -R nodeapp:nodeapp "$APP_DIR"
+echo -e "${GREEN}[OK] Set ownership to nodeapp user${NC}"
+echo ""
+
+# Step 7: Create systemd service
+echo -e "${YELLOW}Step 7: Setting up systemd service...${NC}"
 cat > /etc/systemd/system/image-gen-pipe.service << 'SYSTEMD_EOF'
 [Unit]
 Description=Image Generation Pipe - Beam Search Demo
@@ -116,7 +130,8 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=nodeapp
+Group=nodeapp
 WorkingDirectory=/var/www/image-gen-pipe-v2
 ExecStart=/usr/bin/node src/api/server.js
 Restart=always
@@ -124,7 +139,14 @@ RestartSec=10
 StandardOutput=journal
 StandardError=journal
 
-# Resource limits (adjust as needed)
+# Security hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/www/image-gen-pipe-v2/session-history
+
+# Resource limits
 LimitNOFILE=65536
 
 [Install]
@@ -147,8 +169,8 @@ else
 fi
 echo ""
 
-# Step 7: Configure firewall
-echo -e "${YELLOW}Step 7: Configuring firewall...${NC}"
+# Step 8: Configure firewall
+echo -e "${YELLOW}Step 8: Configuring firewall...${NC}"
 apt-get install -y ufw
 
 # Configure UFW
@@ -162,8 +184,55 @@ ufw allow 443/tcp   # HTTPS
 echo -e "${GREEN}[OK] Firewall configured${NC}"
 echo ""
 
-# Step 8: Install and configure Nginx
-echo -e "${YELLOW}Step 8: Installing Nginx...${NC}"
+# Step 9: Install and configure fail2ban (SECURITY FIX)
+echo -e "${YELLOW}Step 9: Installing fail2ban for SSH protection...${NC}"
+apt-get install -y fail2ban
+
+# Create fail2ban configuration for SSH
+cat > /etc/fail2ban/jail.local << 'FAIL2BAN_EOF'
+[DEFAULT]
+bantime = 3600
+findtime = 600
+maxretry = 5
+
+[sshd]
+enabled = true
+port = 22
+logpath = /var/log/auth.log
+FAIL2BAN_EOF
+
+systemctl enable fail2ban
+systemctl start fail2ban
+
+echo -e "${GREEN}[OK] fail2ban configured${NC}"
+echo ""
+
+# Step 10: SSH Hardening (SECURITY FIX)
+echo -e "${YELLOW}Step 10: Hardening SSH configuration...${NC}"
+
+# Backup original sshd_config
+cp /etc/ssh/sshd_config /etc/ssh/sshd_config.backup
+
+# Apply SSH hardening
+cat >> /etc/ssh/sshd_config << 'SSH_EOF'
+
+# Security hardening added by deployment script
+PasswordAuthentication no
+PermitRootLogin prohibit-password
+PubkeyAuthentication yes
+ChallengeResponseAuthentication no
+UsePAM yes
+X11Forwarding no
+MaxAuthTries 3
+ClientAliveInterval 300
+ClientAliveCountMax 2
+SSH_EOF
+
+echo -e "${GREEN}[OK] SSH hardened (restart SSH later to apply)${NC}"
+echo ""
+
+# Step 11: Install and configure Nginx (SECURITY FIX: headers + rate limiting)
+echo -e "${YELLOW}Step 11: Installing Nginx with security headers...${NC}"
 apt-get install -y nginx
 
 # Determine server name
@@ -173,8 +242,12 @@ else
     SERVER_NAME="_"  # Default - any hostname
 fi
 
-# Create Nginx config
+# Create Nginx config with rate limiting and security headers
 cat > /etc/nginx/sites-available/image-gen-pipe << EOF
+# Rate limiting zone (SECURITY FIX)
+limit_req_zone \$binary_remote_addr zone=api_limit:10m rate=10r/s;
+limit_req_zone \$binary_remote_addr zone=general_limit:10m rate=30r/s;
+
 upstream node_app {
   server localhost:3000;
 }
@@ -183,13 +256,49 @@ server {
   listen 80;
   server_name $SERVER_NAME;
 
-  client_max_body_size 50M;
+  # Reduced upload limit (SECURITY FIX: was 50M)
+  client_max_body_size 10M;
+
+  # Security headers (SECURITY FIX)
+  add_header X-Frame-Options "SAMEORIGIN" always;
+  add_header X-Content-Type-Options "nosniff" always;
+  add_header X-XSS-Protection "1; mode=block" always;
+  add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+  add_header Permissions-Policy "geolocation=(), microphone=(), camera=()" always;
 
   # Gzip compression
   gzip on;
   gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
+  # API endpoints with stricter rate limiting
+  location ~ ^/api/(demo|generate) {
+    limit_req zone=api_limit burst=20 nodelay;
+    limit_req_status 429;
+
+    proxy_pass http://node_app;
+    proxy_http_version 1.1;
+
+    # WebSocket support
+    proxy_set_header Upgrade \$http_upgrade;
+    proxy_set_header Connection "upgrade";
+
+    # Standard headers
+    proxy_set_header Host \$host;
+    proxy_set_header X-Real-IP \$remote_addr;
+    proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    proxy_set_header X-Forwarded-Proto \$scheme;
+
+    # Timeouts for long-running requests
+    proxy_connect_timeout 60s;
+    proxy_send_timeout 3600s;
+    proxy_read_timeout 3600s;
+  }
+
+  # All other requests with general rate limiting
   location / {
+    limit_req zone=general_limit burst=50 nodelay;
+    limit_req_status 429;
+
     proxy_pass http://node_app;
     proxy_http_version 1.1;
 
@@ -225,18 +334,46 @@ else
 fi
 echo ""
 
-# Step 9: Install certbot (for later HTTPS setup)
-echo -e "${YELLOW}Step 9: Installing certbot...${NC}"
+# Step 12: Install certbot (for later HTTPS setup)
+echo -e "${YELLOW}Step 12: Installing certbot...${NC}"
 apt-get install -y certbot python3-certbot-nginx
 
 echo -e "${GREEN}[OK] Certbot installed${NC}"
 echo ""
 
-# Step 10: Create directories
+# Step 13: Configure automatic security updates (SECURITY FIX)
+echo -e "${YELLOW}Step 13: Configuring automatic security updates...${NC}"
+apt-get install -y unattended-upgrades apt-listchanges
+
+# Configure unattended-upgrades
+cat > /etc/apt/apt.conf.d/50unattended-upgrades << 'UNATTENDED_EOF'
+Unattended-Upgrade::Allowed-Origins {
+    "${distro_id}:${distro_codename}-security";
+    "${distro_id}ESMApps:${distro_codename}-apps-security";
+    "${distro_id}ESM:${distro_codename}-infra-security";
+};
+Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+Unattended-Upgrade::MinimalSteps "true";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "true";
+Unattended-Upgrade::Remove-Unused-Dependencies "true";
+Unattended-Upgrade::Automatic-Reboot "false";
+UNATTENDED_EOF
+
+cat > /etc/apt/apt.conf.d/20auto-upgrades << 'AUTO_UPGRADES_EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Download-Upgradeable-Packages "1";
+APT::Periodic::AutocleanInterval "7";
+APT::Periodic::Unattended-Upgrade "1";
+AUTO_UPGRADES_EOF
+
+echo -e "${GREEN}[OK] Automatic security updates enabled${NC}"
+echo ""
+
+# Step 14: Create directories
 mkdir -p "$APP_DIR/session-history"
 chmod 755 "$APP_DIR/session-history"
 
-# Step 11: Display summary
+# Step 15: Display summary
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
@@ -257,10 +394,22 @@ echo "  1. Update DNS: Point your domain A record to: $IP"
 echo "  2. Wait 2-5 minutes for DNS propagation"
 echo "  3. Run: bash $APP_DIR/deploy/finish-setup.sh"
 echo ""
-echo -e "${GREEN}Security:${NC}"
-echo "  - Firewall configured (ports 22, 80, 443 allowed)"
-echo "  - Users must provide their own OpenAI API keys"
-echo "  - No server API key stored"
+echo -e "${GREEN}Security Features Enabled:${NC}"
+echo "  [OK] App runs as dedicated 'nodeapp' user (not root)"
+echo "  [OK] Firewall configured (UFW: ports 22, 80, 443 only)"
+echo "  [OK] fail2ban protecting SSH (max 5 attempts in 10 min)"
+echo "  [OK] SSH hardened (no password auth, pubkey only)"
+echo "  [OK] Rate limiting (10 req/s API, 30 req/s general)"
+echo "  [OK] Security headers (XSS, clickjacking protection)"
+echo "  [OK] Automatic security updates enabled"
+echo "  [OK] Upload limit: 10M (reduced from 50M)"
+echo "  [OK] Users provide their own OpenAI API keys"
+echo "  [OK] No server API key stored"
+echo ""
+echo -e "${YELLOW}IMPORTANT: SSH Configuration${NC}"
+echo "  - SSH now requires public key authentication"
+echo "  - Make sure you have SSH keys set up before logging out!"
+echo "  - Restart SSH to apply: systemctl restart sshd"
 echo ""
 echo -e "${GREEN}Useful commands:${NC}"
 echo "  View logs:           journalctl -u image-gen-pipe -f"
