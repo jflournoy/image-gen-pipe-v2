@@ -27,6 +27,25 @@ router.post('/start', async (req, res) => {
       ensembleSize = 3
     } = req.body;
 
+    // Extract user API key from headers
+    const userApiKey = req.headers['x-openai-api-key'];
+
+    // Validate API key is present
+    if (!userApiKey || !userApiKey.trim()) {
+      return res.status(401).json({
+        error: 'Missing API key',
+        message: 'Provide X-OpenAI-API-Key header with your OpenAI API key.'
+      });
+    }
+
+    // Validate API key format
+    if (!userApiKey.startsWith('sk-')) {
+      return res.status(400).json({
+        error: 'Invalid API key format',
+        message: 'API key should start with sk-'
+      });
+    }
+
     // Validate required parameter
     if (!prompt || typeof prompt !== 'string' || prompt.trim().length === 0) {
       return res.status(400).json({
@@ -70,6 +89,7 @@ router.post('/start', async (req, res) => {
     const jobId = uuidv4();
 
     // Start beam search job in background (don't await - let it run)
+    // Pass user-provided API key (required - no server fallback)
     startBeamSearchJob(jobId, {
       prompt: prompt.trim(),
       n: nValidated,
@@ -78,7 +98,7 @@ router.post('/start', async (req, res) => {
       alpha: alphaValidated,
       temperature: tempValidated,
       ensembleSize: ensembleValidated  // Pass ensemble size to beam search for custom voting
-    }).catch(err => {
+    }, userApiKey).catch(err => {
       console.error(`[Demo] Error running beam search for job ${jobId}:`, err);
     });
 
