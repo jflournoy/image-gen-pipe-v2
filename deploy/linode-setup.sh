@@ -153,8 +153,23 @@ else
 fi
 echo ""
 
-# Step 7: Install and configure Nginx
-echo -e "${YELLOW}Step 7: Installing Nginx...${NC}"
+# Step 7: Configure firewall
+echo -e "${YELLOW}Step 7: Configuring firewall...${NC}"
+apt-get install -y ufw
+
+# Configure UFW
+ufw --force enable
+ufw default deny incoming
+ufw default allow outgoing
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+
+echo -e "${GREEN}[OK] Firewall configured${NC}"
+echo ""
+
+# Step 8: Install and configure Nginx
+echo -e "${YELLOW}Step 8: Installing Nginx...${NC}"
 apt-get install -y nginx
 
 # Determine server name
@@ -216,32 +231,18 @@ else
 fi
 echo ""
 
-# Step 8: Setup HTTPS (optional)
-if [ -n "$LETSENCRYPT_EMAIL" ] && [ -n "$DOMAIN_NAME" ]; then
-    echo -e "${YELLOW}Step 8: Setting up HTTPS with Let's Encrypt...${NC}"
-    apt-get install -y certbot python3-certbot-nginx
+# Step 9: Install certbot (for later HTTPS setup)
+echo -e "${YELLOW}Step 9: Installing certbot...${NC}"
+apt-get install -y certbot python3-certbot-nginx
 
-    # Use certbot --nginx (without certonly) to both get cert AND configure nginx
-    certbot --nginx --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --redirect || {
-        echo -e "${YELLOW}[WARN] HTTPS setup skipped (certbot may need manual configuration)${NC}"
-    }
+echo -e "${GREEN}[OK] Certbot installed${NC}"
+echo ""
 
-    echo -e "${GREEN}[OK] HTTPS configured${NC}"
-    echo ""
-else
-    if [ -z "$DOMAIN_NAME" ]; then
-        echo -e "${YELLOW}Skipped: No domain name provided (using HTTP for IP access)${NC}"
-    else
-        echo -e "${YELLOW}Skipped: No email provided for Let's Encrypt${NC}"
-    fi
-    echo ""
-fi
-
-# Step 9: Create directories
+# Step 10: Create directories
 mkdir -p "$APP_DIR/session-history"
 chmod 755 "$APP_DIR/session-history"
 
-# Step 10: Display summary
+# Step 11: Display summary
 echo ""
 echo -e "${GREEN}========================================${NC}"
 echo -e "${GREEN}Deployment Complete!${NC}"
@@ -250,31 +251,28 @@ echo ""
 echo -e "${GREEN}Service Status:${NC}"
 systemctl status image-gen-pipe --no-pager
 echo ""
-echo -e "${GREEN}Access your application at:${NC}"
-if [ -n "$DOMAIN_NAME" ]; then
-    echo -e "  ${GREEN}https://$DOMAIN_NAME${NC}"
-else
-    IP=$(hostname -I | awk '{print $1}')
-    echo -e "  ${GREEN}http://$IP${NC}"
-fi
+IP=$(hostname -I | awk '{print $1}')
+echo -e "${GREEN}Server IP Address:${NC} ${YELLOW}$IP${NC}"
 echo ""
-echo -e "${GREEN}API Key Configuration:${NC}"
-echo -e "  ${YELLOW}Users must provide their own OpenAI API keys${NC}"
-echo "  - No server API key is configured"
-echo "  - Keys are passed via X-OpenAI-API-Key header"
-echo "  - Keys are NOT stored on the server"
-echo "  - Each user is responsible for their own costs"
+echo -e "${GREEN}Access your application at:${NC}"
+echo -e "  ${GREEN}http://$IP${NC} (HTTP only - HTTPS not configured yet)"
+echo ""
+echo -e "${YELLOW}=== IMPORTANT: HTTPS Setup Required ===${NC}"
+echo -e "${YELLOW}To enable HTTPS:${NC}"
+echo "  1. Update DNS: Point your domain A record to: $IP"
+echo "  2. Wait 2-5 minutes for DNS propagation"
+echo "  3. Run: bash $APP_DIR/deploy/finish-setup.sh"
+echo ""
+echo -e "${GREEN}Security:${NC}"
+echo "  - Firewall configured (ports 22, 80, 443 allowed)"
+echo "  - Users must provide their own OpenAI API keys"
+echo "  - No server API key stored"
 echo ""
 echo -e "${GREEN}Useful commands:${NC}"
 echo "  View logs:           journalctl -u image-gen-pipe -f"
 echo "  Restart service:     systemctl restart image-gen-pipe"
 echo "  Check status:        systemctl status image-gen-pipe"
-echo "  Update app:          cd $APP_DIR && git pull origin main && npm install && systemctl restart image-gen-pipe"
-echo ""
-echo -e "${GREEN}Next steps:${NC}"
-echo "  1. Test the app at the URL above"
-echo "  2. When starting a beam search, you'll be asked for your OpenAI API key"
-echo "  3. Check logs if you encounter issues: journalctl -u image-gen-pipe -f"
+echo "  Update app:          bash $APP_DIR/deploy/update.sh"
 echo ""
 
 # Create an update script for convenience
