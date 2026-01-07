@@ -12,6 +12,13 @@ const MetadataTracker = require('../services/metadata-tracker.js');
 const TokenTracker = require('../utils/token-tracker.js');
 const { MODEL_PRICING } = require('../config/model-pricing.js');
 const { getDateString } = require('../utils/timezone.js');
+const path = require('path');
+
+// Read output directory from environment (set in .env on production)
+// Falls back to session-history/ for local development
+const OUTPUT_DIR = process.env.SESSION_HISTORY_DIR ||
+                   process.env.IMAGES_DIR ||
+                   path.join(process.cwd(), 'session-history');
 
 // Store active jobs
 const activeJobs = new Map();
@@ -57,6 +64,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
 
   // Initialize metadata tracker
   const metadataTracker = new MetadataTracker({
+    outputDir: OUTPUT_DIR,
     sessionId,
     userPrompt: prompt,
     config: { beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature }
