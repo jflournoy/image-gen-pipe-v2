@@ -83,21 +83,52 @@ else
 fi
 echo ""
 
+# Ensure ACME webroot exists
+echo -e "${YELLOW}Step 3: Preparing for Let's Encrypt...${NC}"
+mkdir -p /var/www/html/.well-known/acme-challenge
+chmod -R 755 /var/www/html
+
+# Test ACME challenge path
+echo "test" > /var/www/html/.well-known/acme-challenge/test
+if curl -s "http://$DOMAIN_NAME/.well-known/acme-challenge/test" | grep -q "test"; then
+    echo -e "${GREEN}[OK] ACME challenge path is accessible${NC}"
+    rm /var/www/html/.well-known/acme-challenge/test
+else
+    echo -e "${RED}[WARN] ACME challenge path may not be accessible${NC}"
+    echo "This might cause issues, but attempting anyway..."
+fi
+echo ""
+
 # Run certbot
-echo -e "${YELLOW}Step 3: Obtaining SSL certificate...${NC}"
-certbot --nginx --non-interactive --agree-tos --email "$LETSENCRYPT_EMAIL" -d "$DOMAIN_NAME" --redirect
+echo -e "${YELLOW}Step 4: Obtaining SSL certificate...${NC}"
+certbot --nginx \
+  --non-interactive \
+  --agree-tos \
+  --email "$LETSENCRYPT_EMAIL" \
+  -d "$DOMAIN_NAME" \
+  --redirect \
+  --preferred-challenges http
 
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}[OK] HTTPS configured successfully${NC}"
 else
     echo -e "${RED}[FAIL] HTTPS setup failed${NC}"
-    echo "Check logs: /var/log/letsencrypt/letsencrypt.log"
+    echo ""
+    echo "Debug information:"
+    echo "  - Check logs: tail -50 /var/log/letsencrypt/letsencrypt.log"
+    echo "  - Verify nginx config: nginx -t"
+    echo "  - Test ACME path: curl http://$DOMAIN_NAME/.well-known/acme-challenge/test"
+    echo ""
+    echo "Common issues:"
+    echo "  1. DNS not fully propagated (wait 10-15 more minutes)"
+    echo "  2. Port 80 not accessible from internet"
+    echo "  3. Nginx not serving ACME challenge path correctly"
     exit 1
 fi
 echo ""
 
 # Verify certificate
-echo -e "${YELLOW}Step 4: Verifying SSL certificate...${NC}"
+echo -e "${YELLOW}Step 5: Verifying SSL certificate...${NC}"
 certbot certificates
 
 echo ""

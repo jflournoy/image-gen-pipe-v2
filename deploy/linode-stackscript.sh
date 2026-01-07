@@ -271,6 +271,12 @@ server {
   gzip on;
   gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 
+  # Let's Encrypt ACME challenge (must be before other location blocks)
+  location ^~ /.well-known/acme-challenge/ {
+    root /var/www/html;
+    default_type text/plain;
+  }
+
   # API endpoints with stricter rate limiting
   location ~ ^/api/(demo|generate) {
     limit_req zone=api_limit burst=20 nodelay;
@@ -373,6 +379,10 @@ echo ""
 # Step 14: Create directories
 mkdir -p "$APP_DIR/session-history"
 chmod 755 "$APP_DIR/session-history"
+
+# Create webroot for Let's Encrypt ACME challenges
+mkdir -p /var/www/html/.well-known/acme-challenge
+chmod -R 755 /var/www/html
 
 # Step 15: Display summary
 echo ""
