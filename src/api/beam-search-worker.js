@@ -99,22 +99,27 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
 
     const providers = {
       llm: createLLMProvider({
+        mode: 'real',
         apiKey: userApiKey,
         ...(models?.llm && { model: models.llm })
       }),
       imageGen: createImageProvider({
+        mode: 'real',
         apiKey: userApiKey,
         ...(models?.imageGen && { model: models.imageGen })
       }),
       vision: createVisionProvider({
+        mode: 'real',
         apiKey: userApiKey,
         ...(models?.vision && { model: models.vision })
       }),
       critiqueGen: createCritiqueGenerator({
+        mode: 'real',
         apiKey: userApiKey,
         ...(models?.llm && { model: models.llm })
       }),
       imageRanker: createImageRanker({
+        mode: 'real',
         apiKey: userApiKey,
         ...(models?.vision && { model: models.vision })
       })
