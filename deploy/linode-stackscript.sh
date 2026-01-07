@@ -1,6 +1,5 @@
 #!/bin/bash
-# <UDF name="domain_name" label="Domain Name - leave blank for IP access" default="" example="demo.example.com" />
-# <UDF name="letsencrypt_email" label="Email for SSL certificate - leave blank to skip HTTPS" default="" example="you@example.com" />
+# <UDF name="domain_name" label="Domain Name (optional - for nginx server_name)" default="" example="demo.example.com" />
 
 #############################################################################
 # Linode StackScript for Image Gen Pipe V2
@@ -13,9 +12,12 @@
 #
 # This script sets up a fresh Ubuntu 22.04 or 24.04 Linode with:
 # - Node.js 22
-# - Your app deployed and running as a systemd service
+# - Your app deployed and running as a systemd service (as nodeapp user)
 # - Nginx reverse proxy with WebSocket support
-# - Optional HTTPS with Let's Encrypt
+# - Security hardening (firewall, fail2ban, SSH hardening, rate limiting)
+# - Automatic security updates
+#
+# After deployment, run finish-setup.sh to configure HTTPS with Let's Encrypt
 #############################################################################
 
 set -e  # Exit on error
@@ -34,13 +36,12 @@ echo -e "${GREEN}Image Gen Pipe V2 - Linode Setup${NC}"
 echo -e "${GREEN}========================================${NC}"
 echo ""
 
-# Use UDF variables from Linode dashboard, or allow manual input
+# Use UDF variables from Linode dashboard
 DOMAIN_NAME="${DOMAIN_NAME:-}"
-LETSENCRYPT_EMAIL="${LETSENCRYPT_EMAIL:-}"
 
 echo -e "${YELLOW}Configuration:${NC}"
-echo "Domain: ${DOMAIN_NAME:-'(IP access only)'}"
-echo "Email: ${LETSENCRYPT_EMAIL:-'(HTTPS disabled)'}"
+echo "Domain: ${DOMAIN_NAME:-'(IP access only - will use _ as server_name)'}"
+echo "Note: HTTPS will be configured later via finish-setup.sh"
 echo ""
 
 # Step 1: Update system
