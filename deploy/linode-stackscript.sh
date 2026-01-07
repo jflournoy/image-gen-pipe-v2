@@ -117,6 +117,12 @@ else
     echo -e "${GREEN}[OK] nodeapp user already exists${NC}"
 fi
 
+# Create home directory for npm cache (npm requires it)
+mkdir -p /home/nodeapp
+chown nodeapp:nodeapp /home/nodeapp
+chmod 755 /home/nodeapp
+echo -e "${GREEN}[OK] Created home directory for npm cache${NC}"
+
 # Set ownership of app directory
 chown -R nodeapp:nodeapp "$APP_DIR"
 echo -e "${GREEN}[OK] Set ownership to nodeapp user${NC}"
@@ -440,6 +446,11 @@ cd /var/www/image-gen-pipe-v2
 # Run git as nodeapp user (directory owner)
 echo "Pulling latest changes..."
 sudo -u nodeapp git pull origin main
+
+# Ensure nodeapp home directory exists (for npm cache)
+echo "Ensuring home directory exists..."
+mkdir -p /home/nodeapp
+chown nodeapp:nodeapp /home/nodeapp
 
 # Fix ownership of entire directory (in case root created files)
 echo "Fixing file ownership..."
