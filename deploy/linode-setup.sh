@@ -438,12 +438,26 @@ echo ""
 cat > "$APP_DIR/update.sh" << 'UPDATE_SCRIPT'
 #!/bin/bash
 # Quick update script
+set -e
+
 cd /var/www/image-gen-pipe-v2
-git pull origin main
-npm ci --omit=dev --ignore-scripts
+
+# Run git as nodeapp user (directory owner)
+echo "Pulling latest changes..."
+sudo -u nodeapp git pull origin main
+
+# Install dependencies as nodeapp user
+echo "Installing dependencies..."
+sudo -u nodeapp npm ci --omit=dev --ignore-scripts
+
+# Restart service (requires root)
+echo "Restarting service..."
 systemctl restart image-gen-pipe
+
 echo "[OK] App updated and service restarted"
-journalctl -u image-gen-pipe -n 10
+echo ""
+echo "Recent logs:"
+journalctl -u image-gen-pipe -n 10 --no-pager
 UPDATE_SCRIPT
 
 chmod +x "$APP_DIR/update.sh"
