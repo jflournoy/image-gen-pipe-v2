@@ -132,6 +132,22 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       params: { prompt, n, m, iterations, alpha, temperature }
     });
 
+    // Warn user if using expensive fallback image model
+    const imageModel = providers.imageGen.model;
+    const orgRegistered = process.env.OPENAI_ORG_REGISTERED_FOR_GPT5_IMAGE === 'true';
+    if (imageModel === 'gpt-image-1' && !orgRegistered && !models?.imageGen) {
+      emitProgress(jobId, {
+        type: 'warning',
+        timestamp: new Date().toISOString(),
+        message: '⚠️ Using gpt-image-1 (higher cost). To use gpt-5-image-mini, set OPENAI_ORG_REGISTERED_FOR_GPT5_IMAGE=true or specify model explicitly.',
+        details: {
+          currentModel: 'gpt-image-1',
+          suggestedModel: 'gpt-5-image-mini',
+          reason: 'Organization not registered for gpt-5-image-mini access'
+        }
+      });
+    }
+
     // Configure beam search with progress callbacks
     const config = {
       beamWidth: n,
