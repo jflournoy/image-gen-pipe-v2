@@ -1206,6 +1206,13 @@ function formatMessage(msg) {
     };
   }
 
+  if (msg.type === 'warning') {
+    return {
+      text: msg.message || 'Warning',
+      type: 'warning'
+    };
+  }
+
   // Fallback: show raw JSON for unknown types
   return {
     text: JSON.stringify(msg),
