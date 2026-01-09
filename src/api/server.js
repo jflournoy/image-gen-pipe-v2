@@ -11,6 +11,7 @@ import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
 import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
 import demoRouter from './demo-routes.js';
+import evaluationRouter from './evaluation-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -348,6 +349,7 @@ export function createApp() {
 
   // Image serving endpoint: /api/images/:sessionId/:filename
   // Serves images from output/YYYY-MM-DD/:sessionId/:filename
+  // Searches across all date directories to find the session
   app.get('/api/images/:sessionId/:filename', async (req, res) => {
     const { sessionId, filename } = req.params;
 
@@ -377,36 +379,60 @@ export function createApp() {
       });
     }
 
-    // Get current date in configured timezone (images are stored in output/YYYY-MM-DD/)
-    // IMPORTANT: Use timezone-aware date to match how images were saved
-    // If we use UTC date and the local timezone differs, paths will mismatch at midnight
-    const dateStr = getDateString();
-
-    // Construct safe image path: output/YYYY-MM-DD/ses-HHMMSS/iter0-cand0.png
-    const imagePath = join(process.cwd(), 'output', dateStr, sessionId, filename);
-
     try {
-      // Read the image file
-      console.log(`[Image API] Serving image: ${imagePath}`);
-      const imageBuffer = await readFile(imagePath);
+      const outputDir = join(process.cwd(), 'output');
 
-      // Set appropriate headers and send image
-      res.setHeader('Content-Type', 'image/png');
-      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
-      res.status(200).send(imageBuffer);
-    } catch (error) {
-      // Handle file not found or read errors
-      if (error.code === 'ENOENT') {
-        console.warn(`[Image API] File not found: ${imagePath}`);
-        return res.status(404).json({
-          error: 'Image not found'
-        });
+      // Search across all date directories to find the session
+      // This allows serving images from sessions created on previous days
+      let dates = [];
+      try {
+        dates = await readdir(outputDir);
+      } catch (error) {
+        if (error.code === 'ENOENT') {
+          return res.status(404).json({
+            error: 'Image not found - output directory does not exist'
+          });
+        }
+        throw error;
       }
 
-      // Handle other errors
-      console.error(`[Image API] Error serving image: ${imagePath}`, error.message);
+      // Filter and sort dates (most recent first)
+      dates = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+
+      // Try each date directory until we find the image
+      for (const dateDir of dates) {
+        const imagePath = join(outputDir, dateDir, sessionId, filename);
+
+        try {
+          await readFile(imagePath);
+          // File exists - serve it
+          console.log(`[Image API] Serving image: ${imagePath}`);
+          const imageBuffer = await readFile(imagePath);
+
+          // Set appropriate headers and send image
+          res.setHeader('Content-Type', 'image/png');
+          res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+          return res.status(200).send(imageBuffer);
+        } catch (error) {
+          // File doesn't exist in this date directory, try next
+          if (error.code !== 'ENOENT') {
+            console.error(`[Image API] Error reading ${imagePath}:`, error.message);
+          }
+        }
+      }
+
+      // Image not found in any date directory
+      console.warn(`[Image API] Image not found in any date: ${sessionId}/${filename}`);
+      return res.status(404).json({
+        error: 'Image not found',
+        sessionId,
+        filename
+      });
+    } catch (error) {
+      console.error(`[Image API] Error serving image:`, error);
       return res.status(500).json({
-        error: 'Failed to serve image'
+        error: 'Failed to serve image',
+        message: error.message
       });
     }
   });
@@ -454,8 +480,23 @@ export function createApp() {
     }
   });
 
+  // Evaluation page
+  app.get('/evaluation', async (req, res) => {
+    try {
+      const evaluationPath = join(process.cwd(), 'public', 'evaluation.html');
+      const html = await readFile(evaluationPath, 'utf-8');
+      res.status(200).send(html);
+    } catch (error) {
+      console.error('Error serving evaluation page:', error);
+      res.status(500).json({ error: 'Failed to serve evaluation page' });
+    }
+  });
+
   // Register demo routes
   app.use('/api/demo', demoRouter);
+
+  // Register evaluation routes
+  app.use('/api/evaluation', evaluationRouter);
 
   return app;
 }

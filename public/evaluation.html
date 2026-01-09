@@ -1,0 +1,652 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>HITL Evaluation - Pairwise Comparison</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <!-- Simple Analytics - 100% privacy-first analytics -->
+  <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 {
+      color: #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 a {
+      color: #333;
+      text-decoration: none;
+      font-size: 24px;
+      transition: color 0.2s;
+    }
+    h1 a:hover {
+      color: #0066cc;
+    }
+
+    /* Session Selection */
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+    }
+
+    .session-list {
+      display: grid;
+      gap: 10px;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .session-item {
+      padding: 15px;
+      border: 2px solid #ddd;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: #fafafa;
+    }
+
+    .session-item:hover {
+      border-color: #4CAF50;
+      background: #f0f8f0;
+    }
+
+    .session-item.selected {
+      border-color: #4CAF50;
+      background: #e8f5e9;
+    }
+
+    .session-prompt {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: #333;
+    }
+
+    .session-meta {
+      font-size: 11px;
+      color: #666;
+    }
+
+    /* Comparison Interface */
+    .comparison-container {
+      display: none;
+    }
+
+    .comparison-container.active {
+      display: block;
+    }
+
+    .progress-bar-container {
+      background: #ddd;
+      height: 30px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 20px;
+      position: relative;
+    }
+
+    .progress-bar {
+      background: linear-gradient(90deg, #4CAF50, #45a049);
+      height: 100%;
+      transition: width 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: bold;
+      font-size: 12px;
+    }
+
+    .progress-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #333;
+      font-weight: bold;
+      font-size: 12px;
+      z-index: 1;
+      text-shadow: 0 0 3px white;
+    }
+
+    .user-prompt-display {
+      background: #e3f2fd;
+      padding: 15px;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      border-left: 4px solid #2196F3;
+    }
+
+    .user-prompt-display strong {
+      color: #1976D2;
+    }
+
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+      margin-bottom: 20px;
+    }
+
+    .candidate-panel {
+      border: 3px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: white;
+      transition: border-color 0.2s;
+    }
+
+    .candidate-panel:hover {
+      border-color: #4CAF50;
+    }
+
+    .candidate-label {
+      font-size: 18px;
+      font-weight: bold;
+      margin-bottom: 10px;
+      color: #333;
+    }
+
+    .candidate-image {
+      width: 100%;
+      border-radius: 4px;
+      margin-bottom: 10px;
+      border: 1px solid #ddd;
+    }
+
+    .candidate-prompt {
+      font-size: 11px;
+      color: #666;
+      background: #f9f9f9;
+      padding: 10px;
+      border-radius: 4px;
+      max-height: 100px;
+      overflow-y: auto;
+      margin-bottom: 10px;
+    }
+
+    .choice-buttons {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .btn {
+      padding: 15px 30px;
+      font-size: 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .btn-choose-a {
+      background: #2196F3;
+      color: white;
+    }
+
+    .btn-choose-a:hover {
+      background: #1976D2;
+      transform: scale(1.05);
+    }
+
+    .btn-choose-b {
+      background: #FF9800;
+      color: white;
+    }
+
+    .btn-choose-b:hover {
+      background: #F57C00;
+      transform: scale(1.05);
+    }
+
+    .btn-tie {
+      background: #9E9E9E;
+      color: white;
+    }
+
+    .btn-tie:hover {
+      background: #757575;
+      transform: scale(1.05);
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    /* Completion Screen */
+    .completion-message {
+      text-align: center;
+      padding: 40px;
+      background: #e8f5e9;
+      border-radius: 8px;
+      border: 2px solid #4CAF50;
+    }
+
+    .completion-message h2 {
+      color: #2E7D32;
+      margin-bottom: 10px;
+    }
+
+    .completion-message p {
+      color: #666;
+      margin-bottom: 20px;
+    }
+
+    .btn-export {
+      background: #4CAF50;
+      color: white;
+      padding: 10px 20px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 14px;
+      margin: 5px;
+    }
+
+    .btn-export:hover {
+      background: #45a049;
+    }
+
+    .btn-new {
+      background: #2196F3;
+      color: white;
+    }
+
+    .btn-new:hover {
+      background: #1976D2;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4CAF50;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 4px solid #f44336;
+      margin-bottom: 20px;
+    }
+
+    .keyboard-shortcuts {
+      font-size: 11px;
+      color: #999;
+      text-align: center;
+      margin-top: 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      <span>🧪 HITL Evaluation - Pairwise Comparison</span>
+      <a href="/" title="Back to Demo"><i class="fas fa-home"></i></a>
+    </h1>
+
+    <!-- Session Selection -->
+    <div id="sessionSelection" class="section">
+      <h2>Select a Completed Session to Evaluate</h2>
+      <div id="sessionList" class="session-list">
+        <div class="loading">
+          <div class="spinner"></div>
+          <p>Loading completed sessions...</p>
+        </div>
+      </div>
+      <button id="startEvaluationBtn" class="btn btn-export" style="margin-top: 15px;" disabled>
+        Start Evaluation
+      </button>
+    </div>
+
+    <!-- Comparison Interface -->
+    <div id="comparisonInterface" class="comparison-container">
+      <div class="section">
+        <h2>Compare Candidates</h2>
+
+        <!-- Progress Bar -->
+        <div class="progress-bar-container">
+          <div class="progress-bar" id="progressBar" style="width: 0%;">
+            <span id="progressBarText"></span>
+          </div>
+          <div class="progress-text" id="progressText">0 / 0</div>
+        </div>
+
+        <!-- User Prompt Display -->
+        <div class="user-prompt-display">
+          <strong>Original Prompt:</strong> <span id="userPromptDisplay"></span>
+        </div>
+
+        <!-- Comparison Grid -->
+        <div id="comparisonContent">
+          <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading comparison...</p>
+          </div>
+        </div>
+
+        <!-- Keyboard Shortcuts -->
+        <div class="keyboard-shortcuts">
+          💡 Keyboard shortcuts: Press <strong>1</strong> for left, <strong>2</strong> for right, <strong>3</strong> for tie
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // State
+    let selectedSession = null;
+    let currentEvaluation = null;
+    let currentComparison = null;
+    let comparisonStartTime = null;
+
+    // DOM Elements
+    const sessionSelection = document.getElementById('sessionSelection');
+    const sessionList = document.getElementById('sessionList');
+    const startEvaluationBtn = document.getElementById('startEvaluationBtn');
+    const comparisonInterface = document.getElementById('comparisonInterface');
+    const progressBar = document.getElementById('progressBar');
+    const progressText = document.getElementById('progressText');
+    const progressBarText = document.getElementById('progressBarText');
+    const userPromptDisplay = document.getElementById('userPromptDisplay');
+    const comparisonContent = document.getElementById('comparisonContent');
+
+    // Load completed sessions
+    async function loadSessions() {
+      try {
+        const response = await fetch('/api/evaluation/sessions');
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load sessions');
+        }
+
+        if (data.sessions.length === 0) {
+          sessionList.innerHTML = '<div class="error-message">No completed sessions available. Complete a beam search first!</div>';
+          return;
+        }
+
+        sessionList.innerHTML = data.sessions.map(session => `
+          <div class="session-item" data-session-id="${session.sessionId}">
+            <div class="session-prompt">${escapeHtml(session.userPrompt)}</div>
+            <div class="session-meta">
+              Session: ${session.sessionId} |
+              Candidates: ${session.candidateCount} |
+              Date: ${new Date(session.timestamp).toLocaleString()}
+            </div>
+          </div>
+        `).join('');
+
+        // Add click handlers
+        document.querySelectorAll('.session-item').forEach(item => {
+          item.addEventListener('click', () => selectSession(item));
+        });
+      } catch (error) {
+        console.error('Error loading sessions:', error);
+        sessionList.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+      }
+    }
+
+    function selectSession(item) {
+      // Deselect all
+      document.querySelectorAll('.session-item').forEach(el => el.classList.remove('selected'));
+      // Select this one
+      item.classList.add('selected');
+      selectedSession = item.dataset.sessionId;
+      startEvaluationBtn.disabled = false;
+    }
+
+    // Start evaluation
+    startEvaluationBtn.addEventListener('click', async () => {
+      if (!selectedSession) return;
+
+      try {
+        startEvaluationBtn.disabled = true;
+        const response = await fetch('/api/evaluation/start', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: selectedSession })
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to start evaluation');
+        }
+
+        currentEvaluation = {
+          evaluationId: data.evaluationId,
+          sessionId: data.sessionId,
+          totalPairs: data.totalPairs,
+          candidateCount: data.candidateCount
+        };
+
+        // Switch to comparison interface
+        sessionSelection.style.display = 'none';
+        comparisonInterface.classList.add('active');
+
+        // Load first comparison
+        await loadNextComparison();
+      } catch (error) {
+        console.error('Error starting evaluation:', error);
+        alert(`Error: ${error.message}`);
+        startEvaluationBtn.disabled = false;
+      }
+    });
+
+    // Load next comparison
+    async function loadNextComparison() {
+      try {
+        const response = await fetch(
+          `/api/evaluation/${currentEvaluation.evaluationId}/next?sessionId=${currentEvaluation.sessionId}`
+        );
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load comparison');
+        }
+
+        if (data.completed) {
+          // Show completion screen
+          showCompletionScreen();
+          return;
+        }
+
+        currentComparison = data.comparison;
+        comparisonStartTime = Date.now();
+        renderComparison(currentComparison);
+      } catch (error) {
+        console.error('Error loading comparison:', error);
+        comparisonContent.innerHTML = `<div class="error-message">Error: ${error.message}</div>`;
+      }
+    }
+
+    // Render comparison
+    function renderComparison(comparison) {
+      const { candidateA, candidateB, progress } = comparison;
+
+      // Update progress
+      const percentage = Math.round((progress.completed / progress.total) * 100);
+      progressBar.style.width = `${percentage}%`;
+      progressBarText.textContent = `${percentage}%`;
+      progressText.textContent = `${progress.completed} / ${progress.total}`;
+
+      // Update user prompt (only first time)
+      if (!userPromptDisplay.textContent) {
+        // Get user prompt from first candidate (they all have same session prompt)
+        const sessionData = document.querySelector('.session-item.selected');
+        if (sessionData) {
+          userPromptDisplay.textContent = sessionData.querySelector('.session-prompt').textContent;
+        }
+      }
+
+      // Build image URLs
+      const imageUrlA = `/api/images/${currentEvaluation.sessionId}/${candidateA.localPath.split('/').pop()}`;
+      const imageUrlB = `/api/images/${currentEvaluation.sessionId}/${candidateB.localPath.split('/').pop()}`;
+
+      // Render comparison grid
+      comparisonContent.innerHTML = `
+        <div class="comparison-grid">
+          <div class="candidate-panel">
+            <div class="candidate-label">Candidate A</div>
+            <img src="${imageUrlA}" alt="Candidate A" class="candidate-image">
+            <div class="candidate-prompt"><strong>Prompt:</strong> ${escapeHtml(candidateA.combined)}</div>
+          </div>
+          <div class="candidate-panel">
+            <div class="candidate-label">Candidate B</div>
+            <img src="${imageUrlB}" alt="Candidate B" class="candidate-image">
+            <div class="candidate-prompt"><strong>Prompt:</strong> ${escapeHtml(candidateB.combined)}</div>
+          </div>
+        </div>
+        <div class="choice-buttons">
+          <button class="btn btn-choose-a" onclick="submitChoice('A')">
+            <i class="fas fa-arrow-left"></i> Choose Left (A)
+          </button>
+          <button class="btn btn-tie" onclick="submitChoice('tie')">
+            <i class="fas fa-equals"></i> Tie
+          </button>
+          <button class="btn btn-choose-b" onclick="submitChoice('B')">
+            <i class="fas fa-arrow-right"></i> Choose Right (B)
+          </button>
+        </div>
+      `;
+    }
+
+    // Submit choice
+    window.submitChoice = async function(winner) {
+      // Disable buttons
+      document.querySelectorAll('.choice-buttons button').forEach(btn => btn.disabled = true);
+
+      const responseTimeMs = Date.now() - comparisonStartTime;
+
+      try {
+        const response = await fetch(`/api/evaluation/${currentEvaluation.evaluationId}/compare`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            sessionId: currentEvaluation.sessionId,
+            comparisonId: currentComparison.comparisonId,
+            candidateA: currentComparison.candidateA.candidateId,
+            candidateB: currentComparison.candidateB.candidateId,
+            winner: winner,
+            responseTimeMs: responseTimeMs
+          })
+        });
+
+        const data = await response.json();
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to submit comparison');
+        }
+
+        // Load next comparison
+        await loadNextComparison();
+      } catch (error) {
+        console.error('Error submitting comparison:', error);
+        alert(`Error: ${error.message}`);
+        // Re-enable buttons
+        document.querySelectorAll('.choice-buttons button').forEach(btn => btn.disabled = false);
+      }
+    };
+
+    // Show completion screen
+    function showCompletionScreen() {
+      comparisonContent.innerHTML = `
+        <div class="completion-message">
+          <h2>✅ Evaluation Complete!</h2>
+          <p>You've completed all ${currentEvaluation.totalPairs} pairwise comparisons.</p>
+          <p>Thank you for your contribution to AI evaluation!</p>
+          <div>
+            <button class="btn btn-export" onclick="exportResults()">
+              <i class="fas fa-download"></i> Export Results (JSON)
+            </button>
+            <button class="btn btn-export btn-new" onclick="location.reload()">
+              <i class="fas fa-redo"></i> Start New Evaluation
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    // Export results
+    window.exportResults = async function() {
+      try {
+        const response = await fetch(
+          `/api/evaluation/${currentEvaluation.evaluationId}/export?sessionId=${currentEvaluation.sessionId}`
+        );
+        const data = await response.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to export');
+        }
+
+        // Download as JSON
+        const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `evaluation-${currentEvaluation.evaluationId}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      } catch (error) {
+        console.error('Error exporting results:', error);
+        alert(`Error: ${error.message}`);
+      }
+    };
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (!currentComparison) return;
+
+      if (e.key === '1') {
+        submitChoice('A');
+      } else if (e.key === '2') {
+        submitChoice('B');
+      } else if (e.key === '3') {
+        submitChoice('tie');
+      }
+    });
+
+    // Utility: Escape HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Initialize
+    loadSessions();
+  </script>
+</body>
+</html>
