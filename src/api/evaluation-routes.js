@@ -2,6 +2,10 @@
  * @file Evaluation Routes
  * Express routes for Human-in-the-Loop (HITL) evaluation
  * Supports pairwise comparison of beam search candidates
+ *
+ * PRIVACY: Session selection happens client-side via localStorage.
+ * Users can only evaluate their own sessions (stored in browser).
+ * These routes only handle the evaluation process itself (comparisons, progress, export).
  */
 
 import express from 'express';
@@ -75,58 +79,14 @@ async function loadSessionMetadata(sessionPath) {
 
 /**
  * GET /api/evaluation/sessions
- * List all completed beam search sessions available for evaluation
+ * DISABLED: Privacy issue - this endpoint listed all users' sessions
+ * Sessions are now loaded client-side from localStorage instead
  */
 router.get('/sessions', async (req, res) => {
-  try {
-    const sessions = await findAllSessions();
-
-    // Load metadata for each session
-    const sessionsWithMetadata = await Promise.all(
-      sessions.map(async ({ date, sessionId, path: sessionPath }) => {
-        const metadata = await loadSessionMetadata(sessionPath);
-
-        if (!metadata) return null;
-
-        // Check if session is completed (has finalWinner)
-        const isCompleted = metadata.finalWinner !== null;
-
-        // Count candidates across all iterations
-        const candidateCount = metadata.iterations.reduce(
-          (sum, iter) => sum + iter.candidates.length,
-          0
-        );
-
-        return {
-          sessionId,
-          date,
-          userPrompt: metadata.userPrompt,
-          timestamp: metadata.timestamp,
-          isCompleted,
-          candidateCount,
-          iterations: metadata.iterations.length,
-          finalWinner: metadata.finalWinner
-        };
-      })
-    );
-
-    // Filter out nulls and incomplete sessions
-    const completedSessions = sessionsWithMetadata
-      .filter(s => s && s.isCompleted)
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)); // Most recent first
-
-    res.json({
-      success: true,
-      count: completedSessions.length,
-      sessions: completedSessions
-    });
-  } catch (error) {
-    console.error('[EvalRoutes] Error listing sessions:', error);
-    res.status(500).json({
-      error: 'Failed to list sessions',
-      message: error.message
-    });
-  }
+  res.status(410).json({
+    error: 'Endpoint deprecated',
+    message: 'Sessions are now loaded from browser localStorage for privacy. Use the evaluation UI at /evaluation'
+  });
 });
 
 /**

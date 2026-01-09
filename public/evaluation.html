@@ -321,6 +321,9 @@
     <!-- Session Selection -->
     <div id="sessionSelection" class="section">
       <h2>Select a Completed Session to Evaluate</h2>
+      <p style="color: #666; font-size: 12px; margin: 10px 0;">
+        <i class="fas fa-lock"></i> Privacy-first: Sessions are loaded from your browser's localStorage. Only you can see your own jobs.
+      </p>
       <div id="sessionList" class="session-list">
         <div class="loading">
           <div class="spinner"></div>
@@ -384,27 +387,23 @@
     const userPromptDisplay = document.getElementById('userPromptDisplay');
     const comparisonContent = document.getElementById('comparisonContent');
 
-    // Load completed sessions
+    // Load completed sessions from localStorage (privacy-first, client-side only)
     async function loadSessions() {
       try {
-        const response = await fetch('/api/evaluation/sessions');
-        const data = await response.json();
+        // Get job history from localStorage (same storage used by demo page)
+        const jobHistory = JSON.parse(localStorage.getItem('myJobHistory') || '[]');
 
-        if (!data.success) {
-          throw new Error(data.error || 'Failed to load sessions');
-        }
-
-        if (data.sessions.length === 0) {
-          sessionList.innerHTML = '<div class="error-message">No completed sessions available. Complete a beam search first!</div>';
+        if (jobHistory.length === 0) {
+          sessionList.innerHTML = '<div class="error-message">No completed sessions available. Complete a beam search first!<br><br>Your completed jobs are stored privately in your browser\'s localStorage.</div>';
           return;
         }
 
-        sessionList.innerHTML = data.sessions.map(session => `
+        // Display sessions (most recent first, already sorted in localStorage)
+        sessionList.innerHTML = jobHistory.map(session => `
           <div class="session-item" data-session-id="${session.sessionId}">
-            <div class="session-prompt">${escapeHtml(session.userPrompt)}</div>
+            <div class="session-prompt">${escapeHtml(session.prompt)}</div>
             <div class="session-meta">
               Session: ${session.sessionId} |
-              Candidates: ${session.candidateCount} |
               Date: ${new Date(session.timestamp).toLocaleString()}
             </div>
           </div>
