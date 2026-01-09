@@ -188,51 +188,71 @@ router.get('/images/:sessionId/:filename', async (req, res) => {
       });
     }
 
-    // Construct full path to image
-    // Get today's date in YYYY-MM-DD format
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const dateDir = `${year}-${month}-${day}`;
+    // Search across all date directories to find the session
+    // This allows serving images from sessions created on previous days
+    const outputDir = path.join(process.cwd(), 'output');
 
-    // Full path: output/YYYY-MM-DD/ses-HHMMSS/filename.png
-    const imagePath = path.join(
-      process.cwd(),
-      'output',
-      dateDir,
-      sessionId,
-      filename
-    );
-
-    // Verify file exists
+    let dates = [];
     try {
-      await fsPromises.access(imagePath);
-    } catch {
-      return res.status(404).json({
-        error: 'Image not found',
-        sessionId,
-        filename,
-        path: imagePath
-      });
-    }
-
-    // Set cache headers (1 hour)
-    res.set('Cache-Control', 'public, max-age=3600');
-    res.set('Content-Type', 'image/png');
-
-    // Stream the file
-    const fileStream = fs.createReadStream(imagePath);
-    fileStream.pipe(res);
-
-    fileStream.on('error', (err) => {
-      console.error(`[Demo] Error streaming image ${imagePath}:`, err);
-      if (!res.headersSent) {
-        res.status(500).json({
-          error: 'Failed to serve image',
-          message: err.message
+      dates = await fsPromises.readdir(outputDir);
+    } catch (error) {
+      if (error.code === 'ENOENT') {
+        return res.status(404).json({
+          error: 'Image not found - output directory does not exist'
         });
       }
+      throw error;
+    }
+
+    // Filter and sort dates (most recent first)
+    dates = dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)).sort().reverse();
+
+    // Try each date directory until we find the image
+    for (const dateDir of dates) {
+      const imagePath = path.join(
+        outputDir,
+        dateDir,
+        sessionId,
+        filename
+      );
+
+      try {
+        await fsPromises.access(imagePath);
+        // File exists - serve it
+        console.log(`[Demo] Serving image: ${imagePath}`);
+
+        // Set cache headers (1 hour)
+        res.set('Cache-Control', 'public, max-age=3600');
+        res.set('Content-Type', 'image/png');
+
+        // Stream the file
+        const fileStream = fs.createReadStream(imagePath);
+        fileStream.pipe(res);
+
+        fileStream.on('error', (err) => {
+          console.error(`[Demo] Error streaming image ${imagePath}:`, err);
+          if (!res.headersSent) {
+            res.status(500).json({
+              error: 'Failed to serve image',
+              message: err.message
+            });
+          }
+        });
+
+        return; // Successfully found and started streaming
+      } catch (error) {
+        // File doesn't exist in this date directory, try next
+        if (error.code !== 'ENOENT') {
+          console.error(`[Demo] Error accessing ${imagePath}:`, error.message);
+        }
+      }
+    }
+
+    // Image not found in any date directory
+    return res.status(404).json({
+      error: 'Image not found in any date',
+      sessionId,
+      filename
     });
   } catch (err) {
     console.error('[Demo] Error serving demo image:', err);

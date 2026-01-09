@@ -422,6 +422,10 @@ Provide ONLY the rephrased prompt, nothing else.`;
     // Emit completion event with date for image URL construction
     // Include allGlobalRanked for final ranking display
     const allGlobalRanked = result.allGlobalRanked || [];
+    // Extract date from metadata timestamp (when session was created)
+    const sessionDate = fullMetadata?.timestamp
+      ? fullMetadata.timestamp.split('T')[0]  // Extract YYYY-MM-DD from ISO timestamp
+      : getDateString();  // Fallback to today if no timestamp
     emitProgress(jobId, {
       type: 'complete',
       timestamp: new Date().toISOString(),
@@ -438,7 +442,7 @@ Provide ONLY the rephrased prompt, nothing else.`;
         lineage: fullMetadata.lineage,
         sessionId: fullMetadata.sessionId,
         finalWinner: fullMetadata.finalWinner,
-        date: getDateString(), // Include today's date for image URL construction
+        date: sessionDate, // Use session's actual creation date, not today
         allGlobalRanked: allGlobalRanked.map(c => ({
           iteration: c.metadata.iteration,
           candidateId: c.metadata.candidateId,
