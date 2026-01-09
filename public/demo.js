@@ -30,6 +30,68 @@ let heartbeatCheckInterval = null;
 let heartbeatWarningShown = false;
 
 /**
+ * Job History - Privacy-first localStorage tracking
+ * Stores only YOUR jobs on YOUR device, no server tracking
+ */
+
+/**
+ * Save a completed job to localStorage history
+ * @param {Object} job - Job info {sessionId, timestamp, prompt, date}
+ */
+function saveJobToHistory(job) {
+  try {
+    const history = JSON.parse(localStorage.getItem('myJobHistory') || '[]');
+
+    // Prevent duplicates
+    if (history.some(j => j.sessionId === job.sessionId)) {
+      return;
+    }
+
+    history.unshift(job); // Add to beginning (most recent first)
+
+    // Keep only last 50 jobs
+    if (history.length > 50) {
+      history.length = 50;
+    }
+
+    localStorage.setItem('myJobHistory', JSON.stringify(history));
+    console.log('[Job History] Saved job:', job.sessionId);
+
+    // Update the count badge
+    if (typeof updateMyJobsCount === 'function') {
+      updateMyJobsCount();
+    }
+  } catch (error) {
+    console.warn('[Job History] Failed to save:', error);
+  }
+}
+
+/**
+ * Get user's job history from localStorage
+ * @returns {Array} Array of job objects
+ */
+function getJobHistory() {
+  try {
+    return JSON.parse(localStorage.getItem('myJobHistory') || '[]');
+  } catch (error) {
+    console.warn('[Job History] Failed to load:', error);
+    return [];
+  }
+}
+
+/**
+ * Clear all job history
+ */
+function clearJobHistory() {
+  try {
+    localStorage.removeItem('myJobHistory');
+    console.log('[Job History] Cleared all history');
+  } catch (error) {
+    console.warn('[Job History] Failed to clear:', error);
+  }
+}
+
+/**
  * Update connection health indicator
  * Shows spinner only when job is running AND connected
  */
@@ -1108,6 +1170,14 @@ function formatMessage(msg) {
     if (msg.metadata) {
       jobMetadata = msg.metadata;
       console.log('[Demo] Stored job metadata with lineage:', jobMetadata);
+
+      // Save to localStorage for "My Jobs" history
+      saveJobToHistory({
+        sessionId: msg.metadata.sessionId,
+        timestamp: msg.timestamp || new Date().toISOString(),
+        prompt: msg.metadata.userPrompt || jobMetadata.userPrompt || 'Unknown prompt',
+        date: msg.metadata.date
+      });
     }
 
     // Show final cost summary
@@ -1781,8 +1851,94 @@ function buildLineageVisualization(jobData) {
   `;
 }
 
+/**
+ * My Jobs Modal Functions
+ */
+
+/**
+ * Show My Jobs modal with user's job history
+ */
+function showMyJobs() {
+  const modal = document.getElementById('myJobsModal');
+  const jobsList = document.getElementById('myJobsList');
+  const history = getJobHistory();
+
+  if (history.length === 0) {
+    jobsList.innerHTML = '<p style="text-align: center; color: #999; padding: 40px;">No jobs yet. Complete a beam search to see it here!</p>';
+  } else {
+    jobsList.innerHTML = history.map(job => {
+      const date = new Date(job.timestamp);
+      const promptPreview = job.prompt.length > 80 ? job.prompt.substring(0, 80) + '...' : job.prompt;
+
+      return `
+        <div style="border: 1px solid #ddd; border-radius: 4px; padding: 15px; margin-bottom: 10px; background: #fafafa; cursor: pointer; transition: all 0.2s;"
+             onmouseover="this.style.background='#f0f0f0'; this.style.borderColor='#4CAF50'"
+             onmouseout="this.style.background='#fafafa'; this.style.borderColor='#ddd'"
+             onclick="loadJob('${job.sessionId}')">
+          <div style="font-weight: bold; margin-bottom: 5px; color: #333;">
+            ${promptPreview}
+          </div>
+          <div style="font-size: 11px; color: #666;">
+            Session: ${job.sessionId} |
+            ${date.toLocaleDateString()} ${date.toLocaleTimeString()}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  modal.style.display = 'flex';
+}
+
+/**
+ * Close My Jobs modal
+ */
+function closeMyJobsModal() {
+  const modal = document.getElementById('myJobsModal');
+  modal.style.display = 'none';
+}
+
+/**
+ * Load a specific job (navigate to session view)
+ * @param {string} sessionId - Session ID to load
+ */
+function loadJob(sessionId) {
+  // For now, we'll show an alert. In the future, this could navigate to a session detail view
+  // or trigger loading the session's showcase
+  alert(`Loading session ${sessionId}...\n\nFeature coming soon: View full session details and re-display results!`);
+  closeMyJobsModal();
+}
+
+/**
+ * Confirm before clearing all history
+ */
+function confirmClearHistory() {
+  if (confirm('Clear all job history?\n\nThis will remove all saved jobs from your device. This cannot be undone.')) {
+    clearJobHistory();
+    showMyJobs(); // Refresh the modal
+  }
+}
+
+/**
+ * Update My Jobs count badge
+ */
+function updateMyJobsCount() {
+  const history = getJobHistory();
+  const badge = document.getElementById('myJobsCount');
+
+  if (history.length > 0) {
+    badge.textContent = history.length;
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
 // Check for pending jobs and show reconnection banner if needed
 checkForPendingJob();
+
+// Update My Jobs count on page load
+updateMyJobsCount();
 
 // Initial message
 addMessage('Ready. Configure parameters and click "Start Beam Search"', 'event');
