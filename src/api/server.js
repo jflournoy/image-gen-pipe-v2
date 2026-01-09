@@ -11,8 +11,7 @@ import { join, normalize } from 'node:path';
 import { createRequire } from 'node:module';
 import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
 import demoRouter from './demo-routes.js';
-// DISABLED: Privacy issue - evaluation routes show all users' sessions without authentication
-// import evaluationRouter from './evaluation-routes.js';
+import evaluationRouter from './evaluation-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -482,26 +481,22 @@ export function createApp() {
   });
 
   // Evaluation page
-  // DISABLED: Privacy issue - evaluation API shows all users' sessions without authentication
-  // TODO: Re-enable when we add proper authentication/authorization
-  // app.get('/evaluation', async (req, res) => {
-  //   try {
-  //     const evaluationPath = join(process.cwd(), 'public', 'evaluation.html');
-  //     const html = await readFile(evaluationPath, 'utf--8');
-  //     res.status(200).send(html);
-  //   } catch (error) {
-  //     console.error('Error serving evaluation page:', error);
-  //     res.status(500).json({ error: 'Failed to serve evaluation page' });
-  //   }
-  // });
+  app.get('/evaluation', async (req, res) => {
+    try {
+      const evaluationPath = join(process.cwd(), 'public', 'evaluation.html');
+      const html = await readFile(evaluationPath, 'utf-8');
+      res.status(200).send(html);
+    } catch (error) {
+      console.error('Error serving evaluation page:', error);
+      res.status(500).json({ error: 'Failed to serve evaluation page' });
+    }
+  });
 
   // Register demo routes
   app.use('/api/demo', demoRouter);
 
-  // Register evaluation routes
-  // DISABLED: Privacy issue - shows all users' sessions without authentication
-  // TODO: Re-enable when we add proper authentication/authorization
-  // app.use('/api/evaluation', evaluationRouter);
+  // Register evaluation routes (uses localStorage for session selection, privacy-first)
+  app.use('/api/evaluation', evaluationRouter);
 
   return app;
 }
