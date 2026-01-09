@@ -1018,9 +1018,18 @@
   <div class="container">
     <h1>
       <span>Beam Search Demo - Real-time Messages</span>
-      <a href="https://github.com/jflournoy/image-gen-pipe-v2" target="_blank" rel="noopener noreferrer" title="View on GitHub">
-        <i class="fab fa-github"></i>
-      </a>
+      <div>
+        <a href="javascript:void(0)" onclick="showMyJobs()" title="My Jobs (stored on your device)" style="margin-right: 15px; position: relative;">
+          <i class="fas fa-history"></i>
+          <span id="myJobsCount" style="position: absolute; top: -8px; right: -8px; background: #4CAF50; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; display: none;"></span>
+        </a>
+        <a href="/evaluation" title="HITL Evaluation" style="margin-right: 15px;">
+          <i class="fas fa-users"></i>
+        </a>
+        <a href="https://github.com/jflournoy/image-gen-pipe-v2" target="_blank" rel="noopener noreferrer" title="View on GitHub">
+          <i class="fab fa-github"></i>
+        </a>
+      </div>
     </h1>
 
     <div style="background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
@@ -1231,6 +1240,23 @@
       <button class="modal-close" onclick="closePromptsModal()">&times;</button>
       <h2 id="promptsModalTitle">Candidate Prompts</h2>
       <div id="promptsModalBody" class="prompts-body"></div>
+    </div>
+  </div>
+
+  <!-- My Jobs Modal -->
+  <div id="myJobsModal" class="prompts-modal" onclick="if(event.target === this) closeMyJobsModal()" style="display: none;">
+    <div class="prompts-modal-content" style="max-width: 800px;">
+      <button class="modal-close" onclick="closeMyJobsModal()">&times;</button>
+      <h2>📜 My Jobs</h2>
+      <p style="font-size: 13px; color: #666; margin: 0 0 15px 0;">
+        Privacy-first: These jobs are stored only on your device. Clear your browser data to remove them.
+      </p>
+      <div id="myJobsList" style="max-height: 500px; overflow-y: auto;"></div>
+      <div style="margin-top: 15px; text-align: center;">
+        <button onclick="confirmClearHistory()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+          Clear All History
+        </button>
+      </div>
     </div>
   </div>
 
