@@ -11,15 +11,16 @@ class MockCritiqueGenerator {
 
   /**
    * Generate mock critique for testing
-   * @param {Object} evaluation - Vision provider evaluation results
+   * @param {Object} feedback - Vision provider evaluation or ranking results
    * @param {Object} prompts - The prompts used
+   * @param {string} userPrompt - Original user request
    * @param {Object} options - Generation options
    * @returns {Promise<Object>} Mock structured critique
    */
-  async generateCritique(evaluation, prompts, options) {
+  async generateCritique(feedback, prompts, userPrompt, options) {
     // Validate required parameters (same as real implementation)
-    if (!evaluation) {
-      throw new Error('evaluation is required');
+    if (!feedback) {
+      throw new Error('feedback is required');
     }
 
     if (!prompts) {
@@ -37,7 +38,9 @@ class MockCritiqueGenerator {
       throw new Error('dimension must be either "what" or "how"');
     }
 
-    const { alignmentScore, aestheticScore } = evaluation;
+    // Extract scores from feedback (supports both evaluation and ranking feedback)
+    const alignmentScore = feedback.alignmentScore || (feedback.rank ? (4 - feedback.rank) * 25 : 50);
+    const aestheticScore = feedback.aestheticScore;
 
     // Determine relevant score based on dimension
     let relevantScore = alignmentScore;

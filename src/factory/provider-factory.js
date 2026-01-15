@@ -14,10 +14,18 @@ const MockVisionProvider = require('../providers/mock-vision-provider');
 const MockScoringProvider = require('../providers/mock-scoring-provider');
 const MockCritiqueGenerator = require('../providers/mock-critique-generator');
 
-// Real providers
+// Real providers - OpenAI
 const OpenAILLMProvider = require('../providers/openai-llm-provider');
 const OpenAIImageProvider = require('../providers/openai-image-provider');
 const OpenAIVisionProvider = require('../providers/openai-vision-provider');
+
+// Real providers - Local
+const LocalLLMProvider = require('../providers/local-llm-provider');
+const FluxImageProvider = require('../providers/flux-image-provider');
+const LocalVisionProvider = require('../providers/local-vision-provider');
+const LocalVLMProvider = require('../providers/local-vlm-provider');
+
+// Services
 const CritiqueGenerator = require('../services/critique-generator');
 const ImageRanker = require('../services/image-ranker');
 
@@ -52,6 +60,13 @@ function createLLMProvider(options = {}) {
       // Store apiKey on instance for testing
       instance.apiKey = apiKey;
       return instance;
+    }
+
+    case 'local-llm': {
+      return new LocalLLMProvider({
+        apiUrl: options.apiUrl || config.localLLM?.apiUrl || 'http://localhost:8003',
+        model: options.model || config.localLLM?.model || 'mistralai/Mistral-7B-Instruct-v0.2'
+      });
     }
 
     default:
@@ -90,6 +105,13 @@ function createImageProvider(options = {}) {
       return instance;
     }
 
+    case 'flux': {
+      return new FluxImageProvider({
+        apiUrl: options.apiUrl || config.flux?.apiUrl || 'http://localhost:8001',
+        model: options.model || config.flux?.model || 'flux-dev'
+      });
+    }
+
     default:
       throw new Error(`Unknown image provider: ${provider}`);
   }
@@ -126,6 +148,14 @@ function createVisionProvider(options = {}) {
       // Store apiKey on instance for testing
       instance.apiKey = apiKey;
       return instance;
+    }
+
+    case 'local': {
+      return new LocalVisionProvider({
+        apiUrl: options.apiUrl || config.localVision?.apiUrl || 'http://localhost:8002',
+        clipModel: options.clipModel || config.localVision?.clipModel || 'openai/clip-vit-base-patch32',
+        aestheticModel: options.aestheticModel || config.localVision?.aestheticModel || 'aesthetic_predictor_v2_5'
+      });
     }
 
     default:
@@ -203,6 +233,35 @@ function createImageRanker(options = {}) {
 }
 
 /**
+ * Create a VLM provider instance for pairwise image comparison
+ * @param {Object} options - Override configuration options
+ * @returns {LocalVLMProvider|null} VLM provider instance or null for mock mode
+ */
+function createVLMProvider(options = {}) {
+  const mode = options.mode || config.mode;
+
+  if (mode === 'mock') {
+    // For mock mode, return null to skip VLM ranking
+    return null;
+  }
+
+  // Real provider
+  const provider = options.provider || config.vlm?.provider || 'local';
+
+  switch (provider) {
+    case 'local': {
+      return new LocalVLMProvider({
+        apiUrl: options.apiUrl || config.vlm?.apiUrl || 'http://localhost:8004',
+        model: options.model || config.vlm?.model || 'llava-v1.6-mistral-7b.Q4_K_M.gguf'
+      });
+    }
+
+    default:
+      throw new Error(`Unknown VLM provider: ${provider}`);
+  }
+}
+
+/**
  * Create all providers at once
  * @param {Object} options - Override configuration options
  * @returns {Object} Object with all provider instances
@@ -223,5 +282,6 @@ module.exports = {
   createScoringProvider,
   createCritiqueGenerator,
   createImageRanker,
+  createVLMProvider,
   createProviders
 };

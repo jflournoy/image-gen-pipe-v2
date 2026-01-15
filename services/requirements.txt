@@ -1,0 +1,30 @@
+# Python dependencies for local services
+
+# Core dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+pydantic>=2.4.0
+
+# LLM service (llama.cpp - much more memory efficient than transformers)
+# Install with CUDA support:
+#   pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+# Or for CPU only:
+#   pip install llama-cpp-python
+llama-cpp-python>=0.2.0
+
+# ML dependencies for Vision and Image services
+torch>=2.1.0
+torchvision>=0.16.0
+transformers>=4.35.0  # For CLIP/vision models (not needed for LLM anymore)
+diffusers>=0.24.0
+accelerate>=0.24.0
+huggingface_hub>=0.20.0  # For HF authentication and model caching
+protobuf>=4.25.0  # Required by transformers/diffusers for some models
+sentencepiece>=0.1.99  # Required by some tokenizers
+
+# Image processing
+Pillow>=10.1.0
+requests>=2.31.0
+
+# Optional: For faster inference (vision/image only)
+# xformers>=0.0.22  # Memory efficient attention

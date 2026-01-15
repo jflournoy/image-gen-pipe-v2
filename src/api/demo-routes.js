@@ -6,6 +6,7 @@
 import express from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
+import { getRuntimeProviders } from './provider-routes.js';
 import fs, { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 
@@ -24,26 +25,37 @@ router.post('/start', async (req, res) => {
       maxIterations = 3,
       alpha = 0.7,
       temperature = 0.8,
-      ensembleSize = 3
+      ensembleSize = 3,
+      rankingMode = 'vlm'  // 'vlm' (tournament pairwise) or 'scoring' (CLIP/aesthetic)
     } = req.body;
 
     // Extract user API key from headers
     const userApiKey = req.headers['x-openai-api-key'];
 
-    // Validate API key is present
-    if (!userApiKey || !userApiKey.trim()) {
-      return res.status(401).json({
-        error: 'Missing API key',
-        message: 'Provide X-OpenAI-API-Key header with your OpenAI API key.'
-      });
-    }
+    // Check if OpenAI providers are being used
+    const runtimeProviders = getRuntimeProviders();
+    const needsOpenAI = runtimeProviders.llm === 'openai' ||
+                        runtimeProviders.image === 'openai' ||
+                        runtimeProviders.image === 'dalle' ||
+                        runtimeProviders.vision === 'openai' ||
+                        runtimeProviders.vision === 'gpt-vision';
 
-    // Validate API key format
-    if (!userApiKey.startsWith('sk-')) {
-      return res.status(400).json({
-        error: 'Invalid API key format',
-        message: 'API key should start with sk-'
-      });
+    // Only validate API key if OpenAI providers are being used
+    if (needsOpenAI) {
+      if (!userApiKey || !userApiKey.trim()) {
+        return res.status(401).json({
+          error: 'Missing API key',
+          message: 'OpenAI providers are active - provide X-OpenAI-API-Key header or switch to local providers.'
+        });
+      }
+
+      // Validate API key format
+      if (!userApiKey.startsWith('sk-')) {
+        return res.status(400).json({
+          error: 'Invalid API key format',
+          message: 'API key should start with sk-'
+        });
+      }
     }
 
     // Validate required parameter
@@ -88,6 +100,10 @@ router.post('/start', async (req, res) => {
     // Generate unique job ID
     const jobId = uuidv4();
 
+    // Validate ranking mode
+    const validRankingModes = ['vlm', 'scoring'];
+    const rankingModeValidated = validRankingModes.includes(rankingMode) ? rankingMode : 'vlm';
+
     // Start beam search job in background (don't await - let it run)
     // Pass user-provided API key (required - no server fallback)
     startBeamSearchJob(jobId, {
@@ -97,7 +113,8 @@ router.post('/start', async (req, res) => {
       iterations: iterationsValidated,
       alpha: alphaValidated,
       temperature: tempValidated,
-      ensembleSize: ensembleValidated  // Pass ensemble size to beam search for custom voting
+      ensembleSize: ensembleValidated,  // Pass ensemble size to beam search for custom voting
+      rankingMode: rankingModeValidated  // 'vlm' or 'scoring'
     }, userApiKey).catch(err => {
       console.error(`[Demo] Error running beam search for job ${jobId}:`, err);
     });
@@ -114,7 +131,8 @@ router.post('/start', async (req, res) => {
         maxIterations: iterationsValidated,
         alpha: alphaValidated,
         temperature: tempValidated,
-        ensembleSize: ensembleValidated
+        ensembleSize: ensembleValidated,
+        rankingMode: rankingModeValidated
       }
     });
   } catch (err) {
@@ -158,6 +176,38 @@ router.get('/status/:jobId', (req, res) => {
     console.error(`[Demo] Error getting status for job ${jobId}:`, err);
     res.status(500).json({
       error: 'Failed to get job status',
+      message: err.message
+    });
+  }
+});
+
+/**
+ * POST /api/demo/cancel/:jobId
+ * Cancel a running beam search job
+ */
+router.post('/cancel/:jobId', (req, res) => {
+  const { jobId } = req.params;
+
+  try {
+    const { cancelBeamSearchJob } = require('../api/beam-search-worker.js');
+    const cancelled = cancelBeamSearchJob(jobId);
+
+    if (cancelled) {
+      res.json({
+        success: true,
+        message: `Job ${jobId} cancellation requested`,
+        jobId
+      });
+    } else {
+      res.status(404).json({
+        error: 'Job not found or already complete',
+        jobId
+      });
+    }
+  } catch (err) {
+    console.error(`[Demo] Error cancelling job ${jobId}:`, err);
+    res.status(500).json({
+      error: 'Failed to cancel job',
       message: err.message
     });
   }

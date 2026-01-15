@@ -1012,6 +1012,22 @@
     .lineage-image img:hover {
       opacity: 0.8;
     }
+
+    /* Service status indicator animations */
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.1); }
+    }
+
+    .health-indicator {
+      display: inline-block;
+      transition: all 0.3s ease;
+    }
+
+    /* Apply pulse animation to status indicators showing 🟡 (starting state) */
+    .health-indicator[title*="Starting"] {
+      animation: pulse 1.5s ease-in-out infinite;
+    }
   </style>
 </head>
 <body>
@@ -1019,6 +1035,10 @@
     <h1>
       <span>Beam Search Demo - Real-time Messages</span>
       <div>
+        <a href="javascript:void(0)" onclick="showProviderSettings()" title="Provider Settings (Local/OpenAI)" style="margin-right: 15px; position: relative;">
+          <i class="fas fa-server"></i>
+          <span id="providerIndicator" style="position: absolute; bottom: -5px; right: -5px; width: 10px; height: 10px; border-radius: 50%; border: 2px solid white; display: none;"></span>
+        </a>
         <a href="javascript:void(0)" onclick="showMyJobs()" title="My Jobs (stored on your device)" style="margin-right: 15px; position: relative;">
           <i class="fas fa-history"></i>
           <span id="myJobsCount" style="position: absolute; top: -8px; right: -8px; background: #4CAF50; color: white; border-radius: 10px; padding: 2px 6px; font-size: 10px; display: none;"></span>
@@ -1050,12 +1070,15 @@
 
     <div class="form-section">
       <h2>Configuration</h2>
-      <div class="form-group">
-        <label for="apiKey">OpenAI API Key <span style="color: red;">*</span>:</label>
-        <input type="password" id="apiKey" placeholder="sk-..." required>
-        <small style="display: block; margin-top: 5px; color: #666;">
-          Required. Your key stays in your browser session only and is sent directly to OpenAI via HTTPS.
+      <div id="apiKeySection" class="form-group">
+        <label for="apiKey">OpenAI API Key <span id="apiKeyRequired" style="color: red;">*</span>:</label>
+        <input type="password" id="apiKey" placeholder="sk-...">
+        <small id="apiKeyHelp" style="display: block; margin-top: 5px; color: #666;">
+          Required when using OpenAI providers. Your key stays in your browser session only and is sent directly to OpenAI via HTTPS.
           Not stored on our server. Get a key at <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI API Keys</a>
+        </small>
+        <small id="localModeNote" style="display: none; margin-top: 5px; color: #4CAF50;">
+          ✓ Not required - using local providers. All processing happens on your machine.
         </small>
       </div>
 
@@ -1131,10 +1154,10 @@
         </div>
       </div>
 
-      <div style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
-        <h3 style="margin-top: 0;">Model Selection (Optional)</h3>
+      <div id="modelSelectionSection" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
+        <h3 style="margin-top: 0;">Model Selection (Optional - OpenAI Only)</h3>
         <p style="font-size: 12px; color: #666; margin: 0 0 15px 0;">
-          Choose which AI models to use. Default models work great for most users.
+          Choose which OpenAI models to use. Only applies when using OpenAI providers.
           <br><strong style="color: #333;">📊 Estimated Cost: </strong><span id="costSummary">Calculating...</span>
         </p>
         <div class="params-grid">
@@ -1191,9 +1214,10 @@
         </ul>
       </div>
 
-      <div style="margin-top: 15px;">
-        <button id="startBtn" class="btn-start">Start Beam Search</button>
-        <button id="stopBtn" class="btn-stop" disabled>Stop</button>
+      <div style="margin-top: 15px; display: flex; gap: 10px;">
+        <button id="startBtn" class="btn-start" style="flex: 1;">Start Beam Search</button>
+        <button id="stopBtn" class="btn-stop" disabled style="flex: 1;">Stop</button>
+        <button id="stopAllServicesBtn" onclick="stopAllLocalServices()" style="flex: 0 0 auto; background: #ff5252; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; font-weight: bold;" title="Stop all local services (LLM, Flux, Vision, VLM)">⏹ Stop All Services</button>
       </div>
     </div>
 
@@ -1256,6 +1280,416 @@
         <button onclick="confirmClearHistory()" style="background: #f44336; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; font-size: 12px;">
           Clear All History
         </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Provider Settings Modal -->
+  <div id="providerModal" class="prompts-modal" onclick="if(event.target === this) closeProviderModal()" style="display: none;">
+    <div class="prompts-modal-content" style="max-width: 600px;">
+      <button class="modal-close" onclick="closeProviderModal()">&times;</button>
+      <h2>⚙️ Provider Settings</h2>
+
+      <!-- Environment Info -->
+      <div style="background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 6px; padding: 12px; margin-bottom: 20px;">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <i class="fas fa-info-circle" style="color: #0066cc; font-size: 18px;"></i>
+          <div>
+            <strong style="color: #0066cc;">Environment:</strong>
+            <span id="envStatus">Checking...</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Mode Selection Cards -->
+      <div style="margin-bottom: 20px;">
+        <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">Choose Your Setup</h3>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+          <!-- OpenAI Mode Card -->
+          <div id="openaiModeCard" onclick="selectMode('openai')" style="padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #90caf9; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <i class="fas fa-cloud" style="color: #1976d2; font-size: 18px;"></i>
+              <h4 style="margin: 0; color: #1565c0; font-size: 15px;">OpenAI Mode</h4>
+            </div>
+            <div style="font-size: 11px; color: #555; line-height: 1.5;">
+              <div style="margin-bottom: 6px;"><strong style="color: #2e7d32;">✓ Pros:</strong> Fast & reliable, no setup, consistent quality</div>
+              <div><strong style="color: #c62828;">✗ Cons:</strong> API costs, data leaves your PC</div>
+            </div>
+          </div>
+
+          <!-- Local Mode Card -->
+          <div id="localModeCard" onclick="selectMode('local')" style="padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #81c784; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
+            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+              <i class="fas fa-desktop" style="color: #388e3c; font-size: 18px;"></i>
+              <h4 style="margin: 0; color: #2e7d32; font-size: 15px;">Local Mode</h4>
+            </div>
+            <div style="font-size: 11px; color: #555; line-height: 1.5;">
+              <div style="margin-bottom: 6px;"><strong style="color: #2e7d32;">✓ Pros:</strong> Private, no API costs, full control & customization</div>
+              <div><strong style="color: #c62828;">✗ Cons:</strong> Requires 12GB+ GPU, model downloads (~15GB total)</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced/Mixed Mode Link -->
+        <div style="text-align: center; margin-top: 15px;">
+          <a href="javascript:void(0)" onclick="showAdvancedConfig()" style="color: #666; font-size: 12px; text-decoration: none; border-bottom: 1px dashed #999;">
+            ⚙️ Advanced: Mix & match providers
+          </a>
+        </div>
+      </div>
+
+      <!-- Configuration Section (Context-Aware) -->
+      <div id="configSection" style="margin-bottom: 20px; display: none;">
+        <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">Configuration</h3>
+
+        <!-- Local Mode Configuration -->
+        <div id="localConfigSection" style="display: none;">
+          <div style="padding: 15px; background: #f5f9ff; border-radius: 6px; border: 1px solid #b3d9ff;">
+            <!-- Ranking Mode Selector -->
+            <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
+                Image Ranking Method:
+              </label>
+              <div style="display: flex; gap: 15px; margin-bottom: 6px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                  <input type="radio" name="rankingMode" value="scoring" checked style="margin-right: 6px;" onchange="updateRankingMode()">
+                  <span style="font-size: 13px;">Scored (Vision AI)</span>
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                  <input type="radio" name="rankingMode" value="vlm" style="margin-right: 6px;" onchange="updateRankingMode()">
+                  <span style="font-size: 13px;">Tournament (VLM)</span>
+                </label>
+              </div>
+              <small style="display: block; color: #666; font-size: 11px;">
+                Scored uses Vision AI for quick scoring. Tournament uses VLM for pairwise comparisons.
+              </small>
+            </div>
+
+            <!-- Start All Services Button -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+              <button onclick="quickStartLocalServices()" style="flex: 1; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                🚀 Start All Services
+              </button>
+              <button onclick="stopAllLocalServices()" style="flex: 1; background: linear-gradient(135deg, #f44336 0%, #da190b 100%); color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: bold;">
+                ⏹ Stop All Services
+              </button>
+            </div>
+
+            <p style="margin: 0 0 15px 0; color: #555; font-size: 13px;">
+              Select which local services to use:
+            </p>
+
+            <!-- Service Checkboxes with Status and Controls -->
+            <div id="serviceStatus" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 15px;">
+              <!-- LLM Service -->
+              <div style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                  <input type="checkbox" id="serviceLLM" checked style="width: 16px; height: 16px;">
+                  <label for="serviceLLM" style="flex: 1; cursor: pointer; margin: 0;">
+                    <strong>LLM</strong>
+                    <small style="display: block; color: #666; font-size: 11px;">Prompt refinement</small>
+                  </label>
+                  <span id="llmStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button onclick="startServiceInModal('llm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                  <button onclick="stopServiceInModal('llm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                  <button onclick="restartServiceInModal('llm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻ Restart</button>
+                </div>
+              </div>
+
+              <!-- Flux Service -->
+              <div style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                  <input type="checkbox" id="serviceFlux" checked style="width: 16px; height: 16px;">
+                  <label for="serviceFlux" style="flex: 1; cursor: pointer; margin: 0;">
+                    <strong>Flux</strong>
+                    <small style="display: block; color: #666; font-size: 11px;">Image generation</small>
+                  </label>
+                  <span id="fluxStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button onclick="startServiceInModal('flux')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                  <button onclick="stopServiceInModal('flux')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                  <button onclick="restartServiceInModal('flux')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻ Restart</button>
+                </div>
+              </div>
+
+              <!-- Vision Service -->
+              <div style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                  <input type="checkbox" id="serviceVision" checked style="width: 16px; height: 16px;">
+                  <label for="serviceVision" style="flex: 1; cursor: pointer; margin: 0;">
+                    <strong>Vision</strong>
+                    <small style="display: block; color: #666; font-size: 11px;">Image scoring</small>
+                  </label>
+                  <span id="visionStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button onclick="startServiceInModal('vision')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                  <button onclick="stopServiceInModal('vision')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                  <button onclick="restartServiceInModal('vision')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻ Restart</button>
+                </div>
+              </div>
+
+              <!-- VLM Service -->
+              <div style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+                <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                  <input type="checkbox" id="serviceVLM" checked style="width: 16px; height: 16px;">
+                  <label for="serviceVLM" style="flex: 1; cursor: pointer; margin: 0;">
+                    <strong>VLM</strong>
+                    <small style="display: block; color: #666; font-size: 11px;">Tournament ranking</small>
+                  </label>
+                  <span id="vlmStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+                </div>
+                <div style="display: flex; gap: 6px;">
+                  <button onclick="startServiceInModal('vlm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                  <button onclick="stopServiceInModal('vlm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                  <button onclick="restartServiceInModal('vlm')" class="service-btn" style="flex: 1; padding: 4px 8px; font-size: 11px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻ Restart</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Inline Flux Model Source Configuration -->
+            <div id="fluxModelConfigInline" style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
+                Flux Model Source:
+              </label>
+              <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                  <input type="radio" name="fluxModelSource" value="huggingface" checked style="margin-right: 6px;">
+                  <span style="font-size: 13px;">HuggingFace</span>
+                </label>
+                <label style="display: flex; align-items: center; cursor: pointer;">
+                  <input type="radio" name="fluxModelSource" value="local" style="margin-right: 6px;">
+                  <span style="font-size: 13px;">Local File</span>
+                </label>
+              </div>
+
+              <!-- HuggingFace Model (default) -->
+              <div id="hfModelSection">
+                <small style="display: block; color: #666; font-size: 11px;">
+                  Using: <strong id="currentHfModel">FLUX.1-dev</strong> from HuggingFace
+                </small>
+              </div>
+
+              <!-- Local Model Path Input (hidden by default) -->
+              <div id="localModelSection" style="display: none;">
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <input
+                    type="text"
+                    id="fluxCustomPath"
+                    placeholder="/path/to/your/flux-model.safetensors"
+                    style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
+                  />
+                  <button onclick="setFluxModelPath()" style="background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">
+                    Browse & Set
+                  </button>
+                </div>
+                <small style="display: block; color: #888; font-size: 10px; line-height: 1.4;">
+                  💡 Download custom Flux models from <a href="https://civitai.com/search/models?baseModel=Flux.1%20D" target="_blank" style="color: #0066cc;">CivitAI</a>.
+                  Point to the .safetensors file after downloading.
+                </small>
+                <div id="fluxModelPathStatus" style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; display: none;"></div>
+              </div>
+            </div>
+
+            <!-- LoRA Configuration -->
+            <div id="fluxLoraConfigInline" style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
+                Flux LoRA Configuration:
+              </label>
+
+              <!-- LoRA Path Input -->
+              <div style="margin-bottom: 10px;">
+                <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">LoRA File Path:</label>
+                <input
+                  type="text"
+                  id="fluxLoraPath"
+                  placeholder="services/loras/flux-custom-lora.safetensors"
+                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
+                />
+                <small style="display: block; color: #888; font-size: 10px; margin-top: 4px; line-height: 1.4;">
+                  💡 Path relative to project root. Download LoRAs from <a href="https://huggingface.co/models?other=lora,flux" target="_blank" style="color: #0066cc;">HuggingFace</a> or <a href="https://civitai.com/search/models?baseModel=Flux.1%20D" target="_blank" style="color: #0066cc;">CivitAI</a>
+                </small>
+              </div>
+
+              <!-- LoRA Scale Input -->
+              <div style="margin-bottom: 10px;">
+                <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">LoRA Scale:</label>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                  <input
+                    type="range"
+                    id="fluxLoraScale"
+                    min="0"
+                    max="2"
+                    step="0.1"
+                    value="0.8"
+                    style="flex: 1;"
+                  />
+                  <span id="fluxLoraScaleValue" style="font-family: monospace; font-size: 12px; min-width: 35px;">0.8</span>
+                </div>
+                <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">
+                  Range: 0.0 (disabled) to 2.0 (max strength). Typical: 0.7-1.0
+                </small>
+              </div>
+
+              <!-- LoRA Status -->
+              <div id="fluxLoraStatus" style="padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
+                Status: <span id="fluxLoraStatusText">Not configured</span>
+              </div>
+
+              <!-- LoRA Actions -->
+              <div style="display: flex; gap: 8px;">
+                <button onclick="saveFluxLoraSettings()" style="flex: 1; background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                  💾 Save Settings
+                </button>
+                <button onclick="checkFluxLoraStatus()" style="flex: 1; background: #666; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                  🔄 Check Status
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advanced/Mixed Mode Configuration (Dropdowns) -->
+        <div id="advancedConfigSection" style="display: none;">
+          <div style="padding: 15px; background: #fafafa; border-radius: 6px; border: 1px solid #e0e0e0;">
+            <!-- LLM Provider -->
+          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #555; margin: 0;">LLM Provider:</label>
+              <span id="llmHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+            </div>
+            <select id="llmProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+              <option value="openai">OpenAI (GPT-5 models)</option>
+              <option value="local-llm">Local LLM (Python/Transformers)</option>
+            </select>
+          </div>
+
+          <!-- Image Provider -->
+          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #555; margin: 0;">Image Provider:</label>
+              <span id="imageHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+            </div>
+            <select id="imageProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+              <option value="openai">OpenAI (DALL-E)</option>
+              <option value="flux">Flux (Local Generation)</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #888; font-size: 11px;">
+              Flux model configuration available in Local Mode.
+            </small>
+          </div>
+
+          <!-- Vision Provider (for individual image scoring) -->
+          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #555; margin: 0;">Vision Scoring:</label>
+              <span id="visionHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+            </div>
+            <select id="visionProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
+              <option value="openai">OpenAI (GPT-5 Vision)</option>
+              <option value="local">Local (CLIP + Aesthetics)</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #888; font-size: 11px;">
+              Scores each image individually for prompt alignment and visual quality.
+            </small>
+          </div>
+
+          <!-- Ranking Mode (for comparing/ranking images) -->
+          <div style="margin-bottom: 0; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #b3d9f7;">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <label style="font-weight: bold; color: #1565c0; margin: 0;">🏆 Ranking Method:</label>
+              <span id="vlmHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Checking...</span>
+            </div>
+            <select id="rankingMode" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #90caf9;">
+              <option value="vlm" selected>VLM Tournament (Local pairwise comparison)</option>
+              <option value="scoring">Score-based (Use vision scores only)</option>
+            </select>
+            <small style="display: block; margin-top: 6px; color: #666; font-size: 11px;">
+              <strong>VLM Tournament:</strong> Local vision-language model compares images head-to-head in tournament brackets.
+              <em style="color: #1565c0;">Requires VLM service (port 8004).</em><br>
+              <strong>Score-based:</strong> Rank by vision scores alone (faster, no pairwise comparison).
+            </small>
+            <div style="margin-top: 8px; padding: 8px; background: #fff3e0; border-radius: 4px; font-size: 11px;">
+              <strong style="color: #e65100;">💡 VLM vs Score-based:</strong>
+              <span style="color: #666;">VLM compares pairs of images holistically (prompt match + quality). Score-based uses CLIP alignment + aesthetic scores.</span>
+              <br><code style="background: #fff; padding: 2px 4px; border-radius: 2px; font-size: 10px;">Start VLM: cd services && .venv/bin/python vlm_service.py</code>
+            </div>
+          </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Start Local Services -->
+      <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border: 1px solid #c8e6c9; border-radius: 6px;">
+        <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 16px;">
+          <i class="fas fa-rocket"></i> Quick Start Local Services
+        </h3>
+
+        <!-- HF Token Input -->
+        <div style="margin-bottom: 12px;">
+          <label style="display: block; font-weight: bold; color: #555; margin-bottom: 6px; font-size: 13px;">
+            Hugging Face Token <span style="color: #ff9800; font-size: 11px;">(required for Flux)</span>
+          </label>
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <input
+              type="password"
+              id="hfTokenInput"
+              placeholder="hf_your_token_here"
+              style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px;"
+            />
+            <button onclick="toggleHfTokenVisibility()" style="background: #666; color: white; border: none; padding: 10px 12px; border-radius: 4px; cursor: pointer;" title="Show/Hide token">
+              <i class="fas fa-eye" id="hfTokenEyeIcon"></i>
+            </button>
+          </div>
+          <div id="hfTokenStatus" style="margin-top: 6px; font-size: 12px; color: #666;">
+            Token will be saved locally and used for Flux authentication
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div style="display: flex; gap: 10px; justify-content: space-between;">
+        <button onclick="closeProviderModal()" style="background: #999; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+          Cancel
+        </button>
+        <button id="applyProvidersBtn" onclick="applyProviderSettings()" style="background: #4CAF50; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
+          Apply Changes
+        </button>
+      </div>
+
+      <!-- Model Management Section -->
+      <div id="modelManagementSection" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: none;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+          <h3 style="margin: 0; color: #333; font-size: 16px;">
+            <i class="fas fa-download"></i> Model Management
+          </h3>
+          <button onclick="refreshModelStatus()" style="background: #0066cc; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
+            <i class="fas fa-sync"></i> Refresh
+          </button>
+        </div>
+
+        <!-- Model Status -->
+        <div id="modelStatusContent" style="font-size: 13px;">
+          Loading model status...
+        </div>
+
+        <!-- Download Progress -->
+        <div id="downloadProgressSection" style="margin-top: 15px; display: none;">
+          <div style="background: white; padding: 12px; border-radius: 4px; border: 1px solid #ddd;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+              <span id="downloadModelName" style="font-weight: bold; color: #333;"></span>
+              <span id="downloadProgressPercent" style="color: #666; font-size: 12px;">0%</span>
+            </div>
+            <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
+              <div id="downloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%); transition: width 0.3s;"></div>
+            </div>
+            <div id="downloadStatusMessage" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
+          </div>
+        </div>
       </div>
     </div>
   </div>

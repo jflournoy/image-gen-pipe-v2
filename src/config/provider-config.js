@@ -79,6 +79,29 @@ const providerConfig = {
   scoring: {
     provider: process.env.SCORING_PROVIDER || 'mock'
     // Scoring typically stays mock or uses a custom implementation
+  },
+
+  // Local Provider Configurations
+  // These providers run locally via Python services
+
+  // Local LLM Configuration (Python-based transformers)
+  localLLM: {
+    apiUrl: process.env.LOCAL_LLM_API_URL || 'http://localhost:8003',
+    model: process.env.LOCAL_LLM_MODEL || 'mistralai/Mistral-7B-Instruct-v0.2'
+  },
+
+  // Flux Image Generation Configuration (local)
+  flux: {
+    apiUrl: process.env.FLUX_API_URL || 'http://localhost:8001',
+    model: process.env.FLUX_MODEL || 'flux-dev',  // FLUX.1-dev for quality + LoRA support (auto fp8)
+    loras: process.env.FLUX_LORAS ? JSON.parse(process.env.FLUX_LORAS) : []
+  },
+
+  // Local Vision Configuration (CLIP + Aesthetics)
+  localVision: {
+    apiUrl: process.env.LOCAL_VISION_API_URL || 'http://localhost:8002',
+    clipModel: process.env.CLIP_MODEL || 'openai/clip-vit-base-patch32',
+    aestheticModel: process.env.AESTHETIC_MODEL || 'aesthetic_predictor_v2_5'
   }
 };
 

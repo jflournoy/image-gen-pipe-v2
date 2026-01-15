@@ -15,6 +15,9 @@ const {
 } = require('../src/factory/provider-factory');
 
 const OpenAIVisionProvider = require('../src/providers/openai-vision-provider');
+const LocalLLMProvider = require('../src/providers/local-llm-provider');
+const FluxImageProvider = require('../src/providers/flux-image-provider');
+const LocalVisionProvider = require('../src/providers/local-vision-provider');
 
 describe('Provider Factory', () => {
   describe('createCritiqueGenerator', () => {
@@ -158,6 +161,191 @@ describe('Provider Factory', () => {
 
       assert(vision instanceof OpenAIVisionProvider, 'Should return OpenAIVisionProvider instance');
       assert.strictEqual(vision.model, 'gpt-4o-mini', 'Should use custom model');
+    });
+  });
+
+  describe('createLLMProvider (local-llm)', () => {
+    it('should create LocalLLMProvider when provider is local-llm', () => {
+      const llm = createLLMProvider({ mode: 'real', provider: 'local-llm' });
+
+      assert(llm instanceof LocalLLMProvider, 'Should return LocalLLMProvider instance');
+      assert.strictEqual(typeof llm.refinePrompt, 'function', 'Should have refinePrompt method');
+      assert.strictEqual(typeof llm.combinePrompts, 'function', 'Should have combinePrompts method');
+      assert.strictEqual(typeof llm.generateText, 'function', 'Should have generateText method');
+    });
+
+    it('should use default apiUrl for local-llm', () => {
+      const llm = createLLMProvider({ mode: 'real', provider: 'local-llm' });
+
+      assert.strictEqual(llm.apiUrl, 'http://localhost:8003', 'Should use default local LLM URL');
+    });
+
+    it('should accept custom apiUrl for local-llm', () => {
+      const llm = createLLMProvider({
+        mode: 'real',
+        provider: 'local-llm',
+        apiUrl: 'http://localhost:9003'
+      });
+
+      assert.strictEqual(llm.apiUrl, 'http://localhost:9003', 'Should use custom URL');
+    });
+
+    it('should accept custom model for local-llm', () => {
+      const llm = createLLMProvider({
+        mode: 'real',
+        provider: 'local-llm',
+        model: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF'
+      });
+
+      assert.strictEqual(llm.model, 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF', 'Should use custom model');
+    });
+
+    it('should not require API key for local-llm', () => {
+      const originalKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      try {
+        // Should not throw
+        const llm = createLLMProvider({ mode: 'real', provider: 'local-llm' });
+        assert(llm instanceof LocalLLMProvider, 'Should create local provider without API key');
+      } finally {
+        if (originalKey) {
+          process.env.OPENAI_API_KEY = originalKey;
+        }
+      }
+    });
+  });
+
+  describe('createImageProvider (flux)', () => {
+    it('should create FluxImageProvider when provider is flux', () => {
+      const image = createImageProvider({ mode: 'real', provider: 'flux' });
+
+      assert(image instanceof FluxImageProvider, 'Should return FluxImageProvider instance');
+      assert.strictEqual(typeof image.generateImage, 'function', 'Should have generateImage method');
+    });
+
+    it('should use default apiUrl for flux', () => {
+      const image = createImageProvider({ mode: 'real', provider: 'flux' });
+
+      assert.strictEqual(image.apiUrl, 'http://localhost:8001', 'Should use default Flux URL');
+    });
+
+    it('should accept custom apiUrl for flux', () => {
+      const image = createImageProvider({
+        mode: 'real',
+        provider: 'flux',
+        apiUrl: 'http://localhost:9001'
+      });
+
+      assert.strictEqual(image.apiUrl, 'http://localhost:9001', 'Should use custom URL');
+    });
+
+    it('should accept custom model for flux', () => {
+      const image = createImageProvider({
+        mode: 'real',
+        provider: 'flux',
+        model: 'flux-dev'
+      });
+
+      assert.strictEqual(image.model, 'flux-dev', 'Should use custom model');
+    });
+
+    it('should not require API key for flux', () => {
+      const originalKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      try {
+        // Should not throw
+        const image = createImageProvider({ mode: 'real', provider: 'flux' });
+        assert(image instanceof FluxImageProvider, 'Should create flux provider without API key');
+      } finally {
+        if (originalKey) {
+          process.env.OPENAI_API_KEY = originalKey;
+        }
+      }
+    });
+  });
+
+  describe('createVisionProvider (local)', () => {
+    it('should create LocalVisionProvider when provider is local', () => {
+      const vision = createVisionProvider({ mode: 'real', provider: 'local' });
+
+      assert(vision instanceof LocalVisionProvider, 'Should return LocalVisionProvider instance');
+      assert.strictEqual(typeof vision.analyzeImage, 'function', 'Should have analyzeImage method');
+    });
+
+    it('should use default apiUrl for local vision', () => {
+      const vision = createVisionProvider({ mode: 'real', provider: 'local' });
+
+      assert.strictEqual(vision.apiUrl, 'http://localhost:8002', 'Should use default local vision URL');
+    });
+
+    it('should accept custom apiUrl for local vision', () => {
+      const vision = createVisionProvider({
+        mode: 'real',
+        provider: 'local',
+        apiUrl: 'http://localhost:9002'
+      });
+
+      assert.strictEqual(vision.apiUrl, 'http://localhost:9002', 'Should use custom URL');
+    });
+
+    it('should accept custom clipModel', () => {
+      const vision = createVisionProvider({
+        mode: 'real',
+        provider: 'local',
+        clipModel: 'openai/clip-vit-large-patch14'
+      });
+
+      assert.strictEqual(vision.clipModel, 'openai/clip-vit-large-patch14', 'Should use custom CLIP model');
+    });
+
+    it('should accept custom aestheticModel', () => {
+      const vision = createVisionProvider({
+        mode: 'real',
+        provider: 'local',
+        aestheticModel: 'custom_aesthetic_model'
+      });
+
+      assert.strictEqual(vision.aestheticModel, 'custom_aesthetic_model', 'Should use custom aesthetic model');
+    });
+
+    it('should not require API key for local vision', () => {
+      const originalKey = process.env.OPENAI_API_KEY;
+      delete process.env.OPENAI_API_KEY;
+
+      try {
+        // Should not throw
+        const vision = createVisionProvider({ mode: 'real', provider: 'local' });
+        assert(vision instanceof LocalVisionProvider, 'Should create local vision provider without API key');
+      } finally {
+        if (originalKey) {
+          process.env.OPENAI_API_KEY = originalKey;
+        }
+      }
+    });
+  });
+
+  describe('Factory errors for unknown providers', () => {
+    it('should throw for unknown LLM provider', () => {
+      assert.throws(
+        () => createLLMProvider({ mode: 'real', provider: 'unknown-llm' }),
+        /Unknown LLM provider: unknown-llm/
+      );
+    });
+
+    it('should throw for unknown image provider', () => {
+      assert.throws(
+        () => createImageProvider({ mode: 'real', provider: 'unknown-image' }),
+        /Unknown image provider: unknown-image/
+      );
+    });
+
+    it('should throw for unknown vision provider', () => {
+      assert.throws(
+        () => createVisionProvider({ mode: 'real', provider: 'unknown-vision' }),
+        /Unknown vision provider: unknown-vision/
+      );
     });
   });
 });

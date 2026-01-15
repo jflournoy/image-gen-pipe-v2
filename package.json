@@ -125,6 +125,7 @@
     "@eslint/js": "^9.37.0",
     "eslint": "^9.33.0",
     "husky": "^9.1.7",
+    "nock": "^14.0.10",
     "remark": "^15.0.1",
     "remark-cli": "^12.0.1",
     "remark-lint-code-block-style": "^4.0.1",
@@ -149,6 +150,7 @@
     "remark-validate-links": "^13.1.0"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "openai": "^6.6.0",

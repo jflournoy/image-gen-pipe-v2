@@ -1,0 +1,11 @@
+[project]
+name = "image-gen-pipe"
+version = "2.0.0"
+description = "Image generation pipeline with beam search orchestration"
+requires-python = ">=3.11"
+
+[tool.uv.workspace]
+members = ["services"]
+
+[tool.uv.sources]
+image-gen-services = { workspace = true }
