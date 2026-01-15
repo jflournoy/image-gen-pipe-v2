@@ -173,14 +173,21 @@ export VLM_CONTEXT_SIZE=4096  # Context window
 **Alternative Models**:
 You can use any GGUF quantized VLM with mmproj (CLIP projector) files:
 
-- **InternVL3-8B** (better benchmarks):
+- **Qwen2.5-VL-7B-Instruct** (recommended - pure vision-language, excellent for image comparison):
 ```bash
-export VLM_MODEL_REPO=mradermacher/SenseNova-SI-1.2-InternVL3-8B-GGUF
+export VLM_MODEL_REPO=unsloth/Qwen2.5-VL-7B-Instruct-GGUF
+export VLM_MODEL_FILE=*Q4_K_M.gguf
+export VLM_CLIP_FILE=*mmproj-F16.gguf
+```
+
+- **LLaVA 1.6 Mistral 7B** (current default - proven reliable):
+```bash
+export VLM_MODEL_REPO=jartine/llava-v1.6-mistral-7b-gguf
 export VLM_MODEL_FILE=*Q4_K_M.gguf
 export VLM_CLIP_FILE=*mmproj-f16.gguf
 ```
 
-- **LLaVA 1.5 7B** (faster, uses less memory):
+- **LLaVA 1.5 7B** (lighter weight, faster):
 ```bash
 export VLM_MODEL_REPO=mradermacher/llava-v1.5-7b-gguf
 export VLM_MODEL_FILE=*Q4_K_M.gguf
