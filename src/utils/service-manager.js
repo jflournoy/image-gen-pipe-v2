@@ -188,12 +188,13 @@ async function startService(serviceName, options = {}) {
   // Check if port is in use (might be from different session)
   const portInUse = await isServiceRunningOnPort(serviceConfig.port);
   if (portInUse) {
-    console.log(
-      `[ServiceManager] Port ${serviceConfig.port} already in use for ${serviceName}`
+    console.error(
+      `[ServiceManager] Port ${serviceConfig.port} already in use for ${serviceName}. ` +
+      `This may be from a previous session. Try restarting Node.js server or kill the process manually.`
     );
     return {
       success: false,
-      error: `Port ${serviceConfig.port} is already in use`,
+      error: `Port ${serviceConfig.port} is already in use (may be from previous session)`,
     };
   }
 
@@ -207,25 +208,46 @@ async function startService(serviceName, options = {}) {
   }
 
   // Spawn the service using uv to ensure dependencies are available
-  const proc = spawn('uv', ['run', '--no-project', 'python', serviceConfig.script], {
-    detached: true,
-    stdio: 'ignore',
-    env: serviceEnv,
+  let proc;
+  try {
+    proc = spawn('uv', ['run', '--no-project', 'python', serviceConfig.script], {
+      detached: true,
+      stdio: 'ignore',
+      env: serviceEnv,
+      cwd: path.dirname(serviceConfig.script)
+    });
+
+    // Unref so parent can exit independently
+    proc.unref();
+  } catch (error) {
+    console.error(`[ServiceManager] Failed to spawn ${serviceName} process:`, error);
+    return {
+      success: false,
+      error: `Failed to spawn service: ${error.message}`,
+    };
+  }
+
+  // Handle potential spawn errors that occur after process creation
+  return new Promise((resolve) => {
+    const timeoutId = setTimeout(async () => {
+      // If process is still running after spawn, it was successful
+      if (isProcessRunning(proc.pid)) {
+        await writePIDFile(serviceName, proc.pid);
+        console.log(`[ServiceManager] Started ${serviceName} service (PID: ${proc.pid})`);
+        resolve({
+          success: true,
+          pid: proc.pid,
+          port: serviceConfig.port,
+        });
+      } else {
+        // Process already exited - likely an error in the startup
+        resolve({
+          success: false,
+          error: `Service process exited immediately (possible startup error)`,
+        });
+      }
+    }, 500); // Check after 500ms to give process time to start or fail
   });
-
-  // Unref so parent can exit independently
-  proc.unref();
-
-  // Write PID file
-  await writePIDFile(serviceName, proc.pid);
-
-  console.log(`[ServiceManager] Started ${serviceName} service (PID: ${proc.pid})`);
-
-  return {
-    success: true,
-    pid: proc.pid,
-    port: serviceConfig.port,
-  };
 }
 
 /**
