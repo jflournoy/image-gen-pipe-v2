@@ -2186,6 +2186,8 @@ async function setFluxModelPath() {
     const result = await response.json();
 
     if (response.ok) {
+      // Store in localStorage for use when starting service
+      localStorage.setItem('fluxModelPath', modelPath);
       statusDiv.style.background = '#d4edda';
       statusDiv.style.color = '#155724';
       statusDiv.innerHTML = `
@@ -2709,13 +2711,15 @@ async function startServiceInModal(serviceName) {
     // Set status to "starting" immediately
     setServiceStatus(serviceName, 'starting', 'Starting...');
 
-    // Get HF token and LoRA settings from localStorage (if set)
+    // Get Flux model path, HF token, and LoRA settings from localStorage (if set)
     const hfToken = getHfToken();
+    const modelPath = localStorage.getItem('fluxModelPath');
     const loraPath = localStorage.getItem('loraPath');
     const loraScale = localStorage.getItem('loraScale');
 
     // Build request body with available settings
     const requestBody = { hfToken };
+    if (serviceName === 'flux' && modelPath) requestBody.modelPath = modelPath;
     if (loraPath) requestBody.loraPath = loraPath;
     if (loraScale) requestBody.loraScale = loraScale;
 
