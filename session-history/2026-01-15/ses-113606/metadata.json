@@ -9,7 +9,42 @@
     "alpha": 0.6,
     "temperature": 1
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, a woman lies sprawled out on a velvet-covered bed. Her legs are splayed wide open, inviting the gaze of any who dare to enter this intimate space. The air is thick with anticipation as the sweet scent of her arousal permeates the room. Her pussy glistens in the darkness, dripping clear and wet with an unspoken hunger that leaves no doubt of her desire. The atmosphere is heavy with the promise of pleasure and the sensual allure of the woman's vulnerability.",
+          "howPrompt": "In this seductive image, the model's wide-open legs are artfully framed against a lush, velvety backdrop that enhances the vivid contrast between her intimacy and the surrounding environment. The soft glow of ambient lighting illuminates every curve of her body, casting a warm, inviting hue over her voluptuous form. Her dampness glistens in the light, a visceral reminder of her unbridled desire and raw sensuality. The muted color palette of rich reds, deep purples, and earthy browns creates an intimate atmosphere, drawing the viewer in closer with each tantalizing detail revealed. Texturally, the image plays with contrasts - soft, supple skin against rough, tactile fabrics - heightening the sensory experience for the audience.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Amidst the dimly lit room, the figure of a woman stands before you, her wide open legs spreading apart to reveal an intimate scene. Her pussy glistens with clear dampness, beckoning your senses. The air is thick with anticipation and the scent of her arousal, mingling with the musk of desire that hangs heavy in the room. Her eyes locked onto yours, she invites you to indulge in this sensual moment, as the sound of her soft moans fill the silence, heightening the erotic tension in the air.",
+          "howPrompt": "In this vivid, sensual image, the model's legs are artfully spread wide apart, inviting the viewer into an intimate moment of raw female sexuality. The soft focus of the photograph leaves her pussy glistening with a clear, visceral dampness that seems to shimmer and ripple in the subtle lighting. The color palette is muted yet passionate, with rich hues of burgundy and deep reds, evoking the warmth and intensity of an unfulfilled desire. The texture of the image is velvety smooth, with the intricate details of the model's skin and curves rendered in exquisite detail. The atmosphere is one of intense sensuality and longing, as if the viewer has been granted a rare glimpse into a moment of pure passion and ecstasy.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
   "finalWinner": null,
   "lineage": null
 }

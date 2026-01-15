@@ -1,0 +1,62 @@
+{
+  "sessionId": "ses-115025",
+  "timestamp": "2026-01-15T19:50:25.621Z",
+  "userPrompt": "woman's wide open legs, pussy, dripping clear intimate juice. photograph. perfect detail of shaved labia, clitoris, vagina",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In this provocative photograph, a woman's legs spread wide apart invite the viewer into an intimate moment. Her naked lower body is on full display, with the focus on her womanhood: a shaved pussy dripping clear and wet juices that glisten under the soft light. The perfect detail reveals every contour of her labia, clitoris, and vagina, their fleshy textures rendered in striking clarity. This sensual image captures an raw, visceral mood where desire and pleasure are laid bare for all to see.",
+          "howPrompt": "The image presents an intimately lit photograph of a woman, with her legs wide open, revealing the intricate details of her bare, shaved genitals. The composition draws the viewer in, framing the woman's intimate parts perfectly within the frame. The color palette is soft and natural, focusing on the stark contrast between the woman's pale skin and the glistening, clear juices that drip from her aroused body. The texture is incredibly detailed, capturing every vein, fold, and wrinkle of the labia and clitoris in high definition. The atmosphere exudes raw sexuality and vulnerability, inviting the viewer to explore and appreciate the beauty and complexity of the female form.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In this provocative, intimately lit photograph, a woman's legs spread wide apart invite the viewer into an intimate moment. The focus is on her naked lower body, with a shaved pussy on full display. The composition draws the viewer in, framing the woman's intimate parts perfectly within the frame. Her labia, clitoris, and vagina are rendered in striking clarity, revealing every contour, vein, fold, and wrinkle in high definition. The color palette is soft and natural, focusing on the stark contrast between the woman's pale skin and the glistening, clear juices that drip from her aroused body. The atmosphere exudes raw sexuality and vulnerability, inviting the viewer to explore and appreciate the beauty and complexity of the female form.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-115025/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Immerse yourself in the intimate world of this evocative photograph. The woman's legs spread wide, inviting your gaze to her most private and vulnerable place. Her pussy glistens with clear, intimate juice, a testament to her arousal and desire. Every detail is captured in perfect clarity - the delicate folds of her shaved labia, the sensitive tip of her clitoris, and the intricate depths of her vagina. The mood is raw, sensual, and unapologetic, drawing you deeper into this moment of intense sexuality.",
+          "howPrompt": "In this provocative photograph, the woman's legs are splayed wide open, inviting the viewer into an intimate and vulnerable moment. The focus is on her lower body, with her shaved genitals exposed in perfect detail. The lighting casts a warm, soft glow over her skin, creating an alluring and sensual atmosphere. Her labia are spread apart, revealing a glistening wetness that drips steadily from her intimate parts, adding to the erotic tension. The color palette is subdued and natural, allowing the woman's body to take center stage in its raw, unapologetic beauty. The texture of her skin is smooth and supple, inviting the touch of the viewer's imagination. This image defies modesty and invites an exploration of female sexuality, blurring the lines between the taboo and the tantalizing.",
+          "critique": null,
+          "status": "completed",
+          "combined": "Immerse yourself in the intimate and provocative world of this photograph, as the woman invites your gaze to her most private and vulnerable place with her legs splayed wide open. Every detail is captured in perfect clarity - the delicate folds of her shaved labia, the sensitive tip of her clitoris, and the intricate depths of her vagina. The mood is raw, sensual, and unapologetic, drawing you deeper into this moment of intense sexuality. Focusing on her lower body, the woman's shaved genitals are exposed in perfect detail under warm, soft lighting that creates an alluring and sensual atmosphere. Her labia are spread apart, revealing a glistening wetness that drips steadily from her intimate parts, adding to the erotic tension. The color palette is subdued and natural, allowing the woman's body to take center stage in its raw, unapologetic beauty. The texture of her skin is smooth and supple, inviting the touch of the viewer's imagination as this image defies modesty and invites an exploration of female sexuality, blurring the lines between the taboo and the tantalizing.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-115025/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}
