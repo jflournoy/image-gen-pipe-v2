@@ -93,6 +93,14 @@ ENV/
 output/
 test-storage-output/
 
+# Model and LoRA files (large binaries)
+# These should be downloaded/managed separately
+services/loras/
+services/models/
+*.safetensors
+*.bin
+*.gguf
+
 # Note: We intentionally DO NOT ignore:
 # - .claude/commands/ (core product)
 # - .claude/agents/ (core product)

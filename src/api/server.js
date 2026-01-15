@@ -12,11 +12,12 @@ import { createRequire } from 'node:module';
 import { startBeamSearchJob, getJobStatus, getJobMetadata, cancelBeamSearchJob } from './beam-search-worker.js';
 import demoRouter from './demo-routes.js';
 import evaluationRouter from './evaluation-routes.js';
+import providerRouter, { getRuntimeProviders } from './provider-routes.js';
+import serviceRouter from './service-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
 const { getMetrics: getRateLimiterMetrics } = require('../utils/rate-limiter-registry.js');
-const { getDateString } = require('../utils/timezone.js');
 const providerConfig = require('../config/provider-config.js');
 
 // Store WebSocket connections by jobId
@@ -83,18 +84,28 @@ export function createApp() {
     const { prompt, n, m, iterations, alpha, temperature, models } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
-    // Validate API key is present
-    if (!userApiKey || !userApiKey.trim()) {
-      return res.status(401).json({
-        error: 'Missing API key. Provide X-OpenAI-API-Key header with your OpenAI API key.'
-      });
-    }
+    // Check if OpenAI providers are being used
+    const runtimeProviders = getRuntimeProviders();
+    const needsOpenAI = runtimeProviders.llm === 'openai' ||
+                        runtimeProviders.image === 'openai' ||
+                        runtimeProviders.image === 'dalle' ||
+                        runtimeProviders.vision === 'openai' ||
+                        runtimeProviders.vision === 'gpt-vision';
 
-    // Validate API key format
-    if (!userApiKey.startsWith('sk-')) {
-      return res.status(400).json({
-        error: 'Invalid API key format. Should start with sk-'
-      });
+    // Only validate API key if OpenAI providers are being used
+    if (needsOpenAI) {
+      if (!userApiKey || !userApiKey.trim()) {
+        return res.status(401).json({
+          error: 'Missing API key. OpenAI providers are active - provide X-OpenAI-API-Key header or switch to local providers.'
+        });
+      }
+
+      // Validate API key format
+      if (!userApiKey.startsWith('sk-')) {
+        return res.status(400).json({
+          error: 'Invalid API key format. Should start with sk-'
+        });
+      }
     }
 
     // Validate required parameters
@@ -429,7 +440,7 @@ export function createApp() {
         filename
       });
     } catch (error) {
-      console.error(`[Image API] Error serving image:`, error);
+      console.error('[Image API] Error serving image:', error);
       return res.status(500).json({
         error: 'Failed to serve image',
         message: error.message
@@ -497,6 +508,12 @@ export function createApp() {
 
   // Register evaluation routes (uses localStorage for session selection, privacy-first)
   app.use('/api/evaluation', evaluationRouter);
+
+  // Register provider management routes (runtime provider switching)
+  app.use('/api/providers', providerRouter);
+
+  // Register service control routes (start/stop/restart local services)
+  app.use('/api/services', serviceRouter);
 
   return app;
 }

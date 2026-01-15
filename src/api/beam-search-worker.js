@@ -4,10 +4,11 @@
  */
 
 import { emitProgress } from './server.js';
+import { getRuntimeProviders } from './provider-routes.js';
 import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
-const { beamSearch } = require('../orchestrator/beam-search.js');
+const { beamSearch, configureRateLimitsForProviders } = require('../orchestrator/beam-search.js');
 const MetadataTracker = require('../services/metadata-tracker.js');
 const TokenTracker = require('../utils/token-tracker.js');
 const { MODEL_PRICING } = require('../config/model-pricing.js');
@@ -41,10 +42,6 @@ const jobAbortControllers = new Map();
  * @returns {Promise<void>}
  */
 export async function startBeamSearchJob(jobId, params, userApiKey) {
-  // Require user's API key - NO FALLBACK to server key
-  if (!userApiKey || typeof userApiKey !== 'string' || userApiKey.trim() === '') {
-    throw new Error('User API key is required. A valid OpenAI API key must be provided.');
-  }
   const {
     prompt,
     n = 4,
@@ -52,8 +49,26 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     iterations = 2,
     alpha = 0.7,
     temperature = 0.7,
-    models
+    models,
+    rankingMode = 'vlm'  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
   } = params;
+
+  // Get runtime provider selections early to check if OpenAI is needed
+  const runtimeProviders = getRuntimeProviders();
+
+  // Check if any OpenAI-based providers are being used
+  const needsOpenAI = runtimeProviders.llm === 'openai' ||
+                      runtimeProviders.image === 'openai' ||
+                      runtimeProviders.image === 'dalle' ||
+                      runtimeProviders.vision === 'openai' ||
+                      runtimeProviders.vision === 'gpt-vision';
+
+  // Only require API key if using OpenAI providers
+  if (needsOpenAI) {
+    if (!userApiKey || typeof userApiKey !== 'string' || userApiKey.trim() === '') {
+      throw new Error('OpenAI API key is required when using OpenAI providers. Switch to local providers or provide an API key.');
+    }
+  }
 
   // Generate session ID in ses-HHMMSS format
   const now = new Date();
@@ -94,42 +109,66 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       createImageProvider,
       createVisionProvider,
       createCritiqueGenerator,
-      createImageRanker
+      createImageRanker,
+      createVLMProvider
     } = require('../factory/provider-factory.js');
 
     const providers = {
       llm: createLLMProvider({
         mode: 'real',
+        provider: runtimeProviders.llm,
         apiKey: userApiKey,
         ...(models?.llm && { model: models.llm })
       }),
       imageGen: createImageProvider({
         mode: 'real',
+        provider: runtimeProviders.image,
         apiKey: userApiKey,
         ...(models?.imageGen && { model: models.imageGen })
       }),
       vision: createVisionProvider({
         mode: 'real',
+        provider: runtimeProviders.vision,
         apiKey: userApiKey,
         ...(models?.vision && { model: models.vision })
       }),
-      critiqueGen: createCritiqueGenerator({
+      // CritiqueGen requires OpenAI - use real if available, otherwise use mock
+      critiqueGen: needsOpenAI ? createCritiqueGenerator({
         mode: 'real',
         apiKey: userApiKey,
         ...(models?.llm && { model: models.llm })
+      }) : createCritiqueGenerator({
+        mode: 'mock'
       }),
-      imageRanker: createImageRanker({
+      // ImageRanker depends on rankingMode:
+      // - 'vlm': Use LocalVLMProvider for pairwise tournament ranking
+      // - 'scoring': No pairwise ranking, fall back to CLIP/aesthetic scoring
+      imageRanker: rankingMode === 'vlm' ? createVLMProvider({
+        mode: 'real'
+      }) : (rankingMode === 'scoring' ? null : (needsOpenAI ? createImageRanker({
         mode: 'real',
         apiKey: userApiKey,
         ...(models?.vision && { model: models.vision })
-      })
+      }) : null))
     };
 
-    // Emit start event
+    // Configure rate limiters based on provider types
+    // Local providers process sequentially, so use concurrency=1
+    const isLocalLLM = runtimeProviders.llm === 'local-llm' || runtimeProviders.llm === 'ollama';
+    const isLocalImage = runtimeProviders.image === 'flux' || runtimeProviders.image === 'local';
+    const isLocalVision = runtimeProviders.vision === 'local';
+    configureRateLimitsForProviders({
+      llmIsLocal: isLocalLLM,
+      imageIsLocal: isLocalImage,
+      visionIsLocal: isLocalVision
+    });
+
+    // Emit start event with provider info
     emitProgress(jobId, {
       type: 'started',
       timestamp: new Date().toISOString(),
-      params: { prompt, n, m, iterations, alpha, temperature }
+      params: { prompt, n, m, iterations, alpha, temperature },
+      providers: runtimeProviders
     });
 
     // Warn user if using expensive fallback image model
@@ -457,6 +496,7 @@ Provide ONLY the rephrased prompt, nothing else.`;
       metadata: fullMetadata ? {
         lineage: fullMetadata.lineage,
         sessionId: fullMetadata.sessionId,
+        userPrompt: fullMetadata.userPrompt, // Include user prompt for job history
         finalWinner: fullMetadata.finalWinner,
         date: sessionDate, // Use session's actual creation date, not today
         allGlobalRanked: allGlobalRanked.map(c => ({

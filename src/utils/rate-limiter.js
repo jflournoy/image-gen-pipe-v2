@@ -47,6 +47,33 @@ class RateLimiter {
   }
 
   /**
+   * Update the concurrency limit
+   * Takes effect for new tasks; currently running tasks continue
+   * @param {number} newLimit - New concurrency limit (positive integer)
+   */
+  setConcurrencyLimit(newLimit) {
+    if (!Number.isInteger(newLimit) || newLimit < 1) {
+      throw new Error('Concurrency limit must be a positive integer');
+    }
+    const oldLimit = this.concurrencyLimit;
+    this.concurrencyLimit = newLimit;
+
+    // If we increased the limit and have queued tasks, start more
+    if (newLimit > oldLimit && this.queue.length > 0) {
+      const slotsToFill = Math.min(
+        newLimit - this.currentConcurrency,
+        this.queue.length
+      );
+      for (let i = 0; i < slotsToFill; i++) {
+        const task = this.queue.shift();
+        if (task) {
+          this._executeTask(task);
+        }
+      }
+    }
+  }
+
+  /**
    * Execute a task and handle concurrency
    * @private
    * @param {Object} task - Task object with taskFn, resolve, reject

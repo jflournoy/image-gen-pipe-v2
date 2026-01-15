@@ -25,6 +25,7 @@ let reconnectionBannerId = 'reconnection-banner';
 // Connection health tracking
 let isConnected = false;
 let isJobRunning = false;
+let needsOpenAIKey = true; // Tracks if current providers require OpenAI API key
 let lastMessageTime = Date.now();
 let heartbeatCheckInterval = null;
 let heartbeatWarningShown = false;
@@ -655,7 +656,75 @@ document.addEventListener('DOMContentLoaded', () => {
       closeImageModal();
     }
   });
+
+  // Initialize ranking mode from localStorage or default to 'vlm'
+  const savedRankingMode = localStorage.getItem('rankingMode') || 'vlm';
+  const rankingModeSelect = document.getElementById('rankingMode');
+  if (rankingModeSelect) {
+    rankingModeSelect.value = savedRankingMode;
+    // Check VLM health on page load
+    updateRankingModeUI(savedRankingMode);
+
+    // Update indicator when selection changes
+    rankingModeSelect.addEventListener('change', (e) => {
+      const mode = e.target.value;
+      localStorage.setItem('rankingMode', mode);
+      updateRankingModeUI(mode);
+    });
+  }
 });
+
+/**
+ * Check VLM service health and update indicator
+ */
+async function checkVLMHealth() {
+  const indicator = document.getElementById('vlmHealth');
+  if (!indicator) return;
+
+  try {
+    const response = await fetch('http://localhost:8004/health', { timeout: 3000 });
+    if (response.ok) {
+      const data = await response.json();
+      indicator.textContent = data.model_loaded ? 'VLM Ready' : 'VLM Available';
+      indicator.style.background = '#4CAF50';
+      indicator.style.color = 'white';
+      indicator.title = `Model: ${data.model_repo || 'LLaVA'}`;
+      return true;
+    }
+  } catch (e) {
+    // Service unavailable
+  }
+
+  indicator.textContent = 'VLM Offline';
+  indicator.style.background = '#f44336';
+  indicator.style.color = 'white';
+  indicator.title = 'VLM service not running. Start with: cd services && .venv/bin/python vlm_service.py';
+  return false;
+}
+
+/**
+ * Update UI based on ranking mode selection
+ */
+function updateRankingModeUI(mode) {
+  const indicator = document.getElementById('vlmHealth');
+
+  if (mode === 'vlm') {
+    // Check VLM health when VLM mode selected
+    checkVLMHealth().then(healthy => {
+      if (!healthy) {
+        console.warn('[Ranking] VLM mode selected but service unavailable');
+      }
+    });
+  } else {
+    // Score-based mode doesn't need VLM
+    if (indicator) {
+      indicator.textContent = 'Not needed';
+      indicator.style.background = '#9e9e9e';
+      indicator.style.color = 'white';
+      indicator.title = 'Score-based ranking uses Vision scores only';
+    }
+  }
+}
 
 /**
  * Save pending job to localStorage for reconnection on page reload
@@ -1098,6 +1167,18 @@ function formatMessage(msg) {
 
     // If backend provided a custom message, use it
     if (msg.message) {
+      // Check if this is an image generation message and append LoRA info if available
+      if (msg.message.includes('image') && msg.status === 'starting') {
+        const localLoraPath = localStorage.getItem('fluxLoraPath');
+        if (localLoraPath) {
+          const filename = localLoraPath.split('/').pop();
+          const scale = localStorage.getItem('fluxLoraScale') || '0.8';
+          return {
+            text: msg.message + ` [Using LoRA: ${filename} @ ${scale}]`,
+            type: 'info'
+          };
+        }
+      }
       return {
         text: msg.message,
         type: 'info'
@@ -1291,15 +1372,17 @@ function setStatus(status) {
 // Start beam search
 async function startBeamSearch() {
   try {
-    // Validate API key
+    // Validate API key only if OpenAI providers are being used
     const apiKey = document.getElementById('apiKey').value?.trim();
-    if (!apiKey) {
-      addMessage('Error: OpenAI API key is required', 'error');
-      return;
-    }
-    if (!apiKey.startsWith('sk-')) {
-      addMessage('Error: Invalid API key format. Should start with sk-', 'error');
-      return;
+    if (needsOpenAIKey) {
+      if (!apiKey) {
+        addMessage('Error: OpenAI API key is required (OpenAI providers are active)', 'error');
+        return;
+      }
+      if (!apiKey.startsWith('sk-')) {
+        addMessage('Error: Invalid API key format. Should start with sk-', 'error');
+        return;
+      }
     }
 
     const prompt = document.getElementById('prompt').value.trim();
@@ -1315,7 +1398,8 @@ async function startBeamSearch() {
       m: parseInt(keepTopSelect.value),
       iterations: parseInt(document.getElementById('maxIterations').value),
       alpha: parseFloat(document.getElementById('alpha').value),
-      temperature: parseFloat(document.getElementById('temperature').value)
+      temperature: parseFloat(document.getElementById('temperature').value),
+      rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
     };
 
     // Add selected models (if user selected non-default options)
@@ -1354,6 +1438,19 @@ async function startBeamSearch() {
     }
 
     addMessage(`Starting beam search with: N=${params.n}, M=${params.m}, Iterations=${params.iterations}`, 'event');
+
+    // Check and display LoRA status if using local Flux
+    if (document.getElementById('imageProvider')?.value === 'flux' || document.getElementById('imageProvider')?.value === 'local') {
+      const loraPath = localStorage.getItem('fluxLoraPath');
+      const loraScale = localStorage.getItem('fluxLoraScale') || '0.8';
+      if (loraPath) {
+        const filename = loraPath.split('/').pop();
+        addMessage(`🔄 Using Flux with LoRA: ${filename} (scale: ${loraScale})`, 'event');
+      } else {
+        addMessage('🔄 Using Flux without LoRA', 'event');
+      }
+    }
+
     setStatus('running');
 
     // Save API key to sessionStorage for this session
@@ -1450,7 +1547,8 @@ function connectWebSocket() {
 
         // Handle subscription errors - job not found or already completed
         if (msg.type === 'error') {
-          console.log('[Reconnection] Received error message:', msg.message);
+          const errorText = msg.message || msg.error || 'Unknown error';
+          console.log('[Reconnection] Received error message:', errorText);
           // Clear the stale pending job since it's no longer valid
           clearPendingJob();
         }
@@ -1492,6 +1590,20 @@ function connectWebSocket() {
 function stopBeamSearch(userInitiated = true) {
   if (userInitiated) {
     clearPendingJob(); // Only clear when user explicitly stops the job
+
+    // Send cancel request to backend to abort any ongoing operations in services
+    if (currentJobId) {
+      console.log(`[UI] User stopped job ${currentJobId}, requesting backend cancellation...`);
+      fetch(`/api/demo/cancel/${currentJobId}`, { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+          if (data.success) {
+            console.log(`[UI] Job ${currentJobId} cancellation request sent to backend`);
+            addMessage('⏹ Cancelling job and stopping service tasks...', 'event');
+          }
+        })
+        .catch(err => console.warn(`[UI] Could not send cancellation request:`, err));
+    }
   }
 
   // Mark job as not running and stop monitoring
@@ -1941,11 +2053,1627 @@ function updateMyJobsCount() {
   }
 }
 
+/**
+ * Provider Settings Modal Functions
+ */
+
+/**
+ * Show provider settings modal and load current status
+ */
+async function showProviderSettings() {
+  const modal = document.getElementById('providerModal');
+  modal.style.display = 'flex';
+  modal.classList.add('active');
+
+  // Load saved HF token
+  const savedToken = loadHfToken();
+  const hfTokenInput = document.getElementById('hfTokenInput');
+  if (hfTokenInput && savedToken) {
+    hfTokenInput.value = savedToken;
+  }
+
+  // Load current provider status and model status
+  await Promise.all([
+    loadProviderStatus(),
+    loadModelStatus()
+  ]);
+
+  // Update HF token status indicator
+  try {
+    const healthResponse = await fetch('/api/providers/health');
+    const health = await healthResponse.json();
+    updateHfTokenStatus(health.flux);
+  } catch (e) {
+    // Ignore - status will show based on token presence
+    updateHfTokenStatus(null);
+  }
+
+  // Initialize mode card highlighting based on current providers
+  initializeModeCardHighlighting();
+
+  // Initialize Flux model configuration UI
+  initializeFluxModelConfig();
+
+  // Initialize Flux LoRA configuration UI
+  initializeFluxLoraConfig();
+}
+
+/**
+ * Initialize Flux model configuration section
+ */
+function initializeFluxModelConfig() {
+  const imageProvider = document.getElementById('imageProvider');
+  const fluxModelConfig = document.getElementById('fluxModelConfig');
+  const modelSourceRadios = document.querySelectorAll('input[name="fluxModelSource"]');
+
+  // Show/hide Flux config based on image provider selection
+  if (imageProvider) {
+    imageProvider.addEventListener('change', () => {
+      if (imageProvider.value === 'flux') {
+        fluxModelConfig.style.display = 'block';
+      } else {
+        fluxModelConfig.style.display = 'none';
+      }
+    });
+
+    // Initial state
+    if (imageProvider.value === 'flux') {
+      fluxModelConfig.style.display = 'block';
+    }
+  }
+
+  // Handle model source toggle (HuggingFace vs Local)
+  modelSourceRadios.forEach(radio => {
+    radio.addEventListener('change', () => {
+      toggleFluxModelSource(radio.value);
+    });
+  });
+}
+
+/**
+ * Toggle between HuggingFace and Local model sources
+ */
+function toggleFluxModelSource(source) {
+  const hfSection = document.getElementById('hfModelSection');
+  const localSection = document.getElementById('localModelSection');
+
+  if (source === 'local') {
+    hfSection.style.display = 'none';
+    localSection.style.display = 'block';
+  } else {
+    hfSection.style.display = 'block';
+    localSection.style.display = 'none';
+  }
+}
+
+/**
+ * Set custom Flux model path
+ */
+async function setFluxModelPath() {
+  const pathInput = document.getElementById('fluxCustomPath');
+  const statusDiv = document.getElementById('fluxModelPathStatus');
+  const modelPath = pathInput.value.trim();
+
+  if (!modelPath) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.style.color = '#856404';
+    statusDiv.textContent = 'Please enter a model path';
+    return;
+  }
+
+  // Basic client-side validation
+  if (!modelPath.startsWith('/')) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#fff3cd';
+    statusDiv.style.color = '#856404';
+    statusDiv.textContent = 'Path must be absolute (start with /)';
+    return;
+  }
+
+  try {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#e3f2fd';
+    statusDiv.style.color = '#1565c0';
+    statusDiv.textContent = 'Setting custom model path...';
+
+    const response = await fetch('/api/providers/flux/model-path', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ modelPath })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      statusDiv.style.background = '#d4edda';
+      statusDiv.style.color = '#155724';
+      statusDiv.innerHTML = `
+        <strong>✓ Success!</strong> ${result.message}<br>
+        <small style="margin-top: 4px; display: block;">${result.note}</small>
+      `;
+      addMessage(`Custom Flux model configured: ${modelPath}`, 'event');
+    } else {
+      statusDiv.style.background = '#f8d7da';
+      statusDiv.style.color = '#721c24';
+      statusDiv.textContent = `Error: ${result.message || result.error}`;
+    }
+  } catch (error) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#f8d7da';
+    statusDiv.style.color = '#721c24';
+    statusDiv.textContent = `Error: ${error.message}`;
+  }
+}
+
+/**
+ * Display current model source in UI
+ */
+async function displayModelSource() {
+  try {
+    const response = await fetch('/api/providers/models/status');
+    const status = await response.json();
+
+    if (status.flux && status.flux.modelSource) {
+      const currentHfModel = document.getElementById('currentHfModel');
+      const pathInput = document.getElementById('fluxCustomPath');
+
+      if (status.flux.modelSource === 'local' && status.flux.modelPath) {
+        // Show local path
+        if (pathInput) {
+          pathInput.value = status.flux.modelPath;
+        }
+        // Select local radio button
+        const localRadio = document.querySelector('input[name="fluxModelSource"][value="local"]');
+        if (localRadio) {
+          localRadio.checked = true;
+          toggleFluxModelSource('local');
+        }
+      } else {
+        // Show HuggingFace model
+        if (currentHfModel) {
+          currentHfModel.textContent = status.flux.modelName || 'FLUX.1-dev';
+        }
+      }
+    }
+  } catch (error) {
+    console.error('[UI] Error displaying model source:', error);
+  }
+}
+
+/**
+ * Initialize Flux LoRA configuration
+ */
+function initializeFluxLoraConfig() {
+  // Load saved settings from localStorage
+  const savedLoraPath = localStorage.getItem('fluxLoraPath') || 'services/loras/flux-custom-lora.safetensors';
+  const savedLoraScale = localStorage.getItem('fluxLoraScale') || '0.8';
+
+  const loraPathInput = document.getElementById('fluxLoraPath');
+  const loraScaleInput = document.getElementById('fluxLoraScale');
+  const loraScaleValue = document.getElementById('fluxLoraScaleValue');
+
+  if (loraPathInput) loraPathInput.value = savedLoraPath;
+  if (loraScaleInput) loraScaleInput.value = savedLoraScale;
+  if (loraScaleValue) loraScaleValue.textContent = savedLoraScale;
+
+  // Add event listener for scale slider
+  if (loraScaleInput) {
+    loraScaleInput.addEventListener('input', (e) => {
+      if (loraScaleValue) {
+        loraScaleValue.textContent = e.target.value;
+      }
+    });
+  }
+
+  // Check initial status
+  checkFluxLoraStatus();
+}
+
+/**
+ * Save Flux LoRA settings to localStorage
+ */
+async function saveFluxLoraSettings() {
+  const loraPathInput = document.getElementById('fluxLoraPath');
+  const loraScaleInput = document.getElementById('fluxLoraScale');
+  const statusText = document.getElementById('fluxLoraStatusText');
+
+  if (!loraPathInput || !loraScaleInput) return;
+
+  const loraPath = loraPathInput.value.trim();
+  const loraScale = loraScaleInput.value;
+
+  // Save to localStorage
+  localStorage.setItem('fluxLoraPath', loraPath);
+  localStorage.setItem('fluxLoraScale', loraScale);
+
+  // Update status
+  if (statusText) {
+    statusText.textContent = 'Settings saved! Restart Flux service to apply.';
+    statusText.style.color = '#4CAF50';
+  }
+
+  console.log('[UI] Saved LoRA settings:', { loraPath, loraScale });
+
+  // Note: These settings will be applied when the Flux service is next started/restarted
+  // The service reads from .env which should be updated with these values
+}
+
+/**
+ * Check Flux LoRA status from the service
+ */
+async function checkFluxLoraStatus() {
+  const statusText = document.getElementById('fluxLoraStatusText');
+
+  try {
+    const response = await fetch('http://localhost:8001/lora/status');
+    if (!response.ok) {
+      throw new Error('Service not available');
+    }
+
+    const status = await response.json();
+
+    if (statusText) {
+      if (status.loaded) {
+        // LoRA is already loaded in memory
+        const filename = status.path.split('/').pop();
+        statusText.innerHTML = `
+          <strong>✅ LoRA Active</strong><br>
+          <small>File: ${filename}</small><br>
+          <small>Scale: ${status.scale}</small>
+        `;
+        statusText.style.color = '#4CAF50';
+      } else if (status.configured) {
+        // LoRA is configured but not loaded yet (will load on first generation)
+        const filename = status.configured_path.split('/').pop();
+        statusText.innerHTML = `
+          <strong>⚙️ LoRA Configured</strong><br>
+          <small>File: ${filename}</small><br>
+          <small>Scale: ${status.default_scale}</small><br>
+          <small style="font-style: italic; color: #FF8C00;">Will load on first generation</small>
+        `;
+        statusText.style.color = '#FF9800';
+      } else {
+        // LoRA not configured
+        statusText.textContent = '❌ Not configured';
+        statusText.style.color = '#999';
+      }
+    }
+
+    console.log('[UI] LoRA status:', status);
+  } catch (error) {
+    if (statusText) {
+      statusText.textContent = '⚠️ Flux service not running';
+      statusText.style.color = '#f44336';
+    }
+    console.error('[UI] Error checking LoRA status:', error);
+  }
+}
+
+/**
+ * Initialize mode card highlighting based on current provider selections
+ */
+function initializeModeCardHighlighting() {
+  const llmProvider = document.getElementById('llmProvider')?.value;
+  const imageProvider = document.getElementById('imageProvider')?.value;
+  const visionProvider = document.getElementById('visionProvider')?.value;
+
+  const openaiCard = document.getElementById('openaiModeCard');
+  const localCard = document.getElementById('localModeCard');
+  const configSection = document.getElementById('configSection');
+  const localConfigSection = document.getElementById('localConfigSection');
+  const advancedConfigSection = document.getElementById('advancedConfigSection');
+
+  // Determine if user is in OpenAI mode or Local mode
+  const isOpenAIMode = llmProvider === 'openai' && imageProvider === 'openai' && visionProvider === 'openai';
+  const isLocalMode = llmProvider === 'local-llm' && imageProvider === 'flux' && visionProvider === 'local';
+
+  if (isOpenAIMode) {
+    // Highlight OpenAI card
+    openaiCard.style.border = '3px solid #1976d2';
+    openaiCard.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.3)';
+    localCard.style.border = '2px solid #81c784';
+    localCard.style.boxShadow = 'none';
+
+    // Hide config section for OpenAI mode
+    configSection.style.display = 'none';
+  } else if (isLocalMode) {
+    // Highlight Local card
+    localCard.style.border = '3px solid #388e3c';
+    localCard.style.boxShadow = '0 4px 12px rgba(56, 142, 60, 0.3)';
+    openaiCard.style.border = '2px solid #90caf9';
+    openaiCard.style.boxShadow = 'none';
+
+    // Show local config section
+    configSection.style.display = 'block';
+    localConfigSection.style.display = 'block';
+    advancedConfigSection.style.display = 'none';
+
+    // Update service statuses and start polling
+    updateServiceStatuses();
+    startStatusPolling();
+  } else {
+    // Mixed mode or initial state - no card highlighted
+    openaiCard.style.border = '2px solid #90caf9';
+    openaiCard.style.boxShadow = 'none';
+    localCard.style.border = '2px solid #81c784';
+    localCard.style.boxShadow = 'none';
+
+    // Hide all config sections - prompt user to choose a mode
+    configSection.style.display = 'none';
+    localConfigSection.style.display = 'none';
+    advancedConfigSection.style.display = 'none';
+  }
+}
+
+/**
+ * Show advanced/mixed mode configuration
+ */
+function showAdvancedConfig() {
+  const configSection = document.getElementById('configSection');
+  const localConfigSection = document.getElementById('localConfigSection');
+  const advancedConfigSection = document.getElementById('advancedConfigSection');
+
+  // Show advanced config, hide local config
+  configSection.style.display = 'block';
+  localConfigSection.style.display = 'none';
+  advancedConfigSection.style.display = 'block';
+
+  console.log('[UI] Switched to advanced/mixed mode configuration');
+}
+
+// Status polling interval
+let statusPollingInterval = null;
+
+/**
+ * Start polling service status (every 5 seconds)
+ */
+function startStatusPolling() {
+  // Clear any existing interval
+  if (statusPollingInterval) {
+    clearInterval(statusPollingInterval);
+  }
+
+  // Poll every 5 seconds to detect external changes
+  statusPollingInterval = setInterval(() => {
+    updateServiceStatuses();
+  }, 5000);
+
+  console.log('[UI] Started status polling (5s interval)');
+}
+
+/**
+ * Stop polling service status
+ */
+function stopStatusPolling() {
+  if (statusPollingInterval) {
+    clearInterval(statusPollingInterval);
+    statusPollingInterval = null;
+    console.log('[UI] Stopped status polling');
+  }
+}
+
+/**
+ * Close provider settings modal
+ */
+function closeProviderModal() {
+  const modal = document.getElementById('providerModal');
+  modal.style.display = 'none';
+  modal.classList.remove('active');
+
+  // Stop polling when modal closes
+  stopStatusPolling();
+}
+
+/**
+ * Load provider status from API
+ */
+async function loadProviderStatus() {
+  try {
+    const response = await fetch('/api/providers/status');
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Update environment status
+    const envStatus = document.getElementById('envStatus');
+    if (data.environment.isLocal) {
+      envStatus.innerHTML = '<strong style="color: #4CAF50;">Local Development</strong> - Local providers available';
+    } else {
+      envStatus.innerHTML = '<strong style="color: #0066cc;">Linode Server</strong> - Using OpenAI providers';
+    }
+
+    // Update provider dropdowns
+    document.getElementById('llmProvider').value = data.active.llm;
+    document.getElementById('imageProvider').value = data.active.image;
+    document.getElementById('visionProvider').value = data.active.vision;
+
+    // Update main form based on provider selection
+    updateMainFormForProviders(data.active);
+
+    // Update health indicators
+    updateHealthIndicator('llmHealth', data.active.llm === 'local-llm' ? data.health.localLLM : { available: true, status: 'healthy' });
+    updateHealthIndicator('imageHealth', data.active.image === 'flux' ? data.health.flux : { available: true, status: 'healthy' });
+    updateHealthIndicator('visionHealth', data.active.vision === 'local' ? data.health.localVision : { available: true, status: 'healthy' });
+
+    // Update service health section (old duplicate section - now removed)
+    // Service controls are now in the local config section
+    const serviceHealth = document.getElementById('serviceHealth');
+    if (serviceHealth) {
+      // This section has been removed from the UI, but keeping code for backward compatibility
+      // Just show a simple status message
+      serviceHealth.innerHTML = '<span style="color: #666; font-size: 12px;">Service controls are now in the Configuration section above.</span>';
+    }
+
+    // Update provider indicator in header
+    updateProviderIndicator(data.active);
+
+  } catch (error) {
+    console.error('[Provider Settings] Failed to load status:', error);
+    document.getElementById('envStatus').textContent = 'Error loading status';
+
+    const serviceHealth = document.getElementById('serviceHealth');
+    if (serviceHealth) {
+      serviceHealth.innerHTML = '<span style="color: #f44336;">Failed to load service status</span>';
+    }
+  }
+}
+
+/**
+ * Update health indicator badge
+ */
+function updateHealthIndicator(elementId, health) {
+  const element = document.getElementById(elementId);
+  if (!health) {
+    element.textContent = 'Unknown';
+    element.style.background = '#ddd';
+    element.style.color = '#666';
+    return;
+  }
+
+  if (health.available) {
+    element.textContent = '✓ Available';
+    element.style.background = '#e8f5e9';
+    element.style.color = '#2e7d32';
+  } else {
+    element.textContent = '✗ Unavailable';
+    element.style.background = '#ffebee';
+    element.style.color = '#c62828';
+  }
+}
+
+/**
+ * Update main form elements based on active providers
+ * Hides/shows API key section and model selection based on whether local providers are active
+ */
+function updateMainFormForProviders(activeProviders) {
+  // Check if all providers are local (no OpenAI needed)
+  const isFullyLocal = activeProviders.llm === 'local-llm' &&
+                       activeProviders.image === 'flux' &&
+                       activeProviders.vision === 'local';
+
+  // Check if any OpenAI providers are being used
+  const needsOpenAI = activeProviders.llm === 'openai' ||
+                      activeProviders.image === 'openai' ||
+                      activeProviders.image === 'dalle' ||
+                      activeProviders.vision === 'openai' ||
+                      activeProviders.vision === 'gpt-vision';
+
+  // Update global state for startBeamSearch to use
+  needsOpenAIKey = needsOpenAI;
+
+  // Update API key section
+  const apiKeyInput = document.getElementById('apiKey');
+  const apiKeyRequired = document.getElementById('apiKeyRequired');
+  const apiKeyHelp = document.getElementById('apiKeyHelp');
+  const localModeNote = document.getElementById('localModeNote');
+
+  if (needsOpenAI) {
+    // OpenAI is needed - show required indicator
+    if (apiKeyRequired) apiKeyRequired.style.display = 'inline';
+    if (apiKeyHelp) apiKeyHelp.style.display = 'block';
+    if (localModeNote) localModeNote.style.display = 'none';
+    if (apiKeyInput) apiKeyInput.placeholder = 'sk-... (required)';
+  } else {
+    // Fully local - API key not required
+    if (apiKeyRequired) apiKeyRequired.style.display = 'none';
+    if (apiKeyHelp) apiKeyHelp.style.display = 'none';
+    if (localModeNote) localModeNote.style.display = 'block';
+    if (apiKeyInput) apiKeyInput.placeholder = 'Not required for local providers';
+  }
+
+  // Update model selection section
+  const modelSection = document.getElementById('modelSelectionSection');
+  if (modelSection) {
+    if (isFullyLocal) {
+      modelSection.style.display = 'none';
+    } else {
+      modelSection.style.display = 'block';
+    }
+  }
+}
+
+/**
+ * Apply provider settings changes
+ */
+/**
+ * Select mode (OpenAI or Local) and update all providers accordingly
+ */
+function selectMode(mode) {
+  // Update mode card visuals
+  const openaiCard = document.getElementById('openaiModeCard');
+  const localCard = document.getElementById('localModeCard');
+  const configSection = document.getElementById('configSection');
+  const localConfigSection = document.getElementById('localConfigSection');
+  const advancedConfigSection = document.getElementById('advancedConfigSection');
+
+  if (mode === 'openai') {
+    // Highlight OpenAI card
+    openaiCard.style.border = '3px solid #1976d2';
+    openaiCard.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.3)';
+    localCard.style.border = '2px solid #81c784';
+    localCard.style.boxShadow = 'none';
+
+    // Set all providers to OpenAI
+    document.getElementById('llmProvider').value = 'openai';
+    document.getElementById('imageProvider').value = 'openai';
+    document.getElementById('visionProvider').value = 'openai';
+    document.getElementById('rankingMode').value = 'scoring'; // OpenAI doesn't use VLM
+
+    // Hide configuration (OpenAI needs no local setup)
+    configSection.style.display = 'none';
+
+    // Stop all local services when switching to OpenAI mode
+    stopAllLocalServices();
+  } else if (mode === 'local') {
+    // Highlight Local card
+    localCard.style.border = '3px solid #388e3c';
+    localCard.style.boxShadow = '0 4px 12px rgba(56, 142, 60, 0.3)';
+    openaiCard.style.border = '2px solid #90caf9';
+    openaiCard.style.boxShadow = 'none';
+
+    // Set all providers to Local
+    document.getElementById('llmProvider').value = 'local-llm';
+    document.getElementById('imageProvider').value = 'flux';
+    document.getElementById('visionProvider').value = 'local';
+    document.getElementById('rankingMode').value = 'vlm'; // Local can use VLM
+
+    // Show local configuration with checkboxes
+    configSection.style.display = 'block';
+    localConfigSection.style.display = 'block';
+    advancedConfigSection.style.display = 'none';
+
+    // Update service status indicators
+    updateServiceStatuses();
+  }
+
+  // Don't auto-apply - let user review config and click Apply when ready
+  // Users can now explore mode options without closing the modal
+}
+
+/**
+ * Update service status indicators in local config
+ */
+async function updateServiceStatuses() {
+  try {
+    const response = await fetch('/api/services/status');
+    const services = await response.json();
+
+    // Update status indicators based on actual service process status
+    const llmStatus = document.getElementById('llmStatus');
+    const fluxStatus = document.getElementById('fluxStatus');
+    const visionStatus = document.getElementById('visionStatus');
+    const vlmStatus = document.getElementById('vlmStatus');
+
+    if (llmStatus) {
+      llmStatus.textContent = services.llm?.running ? '🟢' : '⚪';
+      llmStatus.title = services.llm?.running ? `Running (PID: ${services.llm.pid})` : 'Stopped';
+    }
+    if (fluxStatus) {
+      fluxStatus.textContent = services.flux?.running ? '🟢' : '⚪';
+      fluxStatus.title = services.flux?.running ? `Running (PID: ${services.flux.pid})` : 'Stopped';
+    }
+    if (visionStatus) {
+      visionStatus.textContent = services.vision?.running ? '🟢' : '⚪';
+      visionStatus.title = services.vision?.running ? `Running (PID: ${services.vision.pid})` : 'Stopped';
+    }
+    if (vlmStatus) {
+      vlmStatus.textContent = services.vlm?.running ? '🟢' : '⚪';
+      vlmStatus.title = services.vlm?.running ? `Running (PID: ${services.vlm.pid})` : 'Stopped';
+    }
+  } catch (error) {
+    console.error('[UI] Error updating service statuses:', error);
+  }
+}
+
+/**
+ * Update ranking mode based on user selection
+ */
+function updateRankingMode() {
+  const rankingMode = document.querySelector('input[name="rankingMode"]:checked')?.value;
+  if (rankingMode) {
+    document.getElementById('rankingMode').value = rankingMode;
+    console.log('[UI] Ranking mode updated to:', rankingMode);
+  }
+}
+
+/**
+ * Start a specific service (Settings Modal)
+ */
+async function startServiceInModal(serviceName) {
+  try {
+    console.log(`[UI Modal] Starting ${serviceName} service...`);
+
+    // Set status to "starting" immediately
+    setServiceStatus(serviceName, 'starting', 'Starting...');
+
+    // Get HF token from localStorage (if set)
+    const hfToken = getHfToken();
+
+    const response = await fetch(`/api/services/${serviceName}/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ hfToken })
+    });
+
+    const result = await response.json();
+
+    if (response.ok) {
+      // Service started successfully
+      console.log(`[UI Modal] ${serviceName} service process started (PID: ${result.pid}), waiting for service to be ready...`);
+      // Poll service health until ready (especially important for Flux which takes 30-40s to load models)
+      await pollServiceUntilReady(serviceName);
+    } else if (response.status === 409) {
+      // Service already running - this is not an error, just poll to confirm it's healthy
+      console.log(`[UI Modal] ${serviceName} service is already running, confirming health...`);
+      await pollServiceUntilReady(serviceName, 3); // Quick poll with fewer attempts
+    } else {
+      // Actual error starting the service
+      console.error(`[UI Modal] Failed to start ${serviceName}:`, result);
+      setServiceStatus(serviceName, 'error', `Failed to start: ${result.error || 'Unknown error'}`);
+      alert(`Failed to start ${serviceName} service: ${result.error || result.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`[UI Modal] Error starting ${serviceName}:`, error);
+    setServiceStatus(serviceName, 'error', `Error: ${error.message}`);
+    alert(`Error starting ${serviceName} service. Check console for details.`);
+  }
+}
+
+/**
+ * Poll a service's health endpoint until it's ready
+ */
+async function pollServiceUntilReady(serviceName, maxAttempts = 30) {
+  const portMap = { llm: 8003, flux: 8001, vision: 8002, vlm: 8004 };
+  const port = portMap[serviceName];
+
+  if (!port) {
+    console.warn(`[UI Modal] Unknown service ${serviceName}, skipping health poll`);
+    await updateServiceStatuses();
+    return;
+  }
+
+  let attempts = 0;
+  const pollInterval = 2000; // 2 seconds
+  const requestTimeout = 3000; // 3 second timeout per attempt
+
+  while (attempts < maxAttempts) {
+    attempts++;
+
+    try {
+      // Create AbortController for timeout (more compatible than AbortSignal.timeout)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), requestTimeout);
+
+      const healthResponse = await fetch(`http://localhost:${port}/health`, {
+        method: 'GET',
+        signal: controller.signal
+      });
+
+      clearTimeout(timeoutId);
+
+      if (healthResponse.ok) {
+        const health = await healthResponse.json();
+        console.log(`[UI Modal] ${serviceName} service is ready after ${attempts} attempts (${attempts * pollInterval / 1000}s)`);
+        setServiceStatus(serviceName, 'running', `Running (PID: ${health.pid || 'unknown'})`);
+        return; // Success!
+      } else {
+        console.warn(`[UI Modal] ${serviceName} health check returned ${healthResponse.status}, retrying...`);
+      }
+    } catch (error) {
+      // Service not ready yet, continue polling
+      console.log(`[UI Modal] ${serviceName} not ready yet (attempt ${attempts}/${maxAttempts}):`, error.message);
+      const elapsed = attempts * pollInterval / 1000;
+      setServiceStatus(serviceName, 'starting', `Starting... (${elapsed}s)`);
+
+      if (attempts < maxAttempts) {
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+      }
+    }
+  }
+
+  // Max attempts reached, service didn't become ready
+  console.error(`[UI Modal] ${serviceName} service failed to become ready after ${maxAttempts * pollInterval / 1000}s`);
+  setServiceStatus(serviceName, 'error', 'Failed to start (timeout)');
+}
+
+/**
+ * Set service status indicator
+ */
+function setServiceStatus(serviceName, state, title) {
+  const statusElement = document.getElementById(`${serviceName}Status`);
+  if (!statusElement) return;
+
+  const stateIcons = {
+    running: '🟢',
+    stopped: '⚪',
+    starting: '🟡',
+    error: '🔴'
+  };
+
+  statusElement.textContent = stateIcons[state] || '⚪';
+  statusElement.title = title;
+}
+
+/**
+ * Stop a specific service (Settings Modal)
+ */
+async function stopServiceInModal(serviceName) {
+  try {
+    console.log(`[UI Modal] Stopping ${serviceName} service...`);
+
+    const response = await fetch(`/api/services/${serviceName}/stop`, {
+      method: 'POST'
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log(`[UI Modal] ${serviceName} service stopped:`, result);
+      await updateServiceStatuses();
+    } else {
+      const error = await response.json();
+      console.error(`[UI Modal] Failed to stop ${serviceName}:`, error);
+      alert(`Failed to stop ${serviceName} service: ${error.message || 'Unknown error'}`);
+    }
+  } catch (error) {
+    console.error(`[UI Modal] Error stopping ${serviceName}:`, error);
+    alert(`Error stopping ${serviceName} service. Check console for details.`);
+  }
+}
+
+/**
+ * Restart a specific service (Settings Modal)
+ */
+async function restartServiceInModal(serviceName) {
+  try {
+    console.log(`[UI Modal] Restarting ${serviceName} service...`);
+
+    // Stop then start
+    await stopServiceInModal(serviceName);
+
+    // Wait a moment before starting
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    await startServiceInModal(serviceName);
+  } catch (error) {
+    console.error(`[UI Modal] Error restarting ${serviceName}:`, error);
+    alert(`Error restarting ${serviceName} service. Check console for details.`);
+  }
+}
+
+/**
+ * Stop all local services (used when switching to OpenAI mode)
+ */
+async function stopAllLocalServices() {
+  const services = ['llm', 'flux', 'vision', 'vlm'];
+
+  console.log('[UI Modal] Stopping all local services...');
+
+  // Stop all services in parallel
+  const stopPromises = services.map(service =>
+    stopServiceInModal(service).catch(err => {
+      console.warn(`[UI Modal] Failed to stop ${service}:`, err);
+      // Don't fail if one service can't be stopped
+    })
+  );
+
+  await Promise.allSettled(stopPromises);
+  console.log('[UI Modal] All local services stopped');
+}
+
+/**
+ * Apply quick local configuration (LLM + Flux + Local Vision + VLM Ranking)
+ */
+async function applyQuickLocalSettings() {
+  const quickLocalBtn = document.getElementById('quickLocalBtn');
+  quickLocalBtn.disabled = true;
+  quickLocalBtn.textContent = '⚡ Applying...';
+
+  try {
+    // Update UI selectors to reflect quick local settings
+    document.getElementById('llmProvider').value = 'local-llm';
+    document.getElementById('imageProvider').value = 'flux';
+    document.getElementById('visionProvider').value = 'local';
+    document.getElementById('rankingMode').value = 'vlm';
+
+    // Call API to apply configuration
+    const response = await fetch('/api/providers/quick-local', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ startServices: false })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+
+    await response.json();
+
+    // Show success message
+    addMessage(
+      '✓ Quick Local configured: Local LLM + Flux + Local Vision + VLM Ranking',
+      'event'
+    );
+
+    // Update indicator
+    updateProviderIndicator({
+      llm: 'local-llm',
+      image: 'flux',
+      vision: 'local'
+    });
+
+    // Update main form
+    updateMainFormForProviders({
+      llm: 'local-llm',
+      image: 'flux',
+      vision: 'local'
+    });
+
+    closeProviderModal();
+
+  } catch (error) {
+    console.error('[Quick Local] Failed to apply:', error);
+    alert(`Failed to apply Quick Local configuration:\n\n${error.message}`);
+  } finally {
+    quickLocalBtn.disabled = false;
+    quickLocalBtn.textContent = '⚡ Quick Local';
+  }
+}
+
+async function applyProviderSettings() {
+  const applyBtn = document.getElementById('applyProvidersBtn');
+  applyBtn.disabled = true;
+  applyBtn.textContent = 'Applying...';
+
+  try {
+    const llm = document.getElementById('llmProvider').value;
+    const image = document.getElementById('imageProvider').value;
+    const vision = document.getElementById('visionProvider').value;
+
+    const response = await fetch('/api/providers/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ llm, image, vision })
+    });
+
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || `HTTP ${response.status}`);
+    }
+
+    const data = await response.json();
+
+    // Show success message
+    addMessage(`✓ Providers updated: LLM=${data.active.llm}, Image=${data.active.image}, Vision=${data.active.vision}`, 'event');
+
+    // Update indicator and close modal
+    updateProviderIndicator(data.active);
+
+    // Update main form (API key requirements, model selection visibility)
+    updateMainFormForProviders(data.active);
+
+    closeProviderModal();
+
+  } catch (error) {
+    console.error('[Provider Settings] Failed to apply settings:', error);
+    alert(`Failed to switch providers:\n\n${error.message}\n\nMake sure local services are running if you're switching to local providers.`);
+  } finally {
+    applyBtn.disabled = false;
+    applyBtn.textContent = 'Apply Changes';
+  }
+}
+
+/**
+ * Update provider indicator in header
+ */
+function updateProviderIndicator(active) {
+  const indicator = document.getElementById('providerIndicator');
+
+  // Check if any local providers are active
+  const hasLocal = active.llm === 'local-llm' || active.image === 'flux' || active.vision === 'local';
+  const allOpenAI = active.llm === 'openai' && active.image === 'openai' && active.vision === 'openai';
+
+  if (hasLocal) {
+    indicator.style.background = '#FFA500'; // Orange for mixed/local
+    indicator.style.display = 'block';
+    indicator.title = 'Using local providers';
+  } else if (allOpenAI) {
+    indicator.style.background = '#4CAF50'; // Green for all OpenAI
+    indicator.style.display = 'block';
+    indicator.title = 'Using OpenAI providers';
+  } else {
+    indicator.style.display = 'none';
+  }
+}
+
+/**
+ * Model Management Functions
+ */
+
+/**
+ * Load and display model status
+ */
+async function loadModelStatus() {
+  const modelSection = document.getElementById('modelManagementSection');
+  const modelContent = document.getElementById('modelStatusContent');
+
+  try {
+    // Show model section if local environment
+    const statusResponse = await fetch('/api/providers/status');
+    const statusData = await statusResponse.json();
+
+    if (statusData.environment.isLocal) {
+      modelSection.style.display = 'block';
+    } else {
+      modelSection.style.display = 'none';
+      return;
+    }
+
+    // Load model status and recommendations
+    const [modelStatusResponse, modelsResponse] = await Promise.all([
+      fetch('/api/providers/models/status'),
+      fetch('/api/providers/models')
+    ]);
+
+    const modelStatus = await modelStatusResponse.json();
+    const recommendations = await modelsResponse.json();
+
+    // Build model status HTML
+    let html = '';
+
+    // Local LLM Models
+    html += '<div style="margin-bottom: 15px;">';
+    html += '<h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px;">Local LLM Models</h4>';
+    if (modelStatus.localLLM.installed && modelStatus.localLLM.model) {
+      html += '<div style="background: #e8f5e9; padding: 10px; border-radius: 4px; margin-bottom: 10px;">';
+      html += '<span style="color: #2e7d32; font-weight: bold;">✓ Configured Model:</span><br>';
+      html += '<span style="color: #666; font-size: 12px;">' + modelStatus.localLLM.model + '</span>';
+      html += '</div>';
+    } else {
+      html += '<div style="background: #ffebee; padding: 10px; border-radius: 4px; margin-bottom: 10px;">';
+      html += '<span style="color: #c62828; font-weight: bold;">✗ No models installed</span>';
+      html += '</div>';
+    }
+
+    // Show recommended models
+    recommendations.localLLM.forEach(model => {
+      // Check if this model is installed (compare repo names, handle partial matches)
+      const currentModel = modelStatus.localLLM.model || '';
+      const isInstalled = currentModel === model.name ||
+                          currentModel.includes(model.name) ||
+                          model.name.includes(currentModel.split('/').pop()?.split('-GGUF')[0] || '');
+      const displayName = model.displayName || model.name;
+      html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 5px;">';
+      html += '<div style="flex: 1;">';
+      html += `<strong style="color: #333;">${displayName}</strong> ${model.recommended ? '<span style="background: #4CAF50; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 5px;">RECOMMENDED</span>' : ''}`;
+      html += `<br><span style="font-size: 11px; color: #666;">${model.description} (${model.size})</span>`;
+      html += '</div>';
+      if (isInstalled) {
+        html += '<span style="color: #4CAF50; font-size: 12px; font-weight: bold;">✓ Installed</span>';
+      } else {
+        html += `<button onclick="downloadModel('local-llm', '${model.name}')" style="background: #0066cc; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Download</button>`;
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Flux Models
+    html += '<div style="margin-bottom: 15px;">';
+    html += '<h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px;">Flux Image Generation</h4>';
+    if (modelStatus.flux.installed && modelStatus.flux.modelPath) {
+      html += '<div style="background: #e8f5e9; padding: 10px; border-radius: 4px; margin-bottom: 10px;">';
+      html += '<span style="color: #2e7d32; font-weight: bold;">✓ Service Running:</span><br>';
+      html += '<span style="color: #666; font-size: 12px;">' + modelStatus.flux.modelPath + '</span>';
+      html += '</div>';
+    } else if (modelStatus.flux.downloaded || modelStatus.flux.cached) {
+      html += '<div style="background: #fff3e0; padding: 10px; border-radius: 4px; margin-bottom: 10px;">';
+      html += '<span style="color: #f57c00; font-weight: bold;">⚠ Model downloaded but service not running</span>';
+      html += '</div>';
+    } else {
+      html += '<div style="background: #ffebee; padding: 10px; border-radius: 4px; margin-bottom: 10px;">';
+      html += '<span style="color: #c62828; font-weight: bold;">✗ No models installed</span>';
+      html += '</div>';
+    }
+
+    // Show available Flux models
+    recommendations.flux.forEach(model => {
+      // Determine if this model is currently loaded
+      const currentModel = modelStatus.flux.modelPath || modelStatus.flux.modelName || '';
+      const isLoaded = modelStatus.flux.modelLoaded &&
+                       (currentModel.includes(model.name) ||
+                        model.name === 'flux-dev' && currentModel.includes('FLUX.1-dev') ||
+                        model.name === 'flux-schnell' && currentModel.includes('FLUX.1-schnell'));
+
+      // Check if model is downloaded (service knows about it)
+      const isDownloaded = modelStatus.flux.downloaded || modelStatus.flux.cached || isLoaded;
+
+      html += '<div style="display: flex; justify-content: space-between; align-items: center; padding: 8px; background: white; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 5px;">';
+      html += '<div style="flex: 1;">';
+      html += `<strong style="color: #333;">${model.name}</strong> ${model.recommended ? '<span style="background: #4CAF50; color: white; font-size: 10px; padding: 2px 6px; border-radius: 3px; margin-left: 5px;">RECOMMENDED</span>' : ''}`;
+      html += `<br><span style="font-size: 11px; color: #666;">${model.description} (${model.size})</span>`;
+      html += '</div>';
+
+      if (isLoaded) {
+        html += '<span style="color: #4CAF50; font-size: 12px; font-weight: bold;">✓ Loaded</span>';
+      } else if (isDownloaded) {
+        html += '<span style="color: #f57c00; font-size: 12px; font-weight: bold;">✓ Downloaded</span>';
+      } else {
+        html += `<button onclick="downloadModel('flux', '${model.name}')" style="background: #0066cc; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">Download</button>`;
+      }
+      html += '</div>';
+    });
+    html += '</div>';
+
+    // Local Vision Models
+    html += '<div style="margin-bottom: 15px;">';
+    html += '<h4 style="margin: 0 0 10px 0; color: #333; font-size: 14px;">Local Vision Models</h4>';
+    if (modelStatus.localVision.installed) {
+      html += '<div style="background: #e8f5e9; padding: 10px; border-radius: 4px;">';
+      html += '<span style="color: #2e7d32; font-weight: bold;">✓ Service Running</span>';
+      if (modelStatus.localVision.models.length > 0) {
+        html += '<br><span style="color: #666; font-size: 12px;">Models: ' + modelStatus.localVision.models.join(', ') + '</span>';
+      }
+      html += '</div>';
+    } else {
+      html += '<div style="background: #fff3e0; padding: 10px; border-radius: 4px;">';
+      html += '<span style="color: #e65100; font-weight: bold;">⚠ Service Not Running</span><br>';
+      html += '<span style="color: #666; font-size: 12px;">Local vision requires manual Python service setup. See documentation.</span>';
+      html += '</div>';
+    }
+    html += '</div>';
+
+    modelContent.innerHTML = html;
+
+  } catch (error) {
+    console.error('[Model Management] Failed to load model status:', error);
+    modelContent.innerHTML = '<span style="color: #f44336;">Failed to load model status</span>';
+  }
+}
+
+/**
+ * Download a model with progress tracking
+ */
+async function downloadModel(type, modelName) {
+  const progressSection = document.getElementById('downloadProgressSection');
+  const progressBar = document.getElementById('downloadProgressBar');
+  const progressPercent = document.getElementById('downloadProgressPercent');
+  const statusMessage = document.getElementById('downloadStatusMessage');
+  const modelNameEl = document.getElementById('downloadModelName');
+
+  // Show progress section
+  progressSection.style.display = 'block';
+  modelNameEl.textContent = `📥 Downloading ${modelName}...`;
+  progressBar.style.width = '0%';
+  progressPercent.textContent = '0%';
+  statusMessage.textContent = 'Starting download...';
+  statusMessage.style.color = '#666';
+
+  const startTime = Date.now();
+  let progressInterval = null;
+
+  try {
+    const response = await fetch('/api/providers/models/download', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type, model: modelName })
+    });
+
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}`);
+    }
+
+    // Read SSE stream
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() || '';
+
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.substring(6));
+
+            // Update progress
+            if (data.progress !== undefined) {
+              progressBar.style.width = `${data.progress}%`;
+              progressPercent.textContent = `${data.progress}%`;
+            }
+
+            // Update status message with elapsed time
+            if (data.message || data.status === 'downloading') {
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+              const msg = data.message || 'Downloading...';
+              statusMessage.textContent = `${msg} (${elapsedStr})`;
+            }
+
+            // Handle completion or error
+            if (data.status === 'complete') {
+              clearInterval(progressInterval);
+              progressBar.style.background = 'linear-gradient(90deg, #4CAF50 0%, #45a049 100%)';
+              progressBar.style.width = '100%';
+              progressPercent.textContent = '100%';
+              const elapsed = Math.floor((Date.now() - startTime) / 1000);
+              const elapsedStr = elapsed < 60 ? `${elapsed}s` : `${Math.floor(elapsed / 60)}m ${elapsed % 60}s`;
+              statusMessage.textContent = `✓ Download complete! (${elapsedStr})`;
+              statusMessage.style.color = '#4CAF50';
+              setTimeout(() => {
+                progressSection.style.display = 'none';
+                refreshModelStatus();
+              }, 2000);
+            } else if (data.status === 'error') {
+              clearInterval(progressInterval);
+              progressBar.style.background = '#f44336';
+              statusMessage.style.color = '#f44336';
+              setTimeout(() => {
+                progressSection.style.display = 'none';
+              }, 5000);
+            }
+          } catch (e) {
+            console.error('[Model Management] Failed to parse SSE data:', e);
+          }
+        }
+      }
+    }
+
+    // Handle any remaining buffer content
+    if (buffer.trim().startsWith('data: ')) {
+      try {
+        const data = JSON.parse(buffer.substring(6));
+        if (data.status === 'complete') {
+          clearInterval(progressInterval);
+          const elapsed = Math.floor((Date.now() - startTime) / 1000);
+          statusMessage.textContent = `✓ Download complete! (${elapsed}s)`;
+          statusMessage.style.color = '#4CAF50';
+          setTimeout(() => {
+            progressSection.style.display = 'none';
+            refreshModelStatus();
+          }, 2000);
+        }
+      } catch (e) {
+        // Ignore parsing errors for final buffer
+      }
+    }
+
+  } catch (error) {
+    console.error('[Model Management] Download error:', error);
+    statusMessage.textContent = `✗ Error: ${error.message}`;
+    statusMessage.style.color = '#f44336';
+    progressBar.style.background = '#f44336';
+  }
+}
+
+/**
+ * Refresh model status
+ */
+async function refreshModelStatus() {
+  await loadModelStatus();
+}
+
+/**
+ * Service Control Functions
+ */
+
+// Track pending service operations to prevent double-clicks
+const pendingServiceOps = new Set();
+
+/**
+ * Start a service
+ */
+async function startService(serviceName) {
+  // Prevent double-start
+  if (pendingServiceOps.has(serviceName)) {
+    addMessage(`${serviceName} operation already in progress...`, 'info');
+    return;
+  }
+
+  try {
+    pendingServiceOps.add(serviceName);
+    addMessage(`Starting ${serviceName} service...`, 'info');
+
+    // Disable the button visually
+    const btn = document.querySelector(`button[onclick*="startService('${serviceName}')"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Starting...';
+      btn.style.opacity = '0.6';
+    }
+
+    const response = await fetch('/api/providers/services/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service: serviceName })
+    });
+
+    const data = await response.json();
+
+    if (data.status === 'already_running') {
+      addMessage(`${serviceName} is already running`, 'info');
+    } else if (data.status === 'started') {
+      addMessage(`✓ ${serviceName} service started successfully (PID: ${data.pid})`, 'event');
+    } else {
+      addMessage(`Failed to start ${serviceName}: ${data.message}`, 'warning');
+    }
+
+    // Refresh provider status
+    await loadProviderStatus();
+
+  } catch (error) {
+    console.error('[Service Control] Start error:', error);
+    addMessage(`Error starting ${serviceName}: ${error.message}`, 'error');
+  } finally {
+    pendingServiceOps.delete(serviceName);
+  }
+}
+
+/**
+ * Stop a service
+ */
+async function stopService(serviceName) {
+  // Prevent double-stop
+  if (pendingServiceOps.has(serviceName)) {
+    addMessage(`${serviceName} operation already in progress...`, 'info');
+    return;
+  }
+
+  try {
+    pendingServiceOps.add(serviceName);
+    addMessage(`Stopping ${serviceName} service...`, 'info');
+
+    // Disable the button visually
+    const btn = document.querySelector(`button[onclick*="stopService('${serviceName}')"]`);
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = 'Stopping...';
+      btn.style.opacity = '0.6';
+    }
+
+    const response = await fetch('/api/providers/services/stop', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ service: serviceName })
+    });
+
+    const data = await response.json();
+
+    if (data.status === 'not_running') {
+      addMessage(`${serviceName} is not running`, 'info');
+    } else if (data.status === 'stopped') {
+      addMessage(`✓ ${serviceName} service stopped successfully`, 'event');
+    } else {
+      addMessage(`Failed to stop ${serviceName}: ${data.message}`, 'warning');
+    }
+
+    // Refresh provider status
+    await loadProviderStatus();
+
+  } catch (error) {
+    console.error('[Service Control] Stop error:', error);
+    addMessage(`Error stopping ${serviceName}: ${error.message}`, 'error');
+  } finally {
+    pendingServiceOps.delete(serviceName);
+  }
+}
+
+/**
+ * HF Token Management
+ */
+
+/**
+ * Save HF token to localStorage
+ */
+function saveHfToken(token) {
+  if (token && token.startsWith('hf_')) {
+    localStorage.setItem('hfToken', token);
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Load HF token from localStorage
+ */
+function loadHfToken() {
+  return localStorage.getItem('hfToken') || '';
+}
+
+/**
+ * Toggle HF token visibility
+ */
+function toggleHfTokenVisibility() {
+  const input = document.getElementById('hfTokenInput');
+  const icon = document.getElementById('hfTokenEyeIcon');
+
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.className = 'fas fa-eye-slash';
+  } else {
+    input.type = 'password';
+    icon.className = 'fas fa-eye';
+  }
+}
+
+/**
+ * Update HF token status indicator
+ */
+function updateHfTokenStatus(fluxHealth) {
+  const statusEl = document.getElementById('hfTokenStatus');
+  const token = document.getElementById('hfTokenInput')?.value;
+
+  if (!statusEl) return;
+
+  if (!token) {
+    statusEl.innerHTML = '<span style="color: #ff9800;"><i class="fas fa-exclamation-triangle"></i> No token set - required for Flux</span>';
+  } else if (fluxHealth?.hf_authenticated) {
+    statusEl.innerHTML = '<span style="color: #4CAF50;"><i class="fas fa-check-circle"></i> HF authenticated</span>';
+  } else {
+    statusEl.innerHTML = '<span style="color: #2196F3;"><i class="fas fa-info-circle"></i> Token set - will be used on service start</span>';
+  }
+}
+
+/**
+ * Quick Start All Local Services
+ * Starts Flux, Vision, and LLM services with HF token
+ */
+async function quickStartLocalServices() {
+  const btn = document.querySelector('button[onclick*="quickStartLocalServices"]');
+  const hfTokenInput = document.getElementById('hfTokenInput');
+  const hfToken = hfTokenInput?.value?.trim();
+
+  // Save token to localStorage if valid
+  if (hfToken) {
+    if (!hfToken.startsWith('hf_')) {
+      console.warn('[UI] HF token must start with hf_');
+      return;
+    }
+    saveHfToken(hfToken);
+  }
+
+  // Show loading state
+  if (btn) {
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '⏳ Starting Services...';
+
+    // Restore button after completion
+    const restoreButton = () => {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+      btn.innerHTML = originalText;
+    };
+
+    setTimeout(restoreButton, 10000); // Auto-restore after 10s
+  }
+
+  try {
+    console.log('[UI] Quick starting all local services...');
+
+    const services = ['llm', 'flux', 'vision', 'vlm'];
+
+    // Set all services to "starting" state immediately
+    services.forEach(serviceName => {
+      setServiceStatus(serviceName, 'starting', 'Starting...');
+    });
+
+    // Start services in parallel using the new service control API
+    const startPromises = services.map(async (serviceName) => {
+      try {
+        const res = await fetch(`/api/services/${serviceName}/start`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ hfToken })
+        });
+
+        const result = await res.json();
+
+        if (res.ok) {
+          // Service started successfully
+          return { service: serviceName, status: 'started', pid: result.pid, ...result };
+        } else if (res.status === 409) {
+          // Service already running
+          return { service: serviceName, status: 'already-running', ...result };
+        } else {
+          // Actual error
+          return { service: serviceName, status: 'error', error: result.error || 'Unknown error' };
+        }
+      } catch (error) {
+        return { service: serviceName, status: 'error', error: error.message };
+      }
+    });
+
+    // Wait for all services to start (process spawned, but may not be ready)
+    const results = await Promise.allSettled(startPromises);
+
+    // Log results and poll each service that started or was already running
+    let successCount = 0;
+    let failCount = 0;
+    const pollPromises = [];
+
+    results.forEach(({ value }) => {
+      if (value.status === 'started') {
+        successCount++;
+        console.log(`[UI] ${value.service} process started (PID: ${value.pid}), polling for readiness...`);
+        // Poll each service individually to detect when ready
+        pollPromises.push(pollServiceUntilReady(value.service));
+      } else if (value.status === 'already-running') {
+        successCount++;
+        console.log(`[UI] ${value.service} is already running, confirming health...`);
+        // Quick poll to confirm it's healthy
+        pollPromises.push(pollServiceUntilReady(value.service, 3));
+      } else {
+        failCount++;
+        console.warn(`[UI] ${value.service} failed to start:`, value.error || 'Unknown error');
+        setServiceStatus(value.service, 'error', `Failed: ${value.error || 'Unknown'}`);
+      }
+    });
+
+    // Wait for all services to become ready (or timeout)
+    await Promise.allSettled(pollPromises);
+
+    console.log(`[UI] Quick start complete: ${successCount} processes started, ${failCount} failed`);
+
+  } catch (error) {
+    console.error('[UI] Error during quick start:', error);
+  } finally {
+    // Restore button state
+    if (btn) {
+      btn.disabled = false;
+      btn.style.opacity = '1';
+    }
+  }
+}
+
+/**
+ * Switch to local providers after quick-start
+ */
+async function switchToLocalProviders() {
+  try {
+    const response = await fetch('/api/providers/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        llm: 'local-llm',
+        image: 'flux',
+        vision: 'local'
+      })
+    });
+
+    if (response.ok) {
+      // Update dropdowns in modal
+      const llmSelect = document.getElementById('llmProvider');
+      const imageSelect = document.getElementById('imageProvider');
+      const visionSelect = document.getElementById('visionProvider');
+
+      if (llmSelect) llmSelect.value = 'local-llm';
+      if (imageSelect) imageSelect.value = 'flux';
+      if (visionSelect) visionSelect.value = 'local';
+
+      // Update main form (hides API key requirement)
+      updateMainFormForProviders({
+        llm: 'local-llm',
+        image: 'flux',
+        vision: 'local'
+      });
+
+      addMessage('✓ Switched to local providers', 'event');
+    }
+  } catch (error) {
+    console.warn('[Quick Start] Failed to switch providers:', error);
+  }
+}
+
+/**
+ * Stop all local services
+ */
+async function stopAllLocalServices() {
+  try {
+    console.log('[UI] Stopping all local services...');
+
+    const services = ['llm', 'flux', 'vision', 'vlm'];
+
+    // Set all services to "stopping" state immediately
+    services.forEach(serviceName => {
+      setServiceStatus(serviceName, 'starting', 'Stopping...');
+    });
+
+    // Show user feedback
+    addMessage('⏹ Stopping all local services...', 'event');
+
+    // Stop all services in parallel
+    const stopPromises = services.map(serviceName =>
+      fetch(`/api/services/${serviceName}/stop`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      })
+        .then(res => res.json())
+        .then(result => ({
+          service: serviceName,
+          success: result.success !== false,
+          message: result.message
+        }))
+        .catch(error => ({
+          service: serviceName,
+          success: false,
+          error: error.message
+        }))
+    );
+
+    // Wait for all services to stop
+    const results = await Promise.allSettled(stopPromises);
+
+    // Check results
+    let successCount = 0;
+    let failCount = 0;
+
+    results.forEach(({ value }) => {
+      if (value.success) {
+        successCount++;
+        console.log(`[UI] ${value.service} stopped successfully`);
+        setServiceStatus(value.service, 'stopped', 'Stopped');
+      } else {
+        failCount++;
+        console.warn(`[UI] ${value.service} failed to stop:`, value.error || 'Unknown error');
+        setServiceStatus(value.service, 'error', 'Failed to stop');
+      }
+    });
+
+    // Final message
+    if (failCount === 0) {
+      addMessage(`✓ All ${successCount} local services stopped successfully`, 'event');
+      console.log(`[UI] All services stopped successfully`);
+    } else {
+      addMessage(`⚠️ Stopped ${successCount} services, ${failCount} failed to stop`, 'event');
+      console.warn(`[UI] ${failCount} services failed to stop`);
+    }
+  } catch (error) {
+    console.error('[UI] Error stopping services:', error);
+    addMessage(`✗ Error stopping services. Check console for details.`, 'error');
+  }
+}
+
 // Check for pending jobs and show reconnection banner if needed
 checkForPendingJob();
 
 // Update My Jobs count on page load
 updateMyJobsCount();
+
+// Load provider status on page load (don't show modal, just update indicator)
+loadProviderStatus().catch(err => {
+  console.warn('[Provider Settings] Failed to load initial status:', err);
+});
 
 // Initial message
 addMessage('Ready. Configure parameters and click "Start Beam Search"', 'event');
