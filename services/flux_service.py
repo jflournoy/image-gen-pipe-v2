@@ -376,16 +376,31 @@ def truncate_prompt_for_t5(prompt: str, max_tokens: int = 512) -> str:
     """
     Truncate prompt to fit T5's token limit (512 for dev-fp8).
     CLIP's 77 token warning is harmless - T5 is the main encoder for Flux.
-    Uses a simple word-based approximation (1.3 words per token on average).
+    Uses actual T5 tokenization for accurate truncation.
     """
-    # Rough approximation: average English word is ~1.3 tokens
-    max_words = int(max_tokens / 1.3)
-    words = prompt.split()
-    if len(words) <= max_words:
-        return prompt
-    truncated = ' '.join(words[:max_words])
-    print(f'[Flux Service] Truncated prompt from {len(words)} to {max_words} words for T5')
-    return truncated
+    try:
+        from transformers import T5Tokenizer
+        tokenizer = T5Tokenizer.from_pretrained('google-t5/t5-base')
+        tokens = tokenizer.tokenize(prompt)
+
+        if len(tokens) <= max_tokens:
+            return prompt
+
+        # Truncate to max_tokens and decode back to text
+        truncated_tokens = tokens[:max_tokens]
+        truncated = tokenizer.decode(tokenizer.convert_tokens_to_ids(truncated_tokens), skip_special_tokens=True)
+        print(f'[Flux Service] Truncated prompt from {len(tokens)} to {max_tokens} tokens for T5')
+        return truncated
+    except Exception as e:
+        # Fallback to word-based approximation if tokenizer fails
+        print(f'[Flux Service] Warning: T5 tokenizer failed ({e}), using word approximation')
+        max_words = int(max_tokens / 1.3)
+        words = prompt.split()
+        if len(words) <= max_words:
+            return prompt
+        truncated = ' '.join(words[:max_words])
+        print(f'[Flux Service] Truncated prompt from {len(words)} to {max_words} words (approximation)')
+        return truncated
 
 
 @app.post('/generate', response_model=GenerationResponse)
