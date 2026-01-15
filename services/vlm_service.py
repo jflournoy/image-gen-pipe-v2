@@ -219,7 +219,17 @@ async def health_check():
 async def load_model_endpoint():
     """Explicitly load the model (for GPU coordination)"""
     try:
-        load_model()
+        try:
+            load_model()
+        except Exception as e:
+            error_msg = str(e)
+            if '404' in error_msg or 'Repository Not Found' in error_msg:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f'VLM model not available: {error_msg}\n\nConfigure VLM_MODEL_REPO or VLM_MODEL_PATH environment variable with a valid model.'
+                )
+            else:
+                raise
         return {
             'status': 'loaded',
             'model_repo': MODEL_REPO,
@@ -246,7 +256,17 @@ async def compare_images(request: CompareRequest):
     """
     try:
         # Load model if not loaded
-        model = load_model()
+        try:
+            model = load_model()
+        except Exception as e:
+            error_msg = str(e)
+            if '404' in error_msg or 'Repository Not Found' in error_msg:
+                raise HTTPException(
+                    status_code=503,
+                    detail=f'VLM model not available: {error_msg}\n\nConfigure VLM_MODEL_REPO or VLM_MODEL_PATH environment variable with a valid model.'
+                )
+            else:
+                raise HTTPException(status_code=500, detail=f'Failed to load VLM model: {error_msg}')
 
         # Encode images
         try:
