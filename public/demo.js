@@ -3421,6 +3421,13 @@ function loadHfToken() {
 }
 
 /**
+ * Get HF token (alias for loadHfToken)
+ */
+function getHfToken() {
+  return loadHfToken();
+}
+
+/**
  * Toggle HF token visibility
  */
 function toggleHfTokenVisibility() {
