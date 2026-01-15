@@ -3,6 +3,30 @@ name = "image-gen-pipe"
 version = "2.0.0"
 description = "Image generation pipeline with beam search orchestration"
 requires-python = ">=3.11"
+dependencies = [
+    # Core service dependencies
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "pydantic>=2.4.0",
+
+    # LLM service (llama.cpp)
+    "llama-cpp-python>=0.2.0",
+
+    # ML dependencies for Vision and Image services
+    "torch>=2.1.0",
+    "torchvision>=0.16.0",
+    "transformers>=4.35.0",
+    "diffusers>=0.24.0",
+    "accelerate>=0.24.0",
+    "peft>=0.7.0",
+    "huggingface_hub>=0.20.0",
+    "protobuf>=4.25.0",
+    "sentencepiece>=0.1.99",
+
+    # Image processing
+    "Pillow>=10.1.0",
+    "requests>=2.31.0",
+]
 
 [tool.uv.workspace]
 members = ["services"]
