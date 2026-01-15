@@ -4,6 +4,10 @@
  * Starts the Express API server with WebSocket support
  */
 
+// Load environment variables from .env file FIRST
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { startServer, attachWebSocket } from './src/api/server.js';
 
 const PORT = process.env.PORT || 3000;
