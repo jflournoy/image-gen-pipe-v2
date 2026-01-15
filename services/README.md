@@ -163,7 +163,7 @@ export LLM_CONTEXT_SIZE=2048  # Context window
 **Configuration**:
 ```bash
 export VLM_PORT=8004  # Default port
-export VLM_MODEL_REPO=mys/ggml_llava-v1.6-mistral-7b  # Model repo
+export VLM_MODEL_REPO=jartine/llava-v1.6-mistral-7b-gguf  # Model repo
 export VLM_MODEL_FILE=*Q4_K_M.gguf  # Model file pattern
 export VLM_GPU_LAYERS=-1  # -1 = all layers on GPU
 export VLM_CONTEXT_SIZE=4096  # Context window
