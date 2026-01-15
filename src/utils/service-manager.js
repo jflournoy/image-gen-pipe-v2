@@ -214,7 +214,7 @@ async function startService(serviceName, options = {}) {
       detached: true,
       stdio: 'ignore',
       env: serviceEnv,
-      cwd: path.dirname(serviceConfig.script)
+      // Don't set cwd - let uv work from current directory
     });
 
     // Unref so parent can exit independently
@@ -227,27 +227,17 @@ async function startService(serviceName, options = {}) {
     };
   }
 
-  // Handle potential spawn errors that occur after process creation
-  return new Promise((resolve) => {
-    const timeoutId = setTimeout(async () => {
-      // If process is still running after spawn, it was successful
-      if (isProcessRunning(proc.pid)) {
-        await writePIDFile(serviceName, proc.pid);
-        console.log(`[ServiceManager] Started ${serviceName} service (PID: ${proc.pid})`);
-        resolve({
-          success: true,
-          pid: proc.pid,
-          port: serviceConfig.port,
-        });
-      } else {
-        // Process already exited - likely an error in the startup
-        resolve({
-          success: false,
-          error: `Service process exited immediately (possible startup error)`,
-        });
-      }
-    }, 500); // Check after 500ms to give process time to start or fail
-  });
+  // Write PID file immediately
+  // The health polling endpoint will verify the service is actually running
+  await writePIDFile(serviceName, proc.pid);
+
+  console.log(`[ServiceManager] Started ${serviceName} service (PID: ${proc.pid})`);
+
+  return {
+    success: true,
+    pid: proc.pid,
+    port: serviceConfig.port,
+  };
 }
 
 /**
