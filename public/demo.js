@@ -2718,7 +2718,15 @@ async function startServiceInModal(serviceName) {
       body: JSON.stringify({ hfToken })
     });
 
-    const result = await response.json();
+    let result;
+    try {
+      result = await response.json();
+    } catch (parseError) {
+      console.error(`[UI Modal] Failed to parse response from ${serviceName} start:`, parseError);
+      setServiceStatus(serviceName, 'error', 'Invalid response from server');
+      alert(`Error starting ${serviceName}: Invalid response from server. Check console for details.`);
+      return;
+    }
 
     if (response.ok) {
       // Service started successfully
@@ -2732,8 +2740,9 @@ async function startServiceInModal(serviceName) {
     } else {
       // Actual error starting the service
       console.error(`[UI Modal] Failed to start ${serviceName}:`, result);
-      setServiceStatus(serviceName, 'error', `Failed to start: ${result.error || 'Unknown error'}`);
-      alert(`Failed to start ${serviceName} service: ${result.error || result.message || 'Unknown error'}`);
+      const errorMsg = result.error || result.message || 'Unknown error';
+      setServiceStatus(serviceName, 'error', `Failed to start: ${errorMsg}`);
+      alert(`Failed to start ${serviceName} service:\n\n${errorMsg}\n\nCheck browser console for more details.`);
     }
   } catch (error) {
     console.error(`[UI Modal] Error starting ${serviceName}:`, error);
@@ -2795,8 +2804,10 @@ async function pollServiceUntilReady(serviceName, maxAttempts = 30) {
   }
 
   // Max attempts reached, service didn't become ready
-  console.error(`[UI Modal] ${serviceName} service failed to become ready after ${maxAttempts * pollInterval / 1000}s`);
+  const timeoutSecs = maxAttempts * pollInterval / 1000;
+  console.error(`[UI Modal] ${serviceName} service failed to become ready after ${timeoutSecs}s`);
   setServiceStatus(serviceName, 'error', 'Failed to start (timeout)');
+  alert(`${serviceName} service failed to start within ${timeoutSecs} seconds.\n\nPossible causes:\n- Service crashed during startup\n- Port is in use by another process\n- Python dependencies not installed\n\nCheck browser console for details.`);
 }
 
 /**
