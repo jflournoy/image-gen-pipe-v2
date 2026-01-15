@@ -22,7 +22,7 @@ PORT = int(os.getenv('VLM_PORT', '8004'))
 
 # Model configuration - multimodal GGUF models
 # LLaVA 1.6 7B Q4 is ~5GB, fits well with 12GB GPU when Flux is unloaded
-MODEL_REPO = os.getenv('VLM_MODEL_REPO', 'mys/ggml_llava-v1.6-mistral-7b')
+MODEL_REPO = os.getenv('VLM_MODEL_REPO', 'jartine/llava-v1.6-mistral-7b-gguf')
 MODEL_FILE = os.getenv('VLM_MODEL_FILE', '*Q4_K_M.gguf')
 CLIP_MODEL_FILE = os.getenv('VLM_CLIP_FILE', 'mmproj-model-f16.gguf')
 MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
