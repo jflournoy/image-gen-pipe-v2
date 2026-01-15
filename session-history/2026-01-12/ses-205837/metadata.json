@@ -1,0 +1,63 @@
+{
+  "sessionId": "ses-205837",
+  "timestamp": "2026-01-13T04:58:37.970Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the golden sun begins its descent beyond the horizon, a breathtaking scene unfolds before you. The sky is awash in a riot of colors: fiery oranges and reds meld with tender pinks and purples, casting an ethereal glow over the majestic mountains. Their snow-capped peaks shimmer in the fading light, while the valleys below lay draped in the soft embrace of twilight. The gentle rustling of leaves and the lulling song of crickets weave a symphony of serenity as day transitions into night.",
+          "howPrompt": "In the expansive tableau of this image, a resplendent sunset bathes the mountainous horizon in an ethereal glow. The sky is ablaze with hues of fiery orange and deepening magenta, casting long shadows on the rugged, rocky peaks that jut dramatically against the pastel backdrop. Each crag and crevice seems to absorb the warm light, reflecting a complex interplay of texture and depth. The air is still and quiet, imbuing an atmosphere of tranquil serenity, as if time itself has momentarily paused in reverence to this breathtaking display of natural beauty.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day succumbs to twilight, the sky is set ablaze with hues of orange, pink, and purple. Majestic mountains, their peaks dusted with snow, stand tall against the backdrop of this breathtaking sunset. The cool evening breeze carries the sweet scent of pine trees, mingling with the gentle sounds of crickets chirping. The serene setting bathes the soul in tranquility and peace as shadows lengthen and the world seems to hold its breath, in awe of nature's stunning display.",
+          "howPrompt": "In this breathtaking visual style, the sun sets majestically behind a range of towering mountains, casting a warm golden glow over the landscape. The sky is ablaze with hues of orange, pink, and purple, while the mountains' jagged peaks stand tall against the vibrant backdrop. The atmosphere is serene yet dramatic, as if captured from the opening scene of an epic film or a stunning photograph taken at just the right moment. Texture in the image adds depth and dimension, with the sun-kissed grasses and rocky terrain appearing tactile and inviting to explore further.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the sun sinks lower in the sky, a breathtaking canvas of colors unfolds over the towering mountain range. The majestic peaks are bathed in hues of pink, orange, and gold, casting long shadows on the valleys below. Gentle breezes carry the sweet fragrance of wildflowers, mingling with the crisp, cool air. The serene beauty of the sunset scene evokes a sense of peacefulness and tranquility, inviting one to pause and reflect on the wonders of nature.",
+          "howPrompt": "As the sun begins to set, a golden orb descends behind towering mountains, casting long shadows across the landscape. The scene is bathed in warm hues of orange and pink, illuminating the jagged peaks and valleys with an ethereal glow. Dust particles suspended in the air catch the light, creating a shimmering effect that adds texture to the image. The cool blues and purples of the twilight sky contrast beautifully against the fiery backdrop, as if capturing the very essence of serenity and wonder. This breathtaking moment encapsulates the romanticism of nature's endless beauty.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

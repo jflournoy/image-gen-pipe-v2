@@ -129,6 +129,24 @@ Examples of honest responses:
   - Provides code patterns for Zone 1 & Zone 2 streaming
   - Must reference when building beam search orchestrator
 
+### Local Model Stack
+
+This project uses **llama-cpp-python** for running quantized GGUF models locally:
+
+- **Location**: `services/` directory contains Python FastAPI services
+- **LLM Service**: Uses llama-cpp-python for prompt refinement (Mistral 7B Q4)
+- **Flux Service**: Uses diffusers with sequential CPU offload for 12GB GPUs
+- **Vision Service**: Uses CLIP for alignment scoring, aesthetic predictor for quality
+- **Model Coordinator**: `src/utils/model-coordinator.js` manages GPU memory by unloading models before loading others
+
+**Key constraints**:
+
+- Single 12GB GPU shared across services
+- Flux (~10GB) and LLM/VLM cannot run simultaneously
+- Model coordinator ensures only one heavy model loaded at a time
+
+**Setup**: See [services/README.md](services/README.md) for installation and configuration
+
 ## Claude Usage Guidelines
 
 - Use `/estimate` before starting any non-trivial task

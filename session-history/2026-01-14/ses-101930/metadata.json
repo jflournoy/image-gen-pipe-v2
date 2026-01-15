@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-101930",
+  "timestamp": "2026-01-14T18:19:30.685Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Imagine a serene digital landscape. At its heart lies a humble test image, simple yet purposeful in its existence. The image is composed of a grid of squares, each one uniformly white save for a single black dot nestled within its borders. A gentle electronic buzz emanates from the scene, an audible reminder of the image's meticulously calibrated nature. The air is thick with anticipation and possibility; every detail, every pixel, scrutinized under the watchful eye of technology. This is the tranquil yet vital world of a test image, a beacon of precision in a world of infinite data.",
+          "howPrompt": "for the HOW of VISUAL STYLE in a photographic or cinematic context.\n\nImagine a \"simple test image\" rendered with an ethereal visual style reminiscent of an old, hand-tinted photograph. The scene is bathed in soft, warm light filtering through wispy clouds overhead, casting gentle shadows that dance on the textured ground below. Rich hues of sepia and amber dominate the color palette, imbuing the image with a nostalgic charm that speaks to the past. Fine details are subtly blurred, adding an artistic layer of abstraction that evokes the painterly quality of classic film techniques. The overall effect is dreamlike and romantic, inviting the viewer to linger and explore the captured moment with a sense of wonder and curiosity.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Amidst the tranquil stillness of a pristine digital canvas, a lone test image emerges. It's a simple and unassuming presence, composed primarily of swaths of muted gray tones, with subtle variations in shading. The image appears to consist mainly of a grid of squares, each one a slightly different tone, creating an intriguing optical illusion that plays with the viewer's perception. Though devoid of any discernible narrative or emotional depth, this humble test image offers a mesmerizing exploration into the intricacies of digital artistry and the power of subtle contrasts.",
+          "howPrompt": "taken with a DSLR camera in black and white, shot with a wide-angle lens to exaggerate perspective and depth. The image features a lone tree standing against a stormy sky, with raindrops visibly collecting on the tree's leaves and branches. The contrast between the bright whites of the raindrops and the dark grays of the stormy clouds creates a dramatic effect, while the texture of the tree bark is brought to life through intricate detailing. The atmosphere is melancholic and contemplative, evoking feelings of solitude and resilience.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of an empty lab, a single computer monitor glows with the vibrant pixels of a simple test image. The image consists of alternating black and white squares arranged in a grid, like a checkerboard frozen in time. Each square is meticulously defined, their edges crisp and clean against the stark contrast of their neighboring colors. The room around the monitor holds an eerie silence, punctuated only by the faint hum of the cooling fans and the gentle tap-tap-tap of keys being pressed in the distance, a lone technician meticulously calibrating the lab's equipment. The air is cool and dry, carrying with it a subtle scent of sterilized surfaces and machine oil. The atmosphere is one of precision and anticipation, a moment suspended before the rush of innovation and discovery.",
+          "howPrompt": "In this striking visual style, a lone test image stands against a vast, inky black background. The image is illuminated from the front by a soft, warm glow, casting a gentle, ethereal light that brings out its textured details and subtle color variations. The composition is minimalist yet impactful, with the test image occupying the entire frame and the contrasting darkness adding depth and intrigue. The overall atmosphere is one of quiet contemplation, as if inviting the viewer to pause and consider the beauty hidden within the seemingly mundane. This style evokes a sense of nostalgia for classic film photography or the cinematic artistry of old-school portraits, transporting us back in time through its timeless appeal.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the tranquil stillness of your digital workspace, a solitary test image emerges from the depths of your screen. This unassuming entity, composed merely of monochrome pixels, humbly occupies a small corner with its intricate lattice-like design. Its gentle presence invites contemplation and serves as a silent guardian against technological hiccups, emanating an air of steadfast reliability and patient endurance.",
+          "howPrompt": "to create a vivid description of a HOW the image of an ancient, moss-covered stone archway appears in the style of a cinematic masterpiece by Andrei Tarkovsky.\n\nIn the enchanting world of Andrei Tarkovsky's cinematography, the ancient stone archway is bathed in ethereal, golden light filtering through the dense canopy of trees above. Moss and lichen drape the weathered stones, their vibrant greens contrasting against the timeworn gray and brown hues. The composition invites a sense of wonder and contemplation, drawing the viewer's gaze from the foreground of mossy rocks to the distant horizon. The atmosphere is tranquil yet profoundly moving, as if echoing Tarkovsky's exploration of the passage of time in his masterful films.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

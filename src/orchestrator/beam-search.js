@@ -8,6 +8,7 @@
 const { RateLimiter } = require('../utils/rate-limiter.js');
 const rateLimitConfig = require('../config/rate-limits.js');
 const { registerLimiter } = require('../utils/rate-limiter-registry.js');
+const modelCoordinator = require('../utils/model-coordinator.js');
 
 // Initialize rate limiters at module load time
 // This ensures metrics are always available via the API, even before jobs start
@@ -19,6 +20,29 @@ const visionLimiter = new RateLimiter(rateLimitConfig.getLimit('vision'));
 registerLimiter('llm', llmLimiter);
 registerLimiter('imageGen', imageGenLimiter);
 registerLimiter('vision', visionLimiter);
+
+/**
+ * Configure rate limiters based on provider types
+ * Call this before starting a beam search job to set appropriate concurrency
+ *
+ * @param {Object} providerTypes - Object indicating which providers are local
+ * @param {boolean} providerTypes.llmIsLocal - True if using local LLM
+ * @param {boolean} providerTypes.imageIsLocal - True if using local image gen
+ * @param {boolean} providerTypes.visionIsLocal - True if using local vision
+ */
+function configureRateLimitsForProviders(providerTypes = {}) {
+  const { llmIsLocal = false, imageIsLocal = false, visionIsLocal = false } = providerTypes;
+
+  const llmLimit = rateLimitConfig.getLimitForType('llm', llmIsLocal);
+  const imageLimit = rateLimitConfig.getLimitForType('imageGen', imageIsLocal);
+  const visionLimit = rateLimitConfig.getLimitForType('vision', visionIsLocal);
+
+  llmLimiter.setConcurrencyLimit(llmLimit);
+  imageGenLimiter.setConcurrencyLimit(imageLimit);
+  visionLimiter.setConcurrencyLimit(visionLimit);
+
+  console.log(`[BeamSearch] Rate limits configured: LLM=${llmLimit} (local=${llmIsLocal}), Image=${imageLimit} (local=${imageIsLocal}), Vision=${visionLimit} (local=${visionIsLocal})`);
+}
 
 /**
  * Check if an error is a safety violation
@@ -48,11 +72,44 @@ async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvide
   const { onStepProgress, candidateIdStr, ...genOptions } = options;
   // Use candidateIdStr for logging/progress messages, keep numeric candidateId in genOptions for image saving
 
+  // Helper to generate image with periodic progress updates
+  async function generateWithProgress(promptToUse, isRetry = false) {
+    const startTime = Date.now();
+    let progressInterval = null;
+    let elapsedSeconds = 0;
+
+    // Send periodic progress messages to prevent timeout warnings
+    if (onStepProgress) {
+      progressInterval = setInterval(() => {
+        elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+        const retryNote = isRetry ? ' (retry)' : '';
+        onStepProgress({
+          stage: 'imageGen',
+          status: 'generating',
+          candidateId: candidateIdStr,
+          message: `🎨 ${candidateIdStr}: Generating image${retryNote}... ${elapsedSeconds}s`
+        });
+      }, 10000); // Update every 10 seconds
+    }
+
+    try {
+      const result = await imageGenLimiter.execute(() =>
+        imageGenProvider.generateImage(promptToUse, genOptions)
+      );
+      return result;
+    } finally {
+      if (progressInterval) {
+        clearInterval(progressInterval);
+      }
+    }
+  }
+
   try {
+    // Unload LLM before image generation to free GPU memory
+    await modelCoordinator.prepareForImageGen();
+
     // First attempt - generate with original prompt
-    return await imageGenLimiter.execute(() =>
-      imageGenProvider.generateImage(prompt, genOptions)
-    );
+    return await generateWithProgress(prompt, false);
   } catch (error) {
     // Check if this is a safety violation
     if (!isSafetyViolation(error)) {
@@ -116,10 +173,8 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
         });
       }
 
-      // Second attempt - generate with rephrased prompt
-      const result = await imageGenLimiter.execute(() =>
-        imageGenProvider.generateImage(rephrasedPrompt, genOptions)
-      );
+      // Second attempt - generate with rephrased prompt (with progress updates)
+      const result = await generateWithProgress(rephrasedPrompt, true);
 
       // Emit progress: safety retry succeeded
       if (onStepProgress) {
@@ -272,11 +327,13 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
 
   // Build image list for ranking with globally unique IDs
   // Format: "i{iteration}c{candidateId}" e.g., "i0c1" for iteration 0, candidate 1
+  // Include both url and localPath - VLM uses localPath, OpenAI uses url
   const images = candidates.map(candidate => ({
     candidateId: `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`,
     iteration: candidate.metadata.iteration,
     localId: candidate.metadata.candidateId,
-    url: candidate.image.url
+    url: candidate.image.url,
+    localPath: candidate.image.localPath  // For VLM local file access
   }));
 
   // Build known comparisons from previous top candidates' rankings
@@ -544,7 +601,9 @@ async function processCandidateStream(
       });
     }
 
-    evaluation = await visionProvider.analyzeImage(image.url, combined);
+    // Use url for cloud providers, localPath for local providers (Flux, etc.)
+    const imageReference = image.url || image.localPath;
+    evaluation = await visionProvider.analyzeImage(imageReference, combined);
 
     // Track vision tokens
     if (tokenTracker && evaluation.metadata?.tokensUsed) {
@@ -642,6 +701,9 @@ async function initialExpansion(
   }
 
   console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}, onStepProgress=${!!onStepProgress}`);
+
+  // Unload Flux before LLM operations to free GPU memory
+  await modelCoordinator.prepareForLLM();
 
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
   const whatHowPairs = await Promise.all(
@@ -869,8 +931,10 @@ async function initialExpansion(
             });
           }
 
+          // Use url for cloud providers, localPath for local providers (Flux, etc.)
+          const imageReference = image.url || image.localPath;
           evaluation = await visionLimiter.execute(() =>
-            visionProvider.analyzeImage(image.url, combined)
+            visionProvider.analyzeImage(imageReference, combined)
           );
 
           // Track vision tokens
@@ -975,7 +1039,7 @@ async function initialExpansion(
 
   // Check if we have enough candidates to continue
   if (successfulCandidates.length === 0) {
-    throw new Error('All candidates failed during initial expansion. Check prompts for safety violations.');
+    throw new Error('All candidates failed during initial expansion. Check service logs for details.');
   }
 
   console.log(`[initialExpansion] ${successfulCandidates.length}/${N} candidates succeeded`);
@@ -1166,7 +1230,7 @@ async function refinementIteration(
 
   // Check if we have enough candidates to continue
   if (successfulChildren.length === 0) {
-    throw new Error(`All candidates failed during refinement iteration ${iteration}. Check prompts for safety violations.`);
+    throw new Error(`All candidates failed during refinement iteration ${iteration}. Check service logs for details.`);
   }
 
   console.log(`[refinementIteration] Iteration ${iteration}: ${successfulChildren.length}/${allChildren.length} candidates succeeded`);
@@ -1198,7 +1262,8 @@ async function beamSearch(userPrompt, providers, config) {
   const { maxIterations, keepTop, metadataTracker, tokenTracker, onIterationComplete, onRankingComplete, onStepProgress, ensembleSize, beamWidth } = config;
 
   // Determine ranking strategy: Use comparative ranking if imageRanker provided
-  const useComparativeRanking = imageRanker !== undefined;
+  // Note: Check for both null and undefined (null !== undefined is true!)
+  const useComparativeRanking = imageRanker != null;
 
   // Build config with skipVisionAnalysis when using ranking
   const pipelineConfig = {
@@ -1389,5 +1454,6 @@ module.exports = {
   processCandidateStream,
   initialExpansion,
   refinementIteration,
-  beamSearch
+  beamSearch,
+  configureRateLimitsForProviders
 };

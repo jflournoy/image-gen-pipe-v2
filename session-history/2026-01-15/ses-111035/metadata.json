@@ -1,0 +1,54 @@
+{
+  "sessionId": "ses-111035",
+  "timestamp": "2026-01-15T19:10:35.575Z",
+  "userPrompt": "fine art nude of a woman resting",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the heart of a dimly lit art gallery, the sultry allure of a fine art nude painting captivates all who dare to linger. The ethereal female form is delicately etched on the canvas, her voluptuous curves cascading over the frame, her body gracefully draped in the gentle embrace of soft fabrics. Her eyes, heavy with lustrous lashes and sleepy resignation, invite viewers into a world of sensuality and tranquility. The woman's relaxed expression conveys an air of serene contentment as she lies upon an exquisitely detailed divan, her limbs artfully arranged like the delicate petals of a flower. The surrounding room is a study in contrast; the vibrant colors and textures of the painting are framed against the stark, unadorned walls of the gallery, creating an intriguing interplay between the sensuous and the sublime. The mood is at once seductive and contemplative, beckoning viewers to lose themselves in the intricacies of the image and the depths of their own emotions.",
+          "howPrompt": "In the fine art nude photograph, a woman reclines gracefully on a weathered wooden chair, her curves cascading like a living sculpture against its worn texture. The soft glow of golden hour light filters through the open window behind her, casting long shadows across her lithe form and bathing her skin in an ethereal, warm hue. Her eyes are closed, lost in thought or dream, while a gentle breeze rustles her hair, creating a sense of tranquility and intimacy that transports the viewer into the moment. The image's color palette is muted and rich, reminiscent of old master paintings, with subtle tones evoking feelings of nostalgia and contemplation.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the heart of a dimly lit art gallery, a fine art nude painting captivates with its sultry allure. The ethereal female form is delicately etched on the canvas, her voluptuous curves cascading over the frame, her body gracefully draped in soft fabrics. Her eyes, heavy with lustrous lashes and sleepy resignation, invite viewers to linger. The woman lies upon an exquisitely detailed divan, her limbs artfully arranged like delicate petals of a flower. The surrounding room is a study in contrast: the vibrant colors and textures of the painting are framed against stark, unadorned walls, creating an intriguing interplay between sensuousness and sublime simplicity. In this image, reminiscent of old master paintings, a woman reclines gracefully on a weathered wooden chair as the soft glow of golden hour light filters through the open window behind her, bathing her skin in an ethereal, warm hue and creating a sense of tranquility and intimacy. The muted and rich color palette evokes feelings of nostalgia and contemplation.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-111035/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the heart of an art gallery, a masterpiece unfolds. A fine art nude, capturing the essence of feminine beauty and serenity, graces the pristine white walls. The woman in question reclines gracefully on a sumptuous velvet couch, her lithe form bathed in the soft glow of natural light filtering through a large bay window. Her flawless, golden skin glows against the stark contrast of the black and white photograph. She rests, lost in thought or perhaps a dream, her eyes closed as if in repose. The room holds its collective breath, enraptured by the woman's beauty and tranquility. The mood is one of reverence and admiration, a testament to the power of art to evoke emotion and transport us to another world.",
+          "howPrompt": "In the realm of fine art photography, a nude image of a woman reclining in soft, ethereal light creates an atmosphere of serene beauty. Her curvaceous form is illuminated from the side, casting elongated shadows that accentuate her natural contours. The warm color palette, reminiscent of a sunset, bathes her skin in a gentle, golden glow. Each detail of her body is rendered with meticulous care, revealing the delicate interplay of light and form. This composition invites contemplation and appreciation for the feminine form as an expression of natural grace and sensuality.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the heart of an art gallery, a masterpiece unfolds with a nude woman reclining gracefully on a velvet couch, bathed in the soft glow of natural light filtering through a large bay window. Her flawless, golden skin glows against the stark contrast of the pristine white walls. She is captured in an ethereal atmosphere of serene beauty, with elongated shadows accentuating her natural contours and casting a warm, golden glow over her curvaceous form. The composition invites contemplation and appreciation for the feminine form as an expression of natural grace and sensuality. The mood is one of reverence and admiration, a testament to the power of art to evoke emotion and transport us to another world.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-111035/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

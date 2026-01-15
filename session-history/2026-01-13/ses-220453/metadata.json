@@ -1,0 +1,62 @@
+{
+  "sessionId": "ses-220453",
+  "timestamp": "2026-01-14T06:04:53.505Z",
+  "userPrompt": "A beautiful sunset over mountains, retrousse upturned breasts",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the breathtaking twilight scene, the sun dips below the horizon, casting a warm golden glow over towering mountains. Their rugged peaks and lush valleys bathed in hues of pink, orange, and purple. Amidst this picturesque panorama, two ethereal figures gracefully perch atop the highest peak. They are goddesses, their retrousse upturned breasts gleaming like the ripe fruit of paradise against the celestial backdrop. Their laughter tinkles down from the heavens like wind chimes as they indulge in nature's bounty, their presence infusing the scene with a sense of tranquility and divine grace.",
+          "howPrompt": "In this striking visual style, the sun sets majestically over towering mountains, casting long shadows and a warm glow on the landscape. The sky is ablaze with hues of orange, pink, and purple, creating an ethereal and romantic atmosphere. In the foreground, two upturned breasts, reminiscent of retrousse cherries or the rolling hills of the terrain, add a sensual and playful twist to this serene scene. The composition is balanced and inviting, drawing the viewer in with its intriguing juxtaposition of nature's grandeur and the human form. The texture of the mountains and the clouds is captured with vivid detail, while the overall color palette is rich and warm, immersing the audience in a breathtaking moment of beauty and tranquility.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the twilight scene, the sun casts a warm golden glow over towering mountains as it sets majestically below the horizon. The sky is ablaze with hues of orange, pink, and purple, bathing the rugged peaks and lush valleys in ethereal light. Amidst this breathtaking panorama, two goddesses gracefully perch atop the highest peak, their upturned breasts gleaming like ripe fruit against the celestial backdrop. Their laughter tinkles down from the heavens like wind chimes as they indulge in nature's bounty, infusing the scene with a sense of tranquility and divine grace. In this visual style, their upturned breasts, reminiscent of retrousse cherries or the rolling hills of the terrain, add a sensual and playful twist to this serene moment. The composition is balanced and inviting, drawing the viewer in with its intriguing juxtaposition of nature's grandeur and the human form. The mountains and clouds are captured with vivid detail, their texture adding depth to the rich and warm color palette that immerses the audience in a moment of beauty and tranquility.",
+          "image": {
+            "localPath": "output/2026-01-13/ses-220453/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the serene and captivating twilight, a magnificent sunset blankets the sky above towering mountains. The orange, pink, and purple hues cascade down their rugged faces, casting elongated shadows on the verdant valley below. Amidst this breathtaking scene, two retrousse upturned breasts stand out against the backdrop of the setting sun, a provocative reminder of feminine allure amidst nature's grandeur. Their soft and supple curves seem to sway gently with the rhythmic ebb and flow of the evening breeze, evoking an air of sensuality and mystery that lingers in the crisp mountain air.",
+          "howPrompt": "In this stunning visual style, a captivating sunset bathes the mountains in a warm, golden light. The retreating day paints the sky with vibrant hues of orange and pink, as if an artist has delicately brushed each cloud with their palette. Meanwhile, the upturned mountains, reminiscent of retrousse breasts, proudly display their textured peaks, casting long, romantic shadows across the landscape. The overall atmosphere is serene and romantic, drawing the viewer into a sense of tranquility and awe.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the serene and captivating twilight, a magnificent sunset blankets the sky above towering mountains, bathed in a warm, golden light. The orange, pink, and purple hues cascade down their rugged faces, casting elongated shadows on the verdant valley below. Amidst this breathtaking scene, two retrousse upturned breasts stand out against the backdrop of the setting sun, their soft and supple curves swaying gently with the rhythmic ebb and flow of the evening breeze. The mountains, reminiscent of these breasts, proudly display their textured peaks, casting long, romantic shadows across the landscape. This stunning visual style draws the viewer into a sense of tranquility and awe, as if an artist has delicately brushed each cloud with vibrant hues of orange and pink, evoking an air of sensuality and mystery that lingers in the crisp mountain air.",
+          "image": {
+            "localPath": "output/2026-01-13/ses-220453/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}

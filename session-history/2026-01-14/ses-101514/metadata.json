@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-101514",
+  "timestamp": "2026-01-14T18:15:14.119Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the quiet expanse of a sterile laboratory, a single monitor hums softly to life, revealing a simple test image. The gridded squares of monochrome pixels dance across the screen, a stark contrast against the muted beiges and greys that dominate the room. A sense of anticipation hangs heavy in the air as engineers and scientists huddle around the monitor, their eyes glued to the pixelated scene, waiting with bated breath for the results of this crucial experiment. The rhythmic ticking of the clock echoes through the chamber, amplifying the tension, as each second brings them closer to unraveling the secrets hidden within this unassuming test image.",
+          "howPrompt": "featuring a single red apple, shot against a plain white background.\n\nThe HOW of this visual style evokes the essence of minimalism and purity. The monochromatic color palette focuses exclusively on the vibrant hue of the red apple, which pops boldly against the pristine, blank canvas of the pure white backdrop. The lighting is simple yet effective, casting a soft, even glow that illuminates every intricate detail of the fruit's surface. Texture is emphasized through the use of crisp, high-definition imagery, which captures each crevice and groove on the apple's shiny, smooth skin. The atmosphere is one of cleanliness, simplicity, and the quiet beauty of nature's perfect creation.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the stillness of your monitor, a lone test image emerges. Its pixels glow with a gentle radiance, casting an ethereal light over the darkened room. The image itself is deceptively unassuming: a checkerboard grid of black and white squares interspersed with contrasting red dots. Yet within its seemingly innocuous pattern lies the potential to ignite a technological firestorm, as it serves as the very embodiment of a digital threshold test, ready to confirm the calibration and functionality of an SDXL expansion card. The scene is quiet but electrically charged, filled with anticipation and the faint hum of machinery, as the image's pixels dance in the digital limelight, waiting for their cue to bring life to your creative endeavors.",
+          "howPrompt": "with a warm color palette and a soft, dreamlike atmosphere. The image features a test chart filled with neatly arranged squares of varying colors and gradients. The lighting is gentle, casting a golden glow over the scene, with the warm hues accentuating the texture of the chart's surface. The overall composition is balanced, inviting the viewer to explore each square in detail while also maintaining an sense of cohesiveness. The softness and warmth evoke feelings of comfort and tranquility, making this style ideal for branding materials or websites that aim to convey a friendly, inviting aesthetic.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the tranquil stillness of the digital expanse, a lone test image emerges. This unassuming entity, composed of intricately woven pixels, appears as a plain grid of squares, their colors a stark contrast against the inky void that surrounds them. The image's simplicity belies its importance, for it is the very essence of what allows complex visual data to be accurately transmitted and decoded by devices far and wide. In this moment, an ordinary test image transforms into a symbolic representation of the intricate web of connections that bind our increasingly digital world together.",
+          "howPrompt": "In the realm of visual style, a \"simple test image\" can transform into an evocative work of art through careful consideration of various elements. Imagine a black and white photograph featuring a single apple, lit from the side with a warm, golden light that casts intriguing shadows across its surface. The composition is elegant, with the fruit nestled in the lower third of the frame, its stem delicately balanced against the edge. The texture is richly detailed, revealing every crease and curve of the apple's skin. The atmosphere is contemplative and serene, inviting the viewer to pause and reflect on the beauty found in simplicity. This minimalist approach showcases the power of thoughtful composition, lighting, and tonal range to elevate even the most seemingly mundane subject matter.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of a dimly lit room, a solitary test image stands proudly against a pristine white backdrop. Its pixelated form is a mosaic of black and white squares, each one representing an intricate web of data waiting to be deciphered. The image's simplicity belies its complex purpose, as it serves as the foundation for rigorous scientific analysis and technological advancements. The room is filled with the faint hum of machinery, a subtle reminder of the intricate dance between man and machine that brought this test image into existence. The air is heavy with anticipation, as researchers gather around, poised to delve deeper into its secrets and unlock new discoveries.",
+          "howPrompt": "of a red apple on a white background.\n\nImagine a crisp, clean visual style reminiscent of professional product photography. The softbox lighting illuminates the ripe red apple from all angles, creating an even and flawless skin tone that seems to glow with a subtle sheen. The stark contrast between the vibrant apple and the pristine white background draws the viewer's attention, isolating the fruit as the clear focus of the image. The warm hue of the apple complements the coolness of the background, adding depth and dimension while maintaining a simplistic and uncluttered composition.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

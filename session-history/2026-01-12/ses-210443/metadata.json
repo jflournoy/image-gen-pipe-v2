@@ -1,0 +1,80 @@
+{
+  "sessionId": "ses-210443",
+  "timestamp": "2026-01-13T05:04:43.192Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "The scene is set against the breathtaking backdrop of a fiery sunset. The sky ablaze with hues of orange, pink, and purple, painting the heavens in a vivid tapestry. Towering mountains, their peaks dusted with snow, silhouette against this ethereal display, their jagged edges softened by the descending twilight. A gentle breeze carries the scent of pine and wildflowers, mingling with the crisp mountain air. As the last rays of sunlight give way to night, a sense of peace settles over the land, leaving one in awe of nature's splendor.",
+          "howPrompt": "As the golden sun slowly descends behind towering mountains, the sky is ablaze with a breathtaking array of hues - warm oranges and pinks intermingle with cool purples and blues. The composition is artfully framed by the jagged peaks, their rough textures softened by the gentle glow of the setting sun. Long shadows cast by the mountains add depth and dimension to the scene, while the atmosphere is tranquil and serene, inviting reflection and contemplation. This beautiful tableau would make for a stunning photograph or cinematic backdrop.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the last vestiges of daylight cling stubbornly to the sky, a breathtaking sunset unfolds over towering mountains, their craggy peaks bathed in the soft glow of twilight. The vibrant hues of pink, orange, and red paint the heavens as if nature herself were creating a masterpiece on her vast canvas. The crisp, cool air carries the subtle scent of pine and wildflowers, while the gentle rustling of leaves adds a soothing lullaby to this serene moment, inviting you to pause and marvel at the simple beauty of the world around you.",
+          "howPrompt": "As the sun slowly descends behind the towering mountains, a riot of colors paints the sky. The once clear blue backdrop transforms into a canvas of warm oranges, pinks, and purples. The long shadows cast by the peaks create a sense of depth and scale, while the setting sun illuminates the clouds with its golden light, giving them a soft, ethereal glow. The atmosphere is tranquil and serene, inviting reflection and contemplation. This stunning visual style evokes the feeling of a peaceful yet powerful moment in nature.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the last vestiges of daylight cling stubbornly to the sky, a breathtaking sunset unfolds over towering mountains. The once clear blue backdrop transforms into a canvas of warm oranges, pinks, and purples as the sun slowly descends behind the peaks. The craggy mountain peaks are bathed in the soft glow of twilight, while the long shadows cast by the peaks create a sense of depth and scale. The gentle rustling of leaves adds a soothing lullaby to this serene moment, inviting reflection and contemplation. The crisp, cool air carries the subtle scent of pine and wildflowers. This stunning visual style evokes the feeling of a peaceful yet powerful moment in nature, where the vibrant hues of pink, orange, and red paint the heavens as if nature herself were creating a masterpiece on her vast canvas.",
+          "image": {
+            "localPath": "output/temp/flux_1768280948553.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the day yields to twilight, a breathtaking sunset unfolds over towering mountains. The sky ablaze with fiery oranges and reds casts long shadows across the valleys below, while the mountains' craggy peaks are bathed in a soft, ethereal golden light. A gentle breeze carries the scent of pine and wildflowers, adding to the tranquil serenity that envelopes this picturesque scene. The quietude is broken only by the distant echo of a river's gentle flow or the occasional hoot of an owl perched high atop a tree, punctuating the fading light with their haunting melodies.",
+          "howPrompt": "As the sun begins to set, a warm, orange glow envelopes the towering mountain range in the distance. The sky is ablaze with vibrant hues of pink, purple, and gold, casting long, dramatic shadows across the jagged peaks. The atmosphere is serene and peaceful, as if time itself has slowed down to savor the breathtaking beauty of nature's canvas. Texture in the image is enhanced by the play of light and shadow on the mountainous terrain, creating a depth and dimension that draws the viewer in. This photographic or cinematic moment captures the essence of tranquility and wonder, leaving one feeling inspired and rejuvenated.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the day yields to twilight, a breathtaking sunset unfolds over towering mountains, with the sky ablaze with fiery oranges and reds casting long shadows across valleys below. The mountains' craggy peaks are bathed in a soft, ethereal golden light, while a gentle breeze carries the scent of pine and wildflowers. Texture in the image is enhanced by the play of light and shadow on the mountainous terrain, creating a depth and dimension that draws the viewer in. The atmosphere is serene and peaceful, with the tranquility punctuated by the distant echo of a river's gentle flow or an occasional owl hoot, as time seems to slow down to savor the breathtaking beauty of this picturesque scene. This cinematic moment captures the essence of tranquility and wonder, leaving one feeling inspired and rejuvenated.",
+          "image": {
+            "localPath": "output/temp/flux_1768281054378.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the golden orb of the sun slowly descends, the mountains come alive with a breathtaking display of color. The once rugged peaks are bathed in an ethereal glow, transforming into majestic silhouettes against a canvas of fiery reds, oranges, and purples. The crisp mountain air is filled with the soothing sounds of nature - the gentle rustle of leaves in the wind, the distant melody of a babbling brook, and the tranquil silence that envelopes the landscape as day turns to night. The scene exudes a sense of peacefulness and wonder, inviting one to pause and appreciate the raw beauty of nature.",
+          "howPrompt": "Imagine a stunning sunset scene over majestic mountains. The sky is ablaze with warm hues of orange, pink, and red, gradually merging into the deepening blue as night approaches. Long shadows stretch across the rocky terrain below, adding depth to the composition. The sun casts a golden light upon the peaks, making them look radiant and ethereal. Dust and gravel texture can be seen on the mountain surfaces, while a gentle breeze creates ripples in nearby lakes, reflecting the breathtaking colors of the sky above. This serene and romantic setting evokes feelings of tranquility and wonder, leaving the viewer feeling both grounded and lifted up by nature's beauty.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

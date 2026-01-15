@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-201214",
+  "timestamp": "2026-01-15T04:12:14.099Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Imagine a tranquil digital landscape adorned with a solitary test image. The image, simple yet evocative, sits at the center of this barren cybernetic expanse, like an oasis amidst the endless sea of ones and zeros. The scene is bathed in the soft glow emanating from its pixelated borders, casting a faint light over the surrounding void. Its presence, though mundane to some, ignites a sense of curiosity, as if holding within it the potential for hidden meaning or untold secrets waiting to be deciphered by the discerning eye.",
+          "howPrompt": "that showcases HOW the SDXL format preserves details and texture in high resolution, especially when upscaled.\n\nImagine a \"simple test image\" presented in stunning, ultra-high definition through the SDXL format. The image bursts with lifelike clarity, every detail meticulously rendered. Textures are so intricately preserved that they seem to beg for touch - the roughness of tree bark or the smoothness of a polished stone, each one a tactile delight. Lighting is expertly balanced, casting dramatic shadows that dance upon surfaces while highlighting fine details with radiant brilliance. Colors are rendered in rich, vibrant hues, evoking a cinematic-like atmosphere as if transported from the pages of a high-end art book. The SDXL format truly brings every pixel to life, making even the simplest test image an immersive and breathtaking experience.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of the lab, a single monitor hums softly against the background of whirring machinery. The screen displays a simple test image: an even grid of squares in shades of gray, ranging from pristine white to deepest black. Each square is defined by its stark contrast with those around it, the delicate interplay between light and dark creating an intricate dance of tonality on the display. This unassuming image serves as a crucial benchmark for calibration and quality assurance in the realm of digital imaging, a silent guardian against imperfections that could jeopardize the integrity of each pixel within the vast sea of data.",
+          "howPrompt": "that conveys a serene and calming atmosphere.\n\nThis \"simple test image\" transforms into an ethereal scene with gentle, warm tones and a subtly textured surface. The composition is thoughtfully balanced, with soft curves and organic shapes arranged around the center. Light filters in from the side, casting long, dappled shadows across the scene and creating a sense of depth and dimension. The overall effect is tranquil and inviting, like a moment frozen in time within a sunlit meadow.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

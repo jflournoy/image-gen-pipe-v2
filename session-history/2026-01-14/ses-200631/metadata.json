@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-200631",
+  "timestamp": "2026-01-15T04:06:31.598Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the heart of a sterile lab, an unassuming test image comes to life on the pristine screen. The monochromatic scene is a patchwork of pixels - black and white squares arranged in perfect order, a labyrinth of precision. The stillness of the image belies the complexity within, each square teeming with data waiting to be unlocked by the keen eyes of researchers. The air around the monitor hums with anticipation as scientists poise their mice, ready to delve into the intricacies of this simple yet enigmatic testament to technological prowess.",
+          "howPrompt": "with a monochromatic color palette, emphasizing contrast and texture.\n\nThis \"simple test image\" is far from ordinary. Its monochromatic color scheme, derived primarily from shades of gray and a single accent color, creates an evocative atmosphere of timeless sophistication. The image's contrast is intentionally high, with deep shadows and brilliant highlights that dance upon its surface, revealing intricate textures and details. This visual style recalls the aesthetics of classic film noir or chiaroscuro painting, inviting viewers to explore the nuances hidden within the intriguing interplay of light and dark.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of the lab, a single monitor flickers to life against the backdrop of endless rows of data-filled screens. The only animation on this screen is a simple test image: a uniform expanse of grayscale dots, their patterns repeating like a hypnotic dance. Despite its simplicity, an electric charge seems to radiate from the image, a palpable reminder that even the most mundane can hold secrets waiting to be unlocked by the discerning eye and deft hand of a skilled analyst.",
+          "howPrompt": "that consists of a white background with two intersecting red lines. The style of this image is reminiscent of minimalist design, evoking the aesthetic sensibilities of contemporary art galleries and museums. The clean, uncluttered background emphasizes the crisp precision of the lines, while their intersection creates a dynamic tension that draws the viewer's gaze inward. The use of bold, primary colors adds a sense of energy and intensity, elevating the image from mere simplicity to thought-provoking visual complexity. This style is often used in graphic design, branding, and advertising to convey modernity, sophistication, and a focus on essential information.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of an empty lab, a solitary test image hovers on the pristine screen of a high-definition monitor. The image, as uncomplicated as its name suggests, consists of a uniformly checkered grid of black and white squares against a stark white background. Yet, despite its simplicity, it hums with a palpable energy that pulses through the room like an electric current, eager to be scrutinized, analyzed, and validated by the curious minds of engineers and researchers who await its results with bated breath. This is just the beginning, the first step in a complex process of calibration and optimization, but already the image holds the promise of groundbreaking advancements, the tantalizing whisper of innovation on the horizon.",
+          "howPrompt": "with a monochrome color palette, high contrast, and dramatic shadows.\n\nImagine an enchanting scene drawn from the realm of timeless black-and-white photography. The frame is graced by a deceptively unassuming \"simple test image,\" its monochromatic essence radiating depth through intricately crafted contrasts. Each tone, be it the velvety inky blacks or crisp pearly whites, carries an unspoken narrative. The lighting is dramatic, evoking an ethereal mood akin to chiaroscuro masterpieces from Renaissance art. Shadows dance and play with light, carving out textures that leap from the image like contours on a three-dimensional relief map. This visual style elicits a raw, emotional response, immersing the viewer in a mesmerizing tableau of light and dark.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the sterile expanse of a white laboratory, a lone monitor hums with life, its screen illuminating the room with an eerie glow. The image that graces the display is deceptively unassuming: a simple test image, a checkerboard pattern of black and white squares. Yet beneath this unremarkable veneer lies a complex web of algorithms and code, poised to reveal secrets hidden within its seemingly infinite depths. As the seconds tick by, anticipation builds in the air, the silence broken only by the rhythmic pulse of the machine's cooling fans. The scene is ripe with tension, a delicate balance between order and chaos, as the test image stands on the precipice of unveiling its hidden potential.",
+          "howPrompt": "of a red apple, lit from the side with a warm light source, against a white background.\n\nThe style evokes the classic still life photography reminiscent of old master painters. The apple is illuminated from the side by a warm, golden light source, casting long shadows and emphasizing its round, voluptuous form. The white backdrop provides a stark contrast, making the apple's vibrant red hue pop against the pristine background. The texture of the apple's surface is visible through the gentle play of light and shadow, inviting the viewer to reach out and touch its glossy finish. The atmosphere is serene yet sensual, invoking a sense of nostalgia for simpler times and the joy of a simple, ripe fruit.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

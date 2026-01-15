@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-212908",
+  "timestamp": "2026-01-14T05:29:08.813Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun dips below the horizon, a riot of colors spreads across the sky. The once blue expanse transforms into a canvas of orange, pink, and purple hues that dance playfully with the shadows of towering mountains. These majestic peaks stand tall, their snow-capped summits glowing in the fading light. A gentle breeze rustles through the trees at the mountain's base, carrying with it the sweet scent of pine and the sound of a babbling brook nearby. The serenity of the moment is palpable, as day turns to night under the watchful gaze of the mountains.",
+          "howPrompt": "As the sun begins to descend below the horizon, the sky transforms into a breathtaking canvas of warm oranges, pinks, and purples. The mountains in the foreground stand tall and proud against the backdrop of this stunning display. Shadows lengthen on the terrain, adding depth and dimension to the scene. The gentle glow of the suncasts an ethereal light over the landscape, creating a sense of peacefulness and tranquility. This visual style evokes feelings of wonder and appreciation for the natural world.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins its descent, the sky transforms into a breathtaking canvas of oranges, pinks, and purples. The mountains in the distance stand proud against the backdrop of the vibrant colors, their peaks casting long shadows over the valley below. Birds return to their nests, signaling the end of another day as crickets start their symphony in the grass. A gentle breeze carries the sweet scent of wildflowers and the tranquil sounds of nature fill the air, creating a serene and peaceful atmosphere that calms the mind and soothes the soul.",
+          "howPrompt": "In this visual style, the setting sun casts a warm, golden glow over towering mountains, their rugged peaks bathed in the fading light. The sky is ablaze with rich hues of orange, pink, and purple as the last rays of sunlight slowly fade away. The composition expertly balances the vast expanse of the sky against the solidity and stability of the mountain range. The texture of the scene is captured through the use of long exposures, which blur the movement of clouds while keeping the mountains sharp and defined. An atmosphere of tranquility and awe permeates the image, inviting the viewer to pause and reflect on the beauty and power of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

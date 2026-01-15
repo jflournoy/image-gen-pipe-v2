@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-105137",
+  "timestamp": "2026-01-14T18:51:37.832Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day comes to a close, the sky ignites in a breathtaking display of color and light. Majestic mountains, their peaks dusted with the first whispers of winter snow, stand proud against the backdrop of this fiery spectacle. The sun, a luminous orb of molten gold, slowly sinks below the horizon, casting long shadows that dance on the valley floor. The air is filled with a peaceful hush, broken only by the gentle rustle of leaves in the breeze and the distant cry of a solitary bird. As twilight deepens, each mountain peak becomes a silhouette against the ever-changing canvas of color, a tranquil reminder that even as the day ends, new beauty awaits with the dawn.",
+          "howPrompt": "As the sun slowly sinks below the horizon, the sky transforms into a breathtaking canvas of fiery oranges, reds, and pinks that cascade from the heavens, reflecting off the serene, glass-like surface of a tranquil lake. The towering mountains in the distance silhouette against this vibrant backdrop, their jagged peaks casting long, dramatic shadows on the landscape below. The cool, soothing colors of twilight begin to replace the warm hues of sunset as the stars start to twinkle in the sky above, adding a sense of serene calm and tranquility to the scene. This stunning visual style evokes feelings of peacefulness, awe, and wonder.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day comes to a close, the sky transforms into an breathtaking canvas of warm oranges, reds, and purples. The sun, a fiery orb sinking gradually behind the majestic mountains, casts long shadows over the landscape below. The air is filled with the sweet scent of pine and wildflowers as the birds sing their last melodies before the night falls. The serene beauty of the scene leaves one in awe, immersed in the tranquility of nature's grand spectacle.",
+          "howPrompt": "As the sun begins to set, the sky transforms into a breathtaking canvas of warm hues and vibrant colors. The mountains, bathed in the golden light, take on an ethereal glow with each crevice and peak highlighted by the fading sunlight. The atmosphere is peaceful and serene, as if time itself has slowed down to appreciate this fleeting moment. The composition leads the viewer's eye from the vibrant horizon to the towering peaks, creating a sense of depth and perspective. This visual style exudes tranquility and invites the audience to marvel at nature's splendor.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking sight of a sunset casting its golden glow over majestic mountains. The sky is ablaze with hues of orange, pink, and red as the sun slowly sinks beneath the horizon, painting the heavens with an ethereal brilliance that seems to set the world aglow. Each mountain peak stands proudly against this backdrop, their snow-capped peaks reflecting the fiery light in a dazzling display of nature's grandeur. The tranquil silence is only broken by the occasional rustle of wind or the distant calls of nocturnal creatures, creating an enchanting mood that leaves one feeling rejuvenated and inspired.",
+          "howPrompt": "As the golden orb of the sun dips below the horizon, a breathtaking spectacle unfolds. The mountains in the foreground are bathed in a warm, rosy glow, casting elongated shadows that stretch towards the tranquil valley below. The sky is ablaze with fiery hues of orange, pink, and red, gradually fading into deeper blues as the sun disappears from sight. The atmosphere is serene and peaceful, evoking a sense of awe and wonder at nature's beauty, as if time itself has come to a standstill.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the day comes to an end, a breathtaking sunset unfolds over towering mountains. The sky is painted in hues of orange, pink, and purple, each color blending seamlessly into the next as if created by an unseen artist's hand. The peaks of the mountains are bathed in a golden light, their jagged edges softened by the gentle touch of the setting sun. A cool breeze carries the sweet scent of pine trees and wildflowers, adding to the serene atmosphere that envelops the landscape. As day turns into night, the stars begin to twinkle among the clouds, promising another magical moment in this tranquil setting.",
+          "howPrompt": "In this stunning visual style, the sun dips below the horizon, casting a warm orange and pink glow over towering mountains. The composition is expertly framed with the mountains taking center stage, their rugged peaks piercing the sky. The color palette mirrors the sunset's hues, with vibrant oranges, reds, and pinks bleeding into each other. The texture of the image is rich and detailed, capturing every crevice and wrinkle on the mountainous terrain. As day turns to night, a sense of tranquility and wonder fills the atmosphere, inviting the viewer to take in the breathtaking beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

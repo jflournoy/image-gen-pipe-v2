@@ -1,0 +1,84 @@
+{
+  "sessionId": "ses-104533",
+  "timestamp": "2026-01-15T18:45:33.806Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun dips below the horizon, a breathtaking display of colors paints the sky above towering mountains. The once crisp air cools and carries the scent of pine and wildflowers. The golden rays illuminate the snow-capped peaks, creating an ethereal glow that seems to set the mountains aglow from within. Birds silhouetted against the fiery backdrop call out their final songs as day gives way to night. Peace descends over the serene landscape, leaving behind a sense of tranquility and wonder.",
+          "howPrompt": "As the sun begins to descend beneath the horizon, a breathtaking scene of a beautiful sunset over mountains unfolds. The vibrant orange and pink hues of the setting sun cast long shadows across the towering mountain ranges, creating a stunning contrast against the cool blues and purples of the twilight sky. The textures of the rugged mountain peaks are accentuated by the play of light and shadow, while the atmosphere is serene and tranquil, invoking feelings of peace and wonder. This photographic moment captures the essence of nature's beauty in a visual style that is both breathtakingly beautiful and deeply moving.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun sets, a breathtaking display of vibrant orange and pink hues paints the sky above towering mountains, casting long shadows on their rugged textures. The once crisp air cools, carrying the scent of pine and wildflowers as the golden rays illuminate the snow-capped peaks, creating an ethereal glow that sets the mountains aglow from within. Birds silhouetted against the fiery backdrop call out their final songs as day gives way to night, leaving behind a serene and tranquil atmosphere with a sense of peace and wonder. Capture this beautiful moment in a photographic style that accentuates the contrast between the vibrant sunset colors and the cool twilight sky, while highlighting the textures of the mountain peaks and invoking feelings of peace and wonder.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-104533/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the last vestiges of day cling stubbornly to the sky, a breathtaking sunset unfolds over towering mountains. The vibrant hues of pink, orange, and purple streak across the heavens like brushstrokes on a grand canvas. The air carries the crisp scent of pine and wildflowers, while the gentle rustle of leaves adds a soothing symphony to the tranquil scene. The sun's final rays caress the jagged peaks, bathing them in warm light before succumbing to the encroaching darkness. This serene tableau invites contemplation and wonder as the day surrenders to the night.",
+          "howPrompt": "As the golden sun begins to descend beneath the horizon, the mountains bask in a warm, ethereal glow. The sky is awash with vibrant hues of orange, pink, and red, casting long, dramatic shadows across the jagged mountain peaks. Each rocky crevice and textured surface catches the fading light, creating intricate patterns that seem to dance before your eyes. The tranquil atmosphere invites contemplation, as nature's symphony of colors unfolds in a breathtaking display of visual splendor.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the last vestiges of day cling stubbornly to the sky, a breathtaking sunset unfolds over towering mountains. The mountains bask in a warm, ethereal glow as the sky is awash with vibrant hues of orange, pink, and red. Each rocky crevice and textured surface catches the fading light, creating intricate patterns that seem to dance before your eyes. The crisp scent of pine and wildflowers fills the air, accompanied by the gentle rustle of leaves adding a soothing symphony to the scene. The sun's final rays caress the jagged peaks, bathing them in warm light before succumbing to the encroaching darkness, inviting contemplation and wonder as the day surrenders to the night.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-104533/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the sun begins its descent, a brilliant tapestry of colors unfolds across the sky. The mountains, bathed in warm hues of orange and pink, are silhouetted against a canvas of vibrant purples and blues. Each peak is crowned with snow that sparkles like precious gems in the twilight glow. A gentle breeze carries the sweet scent of wildflowers and pine trees, while birds sing their evening songs in harmonious chorus with the lapping waves of nearby lakes. The tranquil scene evokes a deep sense of peace and wonder at nature's majesty.",
+          "howPrompt": "In this breathtaking visual style, the sun sets majestically over towering mountains. The warm hues of orange and pink illuminate the sky with an ethereal glow, casting long shadows on the rugged mountain ranges below. The composition frames the setting sun perfectly between two peaks, creating a balanced and symmetrical image. A soft, golden light filters through the clouds, giving texture to the atmosphere and depth to the scene. This tranquil yet powerful moment invokes feelings of peace, wonder, and the passing of time.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun sets, bathe in a breathtaking tapestry of colors unfolding across the sky. Witness the majestic sun casting a warm, ethereal glow over towering mountains, with vibrant purples and blues illuminating the canvas and snow-capped peaks shimmering like precious gems. Inhale the sweet scent of wildflowers and pine trees carried by a gentle breeze. Listen to birds singing their evening songs in harmony with the lapping waves of nearby lakes. Frame this tranquil yet powerful moment between two peaks, capturing the balanced and symmetrical image of nature's majesty in soft, golden light filtering through clouds. This visual style evokes feelings of peace, wonder, and the passing of time.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-104533/iter0-cand2.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the golden sun sinks below the horizon, its warm rays bathe the majestic mountains in hues of orange, pink, and purple. The craggy peaks shimmer under the glowing sky, their snow-capped summits catching the last light before succumbing to the encroaching darkness. A gentle breeze rustles through the trees at the foot of the mountains, carrying with it the crisp, cool fragrance of pine needles and wildflowers, while birds sing lullabies to the setting sun. The tranquil scene evokes a sense of awe-inspiring beauty and serene peacefulness.",
+          "howPrompt": "As the sun begins its descent, casting long shadows across the landscape, the mountains emerge, their jagged peaks bathed in a warm, golden glow. The vibrant orange and pink hues of the sky bleed into the craggy surfaces of the mountains, creating an ethereal and otherworldly atmosphere. The texture of the rocks is defined by the play of light and shadow, while the tranquil air is punctuated by the occasional call of a distant bird or the gentle rustling of leaves in the wind. This visual style evokes a sense of peace and wonder, a moment suspended in time that speaks to the beauty and majesty of nature.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the golden sun sinks below the horizon, the majestic mountains are bathed in a warm, ethereal glow of orange, pink, and purple hues. The jagged peaks shimmer under the glowing sky, their snow-capped summits catching the last light before succumbing to the encroaching darkness. A gentle breeze rustles through the trees at the foot of the mountains, carrying with it the crisp, cool fragrance of pine needles and wildflowers. Birds sing lullabies to the setting sun as the landscape comes alive with vibrant colors and textures, defined by the play of light and shadow. The tranquil scene evokes a sense of awe-inspiring beauty and serene peacefulness, capturing a moment suspended in time that speaks to the majesty and wonder of nature.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-104533/iter0-cand3.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

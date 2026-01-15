@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-101513",
+  "timestamp": "2026-01-14T18:15:13.607Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the quiet expanse of a digital laboratory, a simple test image glows on an ultramodern monitor. Its pixelated surface, dotted with subtle grays and stark white lines, beckons like a minimalist canvas. The room hums with the soft whirring of machinery, punctuated by the occasional beep or click, creating a soothing symphony of progress. A sense of anticipation hangs heavy in the air as researchers poise their fingers over keyboards, ready to scrutinize every detail and evaluate the image's quality-a crucial step in advancing technology's ever-evolving frontier.",
+          "howPrompt": "that is \"visually stunning\" with a \"gritty, cinematic feel.\"\n\nThe \"a simple test image\" transforms into an evocative masterpiece with a gritty, cinematic feel. The image is bathed in low-key lighting, casting deep shadows that accentuate the textures of aged brick walls and weathered metal surfaces. The color palette leans toward monochromatic tones with bursts of muted reds and oranges, reminiscent of a vintage film noir. The composition is intentionally off-kilter, drawing the viewer's gaze to the intriguing juxtaposition of light and dark areas. The atmosphere is tense yet inviting, as if stepping into the set of a gripping detective drama.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of an empty lab, a solitary test image graces the sterile, backlit monitor. The black and white photograph consists of a simple grid pattern - squares within squares, like a Russian nesting doll. Its monochromatic simplicity belies the complexity hidden beneath the surface. Each square, upon closer inspection, reveals intricate details: a subtle texture, a faint gradient, or a tiny speck of color. The image pulses softly against the dark background, casting a gentle glow that illuminates the room with a sense of anticipation and curiosity. Despite its mundane appearance, the test image sparks the imagination, inviting us to explore the depths of its intricate layers, each revealing new possibilities.",
+          "howPrompt": "for a high contrast, monochrome aesthetic.\n\nIn the realm of visual style, \"a simple test image\" takes on an entirely new dimension when transformed into a high contrast, monochrome masterpiece. The image is bathed in stark, unyielding shadows and intense highlights that play a dramatic dance of light and dark. Each tonal value leaps from the page or screen with an almost three-dimensional presence. The absence of color heightens the viewer's attention to the intricacies of texture and form, revealing an underlying complexity within the simplest of subjects. This monochrome aesthetic evokes a sense of timelessness, reminiscent of classic film photography or the graphic artistry found in noir cinema.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of the digital realm, a solitary test image emerges. It's a humble composition, an unassuming array of monochromatic pixels, arranged with surgical precision to form the visage of a weathered man. His furrowed brow and sunken eyes seem to convey a sense of quiet contemplation or perhaps weary resignation. The image's faded contrast casts a pensive mood over the scene, a poignant reminder that even within the cold, unfeeling world of binary code, there exists the capacity for subtle emotion and intrigue.",
+          "howPrompt": "with a \"soft and warm color palette\" in a \"moody, low-key lighting environment.\"\n\nIn the dimly lit scene, a solitary test image emerges, bathed in a soft and warm, golden hue. The gentle glow envelops the image's edges, creating an intimate, inviting atmosphere that beckons the viewer closer. Shadows deepen, giving depth to the textures while the muted colors of the background blur softly into obscurity. This visual style evokes a sense of nostalgia and comfort, reminiscent of an old photograph found in the attic, its memories preserved in amber tones.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the stillness of the digital void, a solitary test image emerges. It's a simple 256x256 pixel square, its pristine white surface unblemished by the chaotic noise of the data realm. The image hums with an electric energy, its perfect edges radiating like the glow of an LED screen. The scene is devoid of color or complexity, yet the pure, crystalline presence of this digital entity resonates powerfully in the empty expanse, a beacon amidst the binary abyss.",
+          "howPrompt": "taken with a black-and-white film camera.\n\nThis monochrome test image, reminiscent of classic film photography, is bathed in an ethereal soft-focus glow. The composition centers around a single, weathered barn door, its texture etched with the passage of time, contrasting sharply against the pristine, cloudless sky. The black and white color palette imbues the scene with a timeless, nostalgic atmosphere, as if captured on film decades ago. The image's grainy texture, a characteristic trait of black-and-white photography, adds depth and nuance, while the subtle tonal variations evoke a sense of warmth and intimacy.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

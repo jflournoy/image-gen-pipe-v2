@@ -1,0 +1,52 @@
+{
+  "sessionId": "ses-112233",
+  "timestamp": "2026-01-14T19:22:33.733Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day yields to twilight, a breathtaking sunset unfolds over towering mountains. The sky is awash in hues of orange, pink, and purple, each layer melding into the next like an artist's palette come to life. Shadows elongate across craggy peaks as the last rays of sunlight cling stubbornly to their summits. A sense of tranquility pervades the scene, broken only by the occasional call of a nocturnal bird or the distant echo of water cascading down a rocky slope. The serene beauty of nature unfolds before you, inviting contemplation and rejuvenation.",
+          "howPrompt": "As the sun begins its descent beyond the horizon, the sky ignites with a breathtaking display of warm hues. The mountains, bathed in the golden light, take on an ethereal quality with their rugged peaks casting long shadows against the vibrant backdrop. The atmosphere is serene and contemplative, as if time itself has come to a standstill. The rich color palette ranges from fiery oranges and reds to deep purples and blues, while the texture of the scene is defined by the intricate patterns of light and shadow playing upon the mountainous terrain. This visual style evokes a sense of wonder and tranquility, transporting the viewer to a moment of breathtaking beauty.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun sets, a breathtaking display of warm hues unfolds across the sky, illuminating towering mountains. The scene is awash in vibrant orange, pink, and purple tones that blend seamlessly together like an artist's palette come to life. The craggy peaks cast long shadows against the backdrop, as the last rays of sunlight cling stubbornly to their summits. The atmosphere is serene and contemplative, with a rich color palette ranging from fiery oranges and reds to deep purples and blues. The texture of the scene is defined by intricate patterns of light and shadow that play upon the mountainous terrain. Shadows elongate across peaks as nocturnal birds call in the distance and the occasional echo of water cascading down a rocky slope breaks the tranquil silence. This visual style invites contemplation, rejuvenation, and a moment of breathtaking beauty.",
+          "image": {
+            "localPath": "output/2026-01-14/ses-112233/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to set, a riot of colors unfolds across the vast expanse of the sky. The mountains, once bathed in sunlight, are now transformed into a canvas of fiery hues - oranges, pinks, purples and reds, melting into each other in a breathtaking display. Each peak and valley takes on an ethereal glow as the light dances across their rugged surfaces. The air cools and stills, carrying the faint scent of pine and wildflowers. A sense of tranquility descends upon the scene as the world pauses to bear witness to this natural masterpiece.",
+          "howPrompt": "As the sun descends beneath the horizon, the sky bursts into a breathtaking display of warm hues: orange, pink, red, and purple. The mountains, bathed in this ethereal light, take on a majestic quality with their peaks glowing like embers against the backdrop of the vibrant sunset. Shadows lengthen and deepen, creating an intricate texture on the mountain faces that is both visually striking and serene. The atmosphere is one of tranquility and awe-inspiring beauty as nature puts on this dazzling show.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

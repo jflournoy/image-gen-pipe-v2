@@ -1,0 +1,62 @@
+{
+  "sessionId": "ses-215935",
+  "timestamp": "2026-01-14T05:59:35.603Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun begins its descent, a breathtaking tapestry of color unfolds over towering mountains. The sky ablaze with hues of orange, pink, and purple, the mountains stand tall and proud against the backdrop, their rugged peaks shrouded in the warm glow of the setting sun. A gentle breeze carries the sweet scent of pine and wildflowers, as if inviting you to pause and savor this moment of tranquility before the night takes hold.",
+          "howPrompt": "As the sun begins to dip below the horizon, the sky ignites in a breathtaking display of warm oranges, pinks, and purples. The mountains, bathed in this glowing light, take on a majestic quality as their jagged peaks and rocky textures are softened by the golden hues. Shadows stretch long and dark against the landscape, adding depth and dimension to the scene. A sense of peace and tranquility permeates the atmosphere, inviting viewers to pause and appreciate the beauty of nature. This visual style is reminiscent of classic cinematic moments or romantic landscapes in photography, where the interplay between light and shadow captivates the imagination.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun begins to dip below the towering mountains, a breathtaking tapestry of warm colors unfolds in the sky, igniting a display of oranges, pinks, and purples. The mountains take on a majestic quality as their jagged peaks and rocky textures are softened by the golden hues of the setting sun, casting long, dark shadows against the landscape. The sweet scent of pine and wildflowers carried by a gentle breeze invites viewers to pause and savor this moment of tranquility before the night takes hold. This scene is captured in a visual style reminiscent of classic cinematic moments or romantic landscapes in photography, where the interplay between light and shadow captivates the imagination, transporting viewers into a peaceful and captivating world.",
+          "image": {
+            "localPath": "output/2026-01-13/ses-215935/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day bids its final farewell, a breathtaking sunset unfolds over towering mountains, painting the sky with hues of orange, pink, and purple. The sun, a radiant orb, sinks gradually behind the peaks, casting long shadows on the valleys below. The tranquil scene is accompanied by the gentle rustling of leaves in the wind, whispering a lullaby to the world as day turns into night.",
+          "howPrompt": "In the expansive canvas of the twilight sky, a radiant sun bids farewell, casting long, amber shadows on the towering mountain ranges. The vibrant hues of orange and pink splash across the horizon in sweeping, graceful arcs, while the mountains remain a somber, yet captivating contrast in their dark, textured silhouette. As daylight wanes, the atmosphere becomes serene and tranquil, inviting viewers to pause and reflect on the fleeting beauty of the moment. The scene evokes a sense of peaceful nostalgia, as if captured from an epic, cinematic panorama.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the tranquil twilight scene, a radiant sun casts long, amber shadows on towering mountain ranges, as the sky unfolds with breaththtaking hues of orange, pink, and purple. The vibrant colors splash across the horizon in sweeping arcs, while the mountains remain a somber yet captivating contrast in their dark, textured silhouette. Gentle rustling leaves whisper a lullaby to the world as day turns into night. This cinematic panorama invites viewers to pause and reflect on the fleeting beauty of the moment, evoking a sense of peaceful nostalgia.",
+          "image": {
+            "localPath": "output/2026-01-13/ses-215935/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}

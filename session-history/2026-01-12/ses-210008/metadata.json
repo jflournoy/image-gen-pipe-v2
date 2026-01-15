@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-210008",
+  "timestamp": "2026-01-13T05:00:08.819Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking spectacle of a magnificent sunset over towering mountains, their peaks bathed in hues of orange and pink as the golden orb sinks below the horizon. The cool evening breeze carries with it the sweet scent of wildflowers and pine trees, while the tranquil sound of a nearby stream adds to the serene ambiance. As the last vestiges of daylight fade away, the night sky comes alive with a dazzling display of stars, twinkling against the inky black canvas. This moment invites reflection and contemplation, as one is reminded of the passage of time and the wondrous beauty that surrounds us.",
+          "howPrompt": "As the sun begins to descend behind the towering mountains, the sky transforms into a breathtaking canvas of warm hues and vibrant colors. The mountain range is bathed in a soft golden light that brings out their textured peaks, casting long shadows across the landscape below. The atmosphere is serene and peaceful, as if time itself has come to a standstill, inviting contemplation and reflection on the beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the last vestiges of day cling desperately to the western horizon, the sky is set ablaze with a symphony of colors that would leave even the most jaded observer breathless. Majestic mountains, their peaks dusted with a light covering of snow, stand sentinel against the encroaching darkness. The sun casts long, golden shadows across the landscape as it sinks slowly beneath the rolling hills, leaving behind a sense of tranquility and wonder that lingers long after the final embers of sunlight have faded away.",
+          "howPrompt": "As the sun begins to dip below the horizon, the mountains come alive with a breathtaking display of color. The sky is ablaze with hues of orange, pink, and red, casting a warm glow over the rugged mountain peaks. Shadows lengthen and deepen, adding depth and texture to the scene. The atmosphere is serene and tranquil, as if time has momentarily come to a standstill, inviting the viewer to pause and appreciate the natural beauty of the world around them. This visual style evokes the romanticism and wonderment often associated with sunsets and the majesty of mountains.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the sun dips below the horizon, a brilliant tapestry of colors unfolds across the sky. The mountains, once jagged and imposing, soften as they're bathed in the warm glow of the setting sun. The vibrant hues of pink, orange, and red meld into each other, casting long, romantic shadows on the rugged peaks. Birds sing their evening songs as a gentle breeze carries the sweet scent of pine trees through the crisp autumn air. Peaceful silence descends, allowing one to pause and truly appreciate nature's breathtaking spectacle.",
+          "howPrompt": "In this captivating image, the sun is setting gracefully over a range of majestic mountains. The sky is painted with vibrant hues of orange, pink, and purple as the sun slowly sinks below the horizon. The composition of the photograph cleverly places the sun directly in the frame's center, creating a sense of symmetry that draws the viewer's eye in. Long shadows cast by the mountains add depth and texture to the scene, while the warm glow of the setting sun imbues the atmosphere with a sense of tranquility and serenity.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "The sun, a golden orb, begins its descent behind the majestic mountains, painting the sky with hues of fiery reds, deep purples, and tranquil oranges. The air is filled with a crisp chill, signaling the end of another day as birds migrate back to their nests for the night. The breathtaking scene unfolds before you - snow-capped mountains standing tall against the skyline, their silhouettes framing the vibrant canvas above. The tranquility and beauty of nature envelops you, leaving a sense of peace and wonder in its wake.",
+          "howPrompt": "As the sun descends behind towering, rugged mountains, a warm golden glow spreads across the vast, open sky. The peaks are bathed in rich hues of orange and pink, their jagged silhouettes standing bold against the vibrant backdrop. Shadows lengthen as the light slowly fades, creating intricate patterns on the rocky terrain below. A gentle breeze rustles through the trees, adding a sense of serenity to the scene as the cool evening air begins to settle in. The atmosphere is one of tranquility and awe-inspiring beauty, reminiscent of a classic Hollywood sunset scene in an epic western film.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

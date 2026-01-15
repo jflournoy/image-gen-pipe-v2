@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-175054",
+  "timestamp": "2026-01-15T01:50:54.681Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day comes to an end, the sky transforms into a breathtaking canvas of fiery hues. The sun, a radiant orb of molten gold, slowly descends behind the majestic mountains. The peaks, painted in shades of pink, orange, and purple, seem to glow with an inner light. A gentle breeze carries the scent of wildflowers through the crisp autumn air, adding an element of tranquility to this enchanting scene. As twilight deepens, the first stars begin to emerge, promising a night filled with wonder and mystery.",
+          "howPrompt": "As the sun descends, the sky above the mountains transforms into a breathtaking canvas of warm hues. The fiery orb casts long shadows over rugged peaks, their jagged edges bathed in a golden light. Bursts of orange, pink, and red hues dance across the horizon as if painted by an artist's hand. The tranquil atmosphere is heightened by the gentle ripples on reflective water bodies at the mountain's base, adding texture and depth to this stunning visual style.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day surrenders to the encroaching night, the sun descends below the horizon in a fiery display of oranges, reds, and pinks. The mountains stand proud against the backdrop of this celestial spectacle, their jagged peaks casting elongated shadows on the landscape below. A gentle breeze carries the sweet scent of pine and wildflowers, while the chirping of crickets and hooting of owls adds a soothing soundtrack to the peaceful scene. The tranquility of nature envelops you, inviting reflection and contemplation.",
+          "howPrompt": "As the sun begins to set, a warm golden glow illuminates the mountaintops from behind, casting long shadows over the rugged landscape below. The vibrant orange and pink hues of the sky are mirrored in the tranquil water of a nearby lake or river, creating a breathtaking contrast between light and dark. Dust particles in the air catch the remaining sunlight, scattering it in mesmerizing rays that illuminate the texture of the mountainside, revealing intricate rock formations and rough terrain. The atmosphere is one of peaceful serenity and awe-inspiring beauty, inviting contemplation and reflection.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

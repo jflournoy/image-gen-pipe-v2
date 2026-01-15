@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-123234",
+  "timestamp": "2026-01-12T20:32:34.486Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to set, a brilliant display of colors unfolds over towering mountains. The sky transforms into a canvas painted with hues of orange, pink, and purple that slowly give way to the star-studded night. The tranquil scene is accentuated by the gentle whispers of the wind, as it rustles through the leaves of nearby trees, creating a soothing melody. The serene atmosphere invites introspection, allowing one to unwind and appreciate the beauty of nature.",
+          "howPrompt": "As the sun begins to set, the sky transforms into a breathtaking canvas of warm oranges, pinks, and purples. The mountains in the distance appear as silhouettes against this vibrant backdrop, their peaks dusted with the lingering glow of the setting sun. The atmosphere is serene and tranquil, the air thick with the scent of nature, inviting contemplation and reflection. This stunning visual style evokes the feeling of a perfect ending to a day, reminiscent of a romantic scene in a movie or an inspiring photograph from National Geographic.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the expansive canvas of the western sky, a breathtaking sunset unfolds, as if painted by an unseen master. The sky is ablaze with hues of orange, pink, and purple that dance upon the canvas of clouds. Majestic mountains, their peaks bathed in gold, stand sentinel against the fiery backdrop. The cool evening air carries the scent of pine and wildflowers as birds return to their roosts, signaling the approaching twilight. Peaceful tranquility settles upon the landscape as day gives way to night.",
+          "howPrompt": "The breathtaking image of a sunset over mountains unfolds in a symphony of warm hues and contrasting textures. The sun, a grand orb of molten gold, casts long, ethereal shadows over the rugged peaks. The sky is ablaze with fiery reds, oranges, and pinks, reflecting off tranquil pools of water below. Each mountain, draped in rich earth tones and adorned with wispy clouds, exudes a sense of timeless grandeur. This photographic masterpiece evokes a sense of serene beauty and awe-inspiring power, capturing the fleeting magic of nature's daily transformation.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the day draws to a close, the sky is set ablaze with hues of orange, pink, and purple. The sun, a molten orb of gold, slowly sinks behind the towering mountains, their jagged peaks silhouetted against the fiery backdrop. Birds return to their nests, their melodic songs echoing through the valley below. A gentle breeze rustles the leaves, carrying with it the sweet scent of blooming wildflowers and the faintest hint of campfire smoke from distant campsites. The tranquil scene bathes in a golden glow, casting long shadows over the rugged landscape, as the first stars twinkle in the vast expanse above. Peaceful silence envelopes the land, broken only by the soothing sound of crickets and the rhythmic flow of a nearby river.",
+          "howPrompt": "As the sun begins to set, its golden light illuminates the majestic mountains in a warm and inviting glow. The sky is ablaze with vibrant hues of pink, orange, and red, casting long, dramatic shadows on the jagged peaks. The composition expertly balances the serene beauty of the sunset against the grandeur and power of the towering mountains. Textures of rough rock and lush vegetation are accentuated by the soft sunlight, while the atmosphere is peaceful yet awe-inspiring, invoking feelings of tranquility and wonder. This breathtaking scene, reminiscent of classic cinematic or landscape photography, captivates the viewer with its stunning composition, rich color palette, and evocative sense of place.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the golden sun begins to dip below the horizon, the sky transforms into a breathtaking canvas of warm hues. The mountains, once cloaked in the harsh light of day, now appear as majestic silhouettes against the backdrop of fiery oranges, pinks, and purples. The cool evening breeze gently rustles through the trees, carrying with it the sweet scent of wildflowers and fresh mountain air. As twilight descends, a sense of peace washes over the landscape, enveloping all who behold this breathtaking sunset.",
+          "howPrompt": "As the golden sun begins to descend behind the majestic mountains, the sky is ablaze with a vibrant palette of oranges, pinks, and reds. The sun's warm light casts long, dramatic shadows across the rugged terrain, creating an intricate interplay between light and dark. Each mountain peak is bathed in a rich, golden glow, while the valleys below are shrouded in a deep, velvety blue hue. The atmosphere is serene yet powerful, evoking feelings of awe and tranquility. This stunning visual style captures the breathtaking beauty of nature at its finest, reminiscent of a masterful oil painting or a cinematic panorama.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

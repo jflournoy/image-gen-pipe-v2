@@ -1,0 +1,54 @@
+{
+  "sessionId": "ses-084820",
+  "timestamp": "2026-01-15T16:48:20.526Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking scene as the sun slowly descends behind majestic mountains, casting long, golden shadows across the tranquil valley below. The vibrant oranges, pinks, and purples of the sunset illuminate the rugged peaks with an ethereal glow. A gentle breeze carries the scent of pine and wildflowers as crickets begin their symphony, enveloping the serene landscape in a peaceful silence broken only by nature's soft whispers.",
+          "howPrompt": "The breathtaking scene of a beautiful sunset over mountains presents an ethereal spectacle, where the sun casts warm, amber hues on the towering peaks. The mountains, bathed in golden light, exude a sense of grandeur and tranquility, their textured surfaces revealing intricate details as shadows dance along their crevices. This cinematic tableau evokes an emotional response with its stunning composition of vibrant colors merging between the sky and the land, inviting the viewer to immerse themselves in this breathtaking moment of natural beauty.",
+          "critique": null,
+          "status": "completed",
+          "combined": "Experience the ethereal sunset scene over majestic mountains, as the warm, amber hues of the setting sun cast long, golden shadows on the rugged peaks. The vibrant oranges, pinks, and purples of the sunset illuminate the intricately textured surfaces of the mountains, revealing their grandeur and tranquility. A gentle breeze carries the scent of pine and wildflowers as crickets begin their symphony, enveloping the peaceful valley in a serene silence broken only by nature's soft whispers. This cinematic tableau invites you to immerse yourself in the breathtaking moment, where stunning compositions of vibrant colors merge between the sky and the land.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-084820/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins its gentle descent towards the horizon, the sky transforms into a breathtaking canvas of oranges, pinks, and purples. Majestic mountains, their peaks dusted with snow, stand proudly against this backdrop. The cool evening breeze carries the scent of pine trees, mingling with the crispness in the air. Birds sing melancholic songs as they prepare for the night, creating a serene atmosphere that invites contemplation and tranquility.",
+          "howPrompt": "As the sun begins to descend beneath the horizon, the sky is set ablaze with hues of orange, pink, and red. The mountains in the distance are bathed in the warm glow of this breathtaking display, their peaks appearing as silhouettes against the fiery backdrop. The atmosphere is serene yet powerful, invoking feelings of awe and tranquility. The texture of the scene is velvety smooth, with long shadows stretching across the terrain and delicate clouds drifting gently through the sky. This image captures the timeless beauty and majesty of nature at its finest.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun gently descends, the sky transforms into a breathtaking canvas of oranges, pinks, and purples, with majestic mountains, their peaks dusted with snow, standing proudly against this backdrop. The cool evening breeze carries the scent of pine trees, mingling with the crispness in the air. Birds sing melancholic songs as they prepare for the night, creating a serene atmosphere that invites contemplation and tranquility. depict this scene using hues of orange, pink, and red; the mountains bathed in the warm glow of this breathtaking display, their peaks appearing as silhouettes against the fiery backdrop. The texture of the scene is velvety smooth, with long shadows stretching across the terrain and delicate clouds drifting gently through the sky. evoke feelings of awe and tranquility; capture the timeless beauty and majesty of nature at its finest.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-084820/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

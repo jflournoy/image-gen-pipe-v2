@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-094540",
+  "timestamp": "2026-01-14T17:45:40.488Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the grand theater of nature, a magnificent sunset unfolds over towering mountains, their rugged peaks painted in hues of fiery orange and deep magenta. The sky above shimmers with vibrant shades of pink and purple, casting an ethereal glow upon the landscape below. As the last rays of sunlight bathe the valleys and forests in golden light, a sense of serenity washes over the viewer, inviting them to savor this breathtaking moment of beauty and tranquility.",
+          "howPrompt": "As the sun dips below the horizon, a breathtaking tableau unfolds before us. The sky is ablaze with vibrant hues of orange, pink, and red, as if an artist has brushed the heavens with bold strokes. The mountains stand tall against this backdrop, their peaks shrouded in shadows, creating an intriguing interplay between light and dark. A warm golden glow casts long, elongated shadows on the rugged terrain below, while a gentle breeze creates ripples in the tranquil water reflecting the radiant colors above. The air is filled with an ethereal quality, as if time itself has slowed down to savor this fleeting moment of breathtaking beauty.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, the sky is set ablaze with hues of orange, pink, and purple. The mountains, their jagged peaks silhouetted against the fiery backdrop, loom large in the distance. A gentle breeze rustles through the trees lining the valley floor, carrying the scent of pine needles and wildflowers on its wings. The atmosphere is tranquil, inviting, and full of wonder, a perfect moment to pause and reflect on the beauty and majesty of nature.",
+          "howPrompt": "As the sun begins to dip below the horizon, a riot of warm colors spreads across the sky, painting the mountains with hues of orange, pink, and red. The sunlight casts long shadows on the jagged peaks, creating an intricate interplay between light and darkness. The atmosphere is serene and tranquil, as if time itself has paused to appreciate this breathtaking moment. The texture of the image is rich and layered, with the rough, craggy surface of the mountains contrasting against the smooth, velvety sky. The scene evokes a sense of awe and wonder, transporting the viewer to a place of peace and contemplation.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking sight of a magnificent sunset painting the sky above towering mountains. The orb of fire dips below the horizon, casting long shadows on the rugged landscape. Golden hues illuminate the mountainous terrain, while the fading light tints the clouds a vibrant mix of pink and orange. The crisp mountain air carries the scent of pine trees and wildflowers, inviting you to take in this serene and breathtaking moment. Peaceful silence envelopes the scene, broken only by the gentle rustling of leaves and the distant echo of a babbling brook. The sun's final rays set the stage for an unforgettable night in nature's tranquil embrace.",
+          "howPrompt": "As the sun begins to descend below the horizon, the sky erupts in a breathtaking display of fiery oranges, reds, and pinks that cascade from the heavens down towards the earth. The mountains stand tall and majestic against this radiant backdrop, their peaks dusted with snow that reflects the vibrant hues of the sunset, casting an ethereal glow across the landscape. Shadows lengthen and deepen as the light fades, creating a sense of tranquility and serenity that captivates the soul. This stunning scene is reminiscent of classic painterly techniques and nostalgic childhood memories of warmth and comfort.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the golden orb of the sun descends beneath the horizon, its radiant glow bathes the majestic mountains in a warm, ethereal light. The mountaintops, once cloaked in shadow, are now illuminated with a breathtaking palette of hues: fiery orange and red blend seamlessly with the soft pinks and purples of the twilight sky. The serene landscape is filled with an invigorating silence, punctuated only by the occasional hooting of an owl or the gentle rustling of leaves in the evening breeze. The tranquility of the moment transcends the viewer, allowing them to bask in the simple yet profound beauty of nature's grand spectacle.",
+          "howPrompt": "As the golden sun begins to set, its vibrant hues of orange, pink, and red cast an ethereal glow over towering mountains. The long, low-angled sunlight accentuates their textured peaks and valleys, creating depth and dimension in the scene. As the day transitions into night, a soft, cool blue tint takes over, slowly enveloping the landscape in tranquility and serenity. The atmosphere is one of breathtaking beauty and timelessness, reminiscent of a classic Romantic painting or an awe-inspiring cinematic moment.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

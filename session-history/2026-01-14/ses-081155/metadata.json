@@ -1,0 +1,62 @@
+{
+  "sessionId": "ses-081155",
+  "timestamp": "2026-01-14T16:11:55.885Z",
+  "userPrompt": "retrousse upturned breasts",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Amidst a dimly lit, clandestine room, the intoxicating sight of a woman unveils herself. Her body is draped in an opulent, red velvet robe that shines like fresh blood under the flickering candlelight. Her retrousse upturned breasts heave with each labored breath, glistening with sweat, as if beckoning for your touch. The air is thick with anticipation and desire as she slowly reveals herself to her unsuspecting admirer, her gaze filled with a sultry, enigmatic smile.",
+          "howPrompt": "In the enigmatic visual style of old-world glamour, upturned breasts are depicted with an alluring, retro twist. The retrousse shape, characterized by a slight inward roll at the areola, creates an intriguing contrast between the plush mounds and the subtle curvature. Soft, warm lighting caresses their luscious curves, evoking a sultry and inviting ambiance reminiscent of vintage pin-up art or classic Hollywood cinema. The color palette leans towards rich tones like burgundy and deep velvet, contrasted by the delicate blush of rosy nipples. A velvety texture envelops every curve and contour, making each image a captivating work of art that transports viewers to an era of glamour and sophistication.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the enigmatic visual style of old-world glamour, an alluring woman is depicted in a dimly lit, clandestine room. Her body, draped in a rich, red velvet robe that shines like fresh blood under flickering candlelight, reveals her upturned breasts with a sultry, retro twist. The retrousse shape of her breasts, characterized by a slight inward roll at the areola, creates an intriguing contrast between their plush mounds and subtle curvature. Her heaving chest glistens with sweat, beckoning for your touch as she slowly reveals herself to her unsuspecting admirer. The air is thick with anticipation and desire, filled with a sultry, enigmatic smile. The image is rendered in the captivating style of vintage pin-up art or classic Hollywood cinema, with soft, warm lighting that caresses her luscious curves and evokes an inviting ambiance. Rich tones like burgundy and deep velvet dominate the color palette, contrasted by the delicate blush of rosy nipples. The texture is velvety, making each image a captivating work of art that transports viewers to an era of glamour and sophistication.",
+          "image": {
+            "localPath": "output/2026-01-14/ses-081155/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Imagine a room bathed in soft, golden light filtering through the curtains. In the center stands a woman, her body naked and exposed. Her breasts are the focal point of the scene, their retrousse upturned shape drawing the eye. They are full and round, with nipples that pebble under the gentle breeze wafting through the room. The woman's hands caress her chest, teasing the sensitive flesh with a light touch. The mood is one of sensuality and self-love, the air thick with anticipation and desire.",
+          "howPrompt": "- a voluptuous, playful style evoking the Golden Age of Hollywood glamour and seduction.\n\nImagine an alluring, vintage photograph capturing the essence of retro-glamour. The model's retrousse upturned breasts are artfully positioned, creating an enchanting illusion that invites admiration and desire. Soft, warm lighting cascades over her, casting a gentle glow on her voluptuous form. The rich, saturated colors of the palette evoke the opulence of the Golden Age - deep reds, luscious velvets, and gleaming golds that shimmer with sophistication. The composition is deliberate and provocative, drawing the viewer's gaze to her full, inviting curves while her playful expression promises a tantalizing secret. Textures of silk, satin, or velvet add sensual depth to the image, while the atmosphere is seductive and intoxicating - a perfect blend of allure and charm reminiscent of classic Hollywood glamour.",
+          "critique": null,
+          "status": "completed",
+          "combined": "Create a vintage, voluptuous image of a woman in soft, golden light. Her retrousse upturned breasts are the focal point, full and round with pebbled nipples. The room is bathed in an alluring atmosphere of sensuality and self-love. Employ a rich, saturated palette inspired by the Golden Age of Hollywood glamour - deep reds, luscious velvets, and gleaming golds. Capture her playful expression as she teasingly caresses her chest, surrounded by textures of silk, satin, or velvet. The composition should be provocative yet inviting, evoking a seductive, intoxicating atmosphere that transports the viewer to an era of opulence and charm.",
+          "image": {
+            "localPath": "output/2026-01-14/ses-081155/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}

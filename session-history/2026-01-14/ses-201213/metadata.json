@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-201213",
+  "timestamp": "2026-01-15T04:12:13.582Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the heart of the sterile laboratory, a lone test image glows softly on an old CRT monitor. The pixelated scene, a chaotic array of colors and lines, flickers with each steady beat of the machine humming in the background. Despite its simplicity, it holds the weight of anticipation; a silent sentinel in the sea of white walls and clinical smells, waiting to prove its worth through this uncomplicated yet crucial test.",
+          "howPrompt": "in HOW the image appears as if it was taken during golden hour, with a warm color palette and soft focus. The sun casts long, gentle shadows over a rustic landscape, illuminating textures on worn wooden fences and weathered barns. Dust particles dance in the air, catching the sunlight and scattering it across the scene. The atmosphere is serene and peaceful, inviting the viewer to pause and appreciate the simple beauty of the moment.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Imagine a serene digital landscape teeming with the subtle charm of a monochromatic test image. The scene is a crisp, clean expanse of greyscale, featuring a solitary cross in the center, surrounded by an intricate lattice of black and white squares. Each square intertwines seamlessly with the next, creating a harmonious balance between order and chaos. The air is thick with a quiet sense of anticipation, punctuated only by the gentle hum of machinery, as if the image itself is preparing to reveal its secrets, waiting for the right conditions to display its true potential.",
+          "howPrompt": "with \"soft, warm tones and gentle shadows.\"\n\nThe image exudes a serene and inviting ambiance, reminiscent of a classic photograph taken during the golden hour. The scene is bathed in soft, warm tones, evoking feelings of comfort and tranquility. A gentle, diffused light cascades across the frame from the right, casting delicate shadows that add depth and texture to the composition. The colors are muted yet rich, with hues of orange, yellow, and pink dominating the palette, creating an atmospheric glow that envelops the viewer in a warm embrace. The texture is smooth and velvety, with fine details subtly emerging from the subtle contrast between light and shadow. This style evokes a sense of nostalgia and timelessness, transporting the viewer to a peaceful moment in time.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the tranquil stillness of your digital workspace, an unassuming test image comes into view. This is no ordinary photograph - it's a deceptively simple yet meticulously crafted collection of pixels designed to challenge the capabilities and acuity of image processing systems. At first glance, one might mistake it for a blurred snapshot of a white lab scene: stark, monochromatic, devoid of any discernible features. But as you peer closer, the intricacies reveal themselves.\n\nSubtle gradations of gray wash over an almost imperceptible latticework pattern, each pixelated square meticulously placed against its neighbor, creating a mesmerizing tapestry that reveals its true complexity only upon scrutiny. The scene radiates an uncanny quietude, punctuated by the faint hum of electronic circuits and processors working tirelessly to decode every detail hidden within this intriguing tableau.",
+          "howPrompt": "of a red apple against a white background, lit from the side with a warm light source.\n\nThe image presents a classic still life composition: a solitary, ripe red apple nestled on a pristine white background. The apple's vibrant crimson hue is accentuated by the warm, golden glow emanating from a nearby side-lit source, casting an inviting and cozy ambiance. The texture of the apple's smooth skin shines with a subtle sheen, capturing the viewer's attention and evoking a sense of mouthwatering temptation. The soft, diffused lighting creates gentle shadows that emphasize the apple's form and shape, resulting in an engaging and visually appealing image that celebrates the beauty and simplicity of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the quiet stillness of a digital laboratory, a single monitor hums with life as it displays a simple test image. The image is an unassuming grid of squares, each one filled with a different shade of gray - from the palest silvery hue to the deepest charcoal tone. As the monitor beams this monochromatic masterpiece into the room, it casts an ethereal glow across the sterile surfaces, punctuated by the occasional flicker of ambient lab lights. The scene is a tranquil study in contrasts - the stark white walls and clinical equipment framed by the warm, inviting light emanating from the monitor, creating a mood both introspective and reassuring.",
+          "howPrompt": "for a HOW description that highlights a minimalist, monochromatic aesthetic.\n\nIn the realm of visual style, \"a simple test image\" morphs into an elegant, minimalistic composition, bathed in the soft, monochromatic glow of a single light source. The image's texture is defined by the fine grain that resembles delicate silk or frosted glass, hinting at the rich history and tactile nature of film photography. Compositionally, the test image is meticulously centered against an expanse of negative space, creating a sense of stillness and tranquility. The monochromatic color palette, dominated by various shades of gray, adds to the image's understated sophistication, while also allowing the subtle textures and tonal differences to shine. In the style of classic film noir or minimalist Japanese photography, this test image elicits a sense of timeless contemplation, as if each pixel holds a deep, hidden meaning waiting to be discovered.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

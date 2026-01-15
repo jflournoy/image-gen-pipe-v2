@@ -1,0 +1,37 @@
+{
+  "sessionId": "ses-201346",
+  "timestamp": "2026-01-15T04:13:46.282Z",
+  "userPrompt": "a simple test image",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 2,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.8
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the heart of a stark, digital landscape lies a deceptively unassuming test image. Its pixels dance against a canvas of black, forming crisp lines and sharp edges that defy the emptiness surrounding them. A uniform grid of squares, each one filled with a solid hue, stands resolute amidst the void. The air is charged with anticipation as the image awaits the results of its evaluation, the silence broken only by the rhythmic hum of machinery performing their unwavering duties. The scene pulses with an undercurrent of quiet intensity, each pixel a testament to the meticulous craftsmanship and relentless pursuit of perfection that drives the world behind the screen.",
+          "howPrompt": "of a person standing in front of a window with soft, natural light illuminating their face. The composition is balanced, with the window taking up roughly two-thirds of the frame and the subject's figure occupying the remaining third. The color palette is muted and earthy, consisting mainly of browns and beiges. Texture is evident in the folds of the person's clothing and the rough surface of the windowpane. Atmosphere is serene and contemplative, evoking a sense of quiet introspection or reflection. This style could be compared to the cinematic technique used in Scandinavian films or the aesthetic of a classic black-and-white portrait photograph.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

@@ -1,0 +1,52 @@
+{
+  "sessionId": "ses-204013",
+  "timestamp": "2026-01-15T04:40:13.978Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun dips below the horizon, the sky transforms into a breathtaking canvas of vibrant hues. Warm oranges, pinks, and purples spread across the expanse, blending seamlessly with the shadows cast by the towering mountains in the distance. The crisp mountain air carries the faint scent of pine needles and wildflowers, as birds sing their lullabies to the fading day. The serene stillness is broken only by the gentle rustling of leaves and the soothing sound of water cascading down the rocky inclines. The mood is one of peaceful reflection and tranquility, inviting introspection as the world around you comes alive with the magic of nature's sunset spectacle.",
+          "howPrompt": "As the sun begins to descend, it casts a warm, golden glow over towering mountains, their jagged peaks piercing the vibrant orange and pink sky. The atmospheric haze adds depth to the scene, softening the edges of the mountains and bathing everything in a soft, ethereal light. Shadows lengthen, textures become accentuated, and the colors deepen, creating an enchanting and serene atmosphere. This style evokes the feeling of a peaceful and tranquil moment as nature transitions from day to night.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun begins to descend, towering mountains are bathed in a warm, golden glow, their jagged peaks piercing the vibrant orange and pink sky. Shadows lengthen and textures become accentuated as atmospheric haze softens the edges of the mountains, bathing everything in a soft, ethereal light. Warm oranges, pinks, and purples spread across the expanse, blending seamlessly with the shadows cast by the mountains. The crisp mountain air carries the faint scent of pine needles and wildflowers as birds sing their lullabies to the fading day. The gentle rustling of leaves and soothing sound of water cascading down rocky inclines break the serene stillness, inviting introspection in this peaceful moment as nature transitions from day to night.",
+          "image": {
+            "localPath": "output/2026-01-14/ses-204013/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day gives way to night, a breathtaking sunset unfolds over the majestic mountains. The sky is ablaze with hues of orange, pink, and purple, casting long shadows over the towering peaks. A gentle breeze carries the sweet scent of wildflowers and pine trees through the crisp air. Birds sing their evening melodies as the last light fades from the sky, leaving behind a serene and peaceful mood. The world seems to hold its breath in awe, captivated by nature's exquisite display.",
+          "howPrompt": "As the sun begins to descend, a warm golden hue blankets the mountainside in a breathtaking display of color. The mountains themselves appear majestic and imposing, their jagged peaks silhouetted against the fiery orb that is the setting sun. Shadows stretch long across the landscape, deepening the contrast between light and dark. The sky above is awash with vibrant hues of pink, orange, and red, creating a mesmerizing backdrop for this tranquil scene. The cooler tones of the mountainside grasses and rocks add depth and texture, making for a stunning visual composition that speaks to both the power and serenity of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

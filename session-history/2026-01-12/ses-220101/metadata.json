@@ -1,0 +1,84 @@
+{
+  "sessionId": "ses-220101",
+  "timestamp": "2026-01-13T06:01:01.177Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the vast expanse of the western sky, a breathtaking sunset unfolds. The sun, a fiery orb of orange and red hues, descends behind majestic mountains, casting long shadows on the valley below. The air grows crisp and cool, carrying with it the sweet scent of pine and wildflowers. Birds sing lullabies as the sky transforms into a canvas of vibrant colors, reflecting off the tranquil surface of the nearby lake, creating an atmosphere of peace and serenity.",
+          "howPrompt": "As the sun begins to set, its warm orange and pink hues cascade down the mountainside, painting the landscape with rich, vibrant colors. The jagged mountain peaks are bathed in a golden light that highlights their rugged textures, casting long shadows on the rolling hills below. The sky is ablaze with an array of oranges, reds, and purples, reflecting off tranquil bodies of water at the base of the mountains. The peaceful atmosphere is punctuated by the occasional bird in flight against the backdrop of the breathtaking sunset.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the western sky, a breathtaking sunset unfolds as the fiery orb of orange and red hues descends behind majestic mountains. The landscape is bathed in rich, vibrant colors as the warm orange and pink hues cascade down the mountainside, highlighting their rugged textures and casting long shadows on the rolling hills below. The sky transforms into a canvas of oranges, reds, and purples, reflecting off tranquil bodies of water at the base of the mountains. The peaceful atmosphere is punctuated by the occasional bird in flight against this backdrop, carrying with it the sweet scent of pine and wildflowers as the crisp and cool air grows thicker.",
+          "image": {
+            "localPath": "output/2026-01-12/ses-220101/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to descend beneath the horizon, a breathtaking spectacle unfolds before your eyes: mountains in all their majesty, bathed in hues of orange, pink, and red. The sun casts long shadows across the rocky peaks, their jagged edges softened by the golden light filtering through the sky. A sense of peace and tranquility settles over the landscape as birds return to their nests, signaling the end of another day in nature's ever-changing masterpiece.",
+          "howPrompt": "As the day comes to an end, a stunning sunset unfolds over majestic mountains. The sun, a fiery orb, sinks slowly behind the peaks, casting long, golden shadows on the rugged terrain below. Warm hues of orange, pink, and red bathe the scene in a soft, ethereal glow. The mountains, their tops dusted with snow, stand tall against the vibrant backdrop, their texture appearing both rough and serene. An air of tranquility pervades the image, inviting the viewer to take a moment to appreciate nature's breathtaking display. This photographic style evokes feelings of peace, beauty, and the passage of time.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun sets, capture a stunning display of majestic mountains bathed in hues of orange, pink, and red. The fiery orb sinks behind the peaks, casting long, golden shadows on the rugged terrain below. Texture appears both rough and serene as the mountains, their tops dusted with snow, stand tall against the vibrant backdrop. Invoke feelings of peace, beauty, and the passage of time through the ethereal glow that envelops the landscape. The sun's warm light filters through the sky, softening the jagged edges of the mountain peaks while long shadows stretch across the rocky terrain. Birds return to their nests as nature's ever-changing masterpiece comes to a restful close.",
+          "image": {
+            "localPath": "output/2026-01-12/ses-220101/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the day gives way to twilight, a breathtaking sunset unfolds over the majestic mountains. The sky is ablaze with hues of orange, pink, and purple that dance upon the craggy peaks. The sun, a golden orb, sinks slowly, casting long shadows across the rugged terrain. The crisp mountain air carries the sweet scent of pine and wildflowers as birds return to their roosts for the evening. Peaceful serenity envelopes the scene, leaving one feeling small yet connected to the grandeur of nature.",
+          "howPrompt": "As the golden orb of the sun begins to descend beyond the distant mountains, a breathtaking spectacle unfolds before our eyes. The sky is ablaze with vibrant hues of orange, pink, and red, as if painted by an unseen artist's brush. The peaks of the rugged mountains stand tall against this celestial backdrop, their jagged silhouettes casting long, ominous shadows across the tranquil valley below. A warm, ethereal glow emanates from the setting sun, bathing the landscape in a golden light that adds depth and texture to every crevice and crag. The crisp, cool air carries the faint scent of pine and wildflowers, as a gentle breeze rustles the leaves and stirs up the last remnants of the day's warmth. This breathtaking scene evokes a sense of peacefulness and serenity, inviting us to pause and savor the beauty of nature in its most unfiltered form.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the golden orb of the sun begins to descend beyond the majestic, rugged mountains, a breathtaking spectacle unfolds before us. The sky is ablaze with vibrant hues of orange, pink, and purple that dance upon the craggy peaks, casting long shadows across the tranquil valley below. The crisp mountain air carries the sweet scent of pine and wildflowers as birds return to their roosts for the evening. The scene evokes a sense of peaceful serenity, leaving one feeling small yet connected to the grandeur of nature. The visual style is richly textured, with every crevice and crag bathed in a warm, ethereal glow emanating from the setting sun. The jagged silhouettes of the mountains cast long ominous shadows against this celestial backdrop, while the vibrant hues of the sunset add depth and texture to the scene. A gentle breeze rustles the leaves, stirring up the last remnants of the day's warmth as the golden orb sinks slowly, inviting us to pause and savor the beauty of nature in its most unfiltered form.",
+          "image": {
+            "localPath": "output/2026-01-12/ses-220101/iter0-cand2.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, a breathtaking display of color unfolds over towering mountains. The sky transforms into a canvas painted with hues of orange, pink, and purple, each shade blending seamlessly into the next. The mountains stand tall against the backdrop of this mesmerizing spectacle, their jagged peaks shrouded in the last vestiges of sunlight. A gentle breeze carries the crisp scent of pine, adding to the tranquil atmosphere as the day gives way to night.",
+          "howPrompt": "As the sun sinks low, casting long shadows over the rugged mountainside, the sky bursts into a riot of warm hues: orange, pink, red, and gold. The mountains' craggy peaks, bathed in golden light, stand tall against the vibrant backdrop. The atmosphere is serene yet powerful, as if the mountains themselves are holding the sun in its final moments before surrendering to the encroaching night. Texture is added through the use of clouds, which have the soft, billowy appearance of cotton candy or marshmallows, their edges blurred by the fading light. The overall effect is one of breathtaking beauty and tranquility, inviting viewers to pause and reflect on the passage of time.",
+          "critique": null,
+          "status": "completed",
+          "combined": "As the sun dips below the horizon, the mountainside comes alive with a breathtaking display of warm hues: orange, pink, red, and gold. The craggy peaks, bathed in golden light, stand tall against this vibrant backdrop. A gentle breeze carries the crisp scent of pine, adding to the tranquil atmosphere as the day gives way to night. The sky bursts into a riot of color, with each hue blending seamlessly into the next. Texture is added through the use of clouds, which have the soft, billowy appearance of cotton candy or marshmallows, their edges blurred by the fading light. The overall effect is one of breathtaking beauty and tranquility, inviting viewers to pause and reflect on the passage of time. The mountains, standing tall against the backdrop, are rugged yet serene, their jagged peaks shrouded in the last vestiges of sunlight.",
+          "image": {
+            "localPath": "output/2026-01-12/ses-220101/iter0-cand3.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

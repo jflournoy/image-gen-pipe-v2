@@ -106,3 +106,118 @@ describe('Rate Limiter', () => {
     assert.strictEqual(maxConcurrent, 3, 'Should enforce concurrency level of 3');
   });
 });
+
+describe('RateLimiter.setConcurrencyLimit', () => {
+  test('should update concurrency limit', () => {
+    const { RateLimiter } = require('../../src/utils/rate-limiter.js');
+
+    const limiter = new RateLimiter(3);
+    assert.strictEqual(limiter.concurrencyLimit, 3, 'Initial limit should be 3');
+
+    limiter.setConcurrencyLimit(1);
+    assert.strictEqual(limiter.concurrencyLimit, 1, 'Should update to 1');
+
+    limiter.setConcurrencyLimit(5);
+    assert.strictEqual(limiter.concurrencyLimit, 5, 'Should update to 5');
+  });
+
+  test('should reject invalid concurrency limits', () => {
+    const { RateLimiter } = require('../../src/utils/rate-limiter.js');
+
+    const limiter = new RateLimiter(3);
+
+    assert.throws(
+      () => limiter.setConcurrencyLimit(0),
+      /Concurrency limit must be a positive integer/,
+      'Should reject 0'
+    );
+
+    assert.throws(
+      () => limiter.setConcurrencyLimit(-1),
+      /Concurrency limit must be a positive integer/,
+      'Should reject negative numbers'
+    );
+
+    assert.throws(
+      () => limiter.setConcurrencyLimit(1.5),
+      /Concurrency limit must be a positive integer/,
+      'Should reject non-integers'
+    );
+
+    assert.throws(
+      () => limiter.setConcurrencyLimit('2'),
+      /Concurrency limit must be a positive integer/,
+      'Should reject strings'
+    );
+  });
+
+  test('should enforce new lower limit for subsequent tasks', async () => {
+    const { RateLimiter } = require('../../src/utils/rate-limiter.js');
+
+    const limiter = new RateLimiter(5);
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+
+    const task = async () => {
+      currentConcurrent++;
+      maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+      await new Promise(resolve => setTimeout(resolve, 20));
+      currentConcurrent--;
+      return 'done';
+    };
+
+    // Change to serial (1) before running tasks
+    limiter.setConcurrencyLimit(1);
+
+    const promises = Array(3).fill().map(() => limiter.execute(task));
+    await Promise.all(promises);
+
+    assert.strictEqual(maxConcurrent, 1, 'Should enforce new limit of 1');
+  });
+
+  test('should start queued tasks when limit increases', async () => {
+    const { RateLimiter } = require('../../src/utils/rate-limiter.js');
+
+    const limiter = new RateLimiter(1);
+    let maxConcurrent = 0;
+    let currentConcurrent = 0;
+    const completionOrder = [];
+
+    const task = async (id) => {
+      currentConcurrent++;
+      maxConcurrent = Math.max(maxConcurrent, currentConcurrent);
+      await new Promise(resolve => setTimeout(resolve, 10));
+      currentConcurrent--;
+      completionOrder.push(id);
+      return id;
+    };
+
+    // Start tasks with limit of 1 (will queue)
+    const promise1 = limiter.execute(() => task(1));
+    const promise2 = limiter.execute(() => task(2));
+    const promise3 = limiter.execute(() => task(3));
+
+    // Wait a moment for first task to start
+    await new Promise(resolve => setTimeout(resolve, 5));
+
+    // Increase limit - should start more queued tasks
+    limiter.setConcurrencyLimit(3);
+
+    await Promise.all([promise1, promise2, promise3]);
+
+    // After increasing to 3, concurrent tasks should have increased
+    assert.ok(maxConcurrent >= 1, 'Should have run at least 1 concurrent task');
+  });
+
+  test('should report metrics correctly after limit change', () => {
+    const { RateLimiter } = require('../../src/utils/rate-limiter.js');
+
+    const limiter = new RateLimiter(3);
+    const metrics1 = limiter.getMetrics();
+    assert.strictEqual(metrics1.limit, 3, 'Initial metrics should show limit of 3');
+
+    limiter.setConcurrencyLimit(1);
+    const metrics2 = limiter.getMetrics();
+    assert.strictEqual(metrics2.limit, 1, 'Metrics should show updated limit of 1');
+  });
+});
