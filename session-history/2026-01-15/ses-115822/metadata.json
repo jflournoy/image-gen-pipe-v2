@@ -9,7 +9,42 @@
     "alpha": 0.6,
     "temperature": 1
   },
-  "iterations": [],
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the photograph, a woman's legs are sprawled wide open, inviting the viewer into an intimate and private moment. The soft focus highlights her shaved pussy, glistening with clear, wet juice that drips enticingly from her most feminine parts. Every detail is on display - the delicate petals of her labia, the engorged clitoris standing proud, and the vulnerable depths of her vagina. The mood is one of raw sexuality and sensual desire, inviting the viewer to indulge in the vivid imagery before them.",
+          "howPrompt": "In this provocative and sensual photograph, the woman's wide-open legs are spread invitingly apart, framing her intimate area in stark detail. The focus is on her shaved labia, clitoris, and vagina, bathed in a soft, diffused lighting that highlights every contour and crease. The color palette is dominated by the natural tones of the woman's skin, with hints of pink and moisture glistening on her most intimate parts. The texture is tactile and raw, inviting the viewer to reach out and touch. The atmosphere is one of raw, unbridled desire and sexuality, with an intimacy that is both vulnerable and empowering. This image could be straight out of a steamy erotic film, capturing the essence of human sexuality in its most raw and honest form.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the evocative photograph, a woman's legs spread wide apart reveal an intimate scene. Her naked body is bathed in soft, diffused light that accentuates every curve and crevice. The focus of the image is her open pussy, glistening with clear, wet juices that drip steadily onto the white bedsheet beneath. Every detail of her shaved labia, plump clitoris, and inviting vagina is captured in perfect clarity, leaving no doubt about the woman's desire and arousal. The mood is one of raw sensuality and unabashed sexuality, immersing the viewer in an intensely visceral experience.",
+          "howPrompt": "The image exudes an intimate and seductive atmosphere, with a woman's legs spread wide open in an inviting pose. The focus is on the intricate details of her shaved genitals, where the clear, dripping intimate juice creates a striking contrast against the smooth, porcelain-like skin. The lighting casts a soft, warm glow over the scene, illuminating every detail with vivid precision. The color palette consists mainly of flesh tones and subtle shadows, adding to the sensual and raw feel of the photograph. Texture is minimal, allowing the viewer's focus to remain on the captivating display of femininity and desire.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
   "finalWinner": null,
   "lineage": null
 }
