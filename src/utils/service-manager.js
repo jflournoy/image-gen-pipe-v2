@@ -246,11 +246,11 @@ async function startService(serviceName, options = {}) {
   // Spawn the service using uv to ensure dependencies are available
   let proc;
   try {
-    proc = spawn('uv', ['run', '--no-project', 'python', serviceConfig.script], {
+    proc = spawn('uv', ['run', 'python', serviceConfig.script], {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],  // Capture stdout and stderr
       env: serviceEnv,
-      // Don't set cwd - let uv work from current directory
+      // uv will use the project's synced virtual environment
     });
 
     // Pipe stdout and stderr to log file
