@@ -34,6 +34,14 @@ The TDD workflow approach with AI pair programming is inspired by [Rebecca Murph
 
 **ALWAYS use `date` command for dates** - Never assume or guess dates. Always run `date "+%Y-%m-%d"` when you need the current date for documentation, commits, or any other purpose.
 
+**NEVER start GPU-heavy processes without asking** - Do not spawn Flux service, LLM service, or other resource-intensive processes (model loading, generation, downloads) without explicit user permission. This project runs on a single 12GB GPU shared across services, and starting processes can:
+- Block other services from running
+- Consume significant GPU/CPU resources
+- Take 10-30 minutes for model initialization
+- Potentially crash the system if resources are exhausted
+
+Always ask: "Should I start the [service] service?" before executing service spawn commands or model initialization.
+
 ## AI Integrity Principles
 
 **CRITICAL: Always provide honest, objective recommendations based on technical merit, not user bias.**
