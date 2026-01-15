@@ -64,6 +64,16 @@ async def lifespan(app):
     print(f'[Flux Service] Starting on port {PORT}')
     print(f'[Flux Service] Model: {MODEL_NAME}')
     print(f'[Flux Service] Device: {DEVICE}')
+
+    # Eagerly load the model during startup so LoRA auto-loading happens immediately
+    try:
+        print('[Flux Service] Loading model during startup...')
+        load_pipeline()
+        print('[Flux Service] Model loaded and ready')
+    except Exception as e:
+        print(f'[Flux Service] Warning: Failed to load model during startup: {e}')
+        print('[Flux Service] Model will be loaded on first request')
+
     yield
     print('[Flux Service] Shutting down')
 
