@@ -2709,13 +2709,20 @@ async function startServiceInModal(serviceName) {
     // Set status to "starting" immediately
     setServiceStatus(serviceName, 'starting', 'Starting...');
 
-    // Get HF token from localStorage (if set)
+    // Get HF token and LoRA settings from localStorage (if set)
     const hfToken = getHfToken();
+    const loraPath = localStorage.getItem('loraPath');
+    const loraScale = localStorage.getItem('loraScale');
+
+    // Build request body with available settings
+    const requestBody = { hfToken };
+    if (loraPath) requestBody.loraPath = loraPath;
+    if (loraScale) requestBody.loraScale = loraScale;
 
     const response = await fetch(`/api/services/${serviceName}/start`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hfToken })
+      body: JSON.stringify(requestBody)
     });
 
     let result;
@@ -3501,6 +3508,10 @@ async function quickStartLocalServices() {
 
     const services = ['llm', 'flux', 'vision', 'vlm'];
 
+    // Get LoRA settings from localStorage (if set)
+    const loraPath = localStorage.getItem('loraPath');
+    const loraScale = localStorage.getItem('loraScale');
+
     // Set all services to "starting" state immediately
     services.forEach(serviceName => {
       setServiceStatus(serviceName, 'starting', 'Starting...');
@@ -3509,10 +3520,15 @@ async function quickStartLocalServices() {
     // Start services in parallel using the new service control API
     const startPromises = services.map(async (serviceName) => {
       try {
+        // Build request body with available settings
+        const requestBody = { hfToken };
+        if (loraPath) requestBody.loraPath = loraPath;
+        if (loraScale) requestBody.loraScale = loraScale;
+
         const res = await fetch(`/api/services/${serviceName}/start`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ hfToken })
+          body: JSON.stringify(requestBody)
         });
 
         const result = await res.json();
