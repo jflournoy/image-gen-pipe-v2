@@ -247,6 +247,7 @@ async function startService(serviceName, options = {}) {
   let proc;
   try {
     proc = spawn('uv', ['run', 'python', serviceConfig.script], {
+      cwd: path.join(__dirname, '../../'),  // Project root - required for uv to find workspace
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],  // Capture stdout and stderr
       env: serviceEnv,
