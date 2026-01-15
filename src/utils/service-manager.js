@@ -176,6 +176,7 @@ async function getServicePID(serviceName) {
  * @param {string} serviceName - Name of the service to start
  * @param {Object} options - Optional configuration
  * @param {string} options.hfToken - HuggingFace token for Flux service
+ * @param {string} options.modelPath - Custom Flux model path (local .safetensors file)
  * @param {string} options.loraPath - Custom LoRA path for Flux service
  * @param {string} options.loraScale - Custom LoRA scale for Flux service
  */
@@ -219,8 +220,12 @@ async function startService(serviceName, options = {}) {
     console.log(`[ServiceManager] Using provided HF token for ${serviceName}`);
   }
 
-  // Override LoRA settings if provided (allows dynamic configuration)
+  // Override Flux model path and LoRA settings if provided (allows dynamic configuration)
   if (serviceName === 'flux') {
+    if (options.modelPath !== undefined) {
+      serviceEnv.FLUX_MODEL_PATH = options.modelPath;
+      console.log(`[ServiceManager] Using custom Flux model path: ${options.modelPath}`);
+    }
     if (options.loraPath !== undefined) {
       serviceEnv.FLUX_LORA_PATH = options.loraPath;
       console.log(`[ServiceManager] Using custom LoRA path: ${options.loraPath}`);
