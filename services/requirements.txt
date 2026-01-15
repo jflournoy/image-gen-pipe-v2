@@ -18,6 +18,7 @@ torchvision>=0.16.0
 transformers>=4.35.0  # For CLIP/vision models (not needed for LLM anymore)
 diffusers>=0.24.0
 accelerate>=0.24.0
+peft>=0.7.0  # Required for LoRA support in diffusers
 huggingface_hub>=0.20.0  # For HF authentication and model caching
 protobuf>=4.25.0  # Required by transformers/diffusers for some models
 sentencepiece>=0.1.99  # Required by some tokenizers
