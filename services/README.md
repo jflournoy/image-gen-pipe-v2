@@ -164,9 +164,27 @@ export LLM_CONTEXT_SIZE=2048  # Context window
 ```bash
 export VLM_PORT=8004  # Default port
 export VLM_MODEL_REPO=jartine/llava-v1.6-mistral-7b-gguf  # Model repo
-export VLM_MODEL_FILE=*Q4_K_M.gguf  # Model file pattern
+export VLM_MODEL_FILE=*Q4_K_M.gguf  # Model file pattern (supports glob)
+export VLM_CLIP_FILE=*mmproj-f16.gguf  # CLIP projector pattern (supports glob)
 export VLM_GPU_LAYERS=-1  # -1 = all layers on GPU
 export VLM_CONTEXT_SIZE=4096  # Context window
+```
+
+**Alternative Models**:
+You can use any GGUF quantized VLM with mmproj (CLIP projector) files:
+
+- **InternVL3-8B** (better benchmarks):
+```bash
+export VLM_MODEL_REPO=mradermacher/SenseNova-SI-1.2-InternVL3-8B-GGUF
+export VLM_MODEL_FILE=*Q4_K_M.gguf
+export VLM_CLIP_FILE=*mmproj-f16.gguf
+```
+
+- **LLaVA 1.5 7B** (faster, uses less memory):
+```bash
+export VLM_MODEL_REPO=mradermacher/llava-v1.5-7b-gguf
+export VLM_MODEL_FILE=*Q4_K_M.gguf
+export VLM_CLIP_FILE=*mmproj-f16.gguf
 ```
 
 **API Endpoints**:
