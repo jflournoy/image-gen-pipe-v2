@@ -34,7 +34,7 @@ router.get('/status', async (req, res) => {
  */
 router.post('/:name/start', async (req, res) => {
   const { name } = req.params;
-  const { hfToken, loraPath, loraScale } = req.body;
+  const { hfToken, loraPath, loraScale, modelPath } = req.body;
 
   // Validate service name
   const validServices = ['llm', 'flux', 'vision', 'vlm'];
@@ -46,7 +46,7 @@ router.post('/:name/start', async (req, res) => {
   }
 
   try {
-    const result = await ServiceManager.startService(name, { hfToken, loraPath, loraScale });
+    const result = await ServiceManager.startService(name, { hfToken, modelPath, loraPath, loraScale });
 
     if (!result.success) {
       return res.status(409).json({
