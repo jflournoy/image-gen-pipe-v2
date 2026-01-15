@@ -1,0 +1,62 @@
+{
+  "sessionId": "ses-121644",
+  "timestamp": "2026-01-15T20:16:44.563Z",
+  "userPrompt": "gorgeous dripping pussy",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, a woman's body is center stage. Her figure, bathed in shadows, is a tantalizing silhouette against the backdrop of the candlelit chamber. As she shifts positions, a luscious, ripe peach of a pussy comes into view. Its lips glisten with dewdrops from recent pleasure, beckoning to be caressed and savored. The room holds an electric charge as her breath hitches, signaling a hunger that can no longer be contained. Her invitation is clear: come closer, indulge in the decadence of this gorgeous dripping pussy.",
+          "howPrompt": "Imagine a close-up, high definition image of a luscious, wet pussy, bathed in soft, warm golden light that caresses every curve and crevice. The composition is artfully framed, drawing the viewer's gaze directly to the center of the shot where delicate labia glisten with dew-kissed juiciness. A rich color palette of deep burgundy and vibrant pink tones dominate, while subtle shadows add depth and texture to the folds of this sensual landscape. The atmosphere is intoxicatingly intimate, evoking a sense of desire and sensuality that leaves the viewer mesmerized and longing for more.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the dimly lit room, a tantalizing silhouette of a woman's body comes into view against the backdrop of the candlelit chamber. Her decadent invitation is clear as her luscious, wet pussy, bathed in soft, warm golden light, comes center stage. Delicate labia glisten with dew-kissed juiciness, inviting the closest of inspections. The composition artfully frames this sensual landscape, drawing the viewer's gaze directly to the center where subtle shadows add depth and texture to the folds. A rich color palette of deep burgundy and vibrant pink tones dominate, while the atmosphere is intoxicatingly intimate, evoking a sense of desire and sensuality that leaves the viewer mesmerized and longing for more.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-121644/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, the figure of a woman comes into focus. Her body is a canvas of desire, bathed in the warm glow of a nearby candle. The center of her being is a breathtaking sight - a luscious garden of femininity, dripping with the essence of her arousal. Every curve and contour is highlighted by the flickering light, creating an alluring sensory experience that tantalizes the mind and invites the imagination to explore. The room falls silent as the enchanting spectacle unfolds before our very eyes.",
+          "howPrompt": "In the style of a seductive, close-up photograph, the image reveals a \"gorgeous dripping pussy\" bathed in soft, golden light. The composition frames the subject intimately, with a shallow depth of field that separates her from the blurred background. A rich, earthy color palette dominates the scene, as reds and yellows merge to create an alluring glow around the wet petals. The texture is velvety smooth, with intricate details accentuated by the glistening dew. An atmosphere of raw sensuality and desire permeates the frame, inviting the viewer to indulge in the moment.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the dimly lit room, the figure of a woman emerges from the shadows, her body a canvas of desire bathed in the warm, golden glow of a nearby candle. The captivating sight unfolds in an intimate, seductive style reminiscent of a close-up photograph. Her luscious garden of femininity is framed intimately with a shallow depth of field, separating her from the blurred background. Rich earthy tones dominate the scene as reds and yellows merge to create an alluring glow around the wet petals. The texture is velvety smooth, with intricate details accentuated by the glistening dew. An atmosphere of raw sensuality and desire permeates the frame, inviting the viewer to indulge in the moment as every curve and contour is highlighted by the flickering light, creating an alluring sensory experience that tantalizes the mind and invites the imagination to explore.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-121644/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}
