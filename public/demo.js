@@ -1169,10 +1169,10 @@ function formatMessage(msg) {
     if (msg.message) {
       // Check if this is an image generation message and append LoRA info if available
       if (msg.message.includes('image') && msg.status === 'starting') {
-        const localLoraPath = localStorage.getItem('fluxLoraPath');
+        const localLoraPath = localStorage.getItem('loraPath');
         if (localLoraPath) {
           const filename = localLoraPath.split('/').pop();
-          const scale = localStorage.getItem('fluxLoraScale') || '0.8';
+          const scale = localStorage.getItem('loraScale') || '0.8';
           return {
             text: msg.message + ` [Using LoRA: ${filename} @ ${scale}]`,
             type: 'info'
@@ -1441,8 +1441,8 @@ async function startBeamSearch() {
 
     // Check and display LoRA status if using local Flux
     if (document.getElementById('imageProvider')?.value === 'flux' || document.getElementById('imageProvider')?.value === 'local') {
-      const loraPath = localStorage.getItem('fluxLoraPath');
-      const loraScale = localStorage.getItem('fluxLoraScale') || '0.8';
+      const loraPath = localStorage.getItem('loraPath');
+      const loraScale = localStorage.getItem('loraScale') || '0.8';
       if (loraPath) {
         const filename = loraPath.split('/').pop();
         addMessage(`🔄 Using Flux with LoRA: ${filename} (scale: ${loraScale})`, 'event');
@@ -2246,8 +2246,8 @@ async function displayModelSource() {
  */
 function initializeFluxLoraConfig() {
   // Load saved settings from localStorage
-  const savedLoraPath = localStorage.getItem('fluxLoraPath') || 'services/loras/flux-custom-lora.safetensors';
-  const savedLoraScale = localStorage.getItem('fluxLoraScale') || '0.8';
+  const savedLoraPath = localStorage.getItem('loraPath') || 'services/loras/flux-custom-lora.safetensors';
+  const savedLoraScale = localStorage.getItem('loraScale') || '0.8';
 
   const loraPathInput = document.getElementById('fluxLoraPath');
   const loraScaleInput = document.getElementById('fluxLoraScale');
@@ -2283,9 +2283,9 @@ async function saveFluxLoraSettings() {
   const loraPath = loraPathInput.value.trim();
   const loraScale = loraScaleInput.value;
 
-  // Save to localStorage
-  localStorage.setItem('fluxLoraPath', loraPath);
-  localStorage.setItem('fluxLoraScale', loraScale);
+  // Save to localStorage (without 'flux' prefix for consistency with reader)
+  localStorage.setItem('loraPath', loraPath);
+  localStorage.setItem('loraScale', loraScale);
 
   // Update status
   if (statusText) {
@@ -2314,7 +2314,7 @@ async function checkFluxLoraStatus() {
     const status = await response.json();
 
     if (statusText) {
-      if (status.loaded) {
+      if (status.loaded && status.path) {
         // LoRA is already loaded in memory
         const filename = status.path.split('/').pop();
         statusText.innerHTML = `
@@ -2323,14 +2323,14 @@ async function checkFluxLoraStatus() {
           <small>Scale: ${status.scale}</small>
         `;
         statusText.style.color = '#4CAF50';
-      } else if (status.configured) {
+      } else if (status.configured_path) {
         // LoRA is configured but not loaded yet (will load on first generation)
         const filename = status.configured_path.split('/').pop();
         statusText.innerHTML = `
           <strong>⚙️ LoRA Configured</strong><br>
           <small>File: ${filename}</small><br>
-          <small>Scale: ${status.default_scale}</small><br>
-          <small style="font-style: italic; color: #FF8C00;">Will load on first generation</small>
+          <small>Scale: ${status.default_scale || status.scale}</small><br>
+          <small style="font-style: italic; color: #FF8C00;">Will load on next service restart or first generation</small>
         `;
         statusText.style.color = '#FF9800';
       } else {
