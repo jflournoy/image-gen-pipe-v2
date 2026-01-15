@@ -10,6 +10,16 @@ const fsSync = require('fs');
 const path = require('path');
 const net = require('net');
 
+// Set up logging directory
+const LOG_DIR = '/tmp/beam-search-services';
+const ensureLogDir = () => {
+  try {
+    fsSync.mkdirSync(LOG_DIR, { recursive: true });
+  } catch (err) {
+    // Ignore if already exists
+  }
+};
+
 /**
  * Service configuration
  */
@@ -221,20 +231,42 @@ async function startService(serviceName, options = {}) {
     }
   }
 
+  // Ensure log directory exists
+  ensureLogDir();
+
+  // Set up log file for this service
+  const logFile = path.join(LOG_DIR, `${serviceName}.log`);
+  const logStream = fsSync.createWriteStream(logFile, { flags: 'a' });
+
+  // Add timestamp header to log
+  logStream.write(`\n\n${'='.repeat(80)}\n`);
+  logStream.write(`[${new Date().toISOString()}] Starting ${serviceName} service (PID will follow)\n`);
+  logStream.write(`${'='.repeat(80)}\n`);
+
   // Spawn the service using uv to ensure dependencies are available
   let proc;
   try {
     proc = spawn('uv', ['run', '--no-project', 'python', serviceConfig.script], {
       detached: true,
-      stdio: 'ignore',
+      stdio: ['ignore', 'pipe', 'pipe'],  // Capture stdout and stderr
       env: serviceEnv,
       // Don't set cwd - let uv work from current directory
     });
+
+    // Pipe stdout and stderr to log file
+    if (proc.stdout) {
+      proc.stdout.pipe(logStream);
+    }
+    if (proc.stderr) {
+      proc.stderr.pipe(logStream);
+    }
 
     // Unref so parent can exit independently
     proc.unref();
   } catch (error) {
     console.error(`[ServiceManager] Failed to spawn ${serviceName} process:`, error);
+    logStream.write(`\n[ERROR] Failed to spawn: ${error.message}\n`);
+    logStream.end();
     return {
       success: false,
       error: `Failed to spawn service: ${error.message}`,
@@ -245,7 +277,11 @@ async function startService(serviceName, options = {}) {
   // The health polling endpoint will verify the service is actually running
   await writePIDFile(serviceName, proc.pid);
 
+  logStream.write(`\nStarted with PID: ${proc.pid}\n`);
+  logStream.write(`Log file: ${logFile}\n`);
+
   console.log(`[ServiceManager] Started ${serviceName} service (PID: ${proc.pid})`);
+  console.log(`[ServiceManager] Service logs: ${logFile}`);
 
   return {
     success: true,
