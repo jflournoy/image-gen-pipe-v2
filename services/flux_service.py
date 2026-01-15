@@ -34,13 +34,14 @@ LORA_DEFAULT_SCALE = float(os.getenv('FLUX_LORA_SCALE', '1.0'))  # Default LoRA 
 if FLUX_MODEL_PATH:
     # Using local model file
     MODEL_SOURCE = 'local'
-    model_path = Path(FLUX_MODEL_PATH)
+    model_path = Path(FLUX_MODEL_PATH).resolve()  # Convert to absolute path
     if not model_path.exists():
         print(f'[Flux Service] ⚠️ WARNING: FLUX_MODEL_PATH does not exist: {FLUX_MODEL_PATH}')
         print(f'[Flux Service] Falling back to HuggingFace model: {MODEL_NAME}')
         MODEL_SOURCE = 'huggingface'
         FLUX_MODEL_PATH = None
     else:
+        FLUX_MODEL_PATH = str(model_path)  # Use absolute path for DiffusionPipeline
         print(f'[Flux Service] Using local model: {FLUX_MODEL_PATH}')
 else:
     # Using HuggingFace repo
@@ -216,13 +217,13 @@ def load_lora_weights(lora_path: str, lora_scale: float = 1.0):
     if pipeline is None:
         raise RuntimeError('Pipeline must be loaded before adding LoRA')
 
-    # Validate LoRA file exists
-    lora_file = Path(lora_path)
+    # Validate LoRA file exists and convert to absolute path
+    lora_file = Path(lora_path).resolve()
     if not lora_file.exists():
         raise FileNotFoundError(f'LoRA file not found: {lora_path}')
 
     try:
-        print(f'[Flux Service] Loading LoRA from: {lora_path}')
+        print(f'[Flux Service] Loading LoRA from: {lora_file}')
         print(f'[Flux Service] LoRA scale: {lora_scale}')
 
         # Load LoRA weights using diffusers API
