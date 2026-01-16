@@ -278,8 +278,12 @@ def load_lora_weights(lora_path: str, lora_scale: float = 1.0):
 
         # Set LoRA scale if supported
         if hasattr(pipeline, 'set_adapters'):
+            # Get the actual adapter names that were loaded
+            adapters = list(pipeline.get_list_adapters().keys()) if hasattr(pipeline, 'get_list_adapters') else ['default']
+            if not adapters:
+                adapters = ['default']
             # For newer diffusers versions with adapter support
-            pipeline.set_adapters(['default'], adapter_weights=[lora_scale])
+            pipeline.set_adapters(adapters, adapter_weights=[lora_scale] * len(adapters))
         elif hasattr(pipeline, 'fuse_lora'):
             # Fuse LoRA into model weights for older API
             pipeline.fuse_lora(lora_scale=lora_scale)
