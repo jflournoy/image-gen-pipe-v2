@@ -220,7 +220,7 @@ async function startService(serviceName, options = {}) {
     console.log(`[ServiceManager] Using provided HF token for ${serviceName}`);
   }
 
-  // Override Flux model path and LoRA settings if provided (allows dynamic configuration)
+  // Override Flux model path, LoRA settings, and encoder paths if provided (allows dynamic configuration)
   if (serviceName === 'flux') {
     if (options.modelPath !== undefined) {
       serviceEnv.FLUX_MODEL_PATH = options.modelPath;
@@ -233,6 +233,19 @@ async function startService(serviceName, options = {}) {
     if (options.loraScale !== undefined) {
       serviceEnv.FLUX_LORA_SCALE = options.loraScale;
       console.log(`[ServiceManager] Using custom LoRA scale: ${options.loraScale}`);
+    }
+    // NEW: Support for local encoder paths (for custom Flux models like CustomModel)
+    if (options.textEncoderPath !== undefined) {
+      serviceEnv.FLUX_TEXT_ENCODER_PATH = options.textEncoderPath;
+      console.log(`[ServiceManager] Using custom CLIP-L encoder path: ${options.textEncoderPath}`);
+    }
+    if (options.textEncoder2Path !== undefined) {
+      serviceEnv.FLUX_TEXT_ENCODER_2_PATH = options.textEncoder2Path;
+      console.log(`[ServiceManager] Using custom T5-XXL encoder path: ${options.textEncoder2Path}`);
+    }
+    if (options.vaePath !== undefined) {
+      serviceEnv.FLUX_VAE_PATH = options.vaePath;
+      console.log(`[ServiceManager] Using custom VAE encoder path: ${options.vaePath}`);
     }
   }
 
