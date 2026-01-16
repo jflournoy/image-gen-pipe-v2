@@ -1566,6 +1566,42 @@ router.get('/flux/discovery', async (req, res) => {
 });
 
 /**
+ * GET /api/providers/flux/models
+ * List available Flux models in the local checkpoints directory
+ * Returns array of model names with paths
+ */
+router.get('/flux/models', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const fsSync = require('fs');
+    const path = require('path');
+
+    const projectRoot = path.dirname(path.dirname(path.dirname(__filename)));
+    const checkpointsDir = path.join(projectRoot, 'services/checkpoints');
+
+    // Discover available Flux models
+    const models = await discoverFiles(checkpointsDir, /\.safetensors$/i);
+
+    res.json({
+      success: true,
+      models: models.map(filename => ({
+        name: filename,
+        path: `services/checkpoints/${filename}`,
+        displayName: filename.replace(/\.safetensors$/, '').replace(/_/g, ' ')
+      })),
+      count: models.length
+    });
+  } catch (error) {
+    console.error('[Flux Models] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to list available models',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Discover files in a directory matching a pattern
  */
 async function discoverFiles(dirPath, pattern) {
