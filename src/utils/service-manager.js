@@ -222,30 +222,38 @@ async function startService(serviceName, options = {}) {
 
   // Override Flux model path, LoRA settings, and encoder paths if provided (allows dynamic configuration)
   if (serviceName === 'flux') {
+    const projectRoot = path.join(__dirname, '../../');
+
     if (options.modelPath !== undefined) {
-      serviceEnv.FLUX_MODEL_PATH = options.modelPath;
-      console.log(`[ServiceManager] Using custom Flux model path: ${options.modelPath}`);
+      const modelPath = path.resolve(projectRoot, options.modelPath);
+      serviceEnv.FLUX_MODEL_PATH = modelPath;
+      console.log(`[ServiceManager] Using custom Flux model path: ${modelPath}`);
     }
     if (options.loraPath !== undefined) {
-      serviceEnv.FLUX_LORA_PATH = options.loraPath;
-      console.log(`[ServiceManager] Using custom LoRA path: ${options.loraPath}`);
+      const loraPath = path.resolve(projectRoot, options.loraPath);
+      serviceEnv.FLUX_LORA_PATH = loraPath;
+      console.log(`[ServiceManager] Using custom LoRA path: ${loraPath}`);
     }
     if (options.loraScale !== undefined) {
       serviceEnv.FLUX_LORA_SCALE = options.loraScale;
       console.log(`[ServiceManager] Using custom LoRA scale: ${options.loraScale}`);
     }
-    // NEW: Support for local encoder paths (for custom Flux models like CustomModel)
+    // Support for local encoder paths (for custom Flux models like CustomModel)
+    // Convert relative paths to absolute paths so service can find them regardless of cwd
     if (options.textEncoderPath !== undefined) {
-      serviceEnv.FLUX_TEXT_ENCODER_PATH = options.textEncoderPath;
-      console.log(`[ServiceManager] Using custom CLIP-L encoder path: ${options.textEncoderPath}`);
+      const encoderPath = path.resolve(projectRoot, options.textEncoderPath);
+      serviceEnv.FLUX_TEXT_ENCODER_PATH = encoderPath;
+      console.log(`[ServiceManager] Using custom CLIP-L encoder path: ${encoderPath}`);
     }
     if (options.textEncoder2Path !== undefined) {
-      serviceEnv.FLUX_TEXT_ENCODER_2_PATH = options.textEncoder2Path;
-      console.log(`[ServiceManager] Using custom T5-XXL encoder path: ${options.textEncoder2Path}`);
+      const encoderPath = path.resolve(projectRoot, options.textEncoder2Path);
+      serviceEnv.FLUX_TEXT_ENCODER_2_PATH = encoderPath;
+      console.log(`[ServiceManager] Using custom T5-XXL encoder path: ${encoderPath}`);
     }
     if (options.vaePath !== undefined) {
-      serviceEnv.FLUX_VAE_PATH = options.vaePath;
-      console.log(`[ServiceManager] Using custom VAE encoder path: ${options.vaePath}`);
+      const encoderPath = path.resolve(projectRoot, options.vaePath);
+      serviceEnv.FLUX_VAE_PATH = encoderPath;
+      console.log(`[ServiceManager] Using custom VAE encoder path: ${encoderPath}`);
     }
   }
 
