@@ -5,8 +5,13 @@
 
 import express from 'express';
 import { createRequire } from 'node:module';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
 const providerConfig = require('../config/provider-config.js');
 const axios = require('axios');
 
@@ -1574,9 +1579,8 @@ router.get('/flux/models', async (req, res) => {
   try {
     const fs = require('fs').promises;
     const fsSync = require('fs');
-    const path = require('path');
 
-    const projectRoot = path.dirname(path.dirname(path.dirname(__filename)));
+    const projectRoot = path.join(__dirname, '../../');
     const checkpointsDir = path.join(projectRoot, 'services/checkpoints');
 
     // Discover available Flux models
