@@ -150,10 +150,20 @@ def load_model():
                     model_file = matches[0]
                     print(f'[VLM Service] Found model: {model_file}')
 
+            # Expand CLIP file glob pattern if needed
+            clip_file = CLIP_MODEL_FILE
+            if '*' in CLIP_MODEL_FILE:
+                from huggingface_hub import list_repo_files
+                files = list(list_repo_files(MODEL_REPO))
+                matches = [f for f in files if fnmatch.fnmatch(f, CLIP_MODEL_FILE)]
+                if matches:
+                    clip_file = matches[0]
+                    print(f'[VLM Service] Found CLIP projector: {clip_file}')
+
             model_path = hf_hub_download(repo_id=MODEL_REPO, filename=model_file)
 
             # Download CLIP projector
-            clip_path = hf_hub_download(repo_id=MODEL_REPO, filename=CLIP_MODEL_FILE)
+            clip_path = hf_hub_download(repo_id=MODEL_REPO, filename=clip_file)
 
         print(f'[VLM Service] Model path: {model_path}')
         print(f'[VLM Service] CLIP path: {clip_path}')
