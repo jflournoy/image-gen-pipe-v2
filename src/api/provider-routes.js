@@ -1606,6 +1606,39 @@ router.get('/flux/models', async (req, res) => {
 });
 
 /**
+ * GET /api/providers/flux/config
+ * Get current Flux configuration (both .env defaults and active overrides)
+ * Allows users to see what's configured and what's been overridden
+ */
+router.get('/flux/config', async (req, res) => {
+  try {
+    // .env defaults from environment
+    const fluxConfig = {
+      env: {
+        modelPath: process.env.FLUX_MODEL_PATH || 'services/checkpoints/flux-dev-fp8.safetensors',
+        loraPath: process.env.FLUX_LORA_PATH || '',
+        loraScale: process.env.FLUX_LORA_SCALE || '',
+        textEncoderPath: process.env.FLUX_TEXT_ENCODER_PATH || 'services/encoders/clip_l.safetensors',
+        textEncoder2Path: process.env.FLUX_TEXT_ENCODER_2_PATH || 'services/encoders/model.safetensors',
+        vaePath: process.env.FLUX_VAE_PATH || 'services/encoders/ae.safetensors'
+      }
+    };
+
+    res.json({
+      success: true,
+      config: fluxConfig
+    });
+  } catch (error) {
+    console.error('[Flux Config] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to retrieve configuration',
+      message: error.message
+    });
+  }
+});
+
+/**
  * Discover files in a directory matching a pattern
  */
 async function discoverFiles(dirPath, pattern) {
