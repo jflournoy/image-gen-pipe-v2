@@ -111,3 +111,8 @@ services/models/
 # - plans/ (project planning).history/
 .tdd-session-*.md
 .history/
+
+# These tests will not work without large downloads.
+test/flux-local-encoders.test.js
+test-output
+test-stroage-output
