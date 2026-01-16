@@ -104,7 +104,8 @@ function spawnService(servicePath, env) {
 test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) => {
   await t.test('Encoder Files Exist', async (t) => {
     await t.test('T5-XXL FP8 encoder file exists', () => {
-      const t5Path = path.join(encodersDir, 't5xxl_fp8_e4m3fn.safetensors');
+      // T5-XXL renamed to model.safetensors for transformers compatibility
+      const t5Path = path.join(encodersDir, 'model.safetensors');
       assert.strictEqual(fs.existsSync(t5Path), true, `T5-XXL encoder not found at ${t5Path}`);
     });
 
@@ -124,7 +125,7 @@ test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) =>
       const envConfig = {
         FLUX_MODEL_PATH: path.join(checkpointsDir, 'flux-dev-fp8.safetensors'),
         FLUX_TEXT_ENCODER_PATH: path.join(encodersDir, 'clip_l.safetensors'),
-        FLUX_TEXT_ENCODER_2_PATH: path.join(encodersDir, 't5xxl_fp8_e4m3fn.safetensors'),
+        FLUX_TEXT_ENCODER_2_PATH: path.join(encodersDir, 'model.safetensors'),  // T5-XXL renamed for transformers compatibility
       };
 
       // Verify all paths are absolute and exist
@@ -147,7 +148,7 @@ test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) =>
       const env = {
         FLUX_MODEL_PATH: path.join(checkpointsDir, 'flux-dev-fp8.safetensors'),
         FLUX_TEXT_ENCODER_PATH: path.join(encodersDir, 'clip_l.safetensors'),
-        FLUX_TEXT_ENCODER_2_PATH: path.join(encodersDir, 't5xxl_fp8_e4m3fn.safetensors'),
+        FLUX_TEXT_ENCODER_2_PATH: path.join(encodersDir, 'model.safetensors'),  // T5-XXL renamed for transformers compatibility
         FLUX_PORT: fluxPort.toString(),
       };
 
@@ -218,9 +219,9 @@ test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) =>
           `Generation failed with status ${response.status}: ${JSON.stringify(response.data)}`
         );
 
-        // Check response has image data (base64 or path)
+        // Check response has image data (localPath, base64, or raw)
         const hasImageData =
-          response.data.image || response.data.image_base64 || response.data.image_data || response.data.images;
+          response.data.localPath || response.data.image || response.data.image_base64 || response.data.image_data || response.data.images;
 
         assert.strictEqual(
           !!hasImageData,
