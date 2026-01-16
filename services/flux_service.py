@@ -157,21 +157,30 @@ def load_pipeline():
                     **kwargs
                 )
             except Exception as e:
-                # If missing components (e.g., text_encoder), load them from HuggingFace
-                if 'missing' in str(e).lower() or 'CLIPTextModel' in str(e):
+                # If missing components (e.g., text_encoder, text_encoder_2), load them from HuggingFace
+                error_str = str(e).lower()
+                if any(x in error_str for x in ['missing', 'cliptextmodel', 't5encoder']):
                     print(f'[Flux Service] Custom model missing components, loading from HuggingFace: {e}')
-                    from transformers import CLIPTextModel, CLIPTokenizer
+                    from transformers import CLIPTextModel, T5EncoderModel
 
-                    print('[Flux Service] Loading text_encoder from HuggingFace...')
+                    # Load both text encoders needed by Flux
+                    print('[Flux Service] Loading text_encoder (CLIP) from HuggingFace...')
                     text_encoder = CLIPTextModel.from_pretrained(
                         'openai/clip-vit-large-patch14',
                         torch_dtype=kwargs['torch_dtype']
                     )
 
-                    # Retry with loaded components
+                    print('[Flux Service] Loading text_encoder_2 (T5) from HuggingFace...')
+                    text_encoder_2 = T5EncoderModel.from_pretrained(
+                        'google-t5/t5-base',
+                        torch_dtype=kwargs['torch_dtype']
+                    )
+
+                    # Retry with all loaded components
                     pipeline = FluxPipeline.from_single_file(
                         model_to_load,
                         text_encoder=text_encoder,
+                        text_encoder_2=text_encoder_2,
                         **kwargs
                     )
                 else:
