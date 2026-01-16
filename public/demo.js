@@ -2105,6 +2105,9 @@ async function showProviderSettings() {
 
   // Initialize Flux LoRA configuration UI
   initializeFluxLoraConfig();
+
+  // Load and display configuration status (.env vs localStorage)
+  loadConfigurationStatus();
 }
 
 /**
@@ -2558,6 +2561,7 @@ async function saveFluxEncoderSettings() {
 
   console.log('[UI] Saved encoder settings:', { clipPath, t5Path, vaePath });
   addMessage('✅ Encoder settings saved! These will be used when you restart the Flux service.', 'event');
+  loadConfigurationStatus(); // Refresh status display
 }
 
 /**
@@ -2823,6 +2827,7 @@ function selectFluxModel() {
   // Save to localStorage
   localStorage.setItem('fluxModelPath', selectedPath);
   updateFluxModelPathDisplay();
+  loadConfigurationStatus(); // Refresh status display
 
   console.log('[UI] Selected Flux model:', modelName, 'Path:', selectedPath);
   addMessage(`✅ Selected model: ${modelName}`, 'event');
@@ -2855,6 +2860,105 @@ function initializeFluxModelDropdown() {
     loadFluxModels();
     localModelSection.modelsLoaded = true;
   }
+}
+
+/**
+ * Load and display configuration status (comparing .env defaults vs localStorage overrides)
+ */
+async function loadConfigurationStatus() {
+  const statusContent = document.getElementById('configStatusContent');
+  if (!statusContent) return;
+
+  try {
+    // Get .env defaults
+    const configResponse = await fetch('/api/providers/flux/config');
+    if (!configResponse.ok) throw new Error('Failed to load configuration');
+
+    const configData = await configResponse.json();
+    if (!configData.success) throw new Error('Invalid response');
+
+    const envConfig = configData.config.env;
+
+    // Get localStorage overrides
+    const localStorageOverrides = {
+      modelPath: localStorage.getItem('fluxModelPath'),
+      loraPath: localStorage.getItem('loraPath'),
+      loraScale: localStorage.getItem('loraScale'),
+      textEncoderPath: localStorage.getItem('fluxTextEncoderPath'),
+      textEncoder2Path: localStorage.getItem('fluxTextEncoder2Path'),
+      vaePath: localStorage.getItem('fluxVaePath')
+    };
+
+    // Build status display
+    let statusHtml = '<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">';
+
+    // Model Configuration
+    statusHtml += '<div><strong style="color: #0066cc;">Flux Model:</strong><br>';
+    statusHtml += `<small style="color: #666;">.env: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #333;">${escapeHtml(envConfig.modelPath)}</code>`;
+
+    if (localStorageOverrides.modelPath) {
+      statusHtml += `<small style="color: #666;">🔄 Override: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #d32f2f;">${escapeHtml(localStorageOverrides.modelPath)}</code>`;
+      statusHtml += `<button onclick="resetFluxModelToEnvDefault()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset to .env Default</button>`;
+    } else {
+      statusHtml += '<small style="color: #4CAF50;">✓ Using .env default</small>';
+    }
+    statusHtml += '</div>';
+
+    // LoRA Configuration
+    statusHtml += '<div><strong style="color: #0066cc;">LoRA Config:</strong><br>';
+    const envLoraPath = envConfig.loraPath || '(none)';
+    const envLoraScale = envConfig.loraScale || '(none)';
+    statusHtml += `<small style="color: #666;">.env Path: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #333;">${escapeHtml(envLoraPath)}</code>`;
+    statusHtml += `<small style="color: #666;">.env Scale: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #333;">${escapeHtml(envLoraScale)}</code>`;
+
+    if (localStorageOverrides.loraPath) {
+      statusHtml += `<small style="color: #666;">🔄 Override Path: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #d32f2f;">${escapeHtml(localStorageOverrides.loraPath)}</code>`;
+      statusHtml += `<button onclick="resetFluxLoraSettingsComplete()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset LoRA</button>`;
+    } else {
+      statusHtml += '<small style="color: #4CAF50;">✓ Using .env defaults</small>';
+    }
+    statusHtml += '</div>';
+
+    statusHtml += '</div>';
+
+    statusContent.innerHTML = statusHtml;
+    console.log('[UI] Loaded configuration status:', { env: envConfig, overrides: localStorageOverrides });
+  } catch (error) {
+    console.error('[UI] Error loading configuration:', error);
+    statusContent.innerHTML = '<small style="color: #f44336;">Error loading configuration status</small>';
+  }
+}
+
+/**
+ * Reset Flux model to .env default
+ */
+function resetFluxModelToEnvDefault() {
+  if (!confirm('Reset Flux model to .env default?\nThis will clear the browser override.')) {
+    return;
+  }
+
+  localStorage.removeItem('fluxModelPath');
+  updateFluxModelPathDisplay();
+  loadConfigurationStatus();
+
+  addMessage('✅ Flux model reset to .env default', 'event');
+  console.log('[UI] Reset Flux model to .env default');
+}
+
+/**
+ * Reset LoRA to .env defaults
+ */
+function resetFluxLoraSettingsComplete() {
+  if (!confirm('Reset LoRA configuration to .env defaults?\nThis will clear all browser overrides.')) {
+    return;
+  }
+
+  localStorage.removeItem('loraPath');
+  localStorage.removeItem('loraScale');
+  loadConfigurationStatus();
+
+  addMessage('✅ LoRA configuration reset to .env defaults', 'event');
+  console.log('[UI] Reset LoRA configuration');
 }
 
 /**
