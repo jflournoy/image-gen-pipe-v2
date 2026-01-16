@@ -186,6 +186,11 @@ def load_encoder_with_fallbacks(
     if config.env_var_path:
         try:
             print(f'[Flux Service] Loading {config.name} from local path: {config.env_var_path}')
+            # Debug: Check if file exists before attempting load
+            path_obj = Path(config.env_var_path)
+            if not path_obj.exists():
+                raise FileNotFoundError(f'Path does not exist: {config.env_var_path}')
+            print(f'[Flux Service] Path verified to exist, loading {config.name}...')
             encoder = config.local_loader(config.env_var_path)
             print(f'[Flux Service] Successfully loaded local {config.name} encoder')
 

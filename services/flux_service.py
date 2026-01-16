@@ -45,6 +45,16 @@ FLUX_TEXT_ENCODER_PATH = os.getenv('FLUX_TEXT_ENCODER_PATH')  # Local CLIP-L enc
 FLUX_TEXT_ENCODER_2_PATH = os.getenv('FLUX_TEXT_ENCODER_2_PATH')  # Local T5-XXL encoder
 FLUX_VAE_PATH = os.getenv('FLUX_VAE_PATH')  # Local VAE encoder
 
+# Debug: Log encoder configuration at startup
+if FLUX_TEXT_ENCODER_PATH or FLUX_TEXT_ENCODER_2_PATH or FLUX_VAE_PATH:
+    print('[Flux Service] Custom encoder paths configured:')
+    if FLUX_TEXT_ENCODER_PATH:
+        print(f'  - CLIP-L: {FLUX_TEXT_ENCODER_PATH}')
+    if FLUX_TEXT_ENCODER_2_PATH:
+        print(f'  - T5-XXL: {FLUX_TEXT_ENCODER_2_PATH}')
+    if FLUX_VAE_PATH:
+        print(f'  - VAE: {FLUX_VAE_PATH}')
+
 # Determine model source and validate
 if FLUX_MODEL_PATH:
     # Using local model file
