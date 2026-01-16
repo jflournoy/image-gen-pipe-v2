@@ -2824,13 +2824,47 @@ function selectFluxModel() {
     customPathInput.value = selectedPath;
   }
 
-  // Save to localStorage
+  // Save model path to localStorage
   localStorage.setItem('fluxModelPath', selectedPath);
   updateFluxModelPathDisplay();
+
+  // CRITICAL: Auto-enable local encoders when model is selected
+  // This ensures encoder paths are passed to the service
+  const useLocalCheckbox = document.getElementById('useLocalEncoders');
+  if (useLocalCheckbox) {
+    useLocalCheckbox.checked = true;
+  }
+
+  // Set encoder paths to defaults if not already set
+  // These are the standard Flux .1 encoder paths
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (clipInput && !localStorage.getItem('fluxTextEncoderPath')) {
+    clipInput.value = 'services/encoders/clip_l.safetensors';
+    localStorage.setItem('fluxTextEncoderPath', 'services/encoders/clip_l.safetensors');
+  }
+  if (t5Input && !localStorage.getItem('fluxTextEncoder2Path')) {
+    t5Input.value = 'services/encoders/model.safetensors';
+    localStorage.setItem('fluxTextEncoder2Path', 'services/encoders/model.safetensors');
+  }
+  if (vaeInput && !localStorage.getItem('fluxVaePath')) {
+    vaeInput.value = 'services/encoders/ae.safetensors';
+    localStorage.setItem('fluxVaePath', 'services/encoders/ae.safetensors');
+  }
+
+  // Save encoder enable flag
+  localStorage.setItem('useLocalEncoders', 'true');
+
+  // Update UI to reflect encoder state
+  toggleLocalEncoders();
+  updateFluxEncoderDisplay();
   loadConfigurationStatus(); // Refresh status display
 
   console.log('[UI] Selected Flux model:', modelName, 'Path:', selectedPath);
-  addMessage(`✅ Selected model: ${modelName}`, 'event');
+  console.log('[UI] Auto-enabled local encoders with standard paths');
+  addMessage(`✅ Selected model: ${modelName}\n✅ Auto-enabled local encoders`, 'event');
 }
 
 /**
@@ -3335,11 +3369,17 @@ async function startServiceInModal(serviceName) {
     if (serviceName === 'flux' && modelPath) requestBody.modelPath = modelPath;
     if (loraPath) requestBody.loraPath = loraPath;
     if (loraScale) requestBody.loraScale = loraScale;
-    // Add encoder paths if local encoders are enabled
-    if (serviceName === 'flux' && useLocalEncoders) {
+    // Add encoder paths if:
+    // 1. Local encoders are explicitly enabled, OR
+    // 2. Encoder paths are configured in localStorage (safety net for model selection)
+    if (serviceName === 'flux' && (useLocalEncoders || textEncoderPath || textEncoder2Path || vaePath)) {
       if (textEncoderPath) requestBody.textEncoderPath = textEncoderPath;
       if (textEncoder2Path) requestBody.textEncoder2Path = textEncoder2Path;
       if (vaePath) requestBody.vaePath = vaePath;
+      // Auto-enable the flag if encoder paths are set
+      if (textEncoderPath || textEncoder2Path || vaePath) {
+        localStorage.setItem('useLocalEncoders', 'true');
+      }
     }
 
     const response = await fetch(`/api/services/${serviceName}/start`, {
