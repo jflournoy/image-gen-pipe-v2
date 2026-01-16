@@ -1476,6 +1476,16 @@
 
               <!-- Local Model Path Input (hidden by default) -->
               <div id="localModelSection" style="display: none; margin-top: 8px;">
+                <!-- Available Models Dropdown -->
+                <div style="margin-bottom: 8px;">
+                  <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">Available Local Models:</label>
+                  <select id="fluxModelSelector" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;" onchange="selectFluxModel()">
+                    <option value="">-- Loading models... --</option>
+                  </select>
+                  <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">Select from downloaded models or enter custom path below</small>
+                </div>
+
+                <!-- Custom Path Input -->
                 <div style="display: flex; gap: 8px; margin-bottom: 8px;">
                   <input type="text" id="fluxCustomPath" placeholder="/path/to/your/flux-model.safetensors" style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;" />
                   <button onclick="setFluxModelPath()" style="background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Set Path</button>

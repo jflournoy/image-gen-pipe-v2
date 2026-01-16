@@ -678,6 +678,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Load and display Flux encoder presets
   loadFluxEncoderPresets();
+
+  // Initialize Flux model dropdown
+  initializeFluxModelDropdown();
 });
 
 /**
@@ -2147,6 +2150,7 @@ function toggleFluxModelSource(source) {
     hfSection.style.display = 'none';
     localSection.style.display = 'block';
     updateFluxModelPathDisplay(); // Update display when switching to local
+    loadFluxModels(); // Load available models when switching to local
   } else {
     hfSection.style.display = 'block';
     localSection.style.display = 'none';
@@ -2748,6 +2752,109 @@ function escapeHtml(str) {
     "'": '&#039;'
   };
   return str.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
+ * Load available Flux models from API and populate dropdown
+ */
+async function loadFluxModels() {
+  const selector = document.getElementById('fluxModelSelector');
+  if (!selector) return;
+
+  try {
+    const response = await fetch('/api/providers/flux/models');
+    if (!response.ok) {
+      throw new Error('Failed to load models');
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.models || data.models.length === 0) {
+      selector.innerHTML = '<option value="">-- No local models found --</option>';
+      return;
+    }
+
+    // Build options: add blank option, then all available models
+    let html = '<option value="">-- Select a model --</option>';
+
+    data.models.forEach(model => {
+      html += `<option value="${escapeHtml(model.path)}" data-name="${escapeHtml(model.name)}">
+        ${escapeHtml(model.displayName || model.name)}
+      </option>`;
+    });
+
+    selector.innerHTML = html;
+
+    // If there's a saved model path, select it in the dropdown
+    const savedPath = localStorage.getItem('fluxModelPath');
+    if (savedPath) {
+      selector.value = savedPath;
+    }
+
+    console.log('[UI] Loaded Flux models:', data.models);
+  } catch (error) {
+    console.error('[UI] Error loading models:', error);
+    const selector = document.getElementById('fluxModelSelector');
+    if (selector) {
+      selector.innerHTML = '<option value="">-- Error loading models --</option>';
+    }
+  }
+}
+
+/**
+ * Handle selection of a model from the dropdown
+ */
+function selectFluxModel() {
+  const selector = document.getElementById('fluxModelSelector');
+  const customPathInput = document.getElementById('fluxCustomPath');
+
+  if (!selector || selector.value === '') {
+    return;
+  }
+
+  const selectedPath = selector.value;
+  const selectedOption = selector.options[selector.selectedIndex];
+  const modelName = selectedOption.getAttribute('data-name');
+
+  // Update custom path input with selected model
+  if (customPathInput) {
+    customPathInput.value = selectedPath;
+  }
+
+  // Save to localStorage
+  localStorage.setItem('fluxModelPath', selectedPath);
+  updateFluxModelPathDisplay();
+
+  console.log('[UI] Selected Flux model:', modelName, 'Path:', selectedPath);
+  addMessage(`✅ Selected model: ${modelName}`, 'event');
+}
+
+/**
+ * Initialize model dropdown when local encoder section is shown
+ */
+function initializeFluxModelDropdown() {
+  const localModelSection = document.getElementById('localModelSection');
+  if (!localModelSection) return;
+
+  // Load models when section becomes visible
+  const observer = new MutationObserver(mutations => {
+    mutations.forEach(mutation => {
+      if (mutation.attributeName === 'style') {
+        const isVisible = localModelSection.style.display !== 'none';
+        if (isVisible && !localModelSection.modelsLoaded) {
+          loadFluxModels();
+          localModelSection.modelsLoaded = true;
+        }
+      }
+    });
+  });
+
+  observer.observe(localModelSection, { attributes: true });
+
+  // Also load models immediately if section is already visible
+  if (localModelSection.style.display !== 'none') {
+    loadFluxModels();
+    localModelSection.modelsLoaded = true;
+  }
 }
 
 /**
