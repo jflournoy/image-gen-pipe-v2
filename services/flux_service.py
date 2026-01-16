@@ -144,11 +144,16 @@ def load_pipeline():
         }
         if MODEL_SOURCE == 'huggingface':
             kwargs['token'] = HF_TOKEN
-
-        pipeline = DiffusionPipeline.from_pretrained(
-            model_to_load,
-            **kwargs
-        )
+            pipeline = DiffusionPipeline.from_pretrained(
+                model_to_load,
+                **kwargs
+            )
+        else:
+            # Local .safetensors file - use from_single_file
+            pipeline = DiffusionPipeline.from_single_file(
+                model_to_load,
+                **kwargs
+            )
 
         if DEVICE == 'cuda':
             # Use sequential CPU offload - most aggressive memory saving
