@@ -820,10 +820,10 @@ function validateHfToken(token) {
 /**
  * POST /api/providers/services/start
  * Start a local service
- * Body: { service: 'local-llm'|'flux'|'vision', hfToken?: string }
+ * Body: { service: 'local-llm'|'flux'|'vision', hfToken?: string, modelPath?: string }
  */
 router.post('/services/start', async (req, res) => {
-  const { service, hfToken } = req.body;
+  const { service, hfToken, modelPath } = req.body;
 
   if (!service) {
     return res.status(400).json({
@@ -912,11 +912,17 @@ router.post('/services/start', async (req, res) => {
         });
     }
 
-    // Build environment with HF_TOKEN if provided
+    // Build environment with custom settings if provided
     const spawnEnv = { ...process.env };
     if (hfToken) {
       spawnEnv.HF_TOKEN = hfToken;
       console.log(`[Service Start] Passing HF_TOKEN to ${service} service`);
+    }
+
+    // Pass custom Flux model path if provided
+    if (service === 'flux' && modelPath) {
+      spawnEnv.FLUX_MODEL_PATH = modelPath;
+      console.log(`[Service Start] Passing FLUX_MODEL_PATH to Flux service: ${modelPath}`);
     }
 
     // Spawn the service process

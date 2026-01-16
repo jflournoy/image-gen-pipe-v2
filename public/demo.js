@@ -2140,9 +2140,27 @@ function toggleFluxModelSource(source) {
   if (source === 'local') {
     hfSection.style.display = 'none';
     localSection.style.display = 'block';
+    updateFluxModelPathDisplay(); // Update display when switching to local
   } else {
     hfSection.style.display = 'block';
     localSection.style.display = 'none';
+  }
+}
+
+/**
+ * Update the display of the saved Flux model path
+ */
+function updateFluxModelPathDisplay() {
+  const savedPath = localStorage.getItem('fluxModelPath');
+  const pathValueSpan = document.getElementById('fluxSavedPathValue');
+  const clearBtn = document.getElementById('fluxClearPathBtn');
+
+  if (savedPath) {
+    pathValueSpan.textContent = savedPath;
+    clearBtn.style.display = 'inline-block';
+  } else {
+    pathValueSpan.textContent = 'none';
+    clearBtn.style.display = 'none';
   }
 }
 
@@ -2162,12 +2180,12 @@ async function setFluxModelPath() {
     return;
   }
 
-  // Basic client-side validation
-  if (!modelPath.startsWith('/')) {
+  // Basic client-side validation - allow absolute or relative paths
+  if (!modelPath.endsWith('.safetensors') && !modelPath.endsWith('.pt') && !modelPath.endsWith('.bin')) {
     statusDiv.style.display = 'block';
     statusDiv.style.background = '#fff3cd';
     statusDiv.style.color = '#856404';
-    statusDiv.textContent = 'Path must be absolute (start with /)';
+    statusDiv.textContent = 'Path must point to a model file (.safetensors, .pt, or .bin)';
     return;
   }
 
@@ -2188,6 +2206,7 @@ async function setFluxModelPath() {
     if (response.ok) {
       // Store in localStorage for use when starting service
       localStorage.setItem('fluxModelPath', modelPath);
+      updateFluxModelPathDisplay(); // Update the display to show saved path
       statusDiv.style.background = '#d4edda';
       statusDiv.style.color = '#155724';
       statusDiv.innerHTML = `
@@ -2205,6 +2224,39 @@ async function setFluxModelPath() {
     statusDiv.style.background = '#f8d7da';
     statusDiv.style.color = '#721c24';
     statusDiv.textContent = `Error: ${error.message}`;
+  }
+}
+
+/**
+ * Clear the saved Flux model path from localStorage
+ */
+function clearFluxModelPath() {
+  const statusDiv = document.getElementById('fluxModelPathStatus');
+  const pathInput = document.getElementById('fluxCustomPath');
+
+  // Confirm deletion
+  if (!confirm('This will clear the saved local model path and use the default from .env. Continue?')) {
+    return;
+  }
+
+  try {
+    localStorage.removeItem('fluxModelPath');
+    pathInput.value = '';
+    updateFluxModelPathDisplay(); // Update display
+
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#d4edda';
+    statusDiv.style.color = '#155724';
+    statusDiv.innerHTML = `
+      <strong>✓ Cleared!</strong> Local model path removed.<br>
+      <small style="margin-top: 4px; display: block;">The service will use the default model from .env or HuggingFace.</small>
+    `;
+    addMessage('Flux local model path cleared. Service will use default from .env.', 'event');
+  } catch (error) {
+    statusDiv.style.display = 'block';
+    statusDiv.style.background = '#f8d7da';
+    statusDiv.style.color = '#721c24';
+    statusDiv.textContent = `Error clearing path: ${error.message}`;
   }
 }
 
@@ -2231,11 +2283,15 @@ async function displayModelSource() {
           localRadio.checked = true;
           toggleFluxModelSource('local');
         }
+        // Update the saved path display
+        updateFluxModelPathDisplay();
       } else {
         // Show HuggingFace model
         if (currentHfModel) {
           currentHfModel.textContent = status.flux.modelName || 'FLUX.1-dev';
         }
+        // Also update display for HuggingFace case (in case switching from local)
+        updateFluxModelPathDisplay();
       }
     }
   } catch (error) {
@@ -2268,6 +2324,9 @@ function initializeFluxLoraConfig() {
     });
   }
 
+  // Update the saved settings display
+  updateFluxLoraDisplay();
+
   // Check initial status
   checkFluxLoraStatus();
 }
@@ -2288,6 +2347,9 @@ async function saveFluxLoraSettings() {
   // Save to localStorage (without 'flux' prefix for consistency with reader)
   localStorage.setItem('loraPath', loraPath);
   localStorage.setItem('loraScale', loraScale);
+
+  // Update the saved settings display
+  updateFluxLoraDisplay();
 
   // Update status
   if (statusText) {
@@ -2349,6 +2411,64 @@ async function checkFluxLoraStatus() {
       statusText.style.color = '#f44336';
     }
     console.error('[UI] Error checking LoRA status:', error);
+  }
+}
+
+/**
+ * Update the display of saved LoRA settings
+ */
+function updateFluxLoraDisplay() {
+  const savedLoraPath = localStorage.getItem('loraPath');
+  const savedLoraScale = localStorage.getItem('loraScale');
+  const loraPathSpan = document.getElementById('fluxSavedLoraPath');
+  const loraScaleSpan = document.getElementById('fluxSavedLoraScale');
+  const clearBtn = document.getElementById('fluxClearLoraBtn');
+
+  if (loraPathSpan) {
+    loraPathSpan.textContent = savedLoraPath || 'none';
+  }
+  if (loraScaleSpan) {
+    loraScaleSpan.textContent = savedLoraScale || 'none';
+  }
+  if (clearBtn) {
+    clearBtn.style.display = (savedLoraPath || savedLoraScale) ? 'inline-block' : 'none';
+  }
+}
+
+/**
+ * Clear saved LoRA settings from localStorage
+ */
+function clearFluxLoraSettings() {
+  const statusText = document.getElementById('fluxLoraStatusText');
+  const loraPathInput = document.getElementById('fluxLoraPath');
+  const loraScaleInput = document.getElementById('fluxLoraScale');
+
+  // Confirm deletion
+  if (!confirm('This will clear the saved LoRA settings. Continue?')) {
+    return;
+  }
+
+  try {
+    localStorage.removeItem('loraPath');
+    localStorage.removeItem('loraScale');
+
+    // Clear inputs
+    if (loraPathInput) loraPathInput.value = '';
+    if (loraScaleInput) loraScaleInput.value = '1.0';
+
+    updateFluxLoraDisplay(); // Update display
+
+    if (statusText) {
+      statusText.textContent = '✓ LoRA settings cleared. Service will use defaults from .env.';
+      statusText.style.color = '#4CAF50';
+    }
+
+    addMessage('Flux LoRA settings cleared from browser. Service will use defaults from .env.', 'event');
+  } catch (error) {
+    if (statusText) {
+      statusText.textContent = `Error clearing LoRA settings: ${error.message}`;
+      statusText.style.color = '#f44336';
+    }
   }
 }
 
