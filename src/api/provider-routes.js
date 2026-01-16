@@ -1508,6 +1508,142 @@ router.post('/quick-local', async (req, res) => {
 });
 
 /**
+ * GET /api/providers/flux/discovery
+ * Discover available Flux models and encoders in local directories
+ * Returns a list of available models, encoders, and suggested presets
+ */
+router.get('/flux/discovery', async (req, res) => {
+  try {
+    const fs = require('fs').promises;
+    const fsSync = require('fs');
+    const path = require('path');
+
+    const projectRoot = path.join(__dirname, '../../');
+    const checkpointsDir = path.join(projectRoot, 'services/checkpoints');
+    const encodersDir = path.join(projectRoot, 'services/encoders');
+
+    // Discover available models and encoders
+    const models = await discoverFiles(checkpointsDir, /\.safetensors$/i);
+    const encoderFiles = await discoverFiles(encodersDir, /\.safetensors$/i);
+
+    // Extract encoder types from filenames
+    const encoders = {
+      clipL: encoderFiles.find(f => /clip[_-]?l/i.test(f)) || 'clip_l.safetensors',
+      t5: encoderFiles.find(f => /model\.safetensors/i.test(f)) || 'model.safetensors',
+      vae: encoderFiles.find(f => /ae\.safetensors|vae/i.test(f)) || 'ae.safetensors'
+    };
+
+    // Generate presets by matching models to encoder configurations
+    const presets = generatePresets(models, encodersDir);
+
+    res.json({
+      success: true,
+      models: models.map(m => ({
+        name: m,
+        path: `services/checkpoints/${m}`
+      })),
+      encoders: Object.entries(encoders).reduce((acc, [type, file]) => {
+        acc[type] = {
+          name: file,
+          path: `services/encoders/${file}`
+        };
+        return acc;
+      }, {}),
+      presets: presets,
+      directories: {
+        models: checkpointsDir,
+        encoders: encodersDir
+      }
+    });
+  } catch (error) {
+    console.error('[Provider Discovery] Error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to discover models and encoders',
+      message: error.message
+    });
+  }
+});
+
+/**
+ * Discover files in a directory matching a pattern
+ */
+async function discoverFiles(dirPath, pattern) {
+  try {
+    const fs = require('fs').promises;
+    const fsSync = require('fs');
+
+    if (!fsSync.existsSync(dirPath)) {
+      return [];
+    }
+
+    const files = await fs.readdir(dirPath);
+    return files.filter(f => pattern.test(f)).sort();
+  } catch (error) {
+    console.warn(`[Provider Discovery] Warning reading ${dirPath}:`, error.message);
+    return [];
+  }
+}
+
+/**
+ * Generate intelligent presets by matching models with encoders using regex patterns
+ */
+function generatePresets(models, encodersDir) {
+  const presets = [];
+
+  // Default preset: use all models with standard encoders
+  if (models.length > 0) {
+    presets.push({
+      name: 'Local Models with Standard Encoders',
+      description: 'Use local models with the standard Flux .1 Dev encoders',
+      useLocalEncoders: true,
+      textEncoderPath: 'services/encoders/clip_l.safetensors',
+      textEncoder2Path: 'services/encoders/model.safetensors',
+      vaePath: 'services/encoders/ae.safetensors',
+      models: models // Apply to all models
+    });
+  }
+
+  // Smart presets: match model names to encoder patterns
+  const presetPatterns = [
+    {
+      name: 'CustomModel',
+      pattern: /custom-model/i,
+      description: 'CustomModel custom Flux model with specialized encoders'
+    },
+    {
+      name: 'PixelWave',
+      pattern: /pixelwave/i,
+      description: 'PixelWave fine-tuned Flux model'
+    },
+    {
+      name: 'Flux Dev',
+      pattern: /flux.*dev|flux\.1.*dev/i,
+      description: 'Flux .1 Dev model variants'
+    }
+  ];
+
+  // For each pattern, find matching models and create presets
+  presetPatterns.forEach(preset => {
+    const matchedModels = models.filter(m => preset.pattern.test(m));
+
+    if (matchedModels.length > 0) {
+      presets.push({
+        name: preset.name,
+        description: preset.description,
+        useLocalEncoders: true,
+        textEncoderPath: 'services/encoders/clip_l.safetensors',
+        textEncoder2Path: 'services/encoders/model.safetensors',
+        vaePath: 'services/encoders/ae.safetensors',
+        models: matchedModels
+      });
+    }
+  });
+
+  return presets;
+}
+
+/**
  * Get the current runtime providers (for use by other modules)
  */
 export function getRuntimeProviders() {
