@@ -30,6 +30,11 @@ MODEL_NAME = os.getenv('FLUX_MODEL', 'black-forest-labs/FLUX.1-dev')
 FLUX_LORA_PATH = os.getenv('FLUX_LORA_PATH')  # Optional LoRA weights path
 LORA_DEFAULT_SCALE = float(os.getenv('FLUX_LORA_SCALE', '1.0'))  # Default LoRA strength
 
+# Custom encoder paths (for models like pixelwave that require specific encoders)
+FLUX_TEXT_ENCODER_PATH = os.getenv('FLUX_TEXT_ENCODER_PATH')  # Local CLIP-L encoder
+FLUX_TEXT_ENCODER_2_PATH = os.getenv('FLUX_TEXT_ENCODER_2_PATH')  # Local T5-XXL encoder
+FLUX_VAE_PATH = os.getenv('FLUX_VAE_PATH')  # Local VAE encoder
+
 # Determine model source and validate
 if FLUX_MODEL_PATH:
     # Using local model file
@@ -166,53 +171,95 @@ def load_pipeline():
                     from huggingface_hub import hf_hub_download
                     import safetensors
 
-                    # Load VAE from official Flux (works for most Flux variants)
-                    print('[Flux Service] Loading vae (AutoencoderKL) from HuggingFace...')
-                    vae = AutoencoderKL.from_pretrained(
-                        'black-forest-labs/FLUX.1-dev',
-                        subfolder='vae',
-                        torch_dtype=kwargs['torch_dtype']
-                    )
+                    # Load VAE from local path or HuggingFace
+                    vae = None
+                    if FLUX_VAE_PATH:
+                        try:
+                            print(f'[Flux Service] Loading VAE from local path: {FLUX_VAE_PATH}')
+                            vae = AutoencoderKL.from_single_file(
+                                FLUX_VAE_PATH,
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+                        except Exception as vae_error:
+                            print(f'[Flux Service] Failed to load local VAE: {vae_error}')
+                            print(f'[Flux Service] Falling back to HuggingFace VAE...')
+
+                    if vae is None:
+                        print('[Flux Service] Loading vae (AutoencoderKL) from HuggingFace...')
+                        vae = AutoencoderKL.from_pretrained(
+                            'black-forest-labs/FLUX.1-dev',
+                            subfolder='vae',
+                            torch_dtype=kwargs['torch_dtype']
+                        )
 
                     # Try to load model-specific encoders if available, fall back to standard ones
                     # Some models (like pixelwave) require specific encoder versions
-                    print('[Flux Service] Loading text encoders from HuggingFace...')
-                    try:
-                        # Try to load CLIP-L from SD3-medium (better compatibility with some models)
-                        print('[Flux Service] Attempting to load CLIP-L from stabilityai/stable-diffusion-3-medium...')
-                        text_encoder = CLIPTextModel.from_pretrained(
-                            'stabilityai/stable-diffusion-3-medium',
-                            subfolder='text_encoders',
-                            filename='clip_l.safetensors',
-                            torch_dtype=kwargs['torch_dtype']
-                        )
-                    except Exception:
-                        # Fall back to standard CLIP
-                        print('[Flux Service] CLIP-L not available, falling back to openai/clip-vit-large-patch14')
-                        text_encoder = CLIPTextModel.from_pretrained(
-                            'openai/clip-vit-large-patch14',
-                            torch_dtype=kwargs['torch_dtype']
-                        )
+                    print('[Flux Service] Loading text encoders...')
 
-                    try:
-                        # Try to load T5-XXL FP8 (optimized for Flux models like pixelwave)
-                        print('[Flux Service] Attempting to load T5-XXL FP8 from comfyanonymous/flux_text_encoders...')
-                        t5_path = hf_hub_download(
-                            'comfyanonymous/flux_text_encoders',
-                            filename='t5xxl_fp8_e4m3fn.safetensors'
-                        )
-                        text_encoder_2 = T5EncoderModel.from_pretrained(
-                            'comfyanonymous/flux_text_encoders',
-                            subfolder=None,
-                            torch_dtype=kwargs['torch_dtype']
-                        )
-                    except Exception:
-                        # Fall back to standard T5
-                        print('[Flux Service] T5-XXL FP8 not available, falling back to google-t5/t5-base')
-                        text_encoder_2 = T5EncoderModel.from_pretrained(
-                            'google-t5/t5-base',
-                            torch_dtype=kwargs['torch_dtype']
-                        )
+                    # Load CLIP-L text encoder from local path or HuggingFace
+                    text_encoder = None
+                    if FLUX_TEXT_ENCODER_PATH:
+                        try:
+                            print(f'[Flux Service] Loading CLIP-L from local path: {FLUX_TEXT_ENCODER_PATH}')
+                            text_encoder = CLIPTextModel.from_single_file(
+                                FLUX_TEXT_ENCODER_PATH,
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+                        except Exception as encoder_error:
+                            print(f'[Flux Service] Failed to load local CLIP-L: {encoder_error}')
+                            print(f'[Flux Service] Falling back to HuggingFace CLIP-L...')
+
+                    if text_encoder is None:
+                        try:
+                            # Try to load CLIP-L from SD3-medium (better compatibility with some models)
+                            print('[Flux Service] Attempting to load CLIP-L from stabilityai/stable-diffusion-3-medium...')
+                            text_encoder = CLIPTextModel.from_pretrained(
+                                'stabilityai/stable-diffusion-3-medium',
+                                subfolder='text_encoders',
+                                filename='clip_l.safetensors',
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+                        except Exception:
+                            # Fall back to standard CLIP
+                            print('[Flux Service] CLIP-L not available, falling back to openai/clip-vit-large-patch14')
+                            text_encoder = CLIPTextModel.from_pretrained(
+                                'openai/clip-vit-large-patch14',
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+
+                    # Load T5-XXL text encoder from local path or HuggingFace
+                    text_encoder_2 = None
+                    if FLUX_TEXT_ENCODER_2_PATH:
+                        try:
+                            print(f'[Flux Service] Loading T5-XXL from local path: {FLUX_TEXT_ENCODER_2_PATH}')
+                            text_encoder_2 = T5EncoderModel.from_single_file(
+                                FLUX_TEXT_ENCODER_2_PATH,
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+                        except Exception as encoder2_error:
+                            print(f'[Flux Service] Failed to load local T5-XXL: {encoder2_error}')
+                            print(f'[Flux Service] Falling back to HuggingFace T5-XXL...')
+
+                    if text_encoder_2 is None:
+                        try:
+                            # Try to load T5-XXL FP8 (optimized for Flux models like pixelwave)
+                            print('[Flux Service] Attempting to load T5-XXL FP8 from comfyanonymous/flux_text_encoders...')
+                            t5_path = hf_hub_download(
+                                'comfyanonymous/flux_text_encoders',
+                                filename='t5xxl_fp8_e4m3fn.safetensors'
+                            )
+                            text_encoder_2 = T5EncoderModel.from_pretrained(
+                                'comfyanonymous/flux_text_encoders',
+                                subfolder=None,
+                                torch_dtype=kwargs['torch_dtype']
+                            )
+                        except Exception:
+                            # Fall back to standard T5
+                            print('[Flux Service] T5-XXL FP8 not available, falling back to google-t5/t5-base')
+                            text_encoder_2 = T5EncoderModel.from_pretrained(
+                                'google-t5/t5-base',
+                                torch_dtype=kwargs['torch_dtype']
+                            )
 
                     # Retry with all loaded components
                     pipeline = FluxPipeline.from_single_file(

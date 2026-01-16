@@ -1476,6 +1476,13 @@
 
               <!-- Local Model Path Input (hidden by default) -->
               <div id="localModelSection" style="display: none;">
+                <div id="fluxSavedPathDisplay" style="margin-bottom: 10px; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px; font-size: 11px;">
+                  <strong>Saved in browser:</strong> <span id="fluxSavedPathValue" style="font-family: monospace; color: #666;">none</span>
+                  <button id="fluxClearPathBtn" onclick="clearFluxModelPath()" style="display: none; background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-left: 8px; float: right;">
+                    Clear
+                  </button>
+                  <div style="clear: both;"></div>
+                </div>
                 <div style="display: flex; gap: 8px; margin-bottom: 6px;">
                   <input
                     type="text"
@@ -1484,12 +1491,12 @@
                     style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
                   />
                   <button onclick="setFluxModelPath()" style="background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">
-                    Browse & Set
+                    Set Path
                   </button>
                 </div>
                 <small style="display: block; color: #888; font-size: 10px; line-height: 1.4;">
                   💡 Download custom Flux models from <a href="https://civitai.com/search/models?baseModel=Flux.1%20D" target="_blank" style="color: #0066cc;">CivitAI</a>.
-                  Point to the .safetensors file after downloading.
+                  Point to the .safetensors file after downloading. Paths can be absolute or relative to project root.
                 </small>
                 <div id="fluxModelPathStatus" style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; display: none;"></div>
               </div>
@@ -1500,6 +1507,18 @@
               <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
                 Flux LoRA Configuration:
               </label>
+
+              <!-- Saved LoRA Display -->
+              <div id="fluxSavedLoraDisplay" style="margin-bottom: 10px; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px; font-size: 11px;">
+                <strong>Saved in browser:</strong>
+                <div style="margin-top: 4px;">
+                  <div><span style="color: #666;">Path:</span> <span id="fluxSavedLoraPath" style="font-family: monospace; color: #666;">none</span></div>
+                  <div><span style="color: #666;">Scale:</span> <span id="fluxSavedLoraScale" style="font-family: monospace; color: #666;">none</span></div>
+                </div>
+                <button id="fluxClearLoraBtn" onclick="clearFluxLoraSettings()" style="display: none; background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-top: 6px;">
+                  Clear Saved LoRA
+                </button>
+              </div>
 
               <!-- LoRA Path Input -->
               <div style="margin-bottom: 10px;">
