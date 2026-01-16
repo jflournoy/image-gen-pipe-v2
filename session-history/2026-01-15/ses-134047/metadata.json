@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-134047",
+  "timestamp": "2026-01-15T21:40:47.549Z",
+  "userPrompt": "beautiful fine art nude",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Immerse yourself in the breathtaking beauty of a fine art nude scene. The model, her body sculpted and perfect, stands before an ornate gilded mirror, her reflection shimmering like a work of art itself. Her lithe form is draped in delicate fabric, revealing tantalizing glimpses of flawless skin, every curve and contour highlighted by the gentle play of light cascading through the room's large windows. The room, a serene study of elegance and sophistication, is filled with the sweet scent of roses, their petals strewn across the velvet couch like a painter's palette. A sense of tranquility envelops the scene as the model poses, lost in her own world, a living masterpiece of the human form.",
+          "howPrompt": "Imagine a stunning fine art nude photograph that exudes an ethereal, dreamlike atmosphere. The model's body is bathed in soft, golden light filtering through delicate curtains, casting gentle shadows and highlighting her curves in a sensual yet tasteful way. The composition masterfully frames the figure against a rich, moody backdrop, drawing the viewer's eye towards intriguing details and textures while maintaining an overall sense of balance and harmony. A subdued color palette dominated by warm hues complements the elegant nudity, creating a visually appealing and captivating image that evokes emotion and inspires reflection.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit gallery, a breathtakingly beautiful fine art nude painting comes to life. The luscious curve of her form is illuminated by the soft glow of an antique oil lamp, casting an enticing, inviting shadow across the cool stone floor. Her skin, rendered in exquisite detail, is a smooth tapestry of rosy hues and delicate lines, each brushstroke a loving tribute to the female form. The room holds its collective breath as she poses before us, a goddess in all her unapologetic splendor, evoking a sense of awe, desire, and reverence.",
+          "howPrompt": "Imagine a captivating fine art nude photograph with exquisite attention to detail and evocative emotion. The subject, bathed in ethereal, golden light filtering through dappled leaves, poses gracefully against a mossy tree trunk. Her body, delicately painted with smudged, earthy hues, is the epitome of vulnerability and sensuality. A delicate balance between darkness and light accentuates every curve, creating a luminous glow that emanates from her. The overall atmosphere is one of tranquility and serenity, invoking feelings of both beauty and introspection.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit studio, a stunningly beautiful woman poses nude before an easel, her flawless form bathed in the soft, ethereal glow of the setting sun. Her curves and contours are captured with exquisite detail by the skilled artist, who deftly applies vibrant hues to his canvas. The room is filled with a palpable sense of tranquility and creativity, as the melody of Mozart's Symphony No. 40 fills the air and the scent of turpentine and linseed oil wafts through the windows, mingling with the sweet fragrance of spring flowers blooming outside.",
+          "howPrompt": "In this exquisite fine art nude image, the subject is bathed in soft, ethereal light that filters through a delicate veil of window drapes. Her flawless, toned skin is illuminated in warm hues, casting intriguing shadows that enhance her curves and contours. The composition masterfully balances the interplay between the nude figure and the natural environment, with vines and petals framing her form and evoking a sense of harmony and sensuality. A lush color palette of earthy tones and rich greens complements the subject's complexion and adds depth to the scene, while the textured background suggests the passing of time and the atmosphere resonates with tranquility and allure.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit gallery, a stunning fine art nude gracefully poses before an admiring audience. The artist's masterful brushstrokes capture every curve and contour of her perfect form, revealing an ethereal beauty that leaves onlookers mesmerized. Her alabaster skin glows under the soft glow of the antique chandelier, reflecting off the polished wooden floor in ripples like the surface of a tranquil pool. The mood is one of serene sensuality, a testament to the power of art to evoke emotion and transport the soul.",
+          "howPrompt": "In the realm of fine art nude photography, each image is a sensual and captivating journey into an ethereal world. The lighting illuminates the human form with gentle, diffused tones that caress every curve and line. The composition masterfully balances the interplay between the figure and the surrounding environment, drawing the viewer's gaze in a deliberate dance of exploration. A rich color palette infuses each frame with emotion, evoking feelings of tranquility, passion, or mystery depending on the artistic intent. The texture, often softened through careful post-production techniques, adds an alluring tactile quality that invites us to touch and connect with the image. This stunning fusion of human form, evocative lighting, thoughtful composition, and emotive color palette creates a mesmerizing atmosphere in every beautiful fine art nude photograph.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

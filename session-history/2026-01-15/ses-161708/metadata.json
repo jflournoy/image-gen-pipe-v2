@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-161708",
+  "timestamp": "2026-01-16T00:17:08.143Z",
+  "userPrompt": "young woman masturbating",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit, cluttered room, a young woman, her cheeks flushed with desire, clutches at the hem of her worn flannel shirt. Her eyes are closed as she explores her body with fervent abandon, her breath hitching in short gasps with every touch. The scent of jasmine from the open window mingles with her arousal, filling the air with an intoxicating aroma. The room is silent save for the soft creaks of the bedsprings beneath her as she loses herself in the pleasurable rhythm of her own hands.",
+          "howPrompt": "In this evocative, introspective image, a young woman sits alone in dimly lit room, bathed in the warm, golden glow of a solitary lamp. Her expression is one of intense focus and satisfaction as she explores her own body with deliberate, sensual strokes. The color palette is muted and earthy, dominated by rich browns and deep reds that evoke a raw, primal energy. Textures are soft yet tactile, from the velvety folds of her nightgown to the rough grain of the wooden floor beneath her bare feet. The atmosphere is both intimate and voyeuristic, inviting us to bear witness to a private moment of self-discovery and exploration. This image masterfully captures the essence of solo pleasure, transporting us into a sensual world where the boundaries between the inner and outer worlds blur.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, a young woman, her skin glowing with the soft light filtering through the sheer curtains, is lost in an intense moment of solitude. Her body moves rhythmically under the sheets, hands exploring every inch of her own form. A single pearl necklace adorns her delicate neck, beads catching on the curve of her collarbone as she arches her back. The room is filled with the intoxicating aroma of lavender and vanilla from the scented candles, setting the stage for an erotically charged atmosphere. With each breath, she closes her eyes, succumbing to the pleasure building within her, every sensation heightened by the anticipation and release.",
+          "howPrompt": "Imagine a striking, intimate portrait of a young woman lost in the throes of pleasure. The image is bathed in soft, warm light, filtering in from the windows behind her, casting gentle shadows across her flawless, glowing skin. Her expressive face is contorted in ecstasy as she explores her own body, her eyes closed and a faint blush spreading across her cheeks. The composition is deliberate and sensual, with her body angled towards the camera, inviting us into this private moment. The color palette is muted yet vibrant, featuring earthy tones of browns, reds, and golds that evoke a sense of natural warmth and passion. Her textured skin, contrasting against the smooth, velvety sheets beneath her, adds an enticing tactility to the image. The atmosphere is one of raw vulnerability and sensuality, inviting us to connect with her on a deeply human level. This stunning, artful depiction transcends mere representation, inviting viewers to engage in a visual exploration of desire, pleasure, and the power of the female body.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

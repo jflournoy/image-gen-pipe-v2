@@ -234,25 +234,29 @@ def load_pipeline():
                             )
 
                     # Load T5-XXL text encoder from local path or HuggingFace
-                    # NOTE: Local T5-XXL loading requires config.json alongside safetensors file
-                    # For now, we'll note that we found the file but use HuggingFace model
-                    # TODO: Support loading T5 from safetensors + config.json
                     text_encoder_2 = None
                     if FLUX_TEXT_ENCODER_2_PATH:
                         try:
-                            # Check if config.json exists for local loading
+                            print(f'[Flux Service] Loading T5-XXL from local path: {FLUX_TEXT_ENCODER_2_PATH}')
+                            # Load state dict from safetensors file
+                            state_dict = load_file(FLUX_TEXT_ENCODER_2_PATH)
+                            # Create model from local config or base model, then load weights
                             encoder_dir = Path(FLUX_TEXT_ENCODER_2_PATH).parent
                             if (encoder_dir / 'config.json').exists():
-                                print(f'[Flux Service] Loading T5-XXL from local path: {encoder_dir}')
+                                # Load config from local directory
                                 text_encoder_2 = T5EncoderModel.from_pretrained(str(encoder_dir), torch_dtype=kwargs['torch_dtype'])
-                                print(f'[Flux Service] Successfully loaded local T5-XXL encoder')
                             else:
-                                print(f'[Flux Service] Local T5-XXL found but config.json missing - skipping local load')
-                                print(f'[Flux Service] Falling back to HuggingFace T5-XXL...')
-                                raise Exception('No config.json')
+                                # Use local config.json from same directory
+                                text_encoder_2 = T5EncoderModel.from_pretrained(str(encoder_dir), torch_dtype=kwargs['torch_dtype'])
+                            # Load the state dict weights
+                            text_encoder_2.load_state_dict(state_dict)
+                            # Convert from FP8 to FP16 for CUDA compatibility
+                            # (PyTorch doesn't support arithmetic on FP8 tensors)
+                            text_encoder_2 = text_encoder_2.to(dtype=kwargs['torch_dtype'])
+                            print(f'[Flux Service] Successfully loaded local T5-XXL encoder (converted from FP8 to {kwargs["torch_dtype"]})')
                         except Exception as encoder2_error:
-                            if text_encoder_2 is None:
-                                print(f'[Flux Service] Falling back to HuggingFace T5-XXL...')
+                            print(f'[Flux Service] T5-XXL loading error: {type(encoder2_error).__name__}: {encoder2_error}')
+                            print(f'[Flux Service] Falling back to HuggingFace T5-XXL...')
 
                     if text_encoder_2 is None:
                         try:

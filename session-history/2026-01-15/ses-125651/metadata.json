@@ -1,0 +1,184 @@
+{
+  "sessionId": "ses-125651",
+  "timestamp": "2026-01-15T20:56:51.920Z",
+  "userPrompt": "amateur candid photograph of a naked woman",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the amateur candid photograph lies a captivating image of a woman, her radiant nudity framed by the imperfect edges of the camera lens. The soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, the ripples tracing an ethereal dance upon its surface. A serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation, while the sun's warm kiss paints a golden hue on her bare skin. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere.",
+          "howPrompt": "The amateur candid photograph of a naked woman exudes an uncensored, raw, and authentic charm. The soft focus lens gently caresses her curves, blurring the background while keeping her figure in sharp relief. The warm, golden hour light bathes her skin, casting an ethereal glow that makes her appear almost otherworldly. Her eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into a moment of intimacy. The grainy texture and muted color palette of the image add to its raw, unpolished appeal, creating an atmosphere of authenticity that is both provocative and alluring.",
+          "critique": null,
+          "status": "completed",
+          "combined": "An amateur candid photograph captures a moment of raw vulnerability and sensual allure, featuring a woman in radiant nudity. Soft focus and natural lighting frame her curves as she playfully splashes water atop a crystal-clear lake, with ripples tracing an ethereal dance on the surface. The air carries the scent of blooming flowers, invigorating the senses, while the sun's warm kiss paints a golden hue on her bare skin. The image exudes uncensored charm through its soft focus lens, grainy texture, and muted color palette, with the warm, golden hour light bathing her skin and casting an ethereal glow. Her eyes hold vulnerability and surprise, inviting intimacy and captivating the viewer.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In this captivating amateur candid photograph, a sensual and unassuming woman is the focus of the image. She stands naked by an open window, the sun casting a warm golden glow upon her bare skin, her silhouette framed against the lush greenery outside. The tranquil serenity of the setting contrasts sharply with the raw vulnerability and sensuality that radiates from her body. This powerful juxtaposition of nature's gentle embrace and the woman's untamed essence creates a compelling mood, drawing the viewer in to share an intimate moment in time.",
+          "howPrompt": "This amateur candid photograph captures the raw, unscripted beauty of a naked woman as she goes about her daily life. The image is bathed in soft, natural sunlight filtering through the trees, casting warm, dappled light across her skin. Her composition is casual yet artful, with her body slightly off-center and her eyes gazing intently at something beyond the frame. The color palette is earthy and organic, with tones of green, brown, and beige blending seamlessly into the background. Her skin has a textured, imperfect quality, showing every curve and crevice in high relief. The overall atmosphere is one of vulnerability and intimacy, inviting the viewer to appreciate the natural wonders of the human form.",
+          "critique": null,
+          "status": "completed",
+          "combined": "A captivating amateur candid photograph of a sensual and unassuming woman, standing naked by an open window bathed in warm, golden sunlight that filters through the lush greenery outside. Her composition is casual yet artful with her body slightly off-center and eyes gazing intently beyond the frame, creating a compelling juxtaposition of nature's gentle embrace and her untamed essence. The raw, unscripted beauty of the scene is captured in earthy, organic tones with a color palette blending seamlessly into the background. Her skin has a textured, imperfect quality that shows every curve and crevice in high relief, inviting the viewer to appreciate the natural wonders of the human form through soft, natural sunlight filtering through the trees.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In this unguarded moment, an anonymous amateur photographer has captured the raw essence of a woman's vulnerability and beauty. The image shows a slender figure, her naked body bathed in the soft glow of twilight seeping through the window. Her skin, a perfect blend of sun-kissed golden hues and delicate pink roses, is adorned only with the natural curves and imperfections that make her human. Her hair cascades down her back like a dark waterfall, intertwined with tendrils of twilight vines from the open window. The scene exudes an intimate, ethereal mood, where the boundary between nature and womanhood blurs together, inviting us to savor every detail of this candid moment in time.",
+          "howPrompt": "The amateur candid photograph of a naked woman exudes an unpolished, raw authenticity. The dimly lit scene casts an ethereal glow on her bare form, revealing every curve and crease in high contrast against the darkness. Her expression is lost in the moment, capturing the essence of vulnerability and humanity. The warm, earthy tones of her skin radiate under the soft light, texturally enhancing her natural beauty. The composition emphasizes her connection to the surroundings, immersing viewers in an intimate atmosphere that transcends mere visual representation.",
+          "critique": null,
+          "status": "completed",
+          "combined": "An anonymous amateur photographer's candid shot of a slender, naked woman bathed in the soft twilight glow reveals her raw vulnerability and ethereal beauty. The scene exudes intimacy with natural elements as her sun-kissed, golden-hued, pink-rosetted skin contrasts against the darkness, intertwined with tendrils of twilight vines. Her dark hair cascades like a waterfall, enhancing the ethereal atmosphere that blurs nature and womanhood. The unpolished, raw authenticity of the photograph is emphasized through high-contrast lighting, capturing her lost expression and immersing viewers in an intimate, ethereal mood, with earthy tones radiating warmth under the soft light.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter0-cand2.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit, cramped confines of an old wooden shack, a dusty, yellowed photograph rests atop a rickety table. The image captures a moment frozen in time: a young, unadorned woman with wild, untamed locks, her eyes closed and face flushed with the slightest hint of embarrassment or shame. Her lithe, uncovered form is displayed boldly before the viewer, an intrusion into her most private moments. The room's musty aroma, heavy with the scent of decaying paper, envelopes the scene, creating a palpable sense of unease and longing.",
+          "howPrompt": "In the raw, unfiltered reality of an amateur candid photograph, a woman stands naked in soft focus, her vulnerability and humanity exposed. The warm glow of natural sunlight cascades through the room, dappling her skin with gentle highlights and shadows that playfully dance upon her curves. Her unguarded expression, filled with both defiance and vulnerability, locks eyes with the viewer, inviting them into an intimate moment. The image's color palette is muted yet rich, harkening back to a bygone era of film photography. Texture abounds, from the delicate creases in her skin to the rough-hewn timber beams in the background, creating a tactile and immersive experience for the viewer. The atmosphere is one of raw emotion and honesty, as if the photographer has captured not just an image, but a fleeting moment in time that speaks to the very essence of the human condition.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the dimly lit, cramped confines of an old wooden shack, a dusty, yellowed photograph rests atop a rickety table. The raw, unfiltered reality of an amateur candid photograph captures a young, unadorned woman with wild, untamed locks, her eyes closed and face flushed with the slightest hint of embarrassment or shame. Her lithe, uncovered form is displayed boldly before the viewer, an intrusion into her most private moments. The room's musty aroma, heavy with the scent of decaying paper, envelopes the scene as sunlight cascades through the room in soft focus, dappling her skin with gentle highlights and shadows that playfully dance upon her curves. Her unguarded expression, filled with both defiance and vulnerability, locks eyes with the viewer, inviting them into an intimate moment. The image's muted yet rich color palette harkens back to a bygone era of film photography, while texture abounds from the delicate creases in her skin to the rough-hewn timber beams in the background. The atmosphere is one of raw emotion and honesty, as if the photographer has captured not just an image, but a fleeting moment in time that speaks to the very essence of the human condition.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter0-cand3.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    },
+    {
+      "iteration": 1,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": 0,
+          "whatPrompt": "In the amateur candid photograph, a woman's breathtaking nudity is beautifully captured as she stands at the edge of a tranquil lake. The camera lens imperfectly frames her radiant form with its soft focus and natural lighting, which gently caresses her curves in every direction. Playfully, she splashes water droplets onto the lake's crystal-clear surface, causing ripples that trace an ethereal dance upon it. The air is filled with the enchanting scent of blooming flowers, carried by a gentle breeze that invigorates the senses with its soothing touch. As the sun's warm kiss paints a golden hue on her bare skin, the moment radiates raw vulnerability and sensual allure, transporting the viewer to a serene and dreamlike atmosphere.",
+          "howPrompt": "The amateur candid photograph of a naked woman exudes an uncensored, raw, and authentic charm. The soft focus lens gently caresses her curves, blurring the background while keeping her figure in sharp relief. The warm, golden hour light bathes her skin, casting an ethereal glow that makes her appear almost otherworldly. Her eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into a moment of intimacy. The grainy texture and muted color palette of the image add to its raw, unpolished appeal, creating an atmosphere of authenticity that is both provocative and alluring.",
+          "critique": null,
+          "status": "completed",
+          "combined": "An amateur candid photograph capturing a breathtakingly nude woman at the edge of a tranquil lake, with soft focus and warm golden hour lighting that gently caresses her curves, blurring the background while keeping her figure in sharp relief. The woman playfully splashes water droplets onto the crystal-clear surface, causing ethereal ripples to dance upon it as the enchanting scent of blooming flowers fills the air, carried by a gentle breeze. Her eyes, filled with vulnerability and surprise, hold the viewer captive with an uncensored, raw, and authentic charm that exudes intimacy. The grainy texture and muted color palette add to the image's unpolished appeal, creating an atmosphere of authenticity that is both provocative and alluring.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter1-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 3,
+          "parentId": 0,
+          "whatPrompt": "In the captivating amateur candid photograph, a woman's radiant nudity is framed by the imperfect edges of the camera lens. Soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, each ripple tracing an ethereal dance upon its surface. The serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation that tickles the senses. The sun's warm kiss paints a golden hue on her bare skin, bathing her in a natural glow. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere where time stands still. Her laughter echoes through the forest, enveloped by the symphony of nature's gentle sounds, creating an immersive, sensory-rich experience that leaves one feeling rejuvenated and connected to the world around them.",
+          "howPrompt": "The amateur candid photograph of a naked woman exudes an uncensored, raw, and authentic charm. The soft focus lens gently caresses her curves, blurring the background while keeping her figure in sharp relief. The warm, golden hour light bathes her skin, casting an ethereal glow that makes her appear almost otherworldly. Her eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into a moment of intimacy. The grainy texture and muted color palette of the image add to its raw, unpolished appeal, creating an atmosphere of authenticity that is both provocative and alluring.",
+          "critique": null,
+          "status": "completed",
+          "combined": "A captivating, grainy, and uncensored amateur candid photograph features a radiant woman in nudity, bathed in the warm glow of golden hour light as she playfully splashes water at a crystal-clear lake. The soft focus lens gently caresses her curves, blurring the imperfect edges of the camera frame while keeping her figure in sharp relief. Each ripple on the water's surface traces an ethereal dance, reflecting the golden hue that envelops her bare skin and paints it with a natural glow. The woman's eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into an intimate moment where time stands still amidst the serene breeze carrying the scent of blooming flowers. The natural sounds of the forest intermingle with her laughter, creating an immersive, sensory-rich experience that leaves one feeling rejuvenated and connected to the world around them. The muted color palette and authentic texture of the image further enhance its raw and unpolished appeal, evoking a tranquil and dreamlike atmosphere where vulnerability and sensual allure merge.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter1-cand3.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    },
+    {
+      "iteration": 2,
+      "dimension": "how",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": 0,
+          "whatPrompt": "In the amateur candid photograph lies a captivating image of a woman, her radiant nudity framed by the imperfect edges of the camera lens. The soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, the ripples tracing an ethereal dance upon its surface. A serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation, while the sun's warm kiss paints a golden hue on her bare skin. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere.",
+          "howPrompt": "This candid photograph, taken by an amateur, oozes a raw and uncensored charm with its authentic depiction of a naked woman. The soft focus lens delicately caresses her curves, blurring the background to keep her figure in sharp relief. The warm, golden hour light bathes her skin, creating an ethereal glow that makes her appear otherworldly. Her eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into a moment of intimate connection. The grainy texture and muted color palette add to the image's unpolished appeal, making it both provocative and alluring. This photograph harks back to the early days of photography, where the art form was less about perfection and more about capturing the realness of life.",
+          "critique": null,
+          "status": "completed",
+          "combined": "An amateur candid photograph, featuring a captivating image of a radiantly nude woman playfully splashing water at a crystal-clear lake under the golden hour light. Soft focus and natural lighting gently caress her curves, while a serene breeze weaves through the air carrying the scent of blooming flowers. The background is subtly blurred using a soft focus lens, creating an ethereal glow that makes her figure stand out in sharp relief. Her eyes, filled with vulnerability and surprise, hold the viewer captive, inviting them into a moment of intimate connection. The grainy texture and muted color palette add to the image's raw and uncensored charm, harking back to the early days of photography where authenticity and realness were cherished over perfection.",
+          "image": {
+            "localPath": "output/2026-01-15/ses-125651/iter2-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 1,
+          "parentId": 0,
+          "whatPrompt": "In the amateur candid photograph lies a captivating image of a woman, her radiant nudity framed by the imperfect edges of the camera lens. The soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, the ripples tracing an ethereal dance upon its surface. A serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation, while the sun's warm kiss paints a golden hue on her bare skin. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere.",
+          "howPrompt": "This amateur candid photograph of a naked woman radiates an uncensored, raw, and authentic charm that is both provocative and alluring. The soft focus lens delicately caresses her curves, creating a gentle blur that isolates her figure from the background while keeping it in sharp relief. The warm, golden hour light bathes her skin, casting an ethereal glow that imbues her with an otherworldly quality. Her eyes, filled with vulnerability and surprise, hold the viewer captive and draw them into a moment of intimate connection.\n\nThe grainy texture and muted color palette of the image add to its raw, unpolished appeal, evoking the feel of a candid snapshot taken on film. The imperfect lighting and subtle shadows create an atmosphere of authenticity that is both enticing and inviting, as if we are privy to a moment that is real and unscripted. The image is a testament to the power of the photographic medium to capture the essence of a moment in time and transform it into something beautiful and meaningful.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": 0,
+          "whatPrompt": "In the amateur candid photograph lies a captivating image of a woman, her radiant nudity framed by the imperfect edges of the camera lens. The soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, the ripples tracing an ethereal dance upon its surface. A serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation, while the sun's warm kiss paints a golden hue on her bare skin. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere.",
+          "howPrompt": "This amateur candid photograph of a naked woman boasts an alluring, unfiltered charm that is raw and authentic. The image is captured through the lens with a soft focus effect, which tenderly embraces her curvaceous form while blurring the backdrop. The golden hour light envelops her body, imparting a dreamlike ethereal quality that elevates her appearance to something almost otherworldly. Her eyes, brimming with vulnerability and shock, engage the viewer intimately, drawing them into an intimate moment. The rough-hewn texture and subdued color palette of the image heighten its raw appeal, imbuing it with a sense of authenticity that is both thought-provoking and seductive. This photograph employs techniques reminiscent of classic cinematic and photographic styles, evoking feelings of nostalgia and intimacy.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": 0,
+          "whatPrompt": "In the amateur candid photograph lies a captivating image of a woman, her radiant nudity framed by the imperfect edges of the camera lens. The soft focus and natural lighting gently caress her curves as she playfully splashes water droplets atop a crystal-clear lake, the ripples tracing an ethereal dance upon its surface. A serene breeze carries the scent of blooming flowers, weaving through the air with an invigorating sensation, while the sun's warm kiss paints a golden hue on her bare skin. The moment is laced with raw vulnerability and sensual allure, evoking a tranquil and dreamlike atmosphere.",
+          "howPrompt": "This amateur candid photograph is an unapologetic and captivating glimpse into the authenticity of human experience. The soft focus lens creates a dreamlike quality, gently caressing the woman's curves as it blurs the background, keeping her figure in sharp relief. The warm, golden hour light bathes her skin, casting an ethereal glow that makes her appear otherworldly and inviting. Her eyes, filled with vulnerability and surprise, capture the viewer's attention, holding them captive in a moment of intimate connection. The grainy texture and muted color palette of the image add to its raw, unpolished appeal, creating an atmosphere of authenticity that is both provocative and alluring. This style evokes a sense of unfiltered emotion, inviting viewers to explore the depths of human experience through the lens of this candid photograph.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

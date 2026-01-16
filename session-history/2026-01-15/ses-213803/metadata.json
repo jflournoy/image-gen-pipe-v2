@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-213803",
+  "timestamp": "2026-01-16T05:38:03.479Z",
+  "userPrompt": "a gorgeous woman fingers her pussy",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Imagine the scene: A woman of breathtaking beauty, her skin a perfect blend of honeyed sun-kissed tones, reclines languidly on an overstuffed velvet chaise. Her eyes, dark pools of desire, are half-closed as she fingers the delicate folds of her pussy through her silken thigh-high stockings. The room is filled with a heady perfume of sandalwood and jasmine, mingling with the musk of her arousal. Her breath comes in ragged gasps, each one releasing a soft, sensual moan that lingers in the air, setting the stage for an unforgettable journey of pleasure.",
+          "howPrompt": "In this tantalizing visual style, the woman is bathed in a soft golden light that illuminates her flawless features and delicate curves. The camera angles intimately focus on her hand as it slowly caresses her feminine folds, their wetness glistening under the warm glow. The color palette is saturated with rich hues of reds and pinks, arousing passion and desire. Textures are lush and velvety, from the woman's silky skin to the intricately woven bed sheets beneath her. The atmosphere is sultry and sensual, evoking feelings of pleasure and intimacy that leave viewers breathless.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, a stunning woman with raven-black hair cascading down her shoulders, dressed in an elegant red dress that clung to her voluptuous figure, gracefully leans against the gilded mirror. Her seductive gaze reflects in the polished surface, her lips glossy and full, as she delicately fingers the satin fabric covering her most intimate place. The intoxicating aroma of jasmine perfume fills the air, mingling with the sensual soundtrack playing softly from a corner speaker. Her breath hitches and her eyes flutter closed, lost in the pleasurable sensations as she surrenders herself to the moment.",
+          "howPrompt": "Imagine a seductive scene set against a velvet backdrop of deep reds and rich purples. The woman, radiantly beautiful with fiery auburn hair cascading down her shoulders, reclines on an elegantly worn, leather chaise lounge. Soft, warm lighting illuminates her every curve as she teasingly explores the contours of her body with confident, skilled fingers. Her eyes are heavy-lidded and smoldering, exuding a magnetic allure that pulls you in. The atmosphere is raw, yet sensual, the perfect balance between desire and temptation. Each detail, from the luxurious texture of the leather to the woman's enticing expression, draws you deeper into the image, captivating your senses with its vivid, visceral style.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

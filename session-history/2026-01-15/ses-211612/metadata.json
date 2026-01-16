@@ -1,0 +1,37 @@
+{
+  "sessionId": "ses-211612",
+  "timestamp": "2026-01-16T05:16:12.415Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day draws to a close, the sky is painted with hues of orange, pink, and purple. Majestic mountains rise in the distance, their peaks bathed in the warm glow of the sun's final rays. The air grows cooler as the sun sinks lower, and the gentle rustle of leaves and the soft chirping of crickets fill the quiet evening air. The scene is a breathtaking tableau of nature's beauty, one that stirs the soul and leaves you feeling at peace with the world.",
+          "howPrompt": "In this stunning visual style, the sun descends behind a range of towering mountains, casting long shadows across the landscape. The sky is ablaze with warm oranges and reds, reflecting off the tranquil water below. The composition leads the viewer's eye from the vibrant sunset to the rugged peaks, while the texture of the mountainous terrain adds depth and complexity to the image. An atmospheric sense of peace and awe permeates the scene, inviting the audience to immerse themselves in the breathtaking beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

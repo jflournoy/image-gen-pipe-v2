@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-214733",
+  "timestamp": "2026-01-16T05:47:33.321Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, the sky transforms into a breathtaking canvas of fiery oranges, pinks, and purples. Majestic mountains stand tall against the backdrop of this stunning display, their peaks shimmering in the last rays of sunlight. The air is filled with the soothing sounds of crickets chirping and the gentle rustling of leaves in the wind. A sense of peace and tranquility settles over the scene as the day comes to a close, inviting reflection and renewal.",
+          "howPrompt": "As the sun slowly descends behind the majestic mountains, a breathtaking display of vibrant oranges, pinks, and purples cascades across the sky. The sunlight bathes the peaks in a warm, golden glow, creating dramatic long shadows that accentuate the rugged terrain below. The atmosphere is serene yet powerful, as if the mountains themselves are holding the heavens aloft. This breathtaking scene could easily be captured in a cinematic wide shot, emphasizing the vastness and beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, the sky transforms into a breathtaking canvas of oranges, pinks, and purples. Majestic mountains, their peaks dusted with snow, stand tall against the backdrop of this natural masterpiece. The air is filled with a gentle breeze that carries the scent of pine trees and wildflowers, adding to the serene ambiance of the moment. Birds sing lullabies as the sun continues its descent, painting the sky with warm hues before eventually fading into twilight.",
+          "howPrompt": "As the sun dips below the horizon, a symphony of warm hues cascades across the sky, transforming the landscape into an ethereal canvas. The mountains stand majestically against the backdrop, their rugged peaks bathed in fiery orange and pink tones, while long shadows stretch out like gentle fingers embracing the fading light. The atmosphere is serene yet invigorating, as if nature itself is taking a deep breath before the quiet night sets in. This scene embodies the quintessential beauty of a sunset, capturing the fleeting moment when day transitions seamlessly into night.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-160032",
+  "timestamp": "2026-01-16T00:00:32.143Z",
+  "userPrompt": "sweet wet pussy",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, the intoxicating aroma of passion lingers in the air as a woman lies on the bed, her legs spread invitingly. Her pussy is wet and glistening with desire, a tantalizing sight that beckons to any man who enters. The soft folds of her labia part to reveal her most intimate and sensitive parts, the delicate pinkness contrasting sharply against the cool sheets beneath her. Moans of pleasure escape her lips as she surrenders to her deepest cravings, a sensual symphony that stirs the soul and ignites the senses.",
+          "howPrompt": "In the style of a provocative and sensual photograph, the image captures the intimacy of a sweet wet pussy, bathed in soft warm light that illuminates every curve and crevice. The composition is artfully framed by delicate petals or hands, drawing the viewer's gaze to the center of this erotic scene. Hues of pink, red, and glistening wetness dominate the color palette, creating an alluring contrast against the dark background. Texture is brought to life through the use of shallow depth of field, emphasizing the soft, velvety feel of the subject. The atmosphere is charged with raw desire and anticipation, evoking a visceral response from the audience.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, the intoxicating scent of passion lingers in the air as two bodies intertwine. A woman's sweet wet pussy beckons her lover closer. Her silken skin glistens with a sheen of perspiration, inviting his touch. Her moans fill the room, mingling with the sound of their labored breathing. The visceral connection between them transcends language as they lose themselves in the raw, primal power of their desires. Their bodies move in perfect harmony, surrendering to the sensual rhythm of their lovemaking.",
+          "howPrompt": "In the style of sensual photography, this image captures a close-up view of a sweet, wet pussy. The warm glow of natural light cascades down from above, highlighting the dewy moisture and inviting rosy hue of the labia. The composition is deliberately intimate, with the camera framed low to emphasize the curves and textures of the woman's pelvic region. The color palette leans into the eroticism, saturating reds and pinks while muting greens and blues. A subtle sheen glistens on the surface, resembling the texture of ripe, succulent fruit. The atmosphere is raw, unapologetic, and intensely sexual.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, the air is heavy with the intoxicating scent of passion and desire. The soft moans and sighs of two bodies in ecstasy fill the space as they come together in a dance of sensual pleasure. Amidst this intimate moment, the focus shifts to the center of it all: a woman's sweet wet pussy, glistening with her arousal, beckoning for fulfillment. Her delicate petals are slick and inviting, the warmth emanating from within drawing in her lover like a moth to a flame. Each touch, each caress is met with a soft gasp or shiver as they lose themselves in the rhythm of their own desires. The room becomes an sensory paradise where the sounds of their passion meld with the scent of their desire, leaving them both breathless and wanting more.",
+          "howPrompt": "In the image, soft focus captures a close-up of a woman's sweet, wet pussy. The scene is bathed in warm, golden hues that evoke feelings of intimacy and desire. The composition frames her most intimate area center stage, surrounded by lush, vibrant petals of pink and red, creating a luscious contrast against the dewy skin. A gentle drizzle adds to the sensual atmosphere, while the texture of the woman's body is revealed through delicate strands of hair, making it an alluring and captivating sight.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "Amidst the dimly lit room, the scent of raw desire lingers in the air. The woman lies on her back, her legs splayed open revealing a ripe and glistening pussy, dewdrops clinging to her swollen labia. Her breaths are shallow, her chest heaving with the urgency of her passion. The man hovers above her, his eyes locked onto her tender flesh as he trails a tantalizing tongue over her sensitive skin, tasting every last drop of her sweetness. Their bodies entwine in the intoxicating dance of love and lust, the room echoing with their moans and gasps, a symphony of pleasure that transcends the boundaries of time and space.",
+          "howPrompt": "In this provocative image, the sweet and inviting wetness of a woman's pussy is showcased in lush detail. The warm pink hue of her labia contrasts against the cool, dark background, creating an enticing and alluring atmosphere. Soft, natural lighting illuminates every glisten on her moist skin, while the shallow depth of field highlights the textural complexity of her feminine folds. The color palette is saturated with rich tones, drawing the viewer's gaze to the center of the frame, where the sensual and irresistible promise of intimacy is conveyed through the compelling style.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

@@ -1,0 +1,37 @@
+{
+  "sessionId": "ses-162154",
+  "timestamp": "2026-01-16T00:21:54.887Z",
+  "userPrompt": "young woman masturbating",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 5,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the dimly lit room, a young woman with long, auburn hair and luminous hazel eyes is lost in the throes of her own desire. Her delicate fingers dance over her body, tracing the contours of her curves as she closes her eyes, surrendering to the pleasurable sensations coursing through her. The only sound in the room is her soft sighs and moans, intermingling with the occasional creak of the old wooden bed beneath her. The warm, yellow glow of a single lamp illuminates her bare form, casting an intoxicating aroma of vanilla and jasmine from the bottle on her bedside table. Her gaze is fixed on the mirror before her, reflecting her raw, uninhibited passion as she succumbs to the ecstasy of her own touch.",
+          "howPrompt": "In this visually striking image, the young woman's intimate moment is bathed in soft, diffused light, casting gentle shadows on her supple, youthful form. The composition masterfully frames her slender figure against a muted background of earthy tones, drawing the viewer's gaze to her expressive face. Her color palette exudes a raw, sensual energy with flashes of fiery red and deep, velvety greens that evoke a primal connection. The texture is rich and tactile, inviting exploration of every curve and line, while the atmosphere radiates a sense of unapologetic female empowerment and self-discovery. This image transcends taboo with its bold, artistic representation of femininity and pleasure.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

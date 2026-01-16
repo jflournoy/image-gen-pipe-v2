@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-210925",
+  "timestamp": "2026-01-16T05:09:25.315Z",
+  "userPrompt": "a delicate nyphette spreads her legs",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the heart of an enchanted forest, a nymph with the grace and beauty of a thousand blooming flowers emerges from the dappled shade. Her petite frame is clad in nothing but the tenderest petals of springtime, leaving her vulnerable yet alluring to the senses. With a languid gesture, she parts her legs invitingly, revealing an inner sanctum bathed in soft moonlight and surrounded by vibrant, fragrant blossoms. The air is thick with the scent of new life and the gentle hum of insects as they revel in this ethereal moment, their tiny feet tickling the nymph's delicate toes. Time seems to stand still around her, suspended in a trance as she embraces the raw power of nature.",
+          "howPrompt": "Imagine a softly lit scene, with a nyphette delicately positioned on a plush velvet couch, her slender legs gracefully spread apart. The gentle warmth of the golden hour sunlight filters in through a nearby window, casting dappled shadows across her porcelain skin. Her petal-soft complexion is illuminated by the sun's rays, creating an ethereal glow that seems to envelop her entire being.\n\nThe composition is masterfully balanced, with the nyphette's figure framed by the curvaceous arms of the couch and the lush foliage of nearby plants, which soften the edges of the scene and add a sensual texture. The color palette is inspired by nature, with warm, earthy tones and rich greens contrasting against the nyphette's cool, pale complexion. The atmosphere is one of serene sensuality, as if the viewer has been granted a private glimpse into a moment of unadulterated feminine beauty.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Amidst the dimly lit, sultry room, a nymphette with ethereal porcelain skin gracefully lowers herself onto a plush velvet chaise lounge. Her delicate petals of legs fan out, revealing intricately designed stockings that climb up her shapely thighs. Her heart-shaped mouth curves into an alluring smile as she takes in the sensuality of her own reflection in the gilded mirror before her. The room is perfumed with the heavy scent of jasmine and roses, creating a seductive ambiance that envelopes her senses, as she awaits her mysterious lover's arrival. The anticipation hangs thick in the air, filling her with a heightened sense of desire and passion.",
+          "howPrompt": "In the style of a soft-focus, black and white photograph from the golden age of glamour, the delicate nyphette is captured mid-pose, her legs gracefully splayed before her. The scene is bathed in an ethereal, dreamlike light, casting gentle shadows across her lithe form. Her figure, clad in a diaphanous gown, seems to melt into the background, merging with the delicate textures of petals and leaves that surround her. The composition invites the viewer's gaze, drawing them into the sensual and alluring atmosphere, where the line between subject and environment blur together.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}
