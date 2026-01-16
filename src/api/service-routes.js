@@ -31,10 +31,27 @@ router.get('/status', async (req, res) => {
 /**
  * POST /api/services/:name/start
  * Start a service
+ *
+ * Request body:
+ * - hfToken: HuggingFace API token (optional)
+ * - modelPath: Path to custom Flux model (optional)
+ * - loraPath: Path to LoRA weights (optional)
+ * - loraScale: LoRA strength multiplier (optional, default 1.0)
+ * - textEncoderPath: Path to CLIP-L encoder (optional, for custom Flux models)
+ * - textEncoder2Path: Path to T5-XXL encoder (optional, for custom Flux models)
+ * - vaePath: Path to VAE encoder (optional, for custom Flux models)
  */
 router.post('/:name/start', async (req, res) => {
   const { name } = req.params;
-  const { hfToken, loraPath, loraScale, modelPath } = req.body;
+  const {
+    hfToken,
+    loraPath,
+    loraScale,
+    modelPath,
+    textEncoderPath,    // NEW: CLIP-L encoder path
+    textEncoder2Path,   // NEW: T5-XXL encoder path
+    vaePath            // NEW: VAE encoder path
+  } = req.body;
 
   // Validate service name
   const validServices = ['llm', 'flux', 'vision', 'vlm'];
@@ -46,7 +63,15 @@ router.post('/:name/start', async (req, res) => {
   }
 
   try {
-    const result = await ServiceManager.startService(name, { hfToken, modelPath, loraPath, loraScale });
+    const result = await ServiceManager.startService(name, {
+      hfToken,
+      modelPath,
+      loraPath,
+      loraScale,
+      textEncoderPath,     // Pass encoder paths to ServiceManager
+      textEncoder2Path,
+      vaePath
+    });
 
     if (!result.success) {
       return res.status(409).json({
