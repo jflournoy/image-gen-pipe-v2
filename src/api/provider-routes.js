@@ -1607,11 +1607,6 @@ function generatePresets(models, encodersDir) {
   // Smart presets: match model names to encoder patterns
   const presetPatterns = [
     {
-      name: 'CustomModel',
-      pattern: /custom-model/i,
-      description: 'CustomModel custom Flux model with specialized encoders'
-    },
-    {
       name: 'Custom-Flux',
       pattern: /custom-flux/i,
       description: 'Custom-Flux fine-tuned Flux model'
