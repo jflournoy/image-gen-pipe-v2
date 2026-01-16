@@ -163,26 +163,56 @@ def load_pipeline():
                     print(f'[Flux Service] Custom model missing components, loading from HuggingFace: {e}')
                     from transformers import CLIPTextModel, T5EncoderModel
                     from diffusers import AutoencoderKL
+                    from huggingface_hub import hf_hub_download
+                    import safetensors
 
-                    # Load all potentially missing components
-                    print('[Flux Service] Loading text_encoder (CLIP) from HuggingFace...')
-                    text_encoder = CLIPTextModel.from_pretrained(
-                        'openai/clip-vit-large-patch14',
-                        torch_dtype=kwargs['torch_dtype']
-                    )
-
-                    print('[Flux Service] Loading text_encoder_2 (T5) from HuggingFace...')
-                    text_encoder_2 = T5EncoderModel.from_pretrained(
-                        'google-t5/t5-base',
-                        torch_dtype=kwargs['torch_dtype']
-                    )
-
+                    # Load VAE from official Flux (works for most Flux variants)
                     print('[Flux Service] Loading vae (AutoencoderKL) from HuggingFace...')
                     vae = AutoencoderKL.from_pretrained(
                         'black-forest-labs/FLUX.1-dev',
                         subfolder='vae',
                         torch_dtype=kwargs['torch_dtype']
                     )
+
+                    # Try to load model-specific encoders if available, fall back to standard ones
+                    # Some models (like pixelwave) require specific encoder versions
+                    print('[Flux Service] Loading text encoders from HuggingFace...')
+                    try:
+                        # Try to load CLIP-L from SD3-medium (better compatibility with some models)
+                        print('[Flux Service] Attempting to load CLIP-L from stabilityai/stable-diffusion-3-medium...')
+                        text_encoder = CLIPTextModel.from_pretrained(
+                            'stabilityai/stable-diffusion-3-medium',
+                            subfolder='text_encoders',
+                            filename='clip_l.safetensors',
+                            torch_dtype=kwargs['torch_dtype']
+                        )
+                    except Exception:
+                        # Fall back to standard CLIP
+                        print('[Flux Service] CLIP-L not available, falling back to openai/clip-vit-large-patch14')
+                        text_encoder = CLIPTextModel.from_pretrained(
+                            'openai/clip-vit-large-patch14',
+                            torch_dtype=kwargs['torch_dtype']
+                        )
+
+                    try:
+                        # Try to load T5-XXL FP8 (optimized for Flux models like pixelwave)
+                        print('[Flux Service] Attempting to load T5-XXL FP8 from comfyanonymous/flux_text_encoders...')
+                        t5_path = hf_hub_download(
+                            'comfyanonymous/flux_text_encoders',
+                            filename='t5xxl_fp8_e4m3fn.safetensors'
+                        )
+                        text_encoder_2 = T5EncoderModel.from_pretrained(
+                            'comfyanonymous/flux_text_encoders',
+                            subfolder=None,
+                            torch_dtype=kwargs['torch_dtype']
+                        )
+                    except Exception:
+                        # Fall back to standard T5
+                        print('[Flux Service] T5-XXL FP8 not available, falling back to google-t5/t5-base')
+                        text_encoder_2 = T5EncoderModel.from_pretrained(
+                            'google-t5/t5-base',
+                            torch_dtype=kwargs['torch_dtype']
+                        )
 
                     # Retry with all loaded components
                     pipeline = FluxPipeline.from_single_file(
