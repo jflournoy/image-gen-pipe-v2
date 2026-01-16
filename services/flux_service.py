@@ -150,10 +150,33 @@ def load_pipeline():
             )
         else:
             # Local .safetensors file - use from_single_file
-            pipeline = FluxPipeline.from_single_file(
-                model_to_load,
-                **kwargs
-            )
+            # First try loading as-is
+            try:
+                pipeline = FluxPipeline.from_single_file(
+                    model_to_load,
+                    **kwargs
+                )
+            except Exception as e:
+                # If missing components (e.g., text_encoder), load them from HuggingFace
+                if 'missing' in str(e).lower() or 'CLIPTextModel' in str(e):
+                    print(f'[Flux Service] Custom model missing components, loading from HuggingFace: {e}')
+                    from transformers import CLIPTextModel, CLIPTokenizer
+
+                    print('[Flux Service] Loading text_encoder from HuggingFace...')
+                    text_encoder = CLIPTextModel.from_pretrained(
+                        'openai/clip-vit-large-patch14',
+                        torch_dtype=kwargs['torch_dtype']
+                    )
+
+                    # Retry with loaded components
+                    pipeline = FluxPipeline.from_single_file(
+                        model_to_load,
+                        text_encoder=text_encoder,
+                        **kwargs
+                    )
+                else:
+                    # Re-raise if it's a different error
+                    raise
 
         if DEVICE == 'cuda':
             # Use sequential CPU offload - most aggressive memory saving
