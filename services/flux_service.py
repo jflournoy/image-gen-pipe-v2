@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import FluxPipeline
 from huggingface_hub import login
 
 # Service configuration
@@ -144,13 +144,13 @@ def load_pipeline():
         }
         if MODEL_SOURCE == 'huggingface':
             kwargs['token'] = HF_TOKEN
-            pipeline = DiffusionPipeline.from_pretrained(
+            pipeline = FluxPipeline.from_pretrained(
                 model_to_load,
                 **kwargs
             )
         else:
             # Local .safetensors file - use from_single_file
-            pipeline = DiffusionPipeline.from_single_file(
+            pipeline = FluxPipeline.from_single_file(
                 model_to_load,
                 **kwargs
             )
@@ -572,8 +572,7 @@ async def download_model():
             def download_thread():
                 try:
                     # This downloads all model components
-                    from diffusers import DiffusionPipeline
-                    DiffusionPipeline.download(
+                    FluxPipeline.download(
                         MODEL_NAME,
                         token=HF_TOKEN
                     )
