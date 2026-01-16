@@ -672,6 +672,12 @@ document.addEventListener('DOMContentLoaded', () => {
       updateRankingModeUI(mode);
     });
   }
+
+  // Initialize Flux encoder display
+  updateFluxEncoderDisplay();
+
+  // Load and display Flux encoder presets
+  loadFluxEncoderPresets();
 });
 
 /**
@@ -2473,6 +2479,278 @@ function clearFluxLoraSettings() {
 }
 
 /**
+ * Toggle local encoders checkbox and show/hide encoder inputs
+ */
+function toggleLocalEncoders() {
+  const useLocal = document.getElementById('useLocalEncoders').checked;
+  const encoderInputs = document.getElementById('fluxEncoderInputs');
+  const savedDisplay = document.getElementById('fluxSavedEncoderDisplay');
+
+  if (encoderInputs) {
+    encoderInputs.style.display = useLocal ? 'block' : 'none';
+  }
+  if (savedDisplay) {
+    savedDisplay.style.display = useLocal ? 'block' : 'none';
+  }
+
+  // Load saved encoder settings if they exist
+  if (useLocal) {
+    loadFluxEncoderSettings();
+    // Auto-save defaults to localStorage when toggle is enabled
+    // This ensures encoder paths are available to service startup
+    saveFluxEncoderSettings();
+  }
+}
+
+/**
+ * Load saved encoder settings from localStorage and populate inputs
+ */
+function loadFluxEncoderSettings() {
+  const savedClip = localStorage.getItem('fluxTextEncoderPath') || 'services/encoders/clip_l.safetensors';
+  const savedT5 = localStorage.getItem('fluxTextEncoder2Path') || 'services/encoders/model.safetensors';
+  const savedVae = localStorage.getItem('fluxVaePath') || 'services/encoders/ae.safetensors';
+
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (clipInput) clipInput.value = savedClip;
+  if (t5Input) t5Input.value = savedT5;
+  if (vaeInput) vaeInput.value = savedVae;
+
+  updateFluxEncoderDisplay();
+}
+
+/**
+ * Save encoder paths to localStorage
+ */
+async function saveFluxEncoderSettings() {
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (!clipInput || !t5Input || !vaeInput) return;
+
+  const clipPath = clipInput.value.trim() || 'services/encoders/clip_l.safetensors';
+  const t5Path = t5Input.value.trim() || 'services/encoders/model.safetensors';
+  const vaePath = vaeInput.value.trim() || 'services/encoders/ae.safetensors';
+
+  // Save to localStorage
+  localStorage.setItem('fluxTextEncoderPath', clipPath);
+  localStorage.setItem('fluxTextEncoder2Path', t5Path);
+  localStorage.setItem('fluxVaePath', vaePath);
+  localStorage.setItem('useLocalEncoders', 'true');
+
+  // Update display
+  updateFluxEncoderDisplay();
+
+  // Update status
+  const statusText = document.getElementById('fluxEncoderStatusText');
+  if (statusText) {
+    statusText.textContent = '✓ Encoder paths saved! Restart Flux service to apply.';
+    statusText.style.color = '#4CAF50';
+    document.getElementById('fluxEncoderStatus').style.display = 'block';
+  }
+
+  console.log('[UI] Saved encoder settings:', { clipPath, t5Path, vaePath });
+  addMessage('✅ Encoder settings saved! These will be used when you restart the Flux service.', 'event');
+}
+
+/**
+ * Update the display of saved encoder paths
+ */
+function updateFluxEncoderDisplay() {
+  const savedClip = localStorage.getItem('fluxTextEncoderPath');
+  const savedT5 = localStorage.getItem('fluxTextEncoder2Path');
+  const savedVae = localStorage.getItem('fluxVaePath');
+
+  const clipSpan = document.getElementById('fluxSavedClipPath');
+  const t5Span = document.getElementById('fluxSavedT5Path');
+  const vaeSpan = document.getElementById('fluxSavedVaePath');
+  const clearBtn = document.getElementById('fluxClearEncodersBtn');
+  const useLocalCheckbox = document.getElementById('useLocalEncoders');
+
+  if (clipSpan) clipSpan.textContent = savedClip || 'default';
+  if (t5Span) t5Span.textContent = savedT5 || 'default';
+  if (vaeSpan) vaeSpan.textContent = savedVae || 'default';
+
+  if (clearBtn) {
+    clearBtn.style.display = (savedClip || savedT5 || savedVae) ? 'inline-block' : 'none';
+  }
+
+  // Update checkbox if encoders are saved
+  if (useLocalCheckbox && (savedClip || savedT5 || savedVae)) {
+    useLocalCheckbox.checked = true;
+  }
+}
+
+/**
+ * Clear saved encoder settings
+ */
+function clearFluxEncoderSettings() {
+  if (!confirm('This will clear the saved encoder settings. Continue?')) {
+    return;
+  }
+
+  try {
+    localStorage.removeItem('fluxTextEncoderPath');
+    localStorage.removeItem('fluxTextEncoder2Path');
+    localStorage.removeItem('fluxVaePath');
+    localStorage.removeItem('useLocalEncoders');
+
+    // Clear inputs
+    const clipInput = document.getElementById('fluxTextEncoderPath');
+    const t5Input = document.getElementById('fluxTextEncoder2Path');
+    const vaeInput = document.getElementById('fluxVaePath');
+    const useLocalCheckbox = document.getElementById('useLocalEncoders');
+
+    if (clipInput) clipInput.value = '';
+    if (t5Input) t5Input.value = '';
+    if (vaeInput) vaeInput.value = '';
+    if (useLocalCheckbox) useLocalCheckbox.checked = false;
+
+    updateFluxEncoderDisplay();
+
+    const statusText = document.getElementById('fluxEncoderStatusText');
+    if (statusText) {
+      statusText.textContent = '✓ Encoder settings cleared. Service will use defaults.';
+      statusText.style.color = '#4CAF50';
+    }
+
+    addMessage('Encoder settings cleared. Service will use default fallback encoders.', 'event');
+  } catch (error) {
+    const statusText = document.getElementById('fluxEncoderStatusText');
+    if (statusText) {
+      statusText.textContent = `Error: ${error.message}`;
+      statusText.style.color = '#f44336';
+    }
+  }
+}
+
+/**
+ * Reset encoder inputs to defaults
+ */
+function resetFluxEncoderInputs() {
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (clipInput) clipInput.value = 'services/encoders/clip_l.safetensors';
+  if (t5Input) t5Input.value = 'services/encoders/model.safetensors';
+  if (vaeInput) vaeInput.value = 'services/encoders/ae.safetensors';
+
+  addMessage('Encoder paths reset to defaults', 'event');
+}
+
+/**
+ * Load and display Flux encoder presets from discovery endpoint
+ */
+async function loadFluxEncoderPresets() {
+  const presetsContainer = document.getElementById('fluxEncoderPresets');
+  if (!presetsContainer) return;
+
+  try {
+    const response = await fetch('/api/providers/flux/discovery');
+    if (!response.ok) {
+      throw new Error('Failed to load presets');
+    }
+
+    const data = await response.json();
+    if (!data.success || !data.presets || data.presets.length === 0) {
+      presetsContainer.innerHTML = '<small style="color: #888;">No presets available - manually configure encoders below</small>';
+      return;
+    }
+
+    // Clear loading message
+    const loadingMsg = document.getElementById('fluxPresetsLoading');
+    if (loadingMsg) loadingMsg.remove();
+
+    // Display each preset as a button
+    const presetsHtml = data.presets.map(preset => `
+      <button
+        type="button"
+        onclick="applyFluxEncoderPreset('${escapeHtml(preset.name)}', ${escapeHtml(JSON.stringify(preset))})"
+        style="text-align: left; padding: 8px 10px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 12px; transition: all 0.2s; margin: 2px 0;"
+        onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#0066cc';"
+        onmouseout="this.style.background='#f0f0f0'; this.style.borderColor='#ddd';"
+      >
+        <strong>${escapeHtml(preset.name)}</strong><br>
+        <small style="color: #666;">${escapeHtml(preset.description)}</small>
+      </button>
+    `).join('');
+
+    presetsContainer.innerHTML = presetsHtml || '<small style="color: #888;">No presets available</small>';
+
+    console.log('[UI] Loaded encoder presets:', data.presets);
+  } catch (error) {
+    console.error('[UI] Error loading presets:', error);
+    presetsContainer.innerHTML = '<small style="color: #f44336;">Error loading presets. You can still configure encoders manually.</small>';
+  }
+}
+
+/**
+ * Apply a preset configuration to the encoder inputs
+ */
+function applyFluxEncoderPreset(presetName, presetData) {
+  try {
+    // Parse preset data if it's a string
+    const preset = typeof presetData === 'string' ? JSON.parse(presetData) : presetData;
+
+    // Enable local encoders
+    const useLocalCheckbox = document.getElementById('useLocalEncoders');
+    if (useLocalCheckbox) {
+      useLocalCheckbox.checked = true;
+    }
+
+    // Set encoder paths from preset
+    const clipInput = document.getElementById('fluxTextEncoderPath');
+    const t5Input = document.getElementById('fluxTextEncoder2Path');
+    const vaeInput = document.getElementById('fluxVaePath');
+
+    if (clipInput) clipInput.value = preset.textEncoderPath || 'services/encoders/clip_l.safetensors';
+    if (t5Input) t5Input.value = preset.textEncoder2Path || 'services/encoders/model.safetensors';
+    if (vaeInput) vaeInput.value = preset.vaePath || 'services/encoders/ae.safetensors';
+
+    // Save to localStorage
+    localStorage.setItem('fluxTextEncoderPath', clipInput.value);
+    localStorage.setItem('fluxTextEncoder2Path', t5Input.value);
+    localStorage.setItem('fluxVaePath', vaeInput.value);
+    localStorage.setItem('useLocalEncoders', 'true');
+
+    // Show/hide encoder inputs
+    toggleLocalEncoders();
+
+    // Display list of compatible models if available
+    if (preset.models && preset.models.length > 0) {
+      const modelList = preset.models.join(', ');
+      addMessage(`✅ Applied preset: ${presetName}\nCompatible models: ${modelList}`, 'event');
+    } else {
+      addMessage(`✅ Applied preset: ${presetName}`, 'event');
+    }
+
+    console.log('[UI] Applied preset:', presetName, preset);
+  } catch (error) {
+    console.error('[UI] Error applying preset:', error);
+    addMessage(`❌ Error applying preset: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Escape HTML special characters for safe display
+ */
+function escapeHtml(str) {
+  if (typeof str !== 'string') str = JSON.stringify(str);
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return str.replace(/[&<>"']/g, m => map[m]);
+}
+
+/**
  * Initialize mode card highlighting based on current provider selections
  */
 function initializeModeCardHighlighting() {
@@ -2831,17 +3109,27 @@ async function startServiceInModal(serviceName) {
     // Set status to "starting" immediately
     setServiceStatus(serviceName, 'starting', 'Starting...');
 
-    // Get Flux model path, HF token, and LoRA settings from localStorage (if set)
+    // Get Flux model path, HF token, LoRA settings, and encoder paths from localStorage (if set)
     const hfToken = getHfToken();
     const modelPath = localStorage.getItem('fluxModelPath');
     const loraPath = localStorage.getItem('loraPath');
     const loraScale = localStorage.getItem('loraScale');
+    const useLocalEncoders = localStorage.getItem('useLocalEncoders') === 'true';
+    const textEncoderPath = localStorage.getItem('fluxTextEncoderPath');
+    const textEncoder2Path = localStorage.getItem('fluxTextEncoder2Path');
+    const vaePath = localStorage.getItem('fluxVaePath');
 
     // Build request body with available settings
     const requestBody = { hfToken };
     if (serviceName === 'flux' && modelPath) requestBody.modelPath = modelPath;
     if (loraPath) requestBody.loraPath = loraPath;
     if (loraScale) requestBody.loraScale = loraScale;
+    // Add encoder paths if local encoders are enabled
+    if (serviceName === 'flux' && useLocalEncoders) {
+      if (textEncoderPath) requestBody.textEncoderPath = textEncoderPath;
+      if (textEncoder2Path) requestBody.textEncoder2Path = textEncoder2Path;
+      if (vaePath) requestBody.vaePath = vaePath;
+    }
 
     const response = await fetch(`/api/services/${serviceName}/start`, {
       method: 'POST',
