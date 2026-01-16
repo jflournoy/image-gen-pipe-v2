@@ -47,19 +47,20 @@ async function waitForHealthy(port, maxAttempts = 60, delayMs = 1000) {
 }
 
 /**
- * Helper: Send HTTP POST request
+ * Helper: Send HTTP request (GET or POST)
  */
-async function httpPost(port, path, data) {
+async function httpRequest(port, path, data = null, method = 'GET') {
   return new Promise((resolve, reject) => {
-    const postData = JSON.stringify(data);
+    const isPost = method === 'POST';
+    const postData = isPost ? JSON.stringify(data) : null;
     const options = {
       hostname: 'localhost',
       port,
       path,
-      method: 'POST',
+      method,
       headers: {
         'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(postData),
+        ...(isPost && { 'Content-Length': Buffer.byteLength(postData) }),
       },
       timeout: 120000, // 2 minute timeout for generation
     };
@@ -80,7 +81,9 @@ async function httpPost(port, path, data) {
     });
 
     req.on('error', reject);
-    req.write(postData);
+    if (isPost) {
+      req.write(postData);
+    }
     req.end();
   });
 }
@@ -89,8 +92,10 @@ async function httpPost(port, path, data) {
  * Helper: Spawn service process
  */
 function spawnService(servicePath, env) {
-  return spawn('python3', [servicePath], {
-    cwd: path.join(projectRoot, 'services'),
+  // Run from project root with full path to service to avoid uv trying to build services package
+  const fullServicePath = path.join(projectRoot, servicePath);
+  return spawn('uv', ['run', 'python3', fullServicePath], {
+    cwd: projectRoot,
     env: { ...process.env, ...env },
     stdio: ['ignore', 'pipe', 'pipe'], // Capture stdout/stderr
   });
@@ -146,7 +151,7 @@ test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) =>
         FLUX_PORT: fluxPort.toString(),
       };
 
-      fluxProcess = spawnService('flux_service.py', env);
+      fluxProcess = spawnService('services/flux_service.py', env);
 
       // Capture logs for debugging
       fluxProcess.stdout.on('data', (data) => {
@@ -185,19 +190,27 @@ test('🔴 RED: CustomModel Model with Local Flux .1 Dev Encoders', async (t) =>
     if (!serviceStartFailed) {
       // Test 1: Health check
       await t.test('Service health check passes', async () => {
-        const response = await httpPost(fluxPort, '/health', {});
+        const response = await httpRequest(fluxPort, '/health', null, 'GET');
         assert.strictEqual(response.status, 200, `Health check failed with status ${response.status}`);
       });
 
       // Test 2: Generate image with minimal steps
       await t.test('Generates image without shape mismatch errors', async () => {
-        const response = await httpPost(fluxPort, '/generate', {
+        const response = await httpRequest(fluxPort, '/generate', {
+          model: path.join(checkpointsDir, 'flux-dev-fp8.safetensors'),
           prompt: 'a simple test image',
           height: 512,
           width: 512,
           steps: 1,
           guidance: 3.5,
-        });
+        }, 'POST');
+
+        if (response.status !== 200) {
+          console.log('\n=== SERVICE STARTUP LOGS ===');
+          console.log(logs.stdout);
+          console.log('\n=== SERVICE ERROR LOGS ===');
+          console.log(logs.stderr);
+        }
 
         assert.strictEqual(
           response.status,

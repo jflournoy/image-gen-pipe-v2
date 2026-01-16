@@ -42,6 +42,11 @@ dev = [
 # Use system torch if available to avoid re-downloading
 # torch-index-url = "https://download.pytorch.org/whl/cu121"
 
+[tool.hatch.build.targets.wheel]
+# Services directory contains standalone scripts, not a distributable package
+# Tell hatchling not to build any packages
+packages = []
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
