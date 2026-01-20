@@ -676,6 +676,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Flux encoder display
   updateFluxEncoderDisplay();
 
+  // Restore custom model path if it was previously saved
+  const savedModelPath = localStorage.getItem('fluxModelPath');
+  const customPathInput = document.getElementById('fluxCustomPath');
+  if (customPathInput && savedModelPath) {
+    customPathInput.value = savedModelPath;
+  }
+
   // Load and display Flux encoder presets
   loadFluxEncoderPresets();
 
@@ -2567,6 +2574,24 @@ async function saveFluxEncoderSettings() {
 /**
  * Update the display of saved encoder paths
  */
+/**
+ * Populate encoder input fields from localStorage
+ * Called on initialization and when settings are opened
+ */
+function populateEncoderInputsFromStorage() {
+  const savedClip = localStorage.getItem('fluxTextEncoderPath');
+  const savedT5 = localStorage.getItem('fluxTextEncoder2Path');
+  const savedVae = localStorage.getItem('fluxVaePath');
+
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (clipInput && savedClip) clipInput.value = savedClip;
+  if (t5Input && savedT5) t5Input.value = savedT5;
+  if (vaeInput && savedVae) vaeInput.value = savedVae;
+}
+
 function updateFluxEncoderDisplay() {
   const savedClip = localStorage.getItem('fluxTextEncoderPath');
   const savedT5 = localStorage.getItem('fluxTextEncoder2Path');
@@ -2590,6 +2615,9 @@ function updateFluxEncoderDisplay() {
   if (useLocalCheckbox && (savedClip || savedT5 || savedVae)) {
     useLocalCheckbox.checked = true;
   }
+
+  // Also populate input fields from storage
+  populateEncoderInputsFromStorage();
 }
 
 /**
@@ -2792,6 +2820,8 @@ async function loadFluxModels() {
     const savedPath = localStorage.getItem('fluxModelPath');
     if (savedPath) {
       selector.value = savedPath;
+      // Also populate encoder paths if they were saved
+      populateEncoderInputsFromStorage();
     }
 
     console.log('[UI] Loaded Flux models:', data.models);
@@ -2829,33 +2859,39 @@ function selectFluxModel() {
   updateFluxModelPathDisplay();
 
   // CRITICAL: Auto-enable local encoders when model is selected
-  // This ensures encoder paths are passed to the service
+  // Set the standard Flux .1 encoder paths to localStorage
+  // These are the default encoder paths that work with Flux models
+  const encoderPaths = {
+    clip: 'services/encoders/clip_l.safetensors',
+    t5: 'services/encoders/model.safetensors',
+    vae: 'services/encoders/ae.safetensors'
+  };
+
+  // ALWAYS save encoder paths when model is selected
+  localStorage.setItem('fluxTextEncoderPath', encoderPaths.clip);
+  localStorage.setItem('fluxTextEncoder2Path', encoderPaths.t5);
+  localStorage.setItem('fluxVaePath', encoderPaths.vae);
+  localStorage.setItem('useLocalEncoders', 'true');
+
+  console.log('[UI] Set encoder paths in localStorage:', encoderPaths);
+
+  // Check the "Use Local Encoders" checkbox
   const useLocalCheckbox = document.getElementById('useLocalEncoders');
   if (useLocalCheckbox) {
     useLocalCheckbox.checked = true;
+    console.log('[UI] Checked useLocalEncoders checkbox');
   }
 
-  // Set encoder paths to defaults if not already set
-  // These are the standard Flux .1 encoder paths
+  // Populate encoder path input fields from localStorage
   const clipInput = document.getElementById('fluxTextEncoderPath');
   const t5Input = document.getElementById('fluxTextEncoder2Path');
   const vaeInput = document.getElementById('fluxVaePath');
 
-  if (clipInput && !localStorage.getItem('fluxTextEncoderPath')) {
-    clipInput.value = 'services/encoders/clip_l.safetensors';
-    localStorage.setItem('fluxTextEncoderPath', 'services/encoders/clip_l.safetensors');
-  }
-  if (t5Input && !localStorage.getItem('fluxTextEncoder2Path')) {
-    t5Input.value = 'services/encoders/model.safetensors';
-    localStorage.setItem('fluxTextEncoder2Path', 'services/encoders/model.safetensors');
-  }
-  if (vaeInput && !localStorage.getItem('fluxVaePath')) {
-    vaeInput.value = 'services/encoders/ae.safetensors';
-    localStorage.setItem('fluxVaePath', 'services/encoders/ae.safetensors');
-  }
+  if (clipInput) clipInput.value = encoderPaths.clip;
+  if (t5Input) t5Input.value = encoderPaths.t5;
+  if (vaeInput) vaeInput.value = encoderPaths.vae;
 
-  // Save encoder enable flag
-  localStorage.setItem('useLocalEncoders', 'true');
+  console.log('[UI] Populated encoder path input fields');
 
   // Update UI to reflect encoder state
   toggleLocalEncoders();
@@ -3381,6 +3417,9 @@ async function startServiceInModal(serviceName) {
         localStorage.setItem('useLocalEncoders', 'true');
       }
     }
+
+    console.log(`[UI Modal] Starting ${serviceName} with request body:`, requestBody);
+    console.log(`[UI Modal] Encoder settings: useLocalEncoders=${useLocalEncoders}, CLIP=${textEncoderPath}, T5=${textEncoder2Path}, VAE=${vaePath}`);
 
     const response = await fetch(`/api/services/${serviceName}/start`, {
       method: 'POST',
