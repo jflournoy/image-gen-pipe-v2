@@ -142,6 +142,52 @@ function isServiceRunningOnPort(port) {
 }
 
 /**
+ * Find an available port starting from primary, trying up to maxAttempts
+ */
+async function findAvailablePort(primaryPort, maxAttempts = 10) {
+  for (let offset = 0; offset < maxAttempts; offset++) {
+    const port = primaryPort + offset;
+    const inUse = await isServiceRunningOnPort(port);
+    if (!inUse) {
+      if (offset > 0) {
+        console.log(`[ServiceManager] Primary port ${primaryPort} in use, using ${port}`);
+      }
+      return port;
+    }
+  }
+  return null;
+}
+
+// Port file functions for tracking actual port used
+function getPortFilePath(serviceName) {
+  return path.join('/tmp', `${serviceName}_service.port`);
+}
+
+async function writePortFile(serviceName, port) {
+  const portPath = getPortFilePath(serviceName);
+  await fs.writeFile(portPath, port.toString());
+  console.log(`[ServiceManager] Wrote port ${port} to ${portPath}`);
+}
+
+async function readPortFile(serviceName) {
+  try {
+    const content = await fs.readFile(getPortFilePath(serviceName), 'utf8');
+    return parseInt(content.trim(), 10);
+  } catch {
+    return null;
+  }
+}
+
+async function deletePortFile(serviceName) {
+  try {
+    await fs.unlink(getPortFilePath(serviceName));
+    console.log(`[ServiceManager] Deleted port file for ${serviceName}`);
+  } catch {
+    // Ignore if file doesn't exist
+  }
+}
+
+/**
  * Check if service is running (via PID file and process check)
  */
 async function isServiceRunning(serviceName) {
@@ -277,21 +323,29 @@ async function startService(serviceName, options = {}) {
     };
   }
 
-  // Check if port is in use (might be from different session)
-  const portInUse = await isServiceRunningOnPort(serviceConfig.port);
-  if (portInUse) {
+  // Find available port with fallback
+  const primaryPort = serviceConfig.port;
+  const actualPort = await findAvailablePort(primaryPort);
+
+  if (actualPort === null) {
     console.error(
-      `[ServiceManager] Port ${serviceConfig.port} already in use for ${serviceName}. ` +
-      `This may be from a previous session. Try restarting Node.js server or kill the process manually.`
+      `[ServiceManager] No available port found for ${serviceName}. ` +
+      `Tried ports ${primaryPort}-${primaryPort + 9}`
     );
     return {
       success: false,
-      error: `Port ${serviceConfig.port} is already in use (may be from previous session)`,
+      error: `No available port in range ${primaryPort}-${primaryPort + 9}`,
     };
   }
 
   // Build environment variables
   const serviceEnv = { ...process.env, ...serviceConfig.env };
+
+  // Update environment variable with actual port
+  const portEnvKey = Object.keys(serviceConfig.env).find(k => k.includes('PORT'));
+  if (portEnvKey) {
+    serviceEnv[portEnvKey] = actualPort.toString();
+  }
 
   // Add HF_TOKEN if provided (for Flux service)
   if (options.hfToken) {
@@ -383,6 +437,9 @@ async function startService(serviceName, options = {}) {
   // The health polling endpoint will verify the service is actually running
   await writePIDFile(serviceName, proc.pid);
 
+  // Write port file to track actual port used
+  await writePortFile(serviceName, actualPort);
+
   logStream.write(`\nStarted with PID: ${proc.pid}\n`);
   logStream.write(`Log file: ${logFile}\n`);
 
@@ -392,7 +449,7 @@ async function startService(serviceName, options = {}) {
   return {
     success: true,
     pid: proc.pid,
-    port: serviceConfig.port,
+    port: actualPort,
   };
 }
 
@@ -425,6 +482,7 @@ async function stopService(serviceName, options = {}) {
       if (!isProcessRunning(pid)) {
         console.log(`[ServiceManager] ${serviceName} stopped gracefully`);
         await deletePIDFile(serviceName);
+        await deletePortFile(serviceName);
         return { success: true };
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -435,11 +493,13 @@ async function stopService(serviceName, options = {}) {
     process.kill(pid, 'SIGKILL');
 
     await deletePIDFile(serviceName);
+    await deletePortFile(serviceName);
     return { success: true };
   } catch (error) {
     // Process might have already died
     if (error.code === 'ESRCH') {
       await deletePIDFile(serviceName);
+      await deletePortFile(serviceName);
       return { success: true };
     }
 
@@ -476,11 +536,12 @@ async function getAllServiceStatuses() {
   for (const serviceName of Object.keys(SERVICES)) {
     const running = await isServiceRunning(serviceName);
     const pid = running ? await getServicePID(serviceName) : null;
+    const actualPort = running ? await readPortFile(serviceName) : null;
 
     statuses[serviceName] = {
       running,
       pid,
-      port: SERVICES[serviceName].port,
+      port: actualPort || SERVICES[serviceName].port,
     };
   }
 
@@ -499,4 +560,9 @@ module.exports = {
   deletePIDFile,
   getAllServiceStatuses,
   validateFluxEncoderPaths,
+  findAvailablePort,
+  getPortFilePath,
+  writePortFile,
+  readPortFile,
+  deletePortFile,
 };

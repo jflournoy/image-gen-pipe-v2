@@ -43,6 +43,10 @@ router.get('/status', async (req, res) => {
  */
 router.post('/:name/start', async (req, res) => {
   const { name } = req.params;
+
+  // Defensive check for missing request body
+  const body = req.body || {};
+
   const {
     hfToken,
     loraPath,
@@ -51,7 +55,7 @@ router.post('/:name/start', async (req, res) => {
     textEncoderPath,    // NEW: CLIP-L encoder path
     textEncoder2Path,   // NEW: T5-XXL encoder path
     vaePath            // NEW: VAE encoder path
-  } = req.body;
+  } = body;
 
   // Validate service name
   const validServices = ['llm', 'flux', 'vision', 'vlm'];
