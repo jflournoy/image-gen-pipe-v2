@@ -1028,6 +1028,226 @@
     .health-indicator[title*="Starting"] {
       animation: pulse 1.5s ease-in-out infinite;
     }
+
+    /* Configuration Preview Styles */
+    .config-section {
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .config-section:last-child {
+      border-bottom: none;
+    }
+
+    .config-section-title {
+      font-size: 12px;
+      font-weight: bold;
+      color: #0066cc;
+      margin: 0 0 8px 0;
+    }
+
+    .config-row {
+      display: flex;
+      align-items: center;
+      padding: 6px 0;
+      font-family: monospace;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .config-key {
+      color: #0066cc;
+      font-weight: bold;
+      margin-right: 6px;
+    }
+
+    .config-value {
+      color: #333;
+      cursor: pointer;
+      padding: 3px 8px;
+      border-radius: 3px;
+      background: transparent;
+      transition: background 0.2s;
+      flex: 1;
+    }
+
+    .config-value:hover {
+      background: #f0f8ff;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+
+    .config-input {
+      flex: 1;
+      padding: 4px 8px;
+      font-family: monospace;
+      font-size: 11px;
+      border: 2px solid #0066cc;
+      border-radius: 3px;
+      outline: none;
+      background: #fffef5;
+    }
+
+    .config-dropdown {
+      flex: 1;
+      padding: 4px 8px;
+      font-family: monospace;
+      font-size: 11px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      background: white;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .config-dropdown:hover {
+      border-color: #0066cc;
+    }
+
+    .config-dropdown:focus {
+      border-color: #0066cc;
+      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.1);
+    }
+
+    .config-edit-btn {
+      padding: 2px 8px;
+      font-size: 11px;
+      border: none;
+      background: #f0f0f0;
+      border-radius: 3px;
+      cursor: pointer;
+      margin-left: 4px;
+      transition: background 0.2s;
+    }
+
+    .config-edit-btn:hover {
+      background: #e0e0e0;
+    }
+
+    .config-error {
+      color: #d32f2f;
+      padding: 10px;
+      background: #ffebee;
+      border-radius: 4px;
+      font-size: 11px;
+    }
+
+    /* Service Restart Notification */
+    .restart-notification {
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 400px;
+      background: #ff9800;
+      color: white;
+      padding: 16px;
+      border-radius: 6px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+      z-index: 10000;
+      animation: slideInRight 0.3s ease-out;
+    }
+
+    @keyframes slideInRight {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .restart-notification-content {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .restart-icon {
+      font-size: 20px;
+      flex-shrink: 0;
+    }
+
+    .restart-message {
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .restart-buttons {
+      display: flex;
+      gap: 8px;
+    }
+
+    .restart-btn {
+      flex: 1;
+      padding: 8px 12px;
+      font-size: 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+
+    .restart-now {
+      background: white;
+      color: #ff9800;
+    }
+
+    .restart-now:hover {
+      background: #f5f5f5;
+    }
+
+    .restart-later {
+      background: rgba(255, 255, 255, 0.2);
+      color: white;
+    }
+
+    .restart-later:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* Configuration validation summary styles */
+    .validation-summary {
+      margin: 12px 0 16px 0;
+      padding: 12px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .validation-success {
+      background: #e8f5e9;
+      border: 1px solid #4caf50;
+      color: #2e7d32;
+    }
+
+    .validation-warning {
+      background: #fff3e0;
+      border: 1px solid #ff9800;
+      color: #e65100;
+    }
+
+    .validation-warning small {
+      display: block;
+      margin-top: 4px;
+      opacity: 0.8;
+    }
+
+    /* Required field indicator */
+    .config-required {
+      border-left: 3px solid #ff9800;
+      padding-left: 8px;
+    }
+
+    .config-required .config-key::after {
+      content: " *";
+      color: #ff9800;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -1346,6 +1566,7 @@
         <!-- Local Mode Configuration -->
         <div id="localConfigSection" style="display: none;">
           <div style="padding: 15px; background: #f5f9ff; border-radius: 6px; border: 1px solid #b3d9ff;">
+
             <!-- Ranking Mode Selector -->
             <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
               <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
@@ -1451,242 +1672,47 @@
               </div>
             </div>
 
-            <!-- Inline Flux Model Source Configuration -->
-            <div id="fluxModelConfigInline" style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+            <!-- Model Source Selector -->
+            <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
               <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
                 Flux Model Source:
               </label>
-              <div style="display: flex; gap: 15px; margin-bottom: 10px;">
+              <div style="display: flex; gap: 15px;">
                 <label style="display: flex; align-items: center; cursor: pointer;">
-                  <input type="radio" name="fluxModelSource" value="huggingface" checked style="margin-right: 6px;">
-                  <span style="font-size: 13px;">HuggingFace</span>
+                  <input type="radio" name="fluxModelSource" value="huggingface" checked style="margin-right: 6px;" onchange="updateModelSourceAndRefresh(this.value)">
+                  <span style="font-size: 13px;">HuggingFace (default)</span>
                 </label>
                 <label style="display: flex; align-items: center; cursor: pointer;">
-                  <input type="radio" name="fluxModelSource" value="local" style="margin-right: 6px;">
-                  <span style="font-size: 13px;">Local File</span>
+                  <input type="radio" name="fluxModelSource" value="local" style="margin-right: 6px;" onchange="updateModelSourceAndRefresh(this.value)">
+                  <span style="font-size: 13px;">Local Checkpoint</span>
                 </label>
               </div>
-
-              <!-- HuggingFace Model (default) -->
-              <div id="hfModelSection" style="margin-top: 8px;">
-                <small style="display: block; color: #666; font-size: 11px;">
-                  Using: <strong id="currentHfModel">FLUX.1-dev</strong> from HuggingFace
-                </small>
-              </div>
-
-              <!-- Local Model Path Input (hidden by default) -->
-              <div id="localModelSection" style="display: none; margin-top: 8px;">
-                <!-- Available Models Dropdown -->
-                <div style="margin-bottom: 8px;">
-                  <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">Available Local Models:</label>
-                  <select id="fluxModelSelector" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;" onchange="selectFluxModel()">
-                    <option value="">-- Loading models... --</option>
-                  </select>
-                  <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">Select from downloaded models or enter custom path below</small>
-                </div>
-
-                <!-- Custom Path Input -->
-                <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-                  <input type="text" id="fluxCustomPath" placeholder="/path/to/your/flux-model.safetensors" style="flex: 1; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;" />
-                  <button onclick="setFluxModelPath()" style="background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px; white-space: nowrap;">Set Path</button>
-                </div>
-                <div id="fluxSavedPathDisplay" style="margin-bottom: 8px; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px; font-size: 11px;">
-                  <strong>Saved in browser:</strong> <span id="fluxSavedPathValue" style="font-family: monospace; color: #666;">none</span>
-                  <button id="fluxClearPathBtn" onclick="clearFluxModelPath()" style="display: none; background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-left: 8px; float: right;">Clear</button>
-                  <div style="clear: both;"></div>
-                </div>
-                <small style="display: block; color: #888; font-size: 10px; line-height: 1.4;">
-                  💡 Download custom Flux models from <a href="https://civitai.com/search/models?baseModel=Flux.1%20D" target="_blank" style="color: #0066cc;">CivitAI</a>.
-                  Point to the .safetensors file after downloading. Paths can be absolute or relative to project root.
-                </small>
-                <div id="fluxModelPathStatus" style="margin-top: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; display: none;"></div>
-              </div>
+              <small style="display: block; color: #666; font-size: 11px; margin-top: 8px;">
+                <strong>HuggingFace:</strong> Downloads model automatically. No encoder setup needed.<br>
+                <strong>Local Checkpoint:</strong> Uses custom .safetensors files. <span style="color: #ff9800; font-weight: bold;">Requires encoder paths</span> (CLIP-L, T5-XXL, VAE).
+              </small>
             </div>
 
-            <!-- LoRA Configuration -->
-            <div id="fluxLoraConfigInline" style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
-              <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
-                Flux LoRA Configuration:
-              </label>
-
-              <!-- Saved LoRA Display -->
-              <div id="fluxSavedLoraDisplay" style="margin-bottom: 10px; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px; font-size: 11px;">
-                <strong>Saved in browser:</strong>
-                <div style="margin-top: 4px;">
-                  <div><span style="color: #666;">Path:</span> <span id="fluxSavedLoraPath" style="font-family: monospace; color: #666;">none</span></div>
-                  <div><span style="color: #666;">Scale:</span> <span id="fluxSavedLoraScale" style="font-family: monospace; color: #666;">none</span></div>
-                </div>
-                <button id="fluxClearLoraBtn" onclick="clearFluxLoraSettings()" style="display: none; background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-top: 6px;">
-                  Clear Saved LoRA
-                </button>
-              </div>
-
-              <!-- LoRA Path Input -->
-              <div style="margin-bottom: 10px;">
-                <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">LoRA File Path:</label>
-                <input
-                  type="text"
-                  id="fluxLoraPath"
-                  placeholder="services/loras/flux-custom-lora.safetensors"
-                  style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
-                />
-                <small style="display: block; color: #888; font-size: 10px; margin-top: 4px; line-height: 1.4;">
-                  💡 Path relative to project root. Download LoRAs from <a href="https://huggingface.co/models?other=lora,flux" target="_blank" style="color: #0066cc;">HuggingFace</a> or <a href="https://civitai.com/search/models?baseModel=Flux.1%20D" target="_blank" style="color: #0066cc;">CivitAI</a>
-                </small>
-              </div>
-
-              <!-- LoRA Scale Input -->
-              <div style="margin-bottom: 10px;">
-                <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">LoRA Scale:</label>
-                <div style="display: flex; gap: 8px; align-items: center;">
-                  <input
-                    type="range"
-                    id="fluxLoraScale"
-                    min="0"
-                    max="2"
-                    step="0.1"
-                    value="0.8"
-                    style="flex: 1;"
-                  />
-                  <span id="fluxLoraScaleValue" style="font-family: monospace; font-size: 12px; min-width: 35px;">0.8</span>
-                </div>
-                <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">
-                  Range: 0.0 (disabled) to 2.0 (max strength). Typical: 0.7-1.0
-                </small>
-              </div>
-
-              <!-- LoRA Status -->
-              <div id="fluxLoraStatus" style="padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; margin-bottom: 8px;">
-                Status: <span id="fluxLoraStatusText">Not configured</span>
-              </div>
-
-              <!-- LoRA Actions -->
-              <div style="display: flex; gap: 8px;">
-                <button onclick="saveFluxLoraSettings()" style="flex: 1; background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                  💾 Save Settings
-                </button>
-                <button onclick="checkFluxLoraStatus()" style="flex: 1; background: #666; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                  🔄 Check Status
-                </button>
-              </div>
-            </div>
-
-            <!-- Flux Encoder Configuration -->
-            <div id="fluxEncoderConfigInline" style="margin-top: 12px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
-              <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
-                Flux Encoder Configuration:
-              </label>
-
-              <!-- Encoder Presets (Dynamic) -->
-              <div style="margin-bottom: 12px; padding: 10px; background: #f9f9f9; border-left: 3px solid #2196F3; border-radius: 2px;">
-                <label style="display: block; color: #555; font-size: 12px; font-weight: bold; margin-bottom: 8px;">
-                  Quick Presets:
+            <!-- Configuration Preview (from .env) -->
+            <div id="configPreview" style="margin-top: 15px; padding: 12px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                <label style="font-weight: bold; color: #555; font-size: 13px;">
+                  📝 Configuration (.env)
                 </label>
-                <div id="fluxEncoderPresets" style="display: flex; flex-direction: column; gap: 6px;">
-                  <!-- Presets will be loaded here by JavaScript -->
-                  <small id="fluxPresetsLoading" style="color: #888; font-style: italic;">Loading available models and encoders...</small>
-                </div>
-              </div>
-
-              <!-- Use Local Encoders Toggle -->
-              <div style="margin-bottom: 12px; padding: 8px; background: #f0f8ff; border-left: 3px solid #0066cc; border-radius: 2px;">
-                <label style="display: flex; align-items: center; cursor: pointer; margin: 0;">
-                  <input
-                    type="checkbox"
-                    id="useLocalEncoders"
-                    onchange="toggleLocalEncoders()"
-                    style="width: 16px; height: 16px; margin-right: 8px; cursor: pointer;"
-                  />
-                  <span style="color: #666;">Use Local Encoders</span>
-                  <small style="display: block; flex-basis: 100%; margin-left: 24px; color: #888; margin-top: 2px;">
-                    Enable for custom Flux models that require specific text encoders
-                  </small>
-                </label>
-              </div>
-
-              <!-- Saved Encoder Display -->
-              <div id="fluxSavedEncoderDisplay" style="margin-bottom: 10px; padding: 8px; background: #f9f9f9; border-left: 3px solid #0066cc; border-radius: 2px; font-size: 11px; display: none;">
-                <strong>Saved in browser:</strong>
-                <div style="margin-top: 4px; font-family: monospace; font-size: 10px;">
-                  <div><span style="color: #666;">CLIP-L:</span> <span id="fluxSavedClipPath" style="color: #666;">none</span></div>
-                  <div><span style="color: #666;">T5-XXL:</span> <span id="fluxSavedT5Path" style="color: #666;">none</span></div>
-                  <div><span style="color: #666;">VAE:</span> <span id="fluxSavedVaePath" style="color: #666;">none</span></div>
-                </div>
-                <button id="fluxClearEncodersBtn" onclick="clearFluxEncoderSettings()" style="display: none; background: #dc3545; color: white; border: none; padding: 4px 8px; border-radius: 3px; cursor: pointer; font-size: 11px; margin-top: 6px;">
-                  Clear Saved Encoders
+                <button onclick="resetConfigToDefaults()" style="background: #ff9800; color: white; border: none; padding: 4px 10px; border-radius: 3px; cursor: pointer; font-size: 11px;">
+                  Reset to Defaults
                 </button>
               </div>
-
-              <div id="fluxEncoderInputs" style="display: none;">
-                <!-- CLIP-L Encoder Path -->
-                <div style="margin-bottom: 10px;">
-                  <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">CLIP-L Encoder Path:</label>
-                  <input
-                    type="text"
-                    id="fluxTextEncoderPath"
-                    placeholder="services/encoders/clip_l.safetensors"
-                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
-                  />
-                  <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">
-                    Path to CLIP-L text encoder (required for custom models)
-                  </small>
-                </div>
-
-                <!-- T5-XXL Encoder Path -->
-                <div style="margin-bottom: 10px;">
-                  <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">T5-XXL Encoder Path:</label>
-                  <input
-                    type="text"
-                    id="fluxTextEncoder2Path"
-                    placeholder="services/encoders/model.safetensors"
-                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
-                  />
-                  <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">
-                    Path to T5-XXL encoder with config.json in same directory
-                  </small>
-                </div>
-
-                <!-- VAE Encoder Path -->
-                <div style="margin-bottom: 10px;">
-                  <label style="display: block; color: #666; font-size: 11px; margin-bottom: 4px;">VAE Encoder Path:</label>
-                  <input
-                    type="text"
-                    id="fluxVaePath"
-                    placeholder="services/encoders/ae.safetensors"
-                    style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 12px;"
-                  />
-                  <small style="display: block; color: #888; font-size: 10px; margin-top: 4px;">
-                    Path to VAE (Variational Autoencoder)
-                  </small>
-                </div>
-
-                <!-- Encoder Actions -->
-                <div style="display: flex; gap: 8px; margin-top: 12px;">
-                  <button onclick="saveFluxEncoderSettings()" style="flex: 1; background: #0066cc; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    💾 Save Encoders
-                  </button>
-                  <button onclick="resetFluxEncoderInputs()" style="flex: 1; background: #666; color: white; border: none; padding: 8px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-                    ↻ Reset to Defaults
-                  </button>
-                </div>
-
-                <!-- Encoder Status -->
-                <div id="fluxEncoderStatus" style="padding: 8px; background: #f5f5f5; border-radius: 4px; font-size: 11px; margin-top: 8px; display: none;">
-                  Status: <span id="fluxEncoderStatusText">Not configured</span>
-                </div>
+              <div id="configSections" style="font-size: 12px;">
+                <small style="color: #888;">Loading configuration...</small>
               </div>
+              <small style="display: block; color: #666; font-size: 11px; margin-top: 10px;">
+                💡 Click any value to edit inline. Press Enter to save, Escape to cancel.
+              </small>
             </div>
+
           </div>
 
-          <!-- Configuration Status Display -->
-          <div id="fluxConfigStatus" style="margin-top: 12px; padding: 12px; background: #f0f8ff; border-radius: 4px; border: 1px solid #b3d9ff;">
-            <label style="font-weight: bold; color: #0066cc; font-size: 12px; display: block; margin-bottom: 8px;">
-              ⚙️ Configuration Status
-            </label>
-            <div id="configStatusContent" style="font-size: 11px; color: #555; line-height: 1.6;">
-              <small style="color: #888;">Loading configuration...</small>
-            </div>
-          </div>
         </div>
 
         <!-- Advanced/Mixed Mode Configuration (Dropdowns) -->
@@ -1759,34 +1785,6 @@
         </div>
       </div>
 
-      <!-- Quick Start Local Services -->
-      <div style="margin-bottom: 20px; padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%); border: 1px solid #c8e6c9; border-radius: 6px;">
-        <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 16px;">
-          <i class="fas fa-rocket"></i> Quick Start Local Services
-        </h3>
-
-        <!-- HF Token Input -->
-        <div style="margin-bottom: 12px;">
-          <label style="display: block; font-weight: bold; color: #555; margin-bottom: 6px; font-size: 13px;">
-            Hugging Face Token <span style="color: #ff9800; font-size: 11px;">(required for Flux)</span>
-          </label>
-          <div style="display: flex; gap: 8px; align-items: center;">
-            <input
-              type="password"
-              id="hfTokenInput"
-              placeholder="hf_your_token_here"
-              style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 4px; font-family: monospace; font-size: 13px;"
-            />
-            <button onclick="toggleHfTokenVisibility()" style="background: #666; color: white; border: none; padding: 10px 12px; border-radius: 4px; cursor: pointer;" title="Show/Hide token">
-              <i class="fas fa-eye" id="hfTokenEyeIcon"></i>
-            </button>
-          </div>
-          <div id="hfTokenStatus" style="margin-top: 6px; font-size: 12px; color: #666;">
-            Token will be saved locally and used for Flux authentication
-          </div>
-        </div>
-      </div>
-
       <!-- Actions -->
       <div style="display: flex; gap: 10px; justify-content: space-between;">
         <button onclick="closeProviderModal()" style="background: #999; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold;">
@@ -1797,36 +1795,6 @@
         </button>
       </div>
 
-      <!-- Model Management Section -->
-      <div id="modelManagementSection" style="margin-top: 20px; padding: 15px; background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; display: none;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-          <h3 style="margin: 0; color: #333; font-size: 16px;">
-            <i class="fas fa-download"></i> Model Management
-          </h3>
-          <button onclick="refreshModelStatus()" style="background: #0066cc; color: white; border: none; padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 12px;">
-            <i class="fas fa-sync"></i> Refresh
-          </button>
-        </div>
-
-        <!-- Model Status -->
-        <div id="modelStatusContent" style="font-size: 13px;">
-          Loading model status...
-        </div>
-
-        <!-- Download Progress -->
-        <div id="downloadProgressSection" style="margin-top: 15px; display: none;">
-          <div style="background: white; padding: 12px; border-radius: 4px; border: 1px solid #ddd;">
-            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
-              <span id="downloadModelName" style="font-weight: bold; color: #333;"></span>
-              <span id="downloadProgressPercent" style="color: #666; font-size: 12px;">0%</span>
-            </div>
-            <div style="width: 100%; height: 8px; background: #e0e0e0; border-radius: 4px; overflow: hidden;">
-              <div id="downloadProgressBar" style="width: 0%; height: 100%; background: linear-gradient(90deg, #4CAF50 0%, #45a049 100%); transition: width 0.3s;"></div>
-            </div>
-            <div id="downloadStatusMessage" style="margin-top: 8px; font-size: 12px; color: #666;"></div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 
