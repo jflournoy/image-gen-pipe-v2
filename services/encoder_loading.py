@@ -130,10 +130,18 @@ def load_t5_from_safetensors(path: str, torch_dtype: torch.dtype) -> T5EncoderMo
 
 def load_vae_from_safetensors(path: str, torch_dtype: torch.dtype) -> AutoencoderKL:
     """
-    Load VAE (Variational Autoencoder) from local safetensors file.
+    Load VAE (Variational Autoencoder) from local safetensors file or directory.
+
+    Supports two formats:
+    1. Directory with config.json + diffusion_pytorch_model.safetensors (preferred)
+    2. Single .safetensors file (for SD-compatible VAEs)
+
+    For Flux VAE, use a directory structure with:
+    - config.json (VAE architecture config)
+    - diffusion_pytorch_model.safetensors (weights in diffusers format)
 
     Args:
-        path: Absolute path to VAE .safetensors file
+        path: Absolute path to VAE directory or .safetensors file
         torch_dtype: Target dtype (torch.float16 or torch.float32)
 
     Returns:
@@ -143,12 +151,29 @@ def load_vae_from_safetensors(path: str, torch_dtype: torch.dtype) -> Autoencode
         FileNotFoundError: If path doesn't exist
         Exception: If loading fails
     """
-    if not Path(path).exists():
+    path_obj = Path(path)
+
+    if not path_obj.exists():
         raise FileNotFoundError(f'VAE encoder file not found: {path}')
 
     try:
+        # Check if path is a directory with config.json (diffusers format)
+        if path_obj.is_dir() and (path_obj / 'config.json').exists():
+            print(f'[Encoder Loading] Loading VAE from diffusers directory: {path}')
+            vae = AutoencoderKL.from_pretrained(
+                str(path_obj),
+                torch_dtype=torch_dtype
+            )
+            return vae
+
+        # Otherwise, try loading as single file with Flux VAE config
+        # ae.safetensors is a Flux VAE (16 latent channels) not SD VAE (4 channels)
+        # The config directory contains config.json specifying the correct architecture
+        config_dir = Path(__file__).parent / 'encoders' / 'vae'
+        print(f'[Encoder Loading] Loading VAE from single file with Flux config: {path}')
         vae = AutoencoderKL.from_single_file(
-            path,
+            str(path_obj),
+            config=str(config_dir),  # Use Flux VAE config (16 latent channels)
             torch_dtype=torch_dtype
         )
         return vae
@@ -158,29 +183,44 @@ def load_vae_from_safetensors(path: str, torch_dtype: torch.dtype) -> Autoencode
 
 def load_encoder_with_fallbacks(
     config: EncoderConfig,
-    torch_dtype: torch.dtype
+    torch_dtype: torch.dtype,
+    require_local: bool = False
 ) -> Optional[torch.nn.Module]:
     """
     Load an encoder with configurable fallback chain.
 
     Implements the pattern:
     1. Try loading from local path (if configured)
-    2. Try each fallback loader in order
+    2. Try each fallback loader in order (unless require_local=True)
     3. Log all attempts and failures
     4. Apply dtype converter if provided
 
     Args:
         config: EncoderConfig specifying loader and fallbacks
         torch_dtype: Target dtype for the encoder
+        require_local: If True, fail instead of falling back to HuggingFace.
+                       Use this for custom checkpoints that NEED specific encoders.
 
     Returns:
         Loaded encoder module, or None if all methods fail
 
+    Raises:
+        RuntimeError: If require_local=True and local encoder fails to load
+
     Note:
-        All exceptions are caught and logged. This provides graceful
-        degradation - the service continues even if encoders fail.
+        When require_local=False, all exceptions are caught and logged,
+        providing graceful degradation. When require_local=True, the function
+        will raise an error if local encoders can't be loaded.
     """
     encoder = None
+
+    # If require_local is True but no local path is configured, fail early
+    if require_local and not config.env_var_path:
+        raise RuntimeError(
+            f'{config.name} local path not configured but require_local=True.\n'
+            f'For local checkpoints, you must set the environment variable for {config.name}.\n'
+            f'Cannot fall back to HuggingFace encoders as they may be incompatible with custom models.'
+        )
 
     # Try local path first
     if config.env_var_path:
@@ -189,10 +229,23 @@ def load_encoder_with_fallbacks(
             # Debug: Check if file exists before attempting load
             path_obj = Path(config.env_var_path)
             if not path_obj.exists():
-                raise FileNotFoundError(f'Path does not exist: {config.env_var_path}')
+                error_msg = f'ENCODER ERROR: {config.name} file not found at: {config.env_var_path}'
+                print(f'[Flux Service] {error_msg}')
+                print(f'[Flux Service] Current working directory: {os.getcwd()}')
+                print(f'[Flux Service] Absolute path: {path_obj.absolute()}')
+                if require_local:
+                    raise RuntimeError(f'{error_msg}\n\nLocal checkpoint requires local encoders. Cannot fall back to HuggingFace encoders as they may be incompatible.')
+                raise FileNotFoundError(error_msg)
+
             print(f'[Flux Service] Path verified to exist, loading {config.name}...')
             encoder = config.local_loader(config.env_var_path)
-            print(f'[Flux Service] Successfully loaded local {config.name} encoder')
+
+            # Debug: Print encoder information
+            print(f'[Flux Service] ✓ Successfully loaded local {config.name} encoder')
+            print(f'[Flux Service]   - Type: {type(encoder).__name__}')
+            print(f'[Flux Service]   - Dtype: {next(encoder.parameters()).dtype}')
+            if hasattr(encoder, 'config'):
+                print(f'[Flux Service]   - Config: {encoder.config}')
 
             # Apply dtype conversion if configured
             if config.dtype_converter:
@@ -200,21 +253,38 @@ def load_encoder_with_fallbacks(
 
             return encoder
         except Exception as e:
-            print(f'[Flux Service] Failed to load local {config.name}: {e}')
-            print(f'[Flux Service] Falling back to HuggingFace {config.name}...')
+            error_msg = f'Failed to load local {config.name}: {e}'
+            print(f'[Flux Service] ERROR: {error_msg}')
 
-    # Try fallback chain
+            if require_local:
+                print(f'[Flux Service] ❌ CRITICAL: Local encoders required for custom checkpoint but failed to load')
+                print(f'[Flux Service] Cannot fall back to HuggingFace encoders - they may cause dimension mismatches')
+                raise RuntimeError(f'Local encoder loading failed: {error_msg}\n\nCustom checkpoint requires matching encoders. Please ensure encoder files exist at the configured paths.')
+
+            print(f'[Flux Service] ⚠️ WARNING: Falling back to HuggingFace {config.name}...')
+            print(f'[Flux Service] This may cause dimension mismatch errors with custom checkpoints!')
+
+    # Try fallback chain (unless require_local is True and we got here due to error)
+    if require_local and config.env_var_path:
+        # We already tried local and it failed, and fallback is not allowed
+        return None
+
     for i, fallback_loader in enumerate(config.fallback_chain):
         try:
             print(f'[Flux Service] Attempting fallback {i+1}/{len(config.fallback_chain)} for {config.name}...')
             encoder = fallback_loader()
-            print(f'[Flux Service] Successfully loaded {config.name} from fallback {i+1}')
+            print(f'[Flux Service] ✓ Successfully loaded {config.name} from fallback {i+1}')
+
+            # Debug: Print encoder information
+            print(f'[Flux Service]   - Type: {type(encoder).__name__}')
+            print(f'[Flux Service]   - Dtype: {next(encoder.parameters()).dtype}')
+
             return encoder
         except Exception as e:
             if i < len(config.fallback_chain) - 1:
                 print(f'[Flux Service] Fallback {i+1} failed ({type(e).__name__}), trying next...')
             else:
-                print(f'[Flux Service] All fallbacks exhausted for {config.name}')
+                print(f'[Flux Service] ❌ All fallbacks exhausted for {config.name}')
 
     return encoder
 
@@ -296,7 +366,7 @@ def create_vae_fallback_loaders(torch_dtype: torch.dtype) -> List[Callable]:
     ]
 
 
-def load_text_encoders(torch_dtype: torch.dtype) -> tuple:
+def load_text_encoders(torch_dtype: torch.dtype, require_local: bool = False) -> tuple:
     """
     Load both text encoders (CLIP-L and T5-XXL) with fallback support.
 
@@ -309,16 +379,24 @@ def load_text_encoders(torch_dtype: torch.dtype) -> tuple:
 
     Args:
         torch_dtype: Target dtype for encoders (torch.float16 or torch.float32)
+        require_local: If True, fail instead of falling back when using local checkpoint.
+                       This prevents dimension mismatches with custom checkpoints.
 
     Returns:
         Tuple of (text_encoder, text_encoder_2)
 
     Raises:
         Exception: If encoders cannot be loaded
+        RuntimeError: If require_local=True and local encoders fail to load
     """
     # Get environment variables
     clip_local_path = os.getenv('FLUX_TEXT_ENCODER_PATH')
     t5_local_path = os.getenv('FLUX_TEXT_ENCODER_2_PATH')
+
+    if require_local:
+        print('[Flux Service] ⚠️ STRICT MODE: Using local checkpoint - local encoders are REQUIRED')
+        print(f'[Flux Service] CLIP-L path: {clip_local_path or "NOT SET"}')
+        print(f'[Flux Service] T5-XXL path: {t5_local_path or "NOT SET"}')
 
     # Create CLIP-L configuration
     clip_config = EncoderConfig(
@@ -337,9 +415,9 @@ def load_text_encoders(torch_dtype: torch.dtype) -> tuple:
         dtype_converter=lambda encoder: encoder.to(dtype=torch_dtype),
     )
 
-    # Load both with fallbacks
-    text_encoder = load_encoder_with_fallbacks(clip_config, torch_dtype)
-    text_encoder_2 = load_encoder_with_fallbacks(t5_config, torch_dtype)
+    # Load both with fallbacks (or fail if require_local=True)
+    text_encoder = load_encoder_with_fallbacks(clip_config, torch_dtype, require_local)
+    text_encoder_2 = load_encoder_with_fallbacks(t5_config, torch_dtype, require_local)
 
     # Validate that encoders were loaded successfully
     if text_encoder is None:
@@ -350,7 +428,7 @@ def load_text_encoders(torch_dtype: torch.dtype) -> tuple:
     return text_encoder, text_encoder_2
 
 
-def load_vae_with_fallback(torch_dtype: torch.dtype) -> AutoencoderKL:
+def load_vae_with_fallback(torch_dtype: torch.dtype, require_local: bool = False) -> AutoencoderKL:
     """
     Load VAE with fallback support.
 
@@ -359,14 +437,19 @@ def load_vae_with_fallback(torch_dtype: torch.dtype) -> AutoencoderKL:
 
     Args:
         torch_dtype: Target dtype for VAE
+        require_local: If True, fail instead of falling back when using local checkpoint
 
     Returns:
         Loaded VAE model
 
     Raises:
         Exception: If VAE cannot be loaded
+        RuntimeError: If require_local=True and local VAE fails to load
     """
     vae_local_path = os.getenv('FLUX_VAE_PATH')
+
+    if require_local:
+        print(f'[Flux Service] VAE path: {vae_local_path or "NOT SET"}')
 
     vae_config = EncoderConfig(
         name="VAE",
@@ -375,7 +458,7 @@ def load_vae_with_fallback(torch_dtype: torch.dtype) -> AutoencoderKL:
         fallback_chain=create_vae_fallback_loaders(torch_dtype),
     )
 
-    vae = load_encoder_with_fallbacks(vae_config, torch_dtype)
+    vae = load_encoder_with_fallbacks(vae_config, torch_dtype, require_local)
 
     # Validate that VAE was loaded successfully
     if vae is None:
