@@ -2143,23 +2143,8 @@ function initializeFluxModelConfig() {
   });
 }
 
-/**
- * Toggle between HuggingFace and Local model sources
- */
-function toggleFluxModelSource(source) {
-  const hfSection = document.getElementById('hfModelSection');
-  const localSection = document.getElementById('localModelSection');
-
-  if (source === 'local') {
-    hfSection.style.display = 'none';
-    localSection.style.display = 'block';
-    updateFluxModelPathDisplay(); // Update display when switching to local
-    loadFluxModels(); // Load available models when switching to local
-  } else {
-    hfSection.style.display = 'block';
-    localSection.style.display = 'none';
-  }
-}
+// Removed: toggleFluxModelSource()
+// Model source switching handled via updateModelSourceAndRefresh() and config preview
 
 /**
  * Update the display of the saved Flux model path
@@ -2331,105 +2316,8 @@ function escapeHtml(str) {
 /**
  * Load available Flux models from API and populate dropdown
  */
-async function loadFluxModels() {
-  const selector = document.getElementById('fluxModelSelector');
-  if (!selector) return;
-
-  try {
-    const response = await fetch('/api/providers/flux/models');
-    if (!response.ok) {
-      throw new Error('Failed to load models');
-    }
-
-    const data = await response.json();
-    if (!data.success || !data.models || data.models.length === 0) {
-      selector.innerHTML = '<option value="">-- No local models found --</option>';
-      return;
-    }
-
-    // Build options: add blank option, then all available models
-    let html = '<option value="">-- Select a model --</option>';
-
-    data.models.forEach(model => {
-      html += `<option value="${escapeHtml(model.path)}" data-name="${escapeHtml(model.name)}">
-        ${escapeHtml(model.displayName || model.name)}
-      </option>`;
-    });
-
-    selector.innerHTML = html;
-
-    // If there's a saved model path, select it in the dropdown
-    const savedPath = localStorage.getItem('fluxModelPath');
-    if (savedPath) {
-      selector.value = savedPath;
-    }
-
-    console.log('[UI] Loaded Flux models:', data.models);
-  } catch (error) {
-    console.error('[UI] Error loading models:', error);
-    const selector = document.getElementById('fluxModelSelector');
-    if (selector) {
-      selector.innerHTML = '<option value="">-- Error loading models --</option>';
-    }
-  }
-}
-
-/**
- * Handle selection of a model from the dropdown
- */
-function selectFluxModel() {
-  const selector = document.getElementById('fluxModelSelector');
-  const customPathInput = document.getElementById('fluxCustomPath');
-
-  if (!selector || selector.value === '') {
-    return;
-  }
-
-  const selectedPath = selector.value;
-  const selectedOption = selector.options[selector.selectedIndex];
-  const modelName = selectedOption.getAttribute('data-name');
-
-  // Update custom path input with selected model
-  if (customPathInput) {
-    customPathInput.value = selectedPath;
-  }
-
-  // Save model path to localStorage
-  localStorage.setItem('fluxModelPath', selectedPath);
-  updateFluxModelPathDisplay();
-
-  console.log('[UI] Selected Flux model:', modelName, 'Path:', selectedPath);
-  addMessage(`✅ Selected model: ${modelName}`, 'event');
-}
-
-/**
- * Initialize model dropdown when local encoder section is shown
- */
-function initializeFluxModelDropdown() {
-  const localModelSection = document.getElementById('localModelSection');
-  if (!localModelSection) return;
-
-  // Load models when section becomes visible
-  const observer = new MutationObserver(mutations => {
-    mutations.forEach(mutation => {
-      if (mutation.attributeName === 'style') {
-        const isVisible = localModelSection.style.display !== 'none';
-        if (isVisible && !localModelSection.modelsLoaded) {
-          loadFluxModels();
-          localModelSection.modelsLoaded = true;
-        }
-      }
-    });
-  });
-
-  observer.observe(localModelSection, { attributes: true });
-
-  // Also load models immediately if section is already visible
-  if (localModelSection.style.display !== 'none') {
-    loadFluxModels();
-    localModelSection.modelsLoaded = true;
-  }
-}
+// Removed: loadFluxModels(), selectFluxModel(), initializeFluxModelDropdown()
+// Model selection now handled via configuration preview with file dropdowns
 
 /**
  * Load and display configuration status (comparing .env defaults vs localStorage overrides)
@@ -2676,6 +2564,13 @@ async function renderConfigPreview(mode = 'local') {
     }
 
     let html = '';
+
+    // Add encoder validation summary for local models
+    const isLocalModel = config.FLUX_MODEL_SOURCE === 'local';
+    const validationSummary = renderEncoderValidationSummary(config, isLocalModel);
+    if (validationSummary) {
+      html += validationSummary;
+    }
 
     for (const [sectionName, keys] of Object.entries(sections)) {
       // Filter keys based on current model source
@@ -3449,150 +3344,44 @@ const DEFAULT_VAE_PATH = 'services/encoders/ae.safetensors';
  * Populate local mode with default settings (encoders, ranking mode, etc.)
  * This makes local mode "one-click ready" for users
  */
-function populateLocalDefaults() {
-  console.log('[UI] Populating local mode defaults...');
-
-  // 1. Set default encoder paths in localStorage
-  localStorage.setItem('fluxTextEncoderPath', DEFAULT_CLIP_ENCODER_PATH);
-  localStorage.setItem('fluxTextEncoder2Path', DEFAULT_T5_ENCODER_PATH);
-  localStorage.setItem('fluxVaePath', DEFAULT_VAE_PATH);
-
-  // 2. Enable local encoders checkbox
-  const useLocalEncodersCheckbox = document.getElementById('useLocalEncoders');
-  if (useLocalEncodersCheckbox) {
-    useLocalEncodersCheckbox.checked = true;
-    localStorage.setItem('useLocalEncoders', 'true');
-  }
-
-  // 3. Show encoder input fields
-  const fluxEncoderInputs = document.getElementById('fluxEncoderInputs');
-  if (fluxEncoderInputs) {
-    fluxEncoderInputs.style.display = 'block';
-  }
-
-  // 4. Populate input field values with defaults
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (clipInput) clipInput.value = DEFAULT_CLIP_ENCODER_PATH;
-  if (t5Input) t5Input.value = DEFAULT_T5_ENCODER_PATH;
-  if (vaeInput) vaeInput.value = DEFAULT_VAE_PATH;
-
-  // 5. Show saved encoder display section
-  const savedEncoderDisplay = document.getElementById('fluxSavedEncoderDisplay');
-  if (savedEncoderDisplay) {
-    savedEncoderDisplay.style.display = 'block';
-
-    // Update display values
-    const clipDisplay = document.getElementById('fluxSavedClipPath');
-    const t5Display = document.getElementById('fluxSavedT5Path');
-    const vaeDisplay = document.getElementById('fluxSavedVaePath');
-
-    if (clipDisplay) clipDisplay.textContent = DEFAULT_CLIP_ENCODER_PATH;
-    if (t5Display) t5Display.textContent = DEFAULT_T5_ENCODER_PATH;
-    if (vaeDisplay) vaeDisplay.textContent = DEFAULT_VAE_PATH;
-
-    // Show clear button
-    const clearButton = document.getElementById('fluxClearEncodersBtn');
-    if (clearButton) clearButton.style.display = 'inline-block';
-  }
-
-  // 6. Set ranking mode to tournament (VLM) - always in local mode
-  const vlmRadioButton = document.querySelector('input[name="rankingMode"][value="vlm"]');
-  if (vlmRadioButton) {
-    vlmRadioButton.checked = true;
-  }
-
-  // Update configuration status display (if function exists)
-  if (typeof updateFluxConfigStatus === 'function') {
-    updateFluxConfigStatus();
-  }
-
-  console.log('[UI] Local mode defaults populated successfully');
-}
+// Removed: populateLocalDefaults(), handleFluxModelSourceChange()
+// Encoder configuration now handled via config preview with validation summary
 
 /**
- * Handle Flux model source change (HuggingFace <-> Local File)
- * When switching to local model, auto-enable encoders and populate defaults
+ * Generate validation summary for encoder configuration
+ * Shows status of encoder paths when using local models
+ * @param {Object} config - Configuration object from localStorage
+ * @param {boolean} isLocalModel - Whether using local model source
+ * @returns {string} HTML for validation summary, or empty string if not needed
  */
-function handleFluxModelSourceChange(value) {
-  console.log('[UI] Flux model source changed to:', value);
+function renderEncoderValidationSummary(config, isLocalModel) {
+  if (!isLocalModel) return '';
 
-  // Show/hide appropriate sections based on selection
-  const hfModelSection = document.getElementById('hfModelSection');
-  const localModelSection = document.getElementById('localModelSection');
+  const hasModel = config['FLUX_MODEL_PATH'] && config['FLUX_MODEL_PATH'] !== '[not set]';
+  if (!hasModel) return '';
 
-  if (value === 'huggingface') {
-    if (hfModelSection) hfModelSection.style.display = 'block';
-    if (localModelSection) localModelSection.style.display = 'none';
-  } else if (value === 'local') {
-    if (hfModelSection) hfModelSection.style.display = 'none';
-    if (localModelSection) localModelSection.style.display = 'block';
+  const clipL = localStorage.getItem('fluxTextEncoderPath') || config['FLUX_TEXT_ENCODER_PATH'];
+  const t5 = localStorage.getItem('fluxTextEncoder2Path') || config['FLUX_TEXT_ENCODER_2_PATH'];
+  const vae = localStorage.getItem('fluxVaePath') || config['FLUX_VAE_PATH'];
 
-    // CRITICAL: Auto-enable local encoders when switching to local model
-    // This ensures the custom checkpoint has the encoders it needs
-    const useLocalEncodersCheckbox = document.getElementById('useLocalEncoders');
-    if (useLocalEncodersCheckbox) {
-      useLocalEncodersCheckbox.checked = true;
-      localStorage.setItem('useLocalEncoders', 'true');
-      console.log('[UI] Auto-enabled local encoders for local model');
-    }
+  const hasAll = clipL && t5 && vae &&
+                 clipL !== '[not set]' && t5 !== '[not set]' && vae !== '[not set]';
 
-    // Show encoder input fields
-    const fluxEncoderInputs = document.getElementById('fluxEncoderInputs');
-    if (fluxEncoderInputs) {
-      fluxEncoderInputs.style.display = 'block';
-    }
-
-    // Populate encoder paths with defaults (if not already set)
-    const clipInput = document.getElementById('fluxTextEncoderPath');
-    const t5Input = document.getElementById('fluxTextEncoder2Path');
-    const vaeInput = document.getElementById('fluxVaePath');
-
-    // Only populate if empty (don't overwrite user's existing settings)
-    if (clipInput && !clipInput.value) {
-      clipInput.value = DEFAULT_CLIP_ENCODER_PATH;
-    }
-    if (t5Input && !t5Input.value) {
-      t5Input.value = DEFAULT_T5_ENCODER_PATH;
-    }
-    if (vaeInput && !vaeInput.value) {
-      vaeInput.value = DEFAULT_VAE_PATH;
-    }
-
-    // Update localStorage with defaults if not set
-    if (!localStorage.getItem('fluxTextEncoderPath')) {
-      localStorage.setItem('fluxTextEncoderPath', DEFAULT_CLIP_ENCODER_PATH);
-    }
-    if (!localStorage.getItem('fluxTextEncoder2Path')) {
-      localStorage.setItem('fluxTextEncoder2Path', DEFAULT_T5_ENCODER_PATH);
-    }
-    if (!localStorage.getItem('fluxVaePath')) {
-      localStorage.setItem('fluxVaePath', DEFAULT_VAE_PATH);
-    }
-
-    // Show saved encoder display
-    const savedEncoderDisplay = document.getElementById('fluxSavedEncoderDisplay');
-    if (savedEncoderDisplay) {
-      savedEncoderDisplay.style.display = 'block';
-
-      // Update display values
-      const clipDisplay = document.getElementById('fluxSavedClipPath');
-      const t5Display = document.getElementById('fluxSavedT5Path');
-      const vaeDisplay = document.getElementById('fluxSavedVaePath');
-
-      if (clipDisplay) clipDisplay.textContent = clipInput?.value || DEFAULT_CLIP_ENCODER_PATH;
-      if (t5Display) t5Display.textContent = t5Input?.value || DEFAULT_T5_ENCODER_PATH;
-      if (vaeDisplay) vaeDisplay.textContent = vaeInput?.value || DEFAULT_VAE_PATH;
-
-      // Show clear button
-      const clearButton = document.getElementById('fluxClearEncodersBtn');
-      if (clearButton) clearButton.style.display = 'inline-block';
-    }
-
-    console.log('[UI] Populated encoder defaults for local model');
+  if (hasAll) {
+    return `<div class="validation-summary validation-success">
+      ✅ Local model configured with all required encoders
+    </div>`;
   }
+
+  const missing = [];
+  if (!clipL || clipL === '[not set]') missing.push('CLIP-L');
+  if (!t5 || t5 === '[not set]') missing.push('T5-XXL');
+  if (!vae || vae === '[not set]') missing.push('VAE');
+
+  return `<div class="validation-summary validation-warning">
+    ⚠️ Local model requires encoder paths. Missing: ${missing.join(', ')}
+    <br><small>Select encoder files in the Encoders section below</small>
+  </div>`;
 }
 
 /**
