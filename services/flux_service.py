@@ -76,10 +76,16 @@ else:
 DEVICE = 'cuda' if torch.cuda.is_available() else 'cpu'
 HF_TOKEN = os.getenv('HF_TOKEN')
 
-# Authenticate with Hugging Face if token is available
-if HF_TOKEN:
+# Authenticate with Hugging Face only if needed (HuggingFace model source or VAE fallback)
+if HF_TOKEN and MODEL_SOURCE == 'huggingface':
     print('[Flux Service] Authenticating with Hugging Face...')
-    login(token=HF_TOKEN)
+    try:
+        login(token=HF_TOKEN)
+    except Exception as e:
+        print(f'[Flux Service] ⚠️ HuggingFace login failed: {e}')
+        print('[Flux Service] Continuing without authentication - gated models may fail')
+elif MODEL_SOURCE == 'local':
+    print('[Flux Service] Using local model - HuggingFace authentication not required')
 else:
     print('[Flux Service] ⚠️ HF_TOKEN not set - gated models will fail to load')
 
@@ -88,7 +94,12 @@ else:
 async def lifespan(app):
     """Lifespan event handler for startup/shutdown"""
     print(f'[Flux Service] Starting on port {PORT}')
-    print(f'[Flux Service] Model: {MODEL_NAME}')
+    if MODEL_SOURCE == 'local':
+        print(f'[Flux Service] Model source: LOCAL')
+        print(f'[Flux Service] Model path: {FLUX_MODEL_PATH}')
+    else:
+        print(f'[Flux Service] Model source: HuggingFace')
+        print(f'[Flux Service] Model: {MODEL_NAME}')
     print(f'[Flux Service] Device: {DEVICE}')
     if FLUX_LORA_PATH:
         print(f'[Flux Service] LoRA configured: {FLUX_LORA_PATH} (scale: {LORA_DEFAULT_SCALE})')
@@ -166,6 +177,7 @@ def load_pipeline():
         # For HuggingFace models, pass token for gated models
         kwargs = {
             'torch_dtype': torch.float16 if DEVICE == 'cuda' else torch.float32,
+            'low_cpu_mem_usage': True,  # Enable memory-efficient loading (uses ~50% less RAM)
         }
         if MODEL_SOURCE == 'huggingface':
             kwargs['token'] = HF_TOKEN
@@ -187,12 +199,22 @@ def load_pipeline():
                 if any(x in error_str for x in ['missing', 'cliptextmodel', 't5encoder', 'autoencoder']):
                     print(f'[Flux Service] Custom model missing components, loading with encoder_loading module: {e}')
 
-                    # Load VAE with fallback chain
-                    vae = load_vae_with_fallback(kwargs['torch_dtype'])
+                    # CRITICAL: For local checkpoints, require local encoders (no fallback)
+                    # This prevents dimension mismatches that cause errors like:
+                    # "mat1 and mat2 shapes cannot be multiplied (512x768 and 4096x3072)"
+                    require_local_encoders = (MODEL_SOURCE == 'local')
 
-                    # Load text encoders (CLIP-L and T5-XXL) with fallback chains
+                    if require_local_encoders:
+                        print('[Flux Service] 🔒 LOCAL CHECKPOINT DETECTED')
+                        print('[Flux Service] Requiring local encoders - HuggingFace fallback DISABLED')
+                        print('[Flux Service] This prevents architecture mismatches with custom models')
+
+                    # Load VAE with fallback chain (or require local)
+                    vae = load_vae_with_fallback(kwargs['torch_dtype'], require_local=require_local_encoders)
+
+                    # Load text encoders (CLIP-L and T5-XXL) with fallback chains (or require local)
                     print('[Flux Service] Loading text encoders with encoder_loading module...')
-                    text_encoder, text_encoder_2 = load_text_encoders(kwargs['torch_dtype'])
+                    text_encoder, text_encoder_2 = load_text_encoders(kwargs['torch_dtype'], require_local=require_local_encoders)
 
                     # Retry with all loaded components
                     pipeline = FluxPipeline.from_single_file(
@@ -210,7 +232,21 @@ def load_pipeline():
             # Use sequential CPU offload - most aggressive memory saving
             # Keeps model in CPU RAM, moves each layer to GPU only during its forward pass
             print('[Flux Service] Enabling sequential CPU offload for 12GB GPU...')
-            pipeline.enable_sequential_cpu_offload()
+
+            # Check if transformer is on meta device (shouldn't happen with low_cpu_mem_usage=False)
+            try:
+                if hasattr(pipeline, 'transformer'):
+                    transformer_device = next(pipeline.transformer.parameters()).device.type
+                    if transformer_device == 'meta':
+                        print('[Flux Service] WARNING: Transformer on meta device, skipping CPU offload')
+                        print('[Flux Service] This may cause OOM on 12GB GPUs')
+                    else:
+                        pipeline.enable_sequential_cpu_offload()
+                else:
+                    pipeline.enable_sequential_cpu_offload()
+            except Exception as e:
+                print(f'[Flux Service] WARNING: Could not enable CPU offload: {e}')
+                print('[Flux Service] Continuing without CPU offload - may OOM on 12GB GPUs')
 
             # Additional memory optimizations for inference
             pipeline.enable_attention_slicing(1)  # Maximum slicing
@@ -220,7 +256,21 @@ def load_pipeline():
             if hasattr(pipeline.vae, 'enable_tiling'):
                 pipeline.vae.enable_tiling()
 
-        print('[Flux Service] Model loaded with sequential CPU offload')
+        print('[Flux Service] Model loaded successfully')
+
+        # Debug: Show device placement for each component
+        print('[Flux Service] Component device placement:')
+        for name in ['transformer', 'text_encoder', 'text_encoder_2', 'vae']:
+            if hasattr(pipeline, name):
+                component = getattr(pipeline, name)
+                if component is not None:
+                    try:
+                        device = next(component.parameters()).device
+                        print(f'[Flux Service]   {name}: {device}')
+                    except StopIteration:
+                        print(f'[Flux Service]   {name}: no parameters')
+                else:
+                    print(f'[Flux Service]   {name}: None')
 
         # Auto-load LoRA if configured
         if FLUX_LORA_PATH:
