@@ -3468,10 +3468,6 @@ function selectMode(mode) {
     document.getElementById('visionProvider').value = 'local';
     document.getElementById('rankingMode').value = 'vlm'; // Local always uses VLM tournament mode
 
-    // CRITICAL: Populate default settings for local mode (encoders, etc.)
-    // This makes local mode "one-click ready"
-    populateLocalDefaults();
-
     // Show local configuration with checkboxes
     configSection.style.display = 'block';
     localConfigSection.style.display = 'block';
