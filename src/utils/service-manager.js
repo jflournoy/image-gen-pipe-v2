@@ -50,6 +50,16 @@ const SERVICES = {
   },
 };
 
+/**
+ * Required encoder paths for local Flux models
+ * These must all be provided when using a local model to prevent dimension mismatches
+ */
+const FLUX_REQUIRED_ENCODERS = [
+  { key: 'textEncoderPath', name: 'CLIP-L encoder', envVar: 'FLUX_TEXT_ENCODER_PATH' },
+  { key: 'textEncoder2Path', name: 'T5-XXL encoder', envVar: 'FLUX_TEXT_ENCODER_2_PATH' },
+  { key: 'vaePath', name: 'VAE encoder', envVar: 'FLUX_VAE_PATH' }
+];
+
 const PID_DIR = '/tmp';
 
 /**
@@ -172,6 +182,53 @@ async function getServicePID(serviceName) {
 }
 
 /**
+ * Validate Flux encoder paths are configured for local models
+ * @param {Object} options - Service start options
+ * @param {string} options.modelPath - Custom Flux model path (if using local model)
+ * @param {string} options.textEncoderPath - CLIP-L encoder path
+ * @param {string} options.textEncoder2Path - T5-XXL encoder path
+ * @param {string} options.vaePath - VAE encoder path
+ * @returns {Object} { valid: boolean, error?: string }
+ */
+function validateFluxEncoderPaths(options) {
+  const { modelPath } = options;
+
+  // If no model path, using HuggingFace - no validation needed
+  if (!modelPath) {
+    return { valid: true };
+  }
+
+  // Local model detected - require all encoder paths
+  const missingPaths = FLUX_REQUIRED_ENCODERS
+    .filter(encoder => !options[encoder.key])
+    .map(encoder => encoder.name);
+
+  if (missingPaths.length > 0) {
+    return {
+      valid: false,
+      error: `Local Flux model requires encoder paths. Missing: ${missingPaths.join(', ')}`
+    };
+  }
+
+  // Validate encoder files exist
+  const projectRoot = path.join(__dirname, '../../');
+
+  for (const encoder of FLUX_REQUIRED_ENCODERS) {
+    const encoderPath = options[encoder.key];
+    const fullPath = path.resolve(projectRoot, encoderPath);
+
+    if (!fsSync.existsSync(fullPath)) {
+      return {
+        valid: false,
+        error: `${encoder.name} file does not exist: ${fullPath}`
+      };
+    }
+  }
+
+  return { valid: true };
+}
+
+/**
  * Start a service
  * @param {string} serviceName - Name of the service to start
  * @param {Object} options - Optional configuration
@@ -179,12 +236,34 @@ async function getServicePID(serviceName) {
  * @param {string} options.modelPath - Custom Flux model path (local .safetensors file)
  * @param {string} options.loraPath - Custom LoRA path for Flux service
  * @param {string} options.loraScale - Custom LoRA scale for Flux service
+ * @param {string} options.textEncoderPath - CLIP-L encoder path for local models
+ * @param {string} options.textEncoder2Path - T5-XXL encoder path for local models
+ * @param {string} options.vaePath - VAE encoder path for local models
  */
 async function startService(serviceName, options = {}) {
   const serviceConfig = SERVICES[serviceName];
 
   if (!serviceConfig) {
     throw new Error(`Unknown service: ${serviceName}`);
+  }
+
+  // Validate Flux encoder paths if starting Flux service with local model
+  if (serviceName === 'flux') {
+    console.log('[ServiceManager] Validating Flux encoder configuration...');
+    console.log('[ServiceManager] Model path:', options.modelPath || '(using HuggingFace)');
+    console.log('[ServiceManager] CLIP-L path:', options.textEncoderPath || '(not set)');
+    console.log('[ServiceManager] T5-XXL path:', options.textEncoder2Path || '(not set)');
+    console.log('[ServiceManager] VAE path:', options.vaePath || '(not set)');
+
+    const validation = validateFluxEncoderPaths(options);
+    if (!validation.valid) {
+      console.error(`[ServiceManager] ❌ Validation failed: ${validation.error}`);
+      return {
+        success: false,
+        error: validation.error
+      };
+    }
+    console.log('[ServiceManager] ✅ Encoder configuration valid');
   }
 
   // Check if already running
@@ -419,4 +498,5 @@ module.exports = {
   readPIDFile,
   deletePIDFile,
   getAllServiceStatuses,
+  validateFluxEncoderPaths,
 };
