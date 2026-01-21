@@ -673,18 +673,12 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Initialize Flux encoder display
-  updateFluxEncoderDisplay();
-
   // Restore custom model path if it was previously saved
   const savedModelPath = localStorage.getItem('fluxModelPath');
   const customPathInput = document.getElementById('fluxCustomPath');
   if (customPathInput && savedModelPath) {
     customPathInput.value = savedModelPath;
   }
-
-  // Load and display Flux encoder presets
-  loadFluxEncoderPresets();
 
   // Initialize Flux model dropdown
   initializeFluxModelDropdown();
@@ -2320,458 +2314,6 @@ async function displayModelSource() {
 }
 
 /**
- * Initialize Flux LoRA configuration
- */
-function initializeFluxLoraConfig() {
-  // Load saved settings from localStorage
-  const savedLoraPath = localStorage.getItem('loraPath') || 'services/loras/flux-custom-lora.safetensors';
-  const savedLoraScale = localStorage.getItem('loraScale') || '0.8';
-
-  const loraPathInput = document.getElementById('fluxLoraPath');
-  const loraScaleInput = document.getElementById('fluxLoraScale');
-  const loraScaleValue = document.getElementById('fluxLoraScaleValue');
-
-  if (loraPathInput) loraPathInput.value = savedLoraPath;
-  if (loraScaleInput) loraScaleInput.value = savedLoraScale;
-  if (loraScaleValue) loraScaleValue.textContent = savedLoraScale;
-
-  // Add event listener for scale slider
-  if (loraScaleInput) {
-    loraScaleInput.addEventListener('input', (e) => {
-      if (loraScaleValue) {
-        loraScaleValue.textContent = e.target.value;
-      }
-    });
-  }
-
-  // Update the saved settings display
-  updateFluxLoraDisplay();
-
-  // Check initial status
-  checkFluxLoraStatus();
-}
-
-/**
- * Save Flux LoRA settings to localStorage
- */
-async function saveFluxLoraSettings() {
-  const loraPathInput = document.getElementById('fluxLoraPath');
-  const loraScaleInput = document.getElementById('fluxLoraScale');
-  const statusText = document.getElementById('fluxLoraStatusText');
-
-  if (!loraPathInput || !loraScaleInput) return;
-
-  const loraPath = loraPathInput.value.trim();
-  const loraScale = loraScaleInput.value;
-
-  // Save to localStorage (without 'flux' prefix for consistency with reader)
-  localStorage.setItem('loraPath', loraPath);
-  localStorage.setItem('loraScale', loraScale);
-
-  // Update the saved settings display
-  updateFluxLoraDisplay();
-
-  // Update status
-  if (statusText) {
-    statusText.textContent = 'Settings saved! Restart Flux service to apply.';
-    statusText.style.color = '#4CAF50';
-  }
-
-  console.log('[UI] Saved LoRA settings:', { loraPath, loraScale });
-
-  // Note: These settings will be applied when the Flux service is next started/restarted
-  // The service reads from .env which should be updated with these values
-}
-
-/**
- * Check Flux LoRA status from the service
- */
-async function checkFluxLoraStatus() {
-  const statusText = document.getElementById('fluxLoraStatusText');
-
-  try {
-    const response = await fetch('http://localhost:8001/lora/status');
-    if (!response.ok) {
-      throw new Error('Service not available');
-    }
-
-    const status = await response.json();
-
-    if (statusText) {
-      if (status.loaded && status.path) {
-        // LoRA is already loaded in memory
-        const filename = status.path.split('/').pop();
-        statusText.innerHTML = `
-          <strong>✅ LoRA Active</strong><br>
-          <small>File: ${filename}</small><br>
-          <small>Scale: ${status.scale}</small>
-        `;
-        statusText.style.color = '#4CAF50';
-      } else if (status.configured_path) {
-        // LoRA is configured but not loaded yet (will load on first generation)
-        const filename = status.configured_path.split('/').pop();
-        statusText.innerHTML = `
-          <strong>⚙️ LoRA Configured</strong><br>
-          <small>File: ${filename}</small><br>
-          <small>Scale: ${status.default_scale || status.scale}</small><br>
-          <small style="font-style: italic; color: #FF8C00;">Will load on next service restart or first generation</small>
-        `;
-        statusText.style.color = '#FF9800';
-      } else {
-        // LoRA not configured
-        statusText.textContent = '❌ Not configured';
-        statusText.style.color = '#999';
-      }
-    }
-
-    console.log('[UI] LoRA status:', status);
-  } catch (error) {
-    if (statusText) {
-      statusText.textContent = '⚠️ Flux service not running';
-      statusText.style.color = '#f44336';
-    }
-    console.error('[UI] Error checking LoRA status:', error);
-  }
-}
-
-/**
- * Update the display of saved LoRA settings
- */
-function updateFluxLoraDisplay() {
-  const savedLoraPath = localStorage.getItem('loraPath');
-  const savedLoraScale = localStorage.getItem('loraScale');
-  const loraPathSpan = document.getElementById('fluxSavedLoraPath');
-  const loraScaleSpan = document.getElementById('fluxSavedLoraScale');
-  const clearBtn = document.getElementById('fluxClearLoraBtn');
-
-  if (loraPathSpan) {
-    loraPathSpan.textContent = savedLoraPath || 'none';
-  }
-  if (loraScaleSpan) {
-    loraScaleSpan.textContent = savedLoraScale || 'none';
-  }
-  if (clearBtn) {
-    clearBtn.style.display = (savedLoraPath || savedLoraScale) ? 'inline-block' : 'none';
-  }
-}
-
-/**
- * Clear saved LoRA settings from localStorage
- */
-function clearFluxLoraSettings() {
-  const statusText = document.getElementById('fluxLoraStatusText');
-  const loraPathInput = document.getElementById('fluxLoraPath');
-  const loraScaleInput = document.getElementById('fluxLoraScale');
-
-  // Confirm deletion
-  if (!confirm('This will clear the saved LoRA settings. Continue?')) {
-    return;
-  }
-
-  try {
-    localStorage.removeItem('loraPath');
-    localStorage.removeItem('loraScale');
-
-    // Clear inputs
-    if (loraPathInput) loraPathInput.value = '';
-    if (loraScaleInput) loraScaleInput.value = '1.0';
-
-    updateFluxLoraDisplay(); // Update display
-
-    if (statusText) {
-      statusText.textContent = '✓ LoRA settings cleared. Service will use defaults from .env.';
-      statusText.style.color = '#4CAF50';
-    }
-
-    addMessage('Flux LoRA settings cleared from browser. Service will use defaults from .env.', 'event');
-  } catch (error) {
-    if (statusText) {
-      statusText.textContent = `Error clearing LoRA settings: ${error.message}`;
-      statusText.style.color = '#f44336';
-    }
-  }
-}
-
-/**
- * Toggle local encoders checkbox and show/hide encoder inputs
- */
-function toggleLocalEncoders() {
-  const useLocal = document.getElementById('useLocalEncoders').checked;
-  const encoderInputs = document.getElementById('fluxEncoderInputs');
-  const savedDisplay = document.getElementById('fluxSavedEncoderDisplay');
-
-  if (encoderInputs) {
-    encoderInputs.style.display = useLocal ? 'block' : 'none';
-  }
-  if (savedDisplay) {
-    savedDisplay.style.display = useLocal ? 'block' : 'none';
-  }
-
-  // Load saved encoder settings if they exist
-  if (useLocal) {
-    loadFluxEncoderSettings();
-    // Auto-save defaults to localStorage when toggle is enabled
-    // This ensures encoder paths are available to service startup
-    saveFluxEncoderSettings();
-  }
-}
-
-/**
- * Load saved encoder settings from localStorage and populate inputs
- */
-function loadFluxEncoderSettings() {
-  const savedClip = localStorage.getItem('fluxTextEncoderPath') || 'services/encoders/clip_l.safetensors';
-  const savedT5 = localStorage.getItem('fluxTextEncoder2Path') || 'services/encoders/model.safetensors';
-  const savedVae = localStorage.getItem('fluxVaePath') || 'services/encoders/ae.safetensors';
-
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (clipInput) clipInput.value = savedClip;
-  if (t5Input) t5Input.value = savedT5;
-  if (vaeInput) vaeInput.value = savedVae;
-
-  updateFluxEncoderDisplay();
-}
-
-/**
- * Save encoder paths to localStorage
- */
-async function saveFluxEncoderSettings() {
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (!clipInput || !t5Input || !vaeInput) return;
-
-  const clipPath = clipInput.value.trim() || 'services/encoders/clip_l.safetensors';
-  const t5Path = t5Input.value.trim() || 'services/encoders/model.safetensors';
-  const vaePath = vaeInput.value.trim() || 'services/encoders/ae.safetensors';
-
-  // Save to localStorage
-  localStorage.setItem('fluxTextEncoderPath', clipPath);
-  localStorage.setItem('fluxTextEncoder2Path', t5Path);
-  localStorage.setItem('fluxVaePath', vaePath);
-  localStorage.setItem('useLocalEncoders', 'true');
-
-  // Update display
-  updateFluxEncoderDisplay();
-
-  // Update status
-  const statusText = document.getElementById('fluxEncoderStatusText');
-  if (statusText) {
-    statusText.textContent = '✓ Encoder paths saved! Restart Flux service to apply.';
-    statusText.style.color = '#4CAF50';
-    document.getElementById('fluxEncoderStatus').style.display = 'block';
-  }
-
-  console.log('[UI] Saved encoder settings:', { clipPath, t5Path, vaePath });
-  addMessage('✅ Encoder settings saved! These will be used when you restart the Flux service.', 'event');
-  loadConfigurationStatus(); // Refresh status display
-}
-
-/**
- * Update the display of saved encoder paths
- */
-/**
- * Populate encoder input fields from localStorage
- * Called on initialization and when settings are opened
- */
-function populateEncoderInputsFromStorage() {
-  const savedClip = localStorage.getItem('fluxTextEncoderPath');
-  const savedT5 = localStorage.getItem('fluxTextEncoder2Path');
-  const savedVae = localStorage.getItem('fluxVaePath');
-
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (clipInput && savedClip) clipInput.value = savedClip;
-  if (t5Input && savedT5) t5Input.value = savedT5;
-  if (vaeInput && savedVae) vaeInput.value = savedVae;
-}
-
-function updateFluxEncoderDisplay() {
-  const savedClip = localStorage.getItem('fluxTextEncoderPath');
-  const savedT5 = localStorage.getItem('fluxTextEncoder2Path');
-  const savedVae = localStorage.getItem('fluxVaePath');
-
-  const clipSpan = document.getElementById('fluxSavedClipPath');
-  const t5Span = document.getElementById('fluxSavedT5Path');
-  const vaeSpan = document.getElementById('fluxSavedVaePath');
-  const clearBtn = document.getElementById('fluxClearEncodersBtn');
-  const useLocalCheckbox = document.getElementById('useLocalEncoders');
-
-  if (clipSpan) clipSpan.textContent = savedClip || 'default';
-  if (t5Span) t5Span.textContent = savedT5 || 'default';
-  if (vaeSpan) vaeSpan.textContent = savedVae || 'default';
-
-  if (clearBtn) {
-    clearBtn.style.display = (savedClip || savedT5 || savedVae) ? 'inline-block' : 'none';
-  }
-
-  // Update checkbox if encoders are saved
-  if (useLocalCheckbox && (savedClip || savedT5 || savedVae)) {
-    useLocalCheckbox.checked = true;
-  }
-
-  // Also populate input fields from storage
-  populateEncoderInputsFromStorage();
-}
-
-/**
- * Clear saved encoder settings
- */
-function clearFluxEncoderSettings() {
-  if (!confirm('This will clear the saved encoder settings. Continue?')) {
-    return;
-  }
-
-  try {
-    localStorage.removeItem('fluxTextEncoderPath');
-    localStorage.removeItem('fluxTextEncoder2Path');
-    localStorage.removeItem('fluxVaePath');
-    localStorage.removeItem('useLocalEncoders');
-
-    // Clear inputs
-    const clipInput = document.getElementById('fluxTextEncoderPath');
-    const t5Input = document.getElementById('fluxTextEncoder2Path');
-    const vaeInput = document.getElementById('fluxVaePath');
-    const useLocalCheckbox = document.getElementById('useLocalEncoders');
-
-    if (clipInput) clipInput.value = '';
-    if (t5Input) t5Input.value = '';
-    if (vaeInput) vaeInput.value = '';
-    if (useLocalCheckbox) useLocalCheckbox.checked = false;
-
-    updateFluxEncoderDisplay();
-
-    const statusText = document.getElementById('fluxEncoderStatusText');
-    if (statusText) {
-      statusText.textContent = '✓ Encoder settings cleared. Service will use defaults.';
-      statusText.style.color = '#4CAF50';
-    }
-
-    addMessage('Encoder settings cleared. Service will use default fallback encoders.', 'event');
-  } catch (error) {
-    const statusText = document.getElementById('fluxEncoderStatusText');
-    if (statusText) {
-      statusText.textContent = `Error: ${error.message}`;
-      statusText.style.color = '#f44336';
-    }
-  }
-}
-
-/**
- * Reset encoder inputs to defaults
- */
-function resetFluxEncoderInputs() {
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (clipInput) clipInput.value = 'services/encoders/clip_l.safetensors';
-  if (t5Input) t5Input.value = 'services/encoders/model.safetensors';
-  if (vaeInput) vaeInput.value = 'services/encoders/ae.safetensors';
-
-  addMessage('Encoder paths reset to defaults', 'event');
-}
-
-/**
- * Load and display Flux encoder presets from discovery endpoint
- */
-async function loadFluxEncoderPresets() {
-  const presetsContainer = document.getElementById('fluxEncoderPresets');
-  if (!presetsContainer) return;
-
-  try {
-    const response = await fetch('/api/providers/flux/discovery');
-    if (!response.ok) {
-      throw new Error('Failed to load presets');
-    }
-
-    const data = await response.json();
-    if (!data.success || !data.presets || data.presets.length === 0) {
-      presetsContainer.innerHTML = '<small style="color: #888;">No presets available - manually configure encoders below</small>';
-      return;
-    }
-
-    // Clear loading message
-    const loadingMsg = document.getElementById('fluxPresetsLoading');
-    if (loadingMsg) loadingMsg.remove();
-
-    // Display each preset as a button
-    const presetsHtml = data.presets.map(preset => `
-      <button
-        type="button"
-        onclick="applyFluxEncoderPreset('${escapeHtml(preset.name)}', ${escapeHtml(JSON.stringify(preset))})"
-        style="text-align: left; padding: 8px 10px; background: #f0f0f0; border: 1px solid #ddd; border-radius: 3px; cursor: pointer; font-size: 12px; transition: all 0.2s; margin: 2px 0;"
-        onmouseover="this.style.background='#e8e8e8'; this.style.borderColor='#0066cc';"
-        onmouseout="this.style.background='#f0f0f0'; this.style.borderColor='#ddd';"
-      >
-        <strong>${escapeHtml(preset.name)}</strong><br>
-        <small style="color: #666;">${escapeHtml(preset.description)}</small>
-      </button>
-    `).join('');
-
-    presetsContainer.innerHTML = presetsHtml || '<small style="color: #888;">No presets available</small>';
-
-    console.log('[UI] Loaded encoder presets:', data.presets);
-  } catch (error) {
-    console.error('[UI] Error loading presets:', error);
-    presetsContainer.innerHTML = '<small style="color: #f44336;">Error loading presets. You can still configure encoders manually.</small>';
-  }
-}
-
-/**
- * Apply a preset configuration to the encoder inputs
- */
-function applyFluxEncoderPreset(presetName, presetData) {
-  try {
-    // Parse preset data if it's a string
-    const preset = typeof presetData === 'string' ? JSON.parse(presetData) : presetData;
-
-    // Enable local encoders
-    const useLocalCheckbox = document.getElementById('useLocalEncoders');
-    if (useLocalCheckbox) {
-      useLocalCheckbox.checked = true;
-    }
-
-    // Set encoder paths from preset
-    const clipInput = document.getElementById('fluxTextEncoderPath');
-    const t5Input = document.getElementById('fluxTextEncoder2Path');
-    const vaeInput = document.getElementById('fluxVaePath');
-
-    if (clipInput) clipInput.value = preset.textEncoderPath || 'services/encoders/clip_l.safetensors';
-    if (t5Input) t5Input.value = preset.textEncoder2Path || 'services/encoders/model.safetensors';
-    if (vaeInput) vaeInput.value = preset.vaePath || 'services/encoders/ae.safetensors';
-
-    // Save to localStorage
-    localStorage.setItem('fluxTextEncoderPath', clipInput.value);
-    localStorage.setItem('fluxTextEncoder2Path', t5Input.value);
-    localStorage.setItem('fluxVaePath', vaeInput.value);
-    localStorage.setItem('useLocalEncoders', 'true');
-
-    // Show/hide encoder inputs
-    toggleLocalEncoders();
-
-    // Display list of compatible models if available
-    if (preset.models && preset.models.length > 0) {
-      const modelList = preset.models.join(', ');
-      addMessage(`✅ Applied preset: ${presetName}\nCompatible models: ${modelList}`, 'event');
-    } else {
-      addMessage(`✅ Applied preset: ${presetName}`, 'event');
-    }
-
-    console.log('[UI] Applied preset:', presetName, preset);
-  } catch (error) {
-    console.error('[UI] Error applying preset:', error);
-    addMessage(`❌ Error applying preset: ${error.message}`, 'error');
-  }
-}
-
-/**
  * Escape HTML special characters for safe display
  */
 function escapeHtml(str) {
@@ -2820,8 +2362,6 @@ async function loadFluxModels() {
     const savedPath = localStorage.getItem('fluxModelPath');
     if (savedPath) {
       selector.value = savedPath;
-      // Also populate encoder paths if they were saved
-      populateEncoderInputsFromStorage();
     }
 
     console.log('[UI] Loaded Flux models:', data.models);
@@ -2858,49 +2398,8 @@ function selectFluxModel() {
   localStorage.setItem('fluxModelPath', selectedPath);
   updateFluxModelPathDisplay();
 
-  // CRITICAL: Auto-enable local encoders when model is selected
-  // Set the standard Flux .1 encoder paths to localStorage
-  // These are the default encoder paths that work with Flux models
-  const encoderPaths = {
-    clip: 'services/encoders/clip_l.safetensors',
-    t5: 'services/encoders/model.safetensors',
-    vae: 'services/encoders/ae.safetensors'
-  };
-
-  // ALWAYS save encoder paths when model is selected
-  localStorage.setItem('fluxTextEncoderPath', encoderPaths.clip);
-  localStorage.setItem('fluxTextEncoder2Path', encoderPaths.t5);
-  localStorage.setItem('fluxVaePath', encoderPaths.vae);
-  localStorage.setItem('useLocalEncoders', 'true');
-
-  console.log('[UI] Set encoder paths in localStorage:', encoderPaths);
-
-  // Check the "Use Local Encoders" checkbox
-  const useLocalCheckbox = document.getElementById('useLocalEncoders');
-  if (useLocalCheckbox) {
-    useLocalCheckbox.checked = true;
-    console.log('[UI] Checked useLocalEncoders checkbox');
-  }
-
-  // Populate encoder path input fields from localStorage
-  const clipInput = document.getElementById('fluxTextEncoderPath');
-  const t5Input = document.getElementById('fluxTextEncoder2Path');
-  const vaeInput = document.getElementById('fluxVaePath');
-
-  if (clipInput) clipInput.value = encoderPaths.clip;
-  if (t5Input) t5Input.value = encoderPaths.t5;
-  if (vaeInput) vaeInput.value = encoderPaths.vae;
-
-  console.log('[UI] Populated encoder path input fields');
-
-  // Update UI to reflect encoder state
-  toggleLocalEncoders();
-  updateFluxEncoderDisplay();
-  loadConfigurationStatus(); // Refresh status display
-
   console.log('[UI] Selected Flux model:', modelName, 'Path:', selectedPath);
-  console.log('[UI] Auto-enabled local encoders with standard paths');
-  addMessage(`✅ Selected model: ${modelName}\n✅ Auto-enabled local encoders`, 'event');
+  addMessage(`✅ Selected model: ${modelName}`, 'event');
 }
 
 /**
@@ -3032,6 +2531,543 @@ function resetFluxLoraSettingsComplete() {
 }
 
 /**
+ * ======================================================================
+ * .env Configuration Management API
+ * Single source of truth for configuration (replaces localStorage)
+ * ======================================================================
+ */
+
+// Recommended HuggingFace repositories for dropdowns
+const RECOMMENDED_LLM_REPOS = [
+  'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
+  'TheBloke/Llama-2-7B-Chat-GGUF',
+  'TheBloke/CodeLlama-7B-Instruct-GGUF',
+  'TheBloke/zephyr-7B-beta-GGUF'
+];
+
+const RECOMMENDED_VLM_REPOS = [
+  'unsloth/Qwen2.5-VL-7B-Instruct-GGUF',
+  'jartine/llava-v1.6-mistral-7b-gguf',
+  'mradermacher/llava-v1.5-7b-gguf'
+];
+
+const RECOMMENDED_CLIP_MODELS = [
+  'openai/clip-vit-base-patch32',
+  'openai/clip-vit-large-patch14',
+  'laion/CLIP-ViT-B-32-laion2B-s34B-b79K'
+];
+
+/**
+ * Load configuration from .env file via API
+ * @param {string} mode - Provider mode: 'local' or 'openai'
+ * @returns {Promise<Object>} Configuration object
+ */
+async function loadEnvConfig(mode = 'local') {
+  try {
+    const response = await fetch(`/api/config/env/relevant?mode=${mode}`);
+    const data = await response.json();
+
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to load configuration');
+    }
+
+    return data.config;
+  } catch (error) {
+    console.error('[Config] Error loading .env config:', error);
+    addMessage(`✗ Failed to load configuration: ${error.message}`, 'error');
+    return {};
+  }
+}
+
+/**
+ * Update configuration in .env file via API
+ * @param {Object} updates - Key-value pairs to update
+ * @returns {Promise<Object>} Result with success status
+ */
+async function updateEnvConfig(updates) {
+  try {
+    const response = await fetch('/api/config/env', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(updates)
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to update configuration');
+    }
+
+    // Show warnings if any paths don't exist
+    if (result.warnings && result.warnings.length > 0) {
+      for (const warning of result.warnings) {
+        console.warn(`[Config] ${warning.key}: ${warning.message}`);
+      }
+    }
+
+    // Show service restart prompt if needed
+    showServiceRestartPrompt();
+
+    // Refresh configuration preview
+    await renderConfigPreview();
+
+    addMessage(`✅ Configuration updated: ${result.updated.join(', ')}`, 'event');
+    console.log('[Config] Updated:', result.updated);
+
+    return result;
+  } catch (error) {
+    console.error('[Config] Error updating .env:', error);
+    addMessage(`✗ Failed to update configuration: ${error.message}`, 'error');
+    return { success: false, error: error.message };
+  }
+}
+
+/**
+ * Render configuration preview with inline editing and dropdowns
+ * Shows current .env values organized by section
+ * @param {string} mode - Provider mode: 'local' or 'openai'
+ */
+async function renderConfigPreview(mode = 'local') {
+  const configSections = document.getElementById('configSections');
+  if (!configSections) {
+    console.warn('[Config] configSections element not found');
+    return;
+  }
+
+  try {
+    const config = await loadEnvConfig(mode);
+
+    // Fetch available files from discovery endpoint (only for local mode)
+    let discovery = { models: [], encoders: {}, loras: [] };
+    if (mode === 'local') {
+      try {
+        const discoveryResponse = await fetch('/api/providers/flux/discovery');
+        const discoveryData = await discoveryResponse.json();
+        if (discoveryData.success) {
+          discovery = discoveryData;
+        }
+      } catch (err) {
+        console.warn('[Config] Could not fetch file discovery:', err);
+      }
+    }
+
+    // Define configuration sections based on mode
+    let sections;
+    if (mode === 'openai') {
+      sections = {
+        'OpenAI API': ['OPENAI_API_KEY', 'OPENAI_ORG_ID'],
+        'LLM Models': ['OPENAI_LLM_MODEL', 'OPENAI_LLM_MODEL_EXPAND', 'OPENAI_LLM_MODEL_REFINE', 'OPENAI_LLM_MODEL_COMBINE'],
+        'Image Generation': ['OPENAI_IMAGE_MODEL'],
+        'Vision': ['OPENAI_VISION_MODEL'],
+        'API Behavior': ['OPENAI_MAX_RETRIES', 'OPENAI_TIMEOUT_MS'],
+        'Ranking': ['RANKING_MODE']
+      };
+    } else {
+      sections = {
+        'Model Configuration': ['FLUX_MODEL_SOURCE', 'FLUX_MODEL_PATH'],
+        'Encoders': ['FLUX_TEXT_ENCODER_PATH', 'FLUX_TEXT_ENCODER_2_PATH', 'FLUX_VAE_PATH'],
+        'LoRA': ['FLUX_LORA_PATH', 'FLUX_LORA_SCALE'],
+        'LLM': ['LLM_MODEL_REPO', 'LLM_MODEL_FILE', 'LLM_MODEL_PATH', 'LLM_GPU_LAYERS', 'LLM_CONTEXT_SIZE'],
+        'VLM': ['VLM_MODEL_REPO', 'VLM_MODEL_FILE', 'VLM_CLIP_FILE', 'VLM_MODEL_PATH', 'VLM_CLIP_PATH', 'VLM_GPU_LAYERS', 'VLM_CONTEXT_SIZE'],
+        'Vision': ['CLIP_MODEL'],
+        'Ranking': ['RANKING_MODE'],
+        'Authentication': ['HF_TOKEN']
+      };
+    }
+
+    let html = '';
+
+    for (const [sectionName, keys] of Object.entries(sections)) {
+      // Filter keys based on current model source
+      const visibleKeys = filterKeysForContext(keys, config);
+
+      if (visibleKeys.length === 0) continue;
+
+      html += `<div class="config-section">
+        <h5 class="config-section-title">${sectionName}</h5>`;
+
+      for (const key of visibleKeys) {
+        const value = config[key] || '[not set]';
+
+        // Render different UI elements based on key type
+        if (key === 'FLUX_MODEL_PATH') {
+          html += renderFileDropdown(key, value, discovery.models || []);
+        } else if (key === 'FLUX_TEXT_ENCODER_PATH' && discovery.encoders?.clipL) {
+          html += renderEncoderDropdown(key, value, [discovery.encoders.clipL]);
+        } else if (key === 'FLUX_TEXT_ENCODER_2_PATH' && discovery.encoders?.t5) {
+          html += renderEncoderDropdown(key, value, [discovery.encoders.t5]);
+        } else if (key === 'FLUX_VAE_PATH' && discovery.encoders?.vae) {
+          html += renderEncoderDropdown(key, value, [discovery.encoders.vae]);
+        } else if (key === 'FLUX_LORA_PATH' && discovery.loras) {
+          html += renderFileDropdown(key, value, discovery.loras);
+        } else if (key === 'LLM_MODEL_REPO') {
+          html += renderRepoDropdown(key, value, RECOMMENDED_LLM_REPOS);
+        } else if (key === 'VLM_MODEL_REPO') {
+          html += renderRepoDropdown(key, value, RECOMMENDED_VLM_REPOS);
+        } else if (key === 'CLIP_MODEL') {
+          html += renderRepoDropdown(key, value, RECOMMENDED_CLIP_MODELS);
+        } else {
+          html += renderTextValue(key, value);
+        }
+      }
+
+      html += `</div>`;
+    }
+
+    configSections.innerHTML = html;
+  } catch (error) {
+    console.error('[Config] Error rendering config preview:', error);
+    configSections.innerHTML = `<div class="config-error">Failed to load configuration</div>`;
+  }
+}
+
+/**
+ * Enable inline editing for a configuration value
+ * Click value → edit → Enter saves, Escape cancels
+ * @param {string} key - Configuration key to edit
+ */
+function editConfigValue(key) {
+  const row = document.querySelector(`[data-key="${key}"]`);
+  if (!row) return;
+
+  const valueSpan = row.querySelector('.config-value');
+  if (!valueSpan) return;
+
+  const currentValue = valueSpan.textContent === '[not set]'
+    ? ''
+    : (key === 'HF_TOKEN' && valueSpan.textContent === '••••••••'
+        ? ''
+        : valueSpan.textContent);
+
+  // Create input element
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = currentValue;
+  input.className = 'config-input';
+  input.placeholder = key === 'HF_TOKEN' ? 'Enter token...' : 'Enter value...';
+
+  // Save on Enter, cancel on Escape
+  input.addEventListener('keydown', async (e) => {
+    if (e.key === 'Enter') {
+      const newValue = input.value.trim();
+      await updateEnvConfig({ [key]: newValue });
+    } else if (e.key === 'Escape') {
+      await renderConfigPreview(); // Cancel and restore
+    }
+  });
+
+  // Cancel on blur (click away)
+  input.addEventListener('blur', async () => {
+    // Small delay to allow Enter key to be processed first
+    setTimeout(async () => {
+      if (document.activeElement !== input) {
+        await renderConfigPreview();
+      }
+    }, 100);
+  });
+
+  // Replace span with input
+  valueSpan.replaceWith(input);
+  input.focus();
+  input.select();
+}
+
+/**
+ * Filter configuration keys based on context
+ * Hide local-specific keys when using HuggingFace mode
+ * @param {Array<string>} keys - Keys to filter
+ * @param {Object} config - Full configuration object
+ * @returns {Array<string>} Filtered keys
+ */
+function filterKeysForContext(keys, config) {
+  const modelSource = config.FLUX_MODEL_SOURCE || 'huggingface';
+
+  // Hide local-specific keys when using HuggingFace
+  if (modelSource === 'huggingface') {
+    const hideKeys = [
+      'FLUX_MODEL_PATH',
+      'FLUX_TEXT_ENCODER_PATH',
+      'FLUX_TEXT_ENCODER_2_PATH',
+      'FLUX_VAE_PATH'
+    ];
+    return keys.filter(k => !hideKeys.includes(k));
+  }
+
+  return keys;
+}
+
+/**
+ * Render a file path dropdown for model selection
+ * @param {string} key - Configuration key
+ * @param {string} currentValue - Current value
+ * @param {Array} files - Available files from discovery API
+ * @returns {string} HTML string
+ */
+function renderFileDropdown(key, currentValue, files) {
+  const options = files.map(file => {
+    const selected = file.path === currentValue ? 'selected' : '';
+    return `<option value="${file.path}" ${selected}>${file.name}</option>`;
+  }).join('');
+
+  return `
+    <div class="config-row" data-key="${key}">
+      <span class="config-key">${key}</span> =
+      <select class="config-dropdown" onchange="updateEnvConfig({ '${key}': this.value })">
+        <option value="">-- Select file --</option>
+        ${options}
+      </select>
+      <button class="config-edit-btn" onclick="editConfigValueAsText('${key}')" title="Edit as text">✏️</button>
+    </div>
+  `;
+}
+
+/**
+ * Render an encoder dropdown
+ * @param {string} key - Configuration key
+ * @param {string} currentValue - Current value
+ * @param {Array} encoders - Available encoder files
+ * @returns {string} HTML string
+ */
+function renderEncoderDropdown(key, currentValue, encoders) {
+  const options = encoders.map(encoder => {
+    const selected = encoder.path === currentValue ? 'selected' : '';
+    return `<option value="${encoder.path}" ${selected}>${encoder.name}</option>`;
+  }).join('');
+
+  return `
+    <div class="config-row" data-key="${key}">
+      <span class="config-key">${key}</span> =
+      <select class="config-dropdown" onchange="updateEnvConfig({ '${key}': this.value })">
+        <option value="">-- Select encoder --</option>
+        ${options}
+      </select>
+      <button class="config-edit-btn" onclick="editConfigValueAsText('${key}')" title="Edit as text">✏️</button>
+    </div>
+  `;
+}
+
+/**
+ * Render a HuggingFace repository dropdown
+ * @param {string} key - Configuration key
+ * @param {string} currentValue - Current value
+ * @param {Array<string>} repos - Recommended repository names
+ * @returns {string} HTML string
+ */
+function renderRepoDropdown(key, currentValue, repos) {
+  const options = repos.map(repo => {
+    const selected = repo === currentValue ? 'selected' : '';
+    return `<option value="${repo}" ${selected}>${repo}</option>`;
+  }).join('');
+
+  // Check if current value is not in recommended list
+  const isCustom = currentValue && !repos.includes(currentValue);
+  const customOption = isCustom ? `<option value="${currentValue}" selected>${currentValue} (custom)</option>` : '';
+
+  return `
+    <div class="config-row" data-key="${key}">
+      <span class="config-key">${key}</span> =
+      <select class="config-dropdown" onchange="updateEnvConfig({ '${key}': this.value })">
+        <option value="">-- Select repository --</option>
+        ${options}
+        ${customOption}
+      </select>
+      <button class="config-edit-btn" onclick="editConfigValueAsText('${key}')" title="Edit as text">✏️</button>
+    </div>
+  `;
+}
+
+/**
+ * Render a text value with click-to-edit
+ * @param {string} key - Configuration key
+ * @param {string} value - Current value
+ * @returns {string} HTML string
+ */
+function renderTextValue(key, value) {
+  // Mask sensitive values
+  const displayValue = key === 'HF_TOKEN' && value !== '[not set]'
+    ? '••••••••'
+    : value;
+
+  return `
+    <div class="config-row" data-key="${key}">
+      <span class="config-key">${key}</span> =
+      <span class="config-value" onclick="editConfigValue('${key}')" title="Click to edit">${displayValue}</span>
+    </div>
+  `;
+}
+
+/**
+ * Edit a configuration value as text (fallback for dropdowns)
+ * @param {string} key - Configuration key to edit
+ */
+function editConfigValueAsText(key) {
+  // Same as editConfigValue, but explicitly for text editing
+  editConfigValue(key);
+}
+
+/**
+ * Show prompt to restart services when configuration changes
+ * Only shown if services are currently running
+ */
+function showServiceRestartPrompt() {
+  // Check if any services are running
+  const anyRunning = checkIfAnyServiceRunning();
+
+  if (!anyRunning) return;
+
+  // Check if notification already exists
+  if (document.querySelector('.restart-notification')) {
+    return; // Already showing
+  }
+
+  const notification = document.createElement('div');
+  notification.className = 'restart-notification';
+  notification.innerHTML = `
+    <div class="restart-notification-content">
+      <span class="restart-icon">⚠️</span>
+      <span class="restart-message">Configuration changed. Services must be restarted to use new settings.</span>
+    </div>
+    <div class="restart-buttons">
+      <button class="restart-btn restart-now" onclick="restartAllServicesAndDismiss()">Restart Now</button>
+      <button class="restart-btn restart-later" onclick="dismissRestartPrompt()">Restart Later</button>
+    </div>
+  `;
+
+  document.body.appendChild(notification);
+
+  console.log('[Config] Service restart prompt shown');
+}
+
+/**
+ * Check if any service is currently running
+ * @returns {boolean} True if any service is running
+ */
+function checkIfAnyServiceRunning() {
+  const services = ['llm', 'flux', 'vision', 'vlm'];
+
+  for (const serviceName of services) {
+    const statusElement = document.getElementById(`${serviceName}Status`);
+    if (statusElement && statusElement.textContent.includes('🟢')) {
+      return true; // At least one service is running
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Restart all services and dismiss notification
+ */
+async function restartAllServicesAndDismiss() {
+  dismissRestartPrompt();
+
+  // Stop all services
+  await stopAllLocalServices();
+
+  // Wait a moment for services to stop
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  // Start all services (using new .env values)
+  await quickStartLocalServices();
+}
+
+/**
+ * Dismiss the restart notification
+ */
+function dismissRestartPrompt() {
+  const notification = document.querySelector('.restart-notification');
+  if (notification) {
+    notification.remove();
+    console.log('[Config] Restart prompt dismissed');
+  }
+}
+
+/**
+ * Reset configuration to defaults from .env.example
+ */
+async function resetConfigToDefaults() {
+  const confirmed = confirm('Reset all configuration to defaults?\n\nCurrent .env will be backed up to .env.backup');
+
+  if (!confirmed) return;
+
+  try {
+    const response = await fetch('/api/config/env/reset', {
+      method: 'POST'
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to reset configuration');
+    }
+
+    addMessage(`✅ Configuration reset to defaults. Backup: ${result.backup}`, 'event');
+    console.log('[Config] Reset to defaults. Backup:', result.backup);
+
+    // Refresh configuration preview
+    await renderConfigPreview();
+
+    // Show restart prompt
+    showServiceRestartPrompt();
+  } catch (error) {
+    console.error('[Config] Error resetting config:', error);
+    addMessage(`✗ Failed to reset configuration: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Handle model source change (HuggingFace vs Local)
+ * Updates .env and refreshes configuration preview
+ * @param {string} source - 'huggingface' or 'local'
+ */
+async function updateModelSourceAndRefresh(source) {
+  try {
+    // Update .env
+    await updateEnvConfig({ FLUX_MODEL_SOURCE: source });
+
+    // Refresh configuration preview (will show/hide relevant fields)
+    await renderConfigPreview();
+
+    addMessage(`✅ Model source changed to: ${source}`, 'event');
+    console.log('[Config] Model source changed to:', source);
+  } catch (error) {
+    console.error('[Config] Error updating model source:', error);
+    addMessage(`✗ Failed to update model source: ${error.message}`, 'error');
+  }
+}
+
+/**
+ * Initialize configuration preview when provider modal opens
+ * Call this when showing local configuration section
+ * @param {string} mode - Provider mode: 'local' or 'openai'
+ */
+async function initializeConfigPreview(mode = 'local') {
+  try {
+    // Load and render configuration
+    await renderConfigPreview(mode);
+
+    // Load current model source from .env (only for local mode)
+    if (mode === 'local') {
+      const config = await loadEnvConfig();
+      const modelSource = config.FLUX_MODEL_SOURCE || 'huggingface';
+
+      // Set radio button to match .env value
+      const radioButtons = document.getElementsByName('fluxModelSource');
+      for (const radio of radioButtons) {
+        if (radio.value === modelSource) {
+          radio.checked = true;
+          break;
+        }
+      }
+    }
+
+    console.log('[Config] Configuration preview initialized');
+  } catch (error) {
+    console.error('[Config] Error initializing config preview:', error);
+  }
+}
+
+/**
  * Initialize mode card highlighting based on current provider selections
  */
 function initializeModeCardHighlighting() {
@@ -3056,8 +3092,10 @@ function initializeModeCardHighlighting() {
     localCard.style.border = '2px solid #81c784';
     localCard.style.boxShadow = 'none';
 
-    // Hide config section for OpenAI mode
-    configSection.style.display = 'none';
+    // Show config section for OpenAI mode (displays OpenAI configuration from .env)
+    configSection.style.display = 'block';
+    localConfigSection.style.display = 'none';
+    advancedConfigSection.style.display = 'none';
   } else if (isLocalMode) {
     // Highlight Local card
     localCard.style.border = '3px solid #388e3c';
@@ -3084,6 +3122,107 @@ function initializeModeCardHighlighting() {
     configSection.style.display = 'none';
     localConfigSection.style.display = 'none';
     advancedConfigSection.style.display = 'none';
+  }
+}
+
+/**
+ * Update mode card highlighting based on provider values (called from loadProviderStatus)
+ */
+function updateProviderHighlight(llm, image, vision) {
+  const openaiCard = document.getElementById('openaiModeCard');
+  const localCard = document.getElementById('localModeCard');
+  const configSection = document.getElementById('configSection');
+  const localConfigSection = document.getElementById('localConfigSection');
+  const advancedConfigSection = document.getElementById('advancedConfigSection');
+
+  if (!openaiCard || !localCard) return; // Modal not open
+
+  // Determine if user is in OpenAI mode or Local mode
+  const isOpenAIMode = llm === 'openai' && (image === 'openai' || image === 'dalle') && (vision === 'openai' || vision === 'gpt-vision');
+  const isLocalMode = llm === 'local-llm' && image === 'flux' && vision === 'local';
+
+  if (isOpenAIMode) {
+    // Highlight OpenAI card
+    openaiCard.style.border = '3px solid #1976d2';
+    openaiCard.style.boxShadow = '0 4px 12px rgba(25, 118, 210, 0.3)';
+    localCard.style.border = '2px solid #81c784';
+    localCard.style.boxShadow = 'none';
+
+    if (configSection) configSection.style.display = 'block';
+    if (localConfigSection) localConfigSection.style.display = 'none';
+    if (advancedConfigSection) advancedConfigSection.style.display = 'none';
+  } else if (isLocalMode) {
+    // Highlight Local card
+    localCard.style.border = '3px solid #388e3c';
+    localCard.style.boxShadow = '0 4px 12px rgba(56, 142, 60, 0.3)';
+    openaiCard.style.border = '2px solid #90caf9';
+    openaiCard.style.boxShadow = 'none';
+
+    if (configSection) configSection.style.display = 'block';
+    if (localConfigSection) localConfigSection.style.display = 'block';
+    if (advancedConfigSection) advancedConfigSection.style.display = 'none';
+
+    updateServiceStatuses();
+  } else {
+    // Mixed mode - no card highlighted
+    openaiCard.style.border = '2px solid #90caf9';
+    openaiCard.style.boxShadow = 'none';
+    localCard.style.border = '2px solid #81c784';
+    localCard.style.boxShadow = 'none';
+  }
+}
+
+/**
+ * Load HuggingFace token from localStorage
+ */
+function loadHfToken() {
+  return localStorage.getItem('hfToken') || '';
+}
+
+/**
+ * Get HuggingFace token (from input field or localStorage)
+ */
+function getHfToken() {
+  const hfTokenInput = document.getElementById('hfTokenInput');
+  if (hfTokenInput && hfTokenInput.value) {
+    return hfTokenInput.value;
+  }
+  return loadHfToken();
+}
+
+/**
+ * Save HuggingFace token to localStorage
+ */
+function saveHfToken(token) {
+  if (token) {
+    localStorage.setItem('hfToken', token);
+  } else {
+    localStorage.removeItem('hfToken');
+  }
+}
+
+/**
+ * Update HuggingFace token status indicator
+ */
+function updateHfTokenStatus(fluxHealth) {
+  const statusEl = document.getElementById('hfTokenStatus');
+  if (!statusEl) return;
+
+  if (!fluxHealth) {
+    statusEl.textContent = '⚪ Unknown';
+    statusEl.style.color = '#666';
+    return;
+  }
+
+  if (fluxHealth.available) {
+    statusEl.textContent = '✓ Valid';
+    statusEl.style.color = '#4CAF50';
+  } else if (fluxHealth.error?.includes('token')) {
+    statusEl.textContent = '✗ Invalid token';
+    statusEl.style.color = '#f44336';
+  } else {
+    statusEl.textContent = '⚪ Not checked';
+    statusEl.style.color = '#666';
   }
 }
 
@@ -3157,6 +3296,7 @@ async function loadProviderStatus() {
     }
 
     const data = await response.json();
+    console.log('[Provider Settings] loadProviderStatus response:', data.active);
 
     // Update environment status
     const envStatus = document.getElementById('envStatus');
@@ -3190,6 +3330,9 @@ async function loadProviderStatus() {
 
     // Update provider indicator in header
     updateProviderIndicator(data.active);
+
+    // Update provider card highlighting and config sections
+    updateProviderHighlight(data.active.llm, data.active.image, data.active.vision);
 
   } catch (error) {
     console.error('[Provider Settings] Failed to load status:', error);
@@ -3230,6 +3373,8 @@ function updateHealthIndicator(elementId, health) {
  * Hides/shows API key section and model selection based on whether local providers are active
  */
 function updateMainFormForProviders(activeProviders) {
+  console.log('[UI] updateMainFormForProviders called with:', activeProviders);
+
   // Check if all providers are local (no OpenAI needed)
   const isFullyLocal = activeProviders.llm === 'local-llm' &&
                        activeProviders.image === 'flux' &&
@@ -3242,6 +3387,8 @@ function updateMainFormForProviders(activeProviders) {
                       activeProviders.vision === 'openai' ||
                       activeProviders.vision === 'gpt-vision';
 
+  console.log('[UI] isFullyLocal:', isFullyLocal, 'needsOpenAI:', needsOpenAI);
+
   // Update global state for startBeamSearch to use
   needsOpenAIKey = needsOpenAI;
 
@@ -3251,19 +3398,30 @@ function updateMainFormForProviders(activeProviders) {
   const apiKeyHelp = document.getElementById('apiKeyHelp');
   const localModeNote = document.getElementById('localModeNote');
 
+  console.log('[UI] Elements found:', {
+    apiKeyInput: !!apiKeyInput,
+    apiKeyRequired: !!apiKeyRequired,
+    apiKeyHelp: !!apiKeyHelp,
+    localModeNote: !!localModeNote
+  });
+
   if (needsOpenAI) {
     // OpenAI is needed - show required indicator
+    console.log('[UI] Setting OpenAI mode display');
     if (apiKeyRequired) apiKeyRequired.style.display = 'inline';
     if (apiKeyHelp) apiKeyHelp.style.display = 'block';
     if (localModeNote) localModeNote.style.display = 'none';
     if (apiKeyInput) apiKeyInput.placeholder = 'sk-... (required)';
   } else {
     // Fully local - API key not required
+    console.log('[UI] Setting Local mode display');
     if (apiKeyRequired) apiKeyRequired.style.display = 'none';
     if (apiKeyHelp) apiKeyHelp.style.display = 'none';
     if (localModeNote) localModeNote.style.display = 'block';
     if (apiKeyInput) apiKeyInput.placeholder = 'Not required for local providers';
   }
+
+  console.log('[UI] After update - localModeNote.style.display:', localModeNote?.style.display);
 
   // Update model selection section
   const modelSection = document.getElementById('modelSelectionSection');
@@ -3279,10 +3437,205 @@ function updateMainFormForProviders(activeProviders) {
 /**
  * Apply provider settings changes
  */
+
+/**
+ * Default encoder and model paths for local mode
+ */
+const DEFAULT_CLIP_ENCODER_PATH = 'services/encoders/clip_l.safetensors';
+const DEFAULT_T5_ENCODER_PATH = 'services/encoders/model.safetensors';
+const DEFAULT_VAE_PATH = 'services/encoders/ae.safetensors';
+
+/**
+ * Populate local mode with default settings (encoders, ranking mode, etc.)
+ * This makes local mode "one-click ready" for users
+ */
+function populateLocalDefaults() {
+  console.log('[UI] Populating local mode defaults...');
+
+  // 1. Set default encoder paths in localStorage
+  localStorage.setItem('fluxTextEncoderPath', DEFAULT_CLIP_ENCODER_PATH);
+  localStorage.setItem('fluxTextEncoder2Path', DEFAULT_T5_ENCODER_PATH);
+  localStorage.setItem('fluxVaePath', DEFAULT_VAE_PATH);
+
+  // 2. Enable local encoders checkbox
+  const useLocalEncodersCheckbox = document.getElementById('useLocalEncoders');
+  if (useLocalEncodersCheckbox) {
+    useLocalEncodersCheckbox.checked = true;
+    localStorage.setItem('useLocalEncoders', 'true');
+  }
+
+  // 3. Show encoder input fields
+  const fluxEncoderInputs = document.getElementById('fluxEncoderInputs');
+  if (fluxEncoderInputs) {
+    fluxEncoderInputs.style.display = 'block';
+  }
+
+  // 4. Populate input field values with defaults
+  const clipInput = document.getElementById('fluxTextEncoderPath');
+  const t5Input = document.getElementById('fluxTextEncoder2Path');
+  const vaeInput = document.getElementById('fluxVaePath');
+
+  if (clipInput) clipInput.value = DEFAULT_CLIP_ENCODER_PATH;
+  if (t5Input) t5Input.value = DEFAULT_T5_ENCODER_PATH;
+  if (vaeInput) vaeInput.value = DEFAULT_VAE_PATH;
+
+  // 5. Show saved encoder display section
+  const savedEncoderDisplay = document.getElementById('fluxSavedEncoderDisplay');
+  if (savedEncoderDisplay) {
+    savedEncoderDisplay.style.display = 'block';
+
+    // Update display values
+    const clipDisplay = document.getElementById('fluxSavedClipPath');
+    const t5Display = document.getElementById('fluxSavedT5Path');
+    const vaeDisplay = document.getElementById('fluxSavedVaePath');
+
+    if (clipDisplay) clipDisplay.textContent = DEFAULT_CLIP_ENCODER_PATH;
+    if (t5Display) t5Display.textContent = DEFAULT_T5_ENCODER_PATH;
+    if (vaeDisplay) vaeDisplay.textContent = DEFAULT_VAE_PATH;
+
+    // Show clear button
+    const clearButton = document.getElementById('fluxClearEncodersBtn');
+    if (clearButton) clearButton.style.display = 'inline-block';
+  }
+
+  // 6. Set ranking mode to tournament (VLM) - always in local mode
+  const vlmRadioButton = document.querySelector('input[name="rankingMode"][value="vlm"]');
+  if (vlmRadioButton) {
+    vlmRadioButton.checked = true;
+  }
+
+  // Update configuration status display (if function exists)
+  if (typeof updateFluxConfigStatus === 'function') {
+    updateFluxConfigStatus();
+  }
+
+  console.log('[UI] Local mode defaults populated successfully');
+}
+
+/**
+ * Handle Flux model source change (HuggingFace <-> Local File)
+ * When switching to local model, auto-enable encoders and populate defaults
+ */
+function handleFluxModelSourceChange(value) {
+  console.log('[UI] Flux model source changed to:', value);
+
+  // Show/hide appropriate sections based on selection
+  const hfModelSection = document.getElementById('hfModelSection');
+  const localModelSection = document.getElementById('localModelSection');
+
+  if (value === 'huggingface') {
+    if (hfModelSection) hfModelSection.style.display = 'block';
+    if (localModelSection) localModelSection.style.display = 'none';
+  } else if (value === 'local') {
+    if (hfModelSection) hfModelSection.style.display = 'none';
+    if (localModelSection) localModelSection.style.display = 'block';
+
+    // CRITICAL: Auto-enable local encoders when switching to local model
+    // This ensures the custom checkpoint has the encoders it needs
+    const useLocalEncodersCheckbox = document.getElementById('useLocalEncoders');
+    if (useLocalEncodersCheckbox) {
+      useLocalEncodersCheckbox.checked = true;
+      localStorage.setItem('useLocalEncoders', 'true');
+      console.log('[UI] Auto-enabled local encoders for local model');
+    }
+
+    // Show encoder input fields
+    const fluxEncoderInputs = document.getElementById('fluxEncoderInputs');
+    if (fluxEncoderInputs) {
+      fluxEncoderInputs.style.display = 'block';
+    }
+
+    // Populate encoder paths with defaults (if not already set)
+    const clipInput = document.getElementById('fluxTextEncoderPath');
+    const t5Input = document.getElementById('fluxTextEncoder2Path');
+    const vaeInput = document.getElementById('fluxVaePath');
+
+    // Only populate if empty (don't overwrite user's existing settings)
+    if (clipInput && !clipInput.value) {
+      clipInput.value = DEFAULT_CLIP_ENCODER_PATH;
+    }
+    if (t5Input && !t5Input.value) {
+      t5Input.value = DEFAULT_T5_ENCODER_PATH;
+    }
+    if (vaeInput && !vaeInput.value) {
+      vaeInput.value = DEFAULT_VAE_PATH;
+    }
+
+    // Update localStorage with defaults if not set
+    if (!localStorage.getItem('fluxTextEncoderPath')) {
+      localStorage.setItem('fluxTextEncoderPath', DEFAULT_CLIP_ENCODER_PATH);
+    }
+    if (!localStorage.getItem('fluxTextEncoder2Path')) {
+      localStorage.setItem('fluxTextEncoder2Path', DEFAULT_T5_ENCODER_PATH);
+    }
+    if (!localStorage.getItem('fluxVaePath')) {
+      localStorage.setItem('fluxVaePath', DEFAULT_VAE_PATH);
+    }
+
+    // Show saved encoder display
+    const savedEncoderDisplay = document.getElementById('fluxSavedEncoderDisplay');
+    if (savedEncoderDisplay) {
+      savedEncoderDisplay.style.display = 'block';
+
+      // Update display values
+      const clipDisplay = document.getElementById('fluxSavedClipPath');
+      const t5Display = document.getElementById('fluxSavedT5Path');
+      const vaeDisplay = document.getElementById('fluxSavedVaePath');
+
+      if (clipDisplay) clipDisplay.textContent = clipInput?.value || DEFAULT_CLIP_ENCODER_PATH;
+      if (t5Display) t5Display.textContent = t5Input?.value || DEFAULT_T5_ENCODER_PATH;
+      if (vaeDisplay) vaeDisplay.textContent = vaeInput?.value || DEFAULT_VAE_PATH;
+
+      // Show clear button
+      const clearButton = document.getElementById('fluxClearEncodersBtn');
+      if (clearButton) clearButton.style.display = 'inline-block';
+    }
+
+    console.log('[UI] Populated encoder defaults for local model');
+  }
+}
+
+/**
+ * Validate Flux encoder paths are configured for local models
+ * Prevents service start with incomplete configuration
+ * @returns {Object} { valid: boolean, error?: string }
+ */
+function validateFluxEncoderPaths() {
+  // Check if using local model
+  const fluxModelSource = document.querySelector('input[name="fluxModelSource"]:checked');
+  const isLocalModel = fluxModelSource && fluxModelSource.value === 'local';
+
+  if (!isLocalModel) {
+    // Using HuggingFace model - no validation needed
+    return { valid: true };
+  }
+
+  // Local model - check encoder paths are configured
+  const textEncoderPath = localStorage.getItem('fluxTextEncoderPath');
+  const textEncoder2Path = localStorage.getItem('fluxTextEncoder2Path');
+  const vaePath = localStorage.getItem('fluxVaePath');
+
+  const missingPaths = [];
+  if (!textEncoderPath) missingPaths.push('CLIP-L encoder');
+  if (!textEncoder2Path) missingPaths.push('T5-XXL encoder');
+  if (!vaePath) missingPaths.push('VAE encoder');
+
+  if (missingPaths.length > 0) {
+    return {
+      valid: false,
+      error: `Local Flux model requires encoder paths.\n\nMissing: ${missingPaths.join(', ')}\n\nThese paths should auto-populate when selecting a local model. If they're missing, try re-selecting your model.`
+    };
+  }
+
+  return { valid: true };
+}
+
 /**
  * Select mode (OpenAI or Local) and update all providers accordingly
  */
 function selectMode(mode) {
+  console.log('[UI] selectMode called with:', mode);
+
   // Update mode card visuals
   const openaiCard = document.getElementById('openaiModeCard');
   const localCard = document.getElementById('localModeCard');
@@ -3303,8 +3656,13 @@ function selectMode(mode) {
     document.getElementById('visionProvider').value = 'openai';
     document.getElementById('rankingMode').value = 'scoring'; // OpenAI doesn't use VLM
 
-    // Hide configuration (OpenAI needs no local setup)
-    configSection.style.display = 'none';
+    // Show OpenAI configuration from .env
+    configSection.style.display = 'block';
+    localConfigSection.style.display = 'none'; // Hide local-specific sections
+    advancedConfigSection.style.display = 'none';
+
+    // Initialize configuration preview from .env with OpenAI mode
+    initializeConfigPreview('openai');
 
     // Stop all local services when switching to OpenAI mode
     stopAllLocalServices();
@@ -3319,12 +3677,19 @@ function selectMode(mode) {
     document.getElementById('llmProvider').value = 'local-llm';
     document.getElementById('imageProvider').value = 'flux';
     document.getElementById('visionProvider').value = 'local';
-    document.getElementById('rankingMode').value = 'vlm'; // Local can use VLM
+    document.getElementById('rankingMode').value = 'vlm'; // Local always uses VLM tournament mode
+
+    // CRITICAL: Populate default settings for local mode (encoders, etc.)
+    // This makes local mode "one-click ready"
+    populateLocalDefaults();
 
     // Show local configuration with checkboxes
     configSection.style.display = 'block';
     localConfigSection.style.display = 'block';
     advancedConfigSection.style.display = 'none';
+
+    // Initialize configuration preview from .env
+    initializeConfigPreview();
 
     // Update service status indicators
     updateServiceStatuses();
@@ -3399,6 +3764,17 @@ async function startServiceInModal(serviceName) {
     const textEncoderPath = localStorage.getItem('fluxTextEncoderPath');
     const textEncoder2Path = localStorage.getItem('fluxTextEncoder2Path');
     const vaePath = localStorage.getItem('fluxVaePath');
+
+    // Validate Flux encoder paths before starting
+    if (serviceName === 'flux') {
+      const validation = validateFluxEncoderPaths();
+      if (!validation.valid) {
+        console.error(`[UI Modal] Flux encoder validation failed: ${validation.error}`);
+        setServiceStatus(serviceName, 'error', 'Configuration error');
+        alert(`Cannot start Flux service:\n\n${validation.error}`);
+        return;
+      }
+    }
 
     // Build request body with available settings
     const requestBody = { hfToken };
@@ -3673,6 +4049,8 @@ async function applyProviderSettings() {
     const image = document.getElementById('imageProvider').value;
     const vision = document.getElementById('visionProvider').value;
 
+    console.log('[Provider Settings] Sending switch request with:', { llm, image, vision });
+
     const response = await fetch('/api/providers/switch', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -3685,16 +4063,28 @@ async function applyProviderSettings() {
     }
 
     const data = await response.json();
+    console.log('[Provider Settings] Switch response:', data);
 
     // Show success message
     addMessage(`✓ Providers updated: LLM=${data.active.llm}, Image=${data.active.image}, Vision=${data.active.vision}`, 'event');
 
-    // Update indicator and close modal
+    // Update indicator
     updateProviderIndicator(data.active);
 
     // Update main form (API key requirements, model selection visibility)
+    console.log('[Provider Settings] Calling updateMainFormForProviders with:', data.active);
     updateMainFormForProviders(data.active);
 
+    // Refresh provider status and config display
+    await loadProviderStatus();
+
+    // Update service status indicators if in local mode
+    const isLocal = data.active.llm === 'local-llm' || data.active.image === 'flux' || data.active.vision === 'local';
+    if (isLocal) {
+      await updateServiceStatuses();
+    }
+
+    // Close modal after everything is refreshed
     closeProviderModal();
 
   } catch (error) {
@@ -3996,13 +4386,6 @@ async function downloadModel(type, modelName) {
 }
 
 /**
- * Refresh model status
- */
-async function refreshModelStatus() {
-  await loadModelStatus();
-}
-
-/**
  * Service Control Functions
  */
 
@@ -4108,187 +4491,63 @@ async function stopService(serviceName) {
 }
 
 /**
- * HF Token Management
- */
-
-/**
- * Save HF token to localStorage
- */
-function saveHfToken(token) {
-  if (token && token.startsWith('hf_')) {
-    localStorage.setItem('hfToken', token);
-    return true;
-  }
-  return false;
-}
-
-/**
- * Load HF token from localStorage
- */
-function loadHfToken() {
-  return localStorage.getItem('hfToken') || '';
-}
-
-/**
- * Get HF token (alias for loadHfToken)
- */
-function getHfToken() {
-  return loadHfToken();
-}
-
-/**
- * Toggle HF token visibility
- */
-function toggleHfTokenVisibility() {
-  const input = document.getElementById('hfTokenInput');
-  const icon = document.getElementById('hfTokenEyeIcon');
-
-  if (input.type === 'password') {
-    input.type = 'text';
-    icon.className = 'fas fa-eye-slash';
-  } else {
-    input.type = 'password';
-    icon.className = 'fas fa-eye';
-  }
-}
-
-/**
- * Update HF token status indicator
- */
-function updateHfTokenStatus(fluxHealth) {
-  const statusEl = document.getElementById('hfTokenStatus');
-  const token = document.getElementById('hfTokenInput')?.value;
-
-  if (!statusEl) return;
-
-  if (!token) {
-    statusEl.innerHTML = '<span style="color: #ff9800;"><i class="fas fa-exclamation-triangle"></i> No token set - required for Flux</span>';
-  } else if (fluxHealth?.hf_authenticated) {
-    statusEl.innerHTML = '<span style="color: #4CAF50;"><i class="fas fa-check-circle"></i> HF authenticated</span>';
-  } else {
-    statusEl.innerHTML = '<span style="color: #2196F3;"><i class="fas fa-info-circle"></i> Token set - will be used on service start</span>';
-  }
-}
-
-/**
  * Quick Start All Local Services
- * Starts Flux, Vision, and LLM services with HF token
+ * Simplified version that reads configuration from .env
  */
 async function quickStartLocalServices() {
-  const btn = document.querySelector('button[onclick*="quickStartLocalServices"]');
-  const hfTokenInput = document.getElementById('hfTokenInput');
-  const hfToken = hfTokenInput?.value?.trim();
-
-  // Save token to localStorage if valid
-  if (hfToken) {
-    if (!hfToken.startsWith('hf_')) {
-      console.warn('[UI] HF token must start with hf_');
-      return;
-    }
-    saveHfToken(hfToken);
-  }
-
-  // Show loading state
-  if (btn) {
-    btn.disabled = true;
-    btn.style.opacity = '0.7';
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '⏳ Starting Services...';
-
-    // Restore button after completion
-    const restoreButton = () => {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-      btn.innerHTML = originalText;
-    };
-
-    setTimeout(restoreButton, 10000); // Auto-restore after 10s
-  }
-
   try {
-    console.log('[UI] Quick starting all local services...');
+    addMessage('🚀 Starting all local services...', 'info');
 
-    const services = ['llm', 'flux', 'vision', 'vlm'];
+    const services = ['flux', 'llm', 'vision', 'vlm'];
+    const startPromises = services.map(serviceName =>
+      fetch(`/api/services/${serviceName}/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}) // Services read from process.env/.env
+      }).then(res => res.json()).catch(err => ({ error: err.message }))
+    );
 
-    // Get LoRA settings from localStorage (if set)
-    const loraPath = localStorage.getItem('loraPath');
-    const loraScale = localStorage.getItem('loraScale');
+    const results = await Promise.all(startPromises);
 
-    // Set all services to "starting" state immediately
-    services.forEach(serviceName => {
-      setServiceStatus(serviceName, 'starting', 'Starting...');
-    });
+    // Count successes and failures
+    let started = 0;
+    let alreadyRunning = 0;
+    let failed = 0;
 
-    // Start services in parallel using the new service control API
-    const startPromises = services.map(async (serviceName) => {
-      try {
-        // Build request body with available settings
-        const requestBody = { hfToken };
-        if (loraPath) requestBody.loraPath = loraPath;
-        if (loraScale) requestBody.loraScale = loraScale;
-
-        const res = await fetch(`/api/services/${serviceName}/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody)
-        });
-
-        const result = await res.json();
-
-        if (res.ok) {
-          // Service started successfully
-          return { service: serviceName, status: 'started', pid: result.pid, ...result };
-        } else if (res.status === 409) {
-          // Service already running
-          return { service: serviceName, status: 'already-running', ...result };
-        } else {
-          // Actual error
-          return { service: serviceName, status: 'error', error: result.error || 'Unknown error' };
-        }
-      } catch (error) {
-        return { service: serviceName, status: 'error', error: error.message };
-      }
-    });
-
-    // Wait for all services to start (process spawned, but may not be ready)
-    const results = await Promise.allSettled(startPromises);
-
-    // Log results and poll each service that started or was already running
-    let successCount = 0;
-    let failCount = 0;
-    const pollPromises = [];
-
-    results.forEach(({ value }) => {
-      if (value.status === 'started') {
-        successCount++;
-        console.log(`[UI] ${value.service} process started (PID: ${value.pid}), polling for readiness...`);
-        // Poll each service individually to detect when ready
-        pollPromises.push(pollServiceUntilReady(value.service));
-      } else if (value.status === 'already-running') {
-        successCount++;
-        console.log(`[UI] ${value.service} is already running, confirming health...`);
-        // Quick poll to confirm it's healthy
-        pollPromises.push(pollServiceUntilReady(value.service, 3));
+    results.forEach((result, idx) => {
+      const serviceName = services[idx];
+      if (result.status === 'started') {
+        started++;
+        addMessage(`✅ ${serviceName} service started (PID: ${result.pid})`, 'event');
+      } else if (result.status === 'already-running') {
+        alreadyRunning++;
+        addMessage(`ℹ️ ${serviceName} is already running`, 'info');
       } else {
-        failCount++;
-        console.warn(`[UI] ${value.service} failed to start:`, value.error || 'Unknown error');
-        setServiceStatus(value.service, 'error', `Failed: ${value.error || 'Unknown'}`);
+        failed++;
+        addMessage(`❌ ${serviceName} failed: ${result.error || result.message || 'Unknown error'}`, 'error');
       }
     });
 
-    // Wait for all services to become ready (or timeout)
-    await Promise.allSettled(pollPromises);
+    // Give services a moment to fully initialize before checking status
+    await new Promise(resolve => setTimeout(resolve, 1500));
 
-    console.log(`[UI] Quick start complete: ${successCount} processes started, ${failCount} failed`);
+    // Update service status indicators (green/red buttons)
+    await updateServiceStatuses();
+
+    const total = started + alreadyRunning;
+    if (total > 0) {
+      addMessage(`✅ Quick start complete: ${total}/${services.length} services running`, 'event');
+
+      // Auto-switch to local mode UI since we just started local services
+      // This sets dropdowns and highlights the Local Mode card
+      selectMode('local');
+
+      addMessage('ℹ️ Switched to Local Mode - click "Apply Changes" to confirm', 'info');
+    }
 
   } catch (error) {
     console.error('[UI] Error during quick start:', error);
-  } finally {
-    // Restore button state
-    if (btn) {
-      btn.disabled = false;
-      btn.style.opacity = '1';
-    }
+    addMessage(`❌ Quick start error: ${error.message}`, 'error');
   }
 }
 
