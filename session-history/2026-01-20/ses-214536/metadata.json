@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-214536",
+  "timestamp": "2026-01-21T05:45:36.605Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Bathed in the warm, golden hues of twilight, a breathtaking sunset unfolds above towering mountains. The sky is a vibrant canvas, painted with fiery oranges and reds that slowly fade into gentle purples and blues. Each mountain peak stands tall and proud against the backdrop of the setting sun, their rugged faces illuminated by the last rays of sunlight before being enveloped in the cool darkness of night. The crisp mountain air carries a sense of tranquility and peacefulness, as the gentle rustling of leaves and soft chirping of crickets provide the perfect soundtrack for this breathtaking moment in nature.",
+          "howPrompt": "As the sun begins to set, the mountains are bathed in a warm, golden glow. The vibrant orange and pink hues dance across their peaks, creating an ethereal atmosphere. The long, sweeping composition draws the viewer's eye from the bottom of the frame up to the brilliant sky above. Shadows stretch lazily across the landscape, adding depth and texture to the scene. This style evokes feelings of peacefulness and tranquility, reminiscent of a romantic sunset in a movie or a stunning photograph.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, a breathtaking display of colors illuminates the sky over towering mountains. The once bright blue expanse transforms into an intricate tapestry of pink, orange, purple, and gold hues that dance across the heavens. Each mountain peak, bathed in the warm glow of the setting sun, stands out like a regal sentinel against the deepening indigo backdrop of the night. The gentle breeze carries the crisp, clean scent of pine and wildflowers, mingling with the faint sound of a nearby babbling brook, creating an atmosphere of peace and tranquility that envelopes the viewer in its serene embrace.",
+          "howPrompt": "As the sun begins to set, a warm, golden light bathes the majestic mountains in a rich and inviting glow. The composition is artfully framed with the mountain peaks reaching toward the sky, their jagged edges silhouetted against the brilliant orange and pink hues. A gentle breeze ripples the water's surface below, reflecting the breathtaking spectacle. The atmosphere is serene yet filled with a profound sense of wonder as nature puts on its most spectacular display.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

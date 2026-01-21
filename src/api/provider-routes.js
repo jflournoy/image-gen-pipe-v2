@@ -1526,10 +1526,12 @@ router.get('/flux/discovery', async (req, res) => {
     const projectRoot = path.join(__dirname, '../../');
     const checkpointsDir = path.join(projectRoot, 'services/checkpoints');
     const encodersDir = path.join(projectRoot, 'services/encoders');
+    const lorasDir = path.join(projectRoot, 'services/loras');
 
-    // Discover available models and encoders
+    // Discover available models, encoders, and LoRAs
     const models = await discoverFiles(checkpointsDir, /\.safetensors$/i);
     const encoderFiles = await discoverFiles(encodersDir, /\.safetensors$/i);
+    const loraFiles = await discoverFiles(lorasDir, /\.safetensors$/i);
 
     // Extract encoder types from filenames
     const encoders = {
@@ -1554,10 +1556,15 @@ router.get('/flux/discovery', async (req, res) => {
         };
         return acc;
       }, {}),
+      loras: loraFiles.map(l => ({
+        name: l,
+        path: `services/loras/${l}`
+      })),
       presets: presets,
       directories: {
         models: checkpointsDir,
-        encoders: encodersDir
+        encoders: encodersDir,
+        loras: lorasDir
       }
     });
   } catch (error) {

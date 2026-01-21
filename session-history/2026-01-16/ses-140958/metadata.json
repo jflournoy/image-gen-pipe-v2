@@ -1,0 +1,76 @@
+{
+  "sessionId": "ses-140958",
+  "timestamp": "2026-01-16T22:09:58.793Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 4,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the last sliver of sun dips below the distant mountain range, a kaleidoscope of colors illuminates the sky in a breathtaking display. The once-clear blue expands to pink and orange hues, melting into the deepening indigo and violet shadows. The tranquil silence is punctuated by the gentle breeze that rustles through the branches of the trees, their leaves bathed in golden light as they sway softly against the backdrop of the majestic mountains. The air carries a sweet, crisp scent of pine mingled with the faintly sweet fragrance of autumnal blossoms, adding an extra layer of enchantment to this mesmerizing scene, inviting one to pause and savor the moment in quiet reverence.",
+          "howPrompt": "As the sun begins to dip below the horizon, a riot of warm colors explodes across the sky. The once blue expanse is now painted in hues of orange, pink, and red, each shade blending seamlessly into the next. Long, angular shadows stretch out from the craggy mountain peaks as the light grows softer and more diffuse. The jagged silhouettes of the mountains stand in stark contrast to the soft, ethereal sky, a dynamic tension that captures the viewer's attention. A subtle golden glow filters through the trees at the base of the mountains, casting an inviting warmth over the scene. This breathtaking visual style evokes a sense of tranquility and wonder, as if inviting us to pause and savor the fleeting beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day draws to a close, the sky ignites in a spectacular display of colors. The sun, a radiant orb of orange and red, slowly sinks behind the majestic mountains, casting long, dancing shadows across the tranquil landscape below. The air is filled with the sweet scent of pine and wildflowers, as the wind gently rustles through the trees. The stillness of the moment is only broken by the gentle hooting of an owl in the distance, adding to the sense of peace and serenity that envelops the scene. A breathtaking sunset over mountains, a visual feast for the senses, inviting one to pause and appreciate the beauty and wonder of nature.",
+          "howPrompt": "Imagine a captivating scene of a breathtaking sunset, painted across the vast canvas of towering mountains. The golden sun dips below the horizon, casting long, dramatic shadows over the rugged peaks, their jagged edges illuminated in the soft, warm light. The color palette is a stunning blend of oranges, pinks, and purples, reflecting off the tranquil lake nestled at their base. A gentle breeze creates ripples on the water, while the air is filled with the sweet scent of wildflowers. The texture of the image is rich and vibrant, evoking a sense of peace and serenity. This visual style masterfully encapsulates the beauty and majesty of nature at its finest.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 2,
+          "parentId": null,
+          "whatPrompt": "As the day comes to a close, the sky is set ablaze with hues of orange, pink, and purple. The sun dips below the horizon, casting long shadows on the rugged mountains. Majestic peaks stretch towards the heavens, their craggy edges illuminated by the last rays of sunlight. A gentle breeze rustles through the trees, carrying the sweet scent of pine and wildflowers. The tranquil scene is bathed in an ethereal glow, invoking a sense of peace and wonder at nature's grand display.",
+          "howPrompt": "In this captivating visual style, the sun casts a warm orange and pink glow over the towering mountains, as if painting them with vibrant hues. The composition is carefully balanced, with the sun sinking just beyond the mountain peaks in the distance. The atmospheric scene is enriched by long shadows stretching across the landscape, adding depth and texture to the image. A tranquil feeling pervades, as if inviting one to pause and appreciate the natural beauty unfolding before their eyes. This style evokes a sense of serene wonder, reminiscent of the cinematic panoramic vistas in films like \"The Revenant\" or \"The Good, the Bad and the Ugly.\"",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 3,
+          "parentId": null,
+          "whatPrompt": "As the golden sun dips below the horizon, it sets ablaze a breathtaking tableau of vibrant colors over towering mountains. The peaks, once bathed in the stark daylight, are now kissed by an ethereal glow that paints their faces with hues of pink, orange, and red. A gentle breeze stirs the leaves on the trees at their base, rustling them in a soothing lullaby as twilight descends, enveloping the scene in a tranquil mood, where nature's symphony of colors plays out in a breathtaking spectacle of serenity.",
+          "howPrompt": "As the sun slowly descends behind majestic mountains, the sky ignites with an explosion of warm, rich colors. The vibrant hues of orange, pink, and purple cascade down the horizon, creating a breathtaking backdrop. Long shadows elongate across the rugged terrain, adding depth and texture to the landscape. The serene atmosphere is filled with the soft whispers of wind, evoking feelings of tranquility and awe. The photograph captures the essence of a stunning sunset over mountains, showcasing the raw beauty of nature.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

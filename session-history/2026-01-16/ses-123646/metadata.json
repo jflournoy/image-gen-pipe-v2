@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-123646",
+  "timestamp": "2026-01-16T20:36:46.519Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the golden orb of the sun descends below the horizon, it sets ablaze the breathtaking vista of towering mountains. The sky is awash in hues of fiery orange, rich reds, and deep purples as the last vestiges of sunlight caress the jagged peaks. The cool evening breeze carries with it the scent of pine and wildflowers, creating a serene ambiance that envelops you completely. A sense of tranquility settles over the land, inviting one to pause and savor the breathtaking spectacle of nature in all its splendor.",
+          "howPrompt": "As the sun slowly descends behind the majestic mountains, a riot of warm hues cascades across the horizon. The sky transforms into an ethereal canvas, where shimmering gold and fiery orange tones intermingle, creating a breathtaking display that evokes a sense of tranquility and awe. The jagged mountain peaks, bathed in the golden glow, stand tall against the deepening blue backdrop as their silhouettes become increasingly defined. This visual style captures the serene beauty of nature at twilight, with a color palette inspired by the vivid sunset and the raw texture of the mountains.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, the sky is painted with hues of orange, pink, and purple. The mountains in the distance stand tall and majestic, their peaks dusted with snow that glistens in the fading light. The air carries the scent of pine trees and wildflowers, and a gentle breeze rustles through the leaves. Birds chirp softly as they settle down for the night, and the serene beauty of the scene brings a sense of peace and tranquility.",
+          "howPrompt": "In the vast expanse of the horizon, a breathtaking sunset unfolds. The sky is ablaze with a riotous fusion of warm oranges, reds, and pinks that cascade down from the heavens, casting a golden glow over the towering mountains in the foreground. Each peak is etched with intricate texture, their craggy surfaces illuminated by the last rays of sunlight. The scene is bathed in soft, diffused light that sets the stage for an ethereal, tranquil atmosphere. This breathtaking tableau is a testament to the power and beauty of nature's ever-evolving canvas.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

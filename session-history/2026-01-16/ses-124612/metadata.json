@@ -1,0 +1,15 @@
+{
+  "sessionId": "ses-124612",
+  "timestamp": "2026-01-16T20:46:12.942Z",
+  "userPrompt": "test",
+  "config": {
+    "beamWidth": 1,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.7,
+    "temperature": 0.7
+  },
+  "iterations": [],
+  "finalWinner": null,
+  "lineage": null
+}

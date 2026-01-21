@@ -1,0 +1,100 @@
+{
+  "sessionId": "ses-142700",
+  "timestamp": "2026-01-16T22:27:00.650Z",
+  "userPrompt": "A beautiful woman watching the  sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the golden orb of the setting sun sinks behind majestic mountains, a stunning woman with cascading raven curls and emerald eyes gazes out at the breathtaking spectacle before her. Her delicate features are framed by the wind that gently plays with her hair, and her eyes reflect the fiery hues of the sky above. A soft, ethereal breeze carries the sweet scent of wildflowers to her nostrils as she leans against the worn stone parapet, lost in the serene beauty of this enchanting moment. The peaceful silence is broken only by the melody of crickets and the distant call of a night owl, casting an aura of tranquility and contemplation over this idyllic scene.",
+          "howPrompt": "In the soft, golden glow of the setting sun, a beautiful woman is silhouetted against the majestic backdrop of towering mountains. Her delicate features are illuminated from within as if bathed in the warm, ethereal light emanating from the sky. The vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her, while the mountains loom large and imposing in the background, their rugged peaks and textured slopes adding depth and dimension to the scene. The tranquil atmosphere is reminiscent of classic cinematic scenes, as if transporting us to a romantic moment from an old Hollywood movie.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the soft, golden glow of the setting sun, a beautiful woman with cascading raven curls and emerald eyes is silhouetted against the majestic backdrop of towering mountains. Her delicate features are illuminated from within as if bathed in the warm, ethereal light emanating from the sky. The vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her, while the mountains loom large and imposing in the background, their rugged peaks and textured slopes adding depth and dimension to the scene. Framed by the wind that gently plays with her hair, she gazes out at the breathtaking spectacle before her, her eyes reflecting the fiery hues of the sky above. The peaceful silence is broken only by the melody of crickets and the distant call of a night owl, casting an aura of tranquility and contemplation over this idyllic scene as the sweet scent of wildflowers carried by the soft ethereal breeze reaches her nostrils.",
+          "image": {
+            "localPath": "output/2026-01-16/ses-142700/iter0-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": true
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the tranquil embrace of twilight, a captivating woman with cascading chestnut waves and velvet violet eyes gazes out at the breathtaking sunset. The mountains before her stand proudly, their jagged peaks kissed by the last lingering rays of the setting sun. The vibrant palette of orange, pink, and purple bathes the landscape in a warm, ethereal glow. A gentle breeze carries the fragrance of wildflowers up from the valley below, enveloping her senses and igniting an inner peace that seems to resonate with the serenity of the scene itself.",
+          "howPrompt": "The image captures the allure of a stunning woman as she gazes at the majestic sunset over towering mountains. The scene is bathed in a warm, ethereal glow as the last rays of sunlight illuminate her face and cast long shadows across the rugged terrain. Her silhouette stands out against the backdrop of fiery orange and pink hues that paint the sky, while the tranquil reflection of the sunset glimmers in her mesmerized eyes. The composition draws the viewer's attention to her serene presence amidst the breathtaking landscape, creating an atmosphere of peaceful contemplation and wonder.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the peaceful twilight, a captivating woman with cascading chestnut waves and velvet violet eyes gazes out at the majestic sunset over towering mountains. The scene is bathed in a warm, ethereal glow as the last rays of sunlight illuminate her face and cast long shadows across the rugged terrain. Her silhouette stands out against the backdrop of fiery orange and pink hues that paint the sky, while the tranquil reflection of the sunset glimmers in her mesmerized eyes. The composition draws the viewer's attention to her serene presence amidst the breathtaking landscape, as the gentle breeze carries the fragrance of wildflowers up from the valley below, enveloping her senses and igniting an inner peace that seems to resonate with the serenity of the scene itself.",
+          "image": {
+            "localPath": "output/2026-01-16/ses-142700/iter0-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    },
+    {
+      "iteration": 1,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": 0,
+          "whatPrompt": "",
+          "howPrompt": "In the soft, golden glow of the setting sun, a beautiful woman is silhouetted against the majestic backdrop of towering mountains. Her delicate features are illuminated from within as if bathed in the warm, ethereal light emanating from the sky. The vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her, while the mountains loom large and imposing in the background, their rugged peaks and textured slopes adding depth and dimension to the scene. The tranquil atmosphere is reminiscent of classic cinematic scenes, as if transporting us to a romantic moment from an old Hollywood movie.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the tranquil, romantic scene set by the soft, golden glow of the setting sun, a beautiful woman is silhouetted against the towering, majestic mountains. Her delicate features are illuminated from within in the warm, ethereal light emanating from the sky, while the vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her. The imposing mountains loom large in the background, their rugged peaks and textured slopes adding depth and dimension to the scene. This cinematic moment transports us back to classic Hollywood movies with its tranquil atmosphere and beautiful lighting.",
+          "image": {
+            "localPath": "output/2026-01-16/ses-142700/iter1-cand0.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        },
+        {
+          "candidateId": 1,
+          "parentId": 0,
+          "whatPrompt": "In this tranquil moment, the sun sets behind towering mountains, painting the sky with hues of fiery orange and deep purple. Amidst the breathtaking panorama stands a beautiful woman with raven curls that glisten in the dying light, her emerald eyes reflecting the fiery colors of the sky above. Her delicate features are accentuated by the gentle wind that dances through her hair, carrying with it the sweet scent of wildflowers. Leaning against the worn stone parapet, she is lost in the serene beauty of this moment, the ethereal breeze whispering through the air and filling her senses with the peacefulness of nature. The only sounds to break the silence are the melodic chirping of crickets and the haunting call of a night owl, adding an enchanting layer to the already captivating scene.",
+          "howPrompt": "In the soft, golden glow of the setting sun, a beautiful woman is silhouetted against the majestic backdrop of towering mountains. Her delicate features are illuminated from within as if bathed in the warm, ethereal light emanating from the sky. The vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her, while the mountains loom large and imposing in the background, their rugged peaks and textured slopes adding depth and dimension to the scene. The tranquil atmosphere is reminiscent of classic cinematic scenes, as if transporting us to a romantic moment from an old Hollywood movie.",
+          "critique": null,
+          "status": "completed",
+          "combined": "In the tranquil moment before nightfall, a beautiful woman with raven curls is silhouetted against the majestic backdrop of towering mountains, her delicate features illuminated from within by the soft, golden glow of the setting sun. The vibrant oranges, pinks, and reds of the sunset cast a dreamlike hue over her, reflecting in her emerald eyes as she leans against the worn stone parapet lost in the serene beauty of this moment. Amidst the breathtaking panorama, the gentle wind carries the sweet scent of wildflowers and the melodic chirping of crickets, while the haunting call of a night owl adds an enchanting layer to the already captivating scene. The rugged peaks and textured slopes of the mountains add depth and dimension to the ethereal atmosphere, evoking classic cinematic scenes reminiscent of old Hollywood movies.",
+          "image": {
+            "localPath": "output/2026-01-16/ses-142700/iter1-cand1.png"
+          },
+          "evaluation": null,
+          "totalScore": null,
+          "survived": false
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": {
+    "iteration": 0,
+    "candidateId": 0
+  },
+  "lineage": [
+    {
+      "iteration": 0,
+      "candidateId": 0
+    }
+  ]
+}

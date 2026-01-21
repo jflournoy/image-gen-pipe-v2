@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-211720",
+  "timestamp": "2026-01-21T05:17:20.527Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the golden sun begins its descent behind the majestic mountain range, the sky transforms into a breathtaking canvas of oranges, pinks, and purples. The sun's warm rays bathe the mountains in a gentle glow, casting long shadows over the jagged peaks. The air is filled with the crisp scent of pine and the soothing sound of wind whistling through the trees. As day turns to night, the serene beauty of nature unfolds before your eyes, leaving you in awe of its raw power and tranquility.",
+          "howPrompt": "As the sun sinks low in the sky, the mountains are bathed in a warm, golden glow. The colors of the sunset paint the sky with hues of orange, pink, and purple, reflecting off the tranquil water below. The composition frames the mountains symmetrically against the horizon, creating a sense of balance and harmony. The texture of the mountain's rocky surfaces is highlighted by the fading light, showcasing their rugged and majestic beauty. The atmosphere is serene and peaceful, invoking feelings of awe and wonder at nature's raw power and exquisite artistry.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Bask in the enchanting sight of a resplendent sunset casting its golden glow over majestic mountains. The sky transforms into a breathtaking canvas, where fiery oranges, reds, and pinks dance amongst ethereal wisps of cloud. The crisp mountain air carries the subtle fragrance of pine, mingling with the tranquil silence as nature's symphony plays out in perfect harmony. Watch as the last sliver of sun disappears behind the peaks, surrendering to the cool embrace of twilight. This serene moment, steeped in beauty and serenity, is a testament to the unyielding power and splendor of nature.",
+          "howPrompt": "As the sun begins to set, a warm orange glow cascades over the rugged mountain range. The mountains, bathed in the golden light, stand proud against the deepening blue sky. The scene is composed with the tallest peaks in the foreground, their jagged silhouettes framed perfectly by the setting sun. A gentle breeze causes the trees at the base of the mountains to sway, adding texture and movement to the tranquil image. The vibrant colors of the sunset bleed into the landscape, creating a breathtaking, romantic atmosphere that is both calming and invigorating.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

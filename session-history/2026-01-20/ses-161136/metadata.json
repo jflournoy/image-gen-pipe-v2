@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-161136",
+  "timestamp": "2026-01-21T00:11:36.711Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "In the ethereal glow of a breathtaking sunset, majestic mountains stand tall against the fiery orange and pink horizon. The sun's golden rays paint the jagged peaks with an intricate brushstroke of light and shadow, casting long, dancing shadows on the rolling hills below. A gentle breeze carries the sweet fragrance of pine trees mixed with the earthy scent of damp soil as birds return to their nests for the evening. The serene silence is broken only by the soft whispers of the wind and the distant echo of a babbling brook, creating an enchanting atmosphere that leaves one feeling grounded yet transported to another world.",
+          "howPrompt": "As the golden orb of the setting sun descends behind towering mountain peaks, the sky ignites in a spectacular display of color. The once bright blue expanse transforms into an ethereal canvas of warm hues, from fiery oranges and reds to gentle pinks and purples. Long shadows cast by the mountains lengthen with each passing moment, adding depth and texture to the scene. The atmosphere is tranquil and serene, invoking a sense of awe and wonder at nature's breathtaking beauty. This visual style evokes memories of classic romantic landscape paintings or sweeping cinematic vistas, transporting the viewer to a place of peace and contemplation.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "In the sprawling canvas of the western sky, a magnificent sunset unfolds, its vibrant hues painting the landscape with an ethereal allure. Mountains, their rugged peaks bathed in warm orange and red tones, stand tall against the backdrop, their jagged edges softened by the fading light. The tranquil scene is filled with a sense of stillness and serenity as the sun sinks lower, its golden rays kissing the mountainous terrain before it disappears altogether, leaving behind a blanket of stars to twinkle in the night.",
+          "howPrompt": "As the sun begins to set, the sky is painted with hues of pink, orange, and purple. The mountains in the distance are bathed in a warm golden light, casting long shadows across their rugged surfaces. The colors blend seamlessly together, creating a breathtakingly serene atmosphere. Texture is added through the rough, rocky terrain and the delicate wisps of clouds that gracefully dance above the horizon. This photograph captures the tranquility and beauty of nature at its finest.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

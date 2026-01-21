@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-170035",
+  "timestamp": "2026-01-21T01:00:35.770Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day yields to the evening, a breathtaking sunset unfolds over towering mountains. The sky is painted with hues of pink, orange, and purple, as the sun gradually sinks below the horizon. The air grows cooler, carrying with it the soothing scent of pine and wildflowers. The mountains, their peaks dusted with snow, stand proud against the vibrant backdrop, casting long, golden shadows over the valley below. The tranquility is broken only by the gentle rustle of leaves in the wind and the distant call of a solitary wolf.",
+          "howPrompt": "As the sun begins to dip below the horizon, the sky is set ablaze with a breathtaking display of warm hues. The mountains in the foreground stand tall and majestic against the backdrop of this fiery spectacle. The light casts long shadows across their rugged terrain, adding depth and texture to their grandeur. As the last vestiges of daylight fade away, an ethereal sense of tranquility envelopes the scene, inviting contemplation and wonder.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the sun begins to dip below the horizon, a breathtaking tableau unfolds before your eyes. The sky is painted with hues of pink, orange, and purple, as the last vestiges of daylight cling desperately to the heavens. Majestic mountains loom in the distance, their peaks bathed in the ethereal glow of twilight. Their rugged faces, adorned with snow and rock, seem to whisper tales of ancient times and untold mysteries. The tranquil scene is punctuated by the occasional cry of a raven or the gentle rustle of leaves in the wind, creating an enchanting symphony that invites you to pause and savor the beauty of nature's grand finale.",
+          "howPrompt": "Imagine a breathtaking sunset scene unfolding over majestic mountains. The sky is ablaze with hues of fiery orange, vibrant reds, and rich purples, as the sun slowly descends towards the horizon. Long shadows cast by the mountains stretch across the landscape, adding depth and dimension to the image. The texture of the mountainous terrain appears rugged and untouched, with each peak and valley emphasized by the fading light. An ethereal, serene atmosphere envelopes the scene, inviting a sense of tranquility and wonder.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

@@ -1,0 +1,15 @@
+{
+  "sessionId": "ses-114828",
+  "timestamp": "2026-01-21T19:48:28.668Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [],
+  "finalWinner": null,
+  "lineage": null
+}

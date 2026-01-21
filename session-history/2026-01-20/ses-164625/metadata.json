@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-164625",
+  "timestamp": "2026-01-21T00:46:25.009Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking sight of a beautiful sunset unfolding over majestic mountains. The sky is ablaze with hues of orange, pink, and purple as the sun slowly descends behind the towering peaks. The air cools with each passing moment, carrying with it the crisp scent of pine and wildflowers. The gentle rustling of leaves in the wind adds to the serene atmosphere, inviting you to pause and soak in the breathtaking display of nature's grandeur.",
+          "howPrompt": "As the sun begins to set, a breathtaking scene unfolds over majestic mountains. The sky is painted with warm hues of orange, pink, and red as the sun dips below the horizon. Long shadows stretch across the terrain, creating an intricate dance between light and dark. The mountain peaks are bathed in a golden glow, while the valleys remain in deep shadow. A sense of tranquility and awe washes over the viewer, inviting them to pause and appreciate the raw beauty of nature. This visual style evokes feelings of serenity and wonder, reminiscent of classic landscape photography or a sweeping cinematic panorama.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day gives way to twilight, the sun sinks low behind majestic mountains, casting a warm, golden glow over the tranquil landscape. The sky is ablaze with vivid hues of pink, orange, and red, reflecting off the serene surface of a nearby lake. Birds return to their nests, their silhouettes etched against the fiery backdrop, while a gentle breeze rustles through the trees, carrying the sweet scent of pine and wildflowers on its breath. The air is still and peaceful, the only sounds being the distant tolling of a bell and the occasional hoot of an owl, as the world settles into the quiet embrace of evening.",
+          "howPrompt": "As the golden sun begins to dip below the horizon, the mountains in this scene are bathed in a warm, radiant light. The colors of the sky transition from fiery orange and red hues to gentle pinks and purples. Long shadows stretch across the rugged mountain terrain, adding depth and dimension. The texture of the mountains comes alive as the sunlight plays on their peaks and valleys, creating a breathtaking sense of atmosphere that speaks to the beauty and power of nature. This visual style evokes feelings of tranquility and awe, transporting viewers to a peaceful moment in time.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

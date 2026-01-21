@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-204358",
+  "timestamp": "2026-01-21T04:43:58.851Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the sun dips below the horizon, casting long shadows over the towering mountains, the sky transforms into a breathtaking canvas of warm oranges, pinks, and reds. The crisp mountain air carries the earthy scent of pine and wildflowers, mingling with the sweet fragrance of blooming cacti. Birds flit between trees as crickets chirp in the twilight, creating a tranquil symphony that soothes the soul. The serene beauty of the scene lingers, leaving one feeling rejuvenated and at peace with the world.",
+          "howPrompt": "As the sun begins to descend behind towering mountains, a symphony of colors unfolds before your eyes. Warm hues of orange and pink paint the sky, casting a gentle glow over the jagged peaks. Long shadows stretch across the landscape as the day comes to an end, creating a sense of depth and dimension. The textures of the mountain ranges appear rugged and raw, with each crevice and wrinkle accentuated by the fading light. An air of tranquility and serenity permeates the scene, inviting you to take a moment and appreciate nature's grandeur.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "The sun dips below the horizon, painting the sky in hues of orange, pink, and purple. Majestic mountains stand tall against the backdrop, their peaks shrouded in a golden glow. The air is still, carrying with it the crisp scent of pine and wildflowers, as crickets chirp and birds settle in for the night. The serene beauty of the scene takes your breath away, leaving you feeling small yet connected to the world around you.",
+          "howPrompt": "As the sun begins to set, a riot of colors paints the sky: fiery oranges and reds gradually giving way to deeper hues of purple and pink. The mountains in the distance are bathed in this golden light, their jagged peaks casting long, dramatic shadows on the valley below. The air is filled with the warm glow of the sunset, creating a peaceful, serene atmosphere that seems to pause time itself. This visual style evokes a sense of tranquility and awe, reminiscent of classic landscape photography or cinematic masterpieces like \"The Sound of Music\" or \"Lawrence of Arabia\".",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

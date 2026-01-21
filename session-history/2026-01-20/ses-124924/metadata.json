@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-124924",
+  "timestamp": "2026-01-20T20:49:24.402Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day comes to a close, the sky is transformed into a breathtaking canvas of vibrant colors. The sun, now a radiant orb of molten gold, casts long shadows over towering mountains. Their peaks, bathed in hues of pink, orange, and red, glisten in the fading light, while the valleys below are blanketed in the soft glow of twilight. A gentle breeze carries the sweet scent of wildflowers, mingling with the crisp mountain air as birds return to their nests for the night. The scene is a tranquil and mesmerizing reminder of nature's beauty and the passage of time.",
+          "howPrompt": "As the sun dips below the horizon, the mountains come alive with vibrant hues of orange, pink, and purple. The golden light cascades down their peaks and valleys, creating long, dramatic shadows that add depth and texture to the scene. The atmosphere is serene and tranquil, as if the world is holding its breath in awe of nature's breathtaking display. The composition follows the rule of thirds, with the sun setting just off-center, framing the mountains perfectly and drawing the viewer's eye into the image. The overall effect is one of timeless beauty and wonder that transports the viewer to a peaceful, otherworldly place.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "Bask in the breathtaking spectacle of a magnificent sunset as it paints the sky above towering mountains with hues of fiery orange, radiant pink, and tranquil purple. The sun's gentle descent behind the peaks creates an ethereal glow, casting elongated shadows that dance upon the rocks below. Birds silhouetted against the backdrop sing lullabies to the day while the cool evening breeze whispers through the trees, enveloping you in a serene atmosphere that instills a deep sense of peace and wonder.",
+          "howPrompt": "As the sun descends, it casts a warm golden glow over the towering mountains in this breathtaking scene. The sky is ablaze with vibrant hues of pink, orange, and red, as the sun's last rays illuminate the heavens. In the foreground, the rough texture of boulders and shrubs contrasts sharply with the smooth, velvety clouds overhead. The composition draws the eye from the bottom left, where the first hints of sunlight touch the mountaintops, to the top right, where the sun disappears beneath the horizon, leaving a peaceful, serene atmosphere in its wake. This style evokes feelings of tranquility and wonder, inviting us to pause and savor the beauty of nature's grand sunset display.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

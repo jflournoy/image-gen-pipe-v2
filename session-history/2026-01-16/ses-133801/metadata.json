@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-133801",
+  "timestamp": "2026-01-16T21:38:01.611Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 1,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day yields to twilight, a breathtaking sunset unfolds over towering mountains, their peaks painted with hues of pink, orange, and red. The sky is awash in a symphony of colors, as the sun gradually sinks below the horizon. The crisp mountain air carries the scent of pine and wildflowers, mingling with the sweet aroma of the setting sun. Birds fly silhouetted against the vibrant sky, their melodic songs echoing through the stillness, evoking a sense of peace and tranquility. The serene beauty of the scene captivates the soul and stirs the senses, inviting reflection and appreciation for the wonders of nature.",
+          "howPrompt": "As the sun dips below the horizon, a riot of colors paints the sky: fiery oranges, deep purples, and soft pinks. The mountains, once stark and defined against the blue backdrop of the day, are now bathed in the warm glow. Shadows lengthen, creeping up their craggy faces, and the snow-capped peaks begin to lose definition as they merge with the rosy hue above. The atmosphere is serene, a peaceful transition from day to night. The composition might follow the rule of thirds, placing the sun just off-center, while the mountains anchor the frame, their textures rendered more rich and vivid under the golden light.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day yields to twilight, a breathtaking sunset unfolds over majestic mountains. The sky ablaze with hues of orange, pink, and purple, casting long shadows on craggy peaks that pierce the heavens. A gentle breeze carries the fragrant scent of pine and wildflowers, while the melodic call of birds adds a tranquil symphony to this serene tableau. The mood is one of peacefulness, inviting contemplation and wonder at nature's grandeur.",
+          "howPrompt": "As the golden orb of the sun begins to dip below the distant mountain range, a breathtaking sunset unfolds before our eyes. The warm hues of orange and pink illuminate the sky, casting long, dramatic shadows across the landscape. The mountains stand proudly against this vibrant backdrop, their jagged peaks catching the final rays of sunlight as they turn a deep, rich red. A sense of serene tranquility pervades the scene, inviting us to pause and take in the natural beauty unfolding before us. The textures of the rocky mountains are accentuated by the contrasting light, giving depth and dimension to this visually stunning moment.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}

@@ -1,0 +1,50 @@
+{
+  "sessionId": "ses-122133",
+  "timestamp": "2026-01-20T20:21:33.782Z",
+  "userPrompt": "A beautiful sunset over mountains",
+  "config": {
+    "beamWidth": 2,
+    "keepTop": 1,
+    "maxIterations": 2,
+    "alpha": 0.6,
+    "temperature": 1
+  },
+  "iterations": [
+    {
+      "iteration": 0,
+      "dimension": "what",
+      "candidates": [
+        {
+          "candidateId": 0,
+          "parentId": null,
+          "whatPrompt": "As the day draws to a close, the sky bursts into a breathtaking display of vibrant colors. The sun dips below the horizon, casting a warm golden glow over the towering mountains that stretch out before you. The silhouettes of the peaks become etched against the fiery backdrop, and the tranquil air is filled with the crisp scent of pine and the soft, melodic song of crickets. Each hue seems to deepen in intensity as darkness begins to creep across the land, creating an atmosphere of serene beauty and reflection.",
+          "howPrompt": "The breathtaking image showcases a stunning sunset casting long, warm shadows over towering mountains. The sky is awash with vibrant hues of orange, pink, and purple as the sun sinks below the horizon. The texture of the mountain ranges is highlighted in intricate detail, from the jagged peaks to the rocky terrain beneath, creating a sense of depth and dimensionality. The atmosphere is tranquil yet powerful, as if the viewer is standing at the edge of something grand and untouchable. It's reminiscent of a romantic cinematic scene or a masterfully composed landscape photograph.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        },
+        {
+          "candidateId": 1,
+          "parentId": null,
+          "whatPrompt": "As the day gives way to twilight, a breathtaking sunset unfolds over the majestic mountains. The sky transforms into a canvas of vibrant hues; fiery orange and red paint the horizon while lavender and pink shades dance gracefully towards the heavens. Mountains stand tall and proud against this stunning backdrop, their peaks dusted with snow that glimmers in the softening light, casting long, deep shadows across the landscape. The tranquil scene is filled with a sense of peacefulness and awe-inspiring beauty as nature puts on yet another unforgettable show.",
+          "howPrompt": "As the sun begins to set, a breathtaking scene unfolds over towering mountains. The sky is painted with a rich palette of oranges, pinks, and purples, as if an artist has brushed these colors across the canvas of the heavens. The mountains are bathed in warm, golden light, casting long shadows across their rugged terrain. The atmosphere is serene and peaceful, with only the sound of birds chirping and leaves rustling in the gentle breeze. This stunning image captures the raw beauty and power of nature, inviting viewers to pause and reflect on the simple joys of life.",
+          "critique": null,
+          "status": "attempted",
+          "combined": null,
+          "image": null,
+          "evaluation": null,
+          "totalScore": null,
+          "survived": null
+        }
+      ],
+      "bestCandidateId": null,
+      "bestScore": null
+    }
+  ],
+  "finalWinner": null,
+  "lineage": null
+}
