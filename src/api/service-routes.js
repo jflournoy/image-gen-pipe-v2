@@ -62,6 +62,23 @@ router.post('/:name/start', async (req, res) => {
     });
   }
 
+  // Validate Flux encoder paths before attempting to start
+  if (name === 'flux') {
+    const validation = ServiceManager.validateFluxEncoderPaths({
+      modelPath,
+      textEncoderPath,
+      textEncoder2Path,
+      vaePath
+    });
+
+    if (!validation.valid) {
+      return res.status(400).json({
+        error: 'Invalid Flux configuration',
+        message: validation.error
+      });
+    }
+  }
+
   try {
     const result = await ServiceManager.startService(name, {
       hfToken,
