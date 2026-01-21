@@ -14,6 +14,7 @@ import demoRouter from './demo-routes.js';
 import evaluationRouter from './evaluation-routes.js';
 import providerRouter, { getRuntimeProviders } from './provider-routes.js';
 import serviceRouter from './service-routes.js';
+import configRouter from './config-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -514,6 +515,9 @@ export function createApp() {
 
   // Register service control routes (start/stop/restart local services)
   app.use('/api/services', serviceRouter);
+
+  // Register configuration management routes (.env reading/writing)
+  app.use('/api/config', configRouter);
 
   return app;
 }
