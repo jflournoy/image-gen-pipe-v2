@@ -203,7 +203,8 @@ Combined SDXL prompt:`;
         model: response.data.model_repo || response.data.model,
         model_file: response.data.model_file,
         model_loaded: response.data.model_loaded,
-        device: response.data.device
+        device: response.data.device,
+        gpu_layers: response.data.gpu_layers
       };
     } catch (error) {
       throw new Error(`Service unavailable: ${error.message}`);
