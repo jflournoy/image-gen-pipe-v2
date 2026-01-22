@@ -22,6 +22,10 @@ coverage/
 test-results.log
 test-results.tap
 gpu-test-results.log
+role-test-results.log
+
+# Test fixture images (downloaded, not committed)
+test/fixtures/images/
 
 # Environment and local settings
 .env
