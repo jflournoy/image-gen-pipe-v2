@@ -19,6 +19,9 @@ build/
 coverage/
 .nyc_output
 *.lcov
+test-results.log
+test-results.tap
+gpu-test-results.log
 
 # Environment and local settings
 .env
