@@ -501,6 +501,53 @@ describe('LocalLLMProvider', () => {
     });
   });
 
+  describe('GPU verification', () => {
+    test('should return gpu_layers in health check for GPU usage verification', async () => {
+      const provider = new LocalLLMProvider();
+
+      nock('http://localhost:8003')
+        .get('/health')
+        .reply(200, {
+          status: 'healthy',
+          model_repo: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
+          model_file: '*Q4_K_M.gguf',
+          gpu_layers: 32,
+          context_size: 2048,
+          model_loaded: true,
+          device: 'cuda'
+        });
+
+      const health = await provider.healthCheck();
+
+      assert.ok(health.gpu_layers !== undefined, 'Should include gpu_layers');
+      assert.strictEqual(health.gpu_layers, 32, 'Should return correct gpu_layers value');
+      assert.ok(health.gpu_layers !== 0, 'Should use GPU (gpu_layers > 0)');
+      assert.strictEqual(health.device, 'cuda', 'Should indicate CUDA device');
+      assert.strictEqual(health.model_loaded, true, 'Model should be loaded');
+    });
+
+    test('should indicate GPU usage when gpu_layers is set to all (-1)', async () => {
+      const provider = new LocalLLMProvider();
+
+      nock('http://localhost:8003')
+        .get('/health')
+        .reply(200, {
+          status: 'healthy',
+          model_repo: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
+          model_file: '*Q4_K_M.gguf',
+          gpu_layers: -1,
+          context_size: 2048,
+          model_loaded: true,
+          device: 'cuda'
+        });
+
+      const health = await provider.healthCheck();
+
+      assert.strictEqual(health.gpu_layers, -1, 'Should indicate all layers on GPU');
+      assert.ok(health.device === 'cuda', 'Should use CUDA device');
+    });
+  });
+
   describe('OpenAI compatibility', () => {
     test('should format request as OpenAI completions API', async () => {
       const provider = new LocalLLMProvider();
