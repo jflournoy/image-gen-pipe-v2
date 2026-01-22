@@ -244,6 +244,26 @@ describe('LocalVLMProvider', () => {
       assert.ok(health, 'Should return health object');
       assert.strictEqual(health.status, 'healthy');
     });
+
+    it('should return gpu_layers in health check for GPU usage verification', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+      provider._axios = mockAxios;
+
+      mockAxios.setResponse({
+        status: 'healthy',
+        model_repo: 'jartine/llava-v1.6-mistral-7b-gguf',
+        model_file: '*Q4_K_M.gguf',
+        gpu_layers: -1,
+        model_loaded: true
+      });
+
+      const health = await provider.healthCheck();
+
+      assert.ok(health.gpu_layers !== undefined, 'Should include gpu_layers');
+      assert.strictEqual(health.gpu_layers, -1, 'Should indicate all layers on GPU');
+      assert.strictEqual(health.model_loaded, true, 'Model should be loaded');
+    });
   });
 
   describe('Error Handling', () => {
