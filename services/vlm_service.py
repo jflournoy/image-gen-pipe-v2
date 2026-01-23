@@ -21,10 +21,11 @@ from pydantic import BaseModel
 PORT = int(os.getenv('VLM_PORT', '8004'))
 
 # Model configuration - multimodal GGUF models
-# LLaVA 1.6 7B Q4 is ~5GB, fits well with 12GB GPU when Flux is unloaded
-MODEL_REPO = os.getenv('VLM_MODEL_REPO', 'jartine/llava-v1.6-mistral-7b-gguf')
+# Qwen2.5-VL 7B Q4 is ~5GB, fits well with 12GB GPU when Flux is unloaded
+# Using unsloth/Qwen2.5-VL-7B-Instruct-GGUF (public repo)
+MODEL_REPO = os.getenv('VLM_MODEL_REPO', 'unsloth/Qwen2.5-VL-7B-Instruct-GGUF')
 MODEL_FILE = os.getenv('VLM_MODEL_FILE', '*Q4_K_M.gguf')
-CLIP_MODEL_FILE = os.getenv('VLM_CLIP_FILE', '*mmproj-f16.gguf')
+CLIP_MODEL_FILE = os.getenv('VLM_CLIP_FILE', '*mmproj-F16.gguf')
 MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only
@@ -118,7 +119,13 @@ def load_model():
 
     try:
         from llama_cpp import Llama
-        from llama_cpp.llama_chat_format import Llava15ChatHandler
+        # Try Qwen2VL handler first (for Qwen2.5-VL models), fall back to Llava15
+        try:
+            from llama_cpp.llama_chat_format import Qwen2VLChatHandler as VisionChatHandler
+            handler_name = 'Qwen2VL'
+        except ImportError:
+            from llama_cpp.llama_chat_format import Llava15ChatHandler as VisionChatHandler
+            handler_name = 'Llava15'
     except ImportError:
         raise RuntimeError(
             "llama-cpp-python not installed. Install with: "
@@ -167,9 +174,10 @@ def load_model():
 
         print(f'[VLM Service] Model path: {model_path}')
         print(f'[VLM Service] CLIP path: {clip_path}')
+        print(f'[VLM Service] Using chat handler: {handler_name}')
 
         # Create chat handler for vision
-        chat_handler = Llava15ChatHandler(clip_model_path=clip_path, verbose=False)
+        chat_handler = VisionChatHandler(clip_model_path=clip_path, verbose=False)
 
         # Load model with vision chat handler
         llm = Llama(
@@ -394,7 +402,7 @@ async def download_status():
                 'status': 'not_downloaded',
                 'repo': MODEL_REPO,
                 'file': actual_filename,
-                'message': 'Model needs to be downloaded (~5GB for LLaVA 7B Q4)'
+                'message': 'Model needs to be downloaded (~5GB for Qwen2.5-VL 7B Q4)'
             }
     except ImportError:
         return {

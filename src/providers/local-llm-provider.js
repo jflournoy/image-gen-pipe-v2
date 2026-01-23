@@ -27,17 +27,36 @@ class LocalLLMProvider {
    * @param {string} prompt - Original prompt to refine
    * @param {Object} options - Refinement options
    * @param {string} options.dimension - 'what' (content) or 'how' (style)
-   * @param {Object} options.previousResult - Previous generation result for critique-based refinement
+   * @param {Object} options.previousResult - Previous generation result for critique-based refinement (test interface)
+   * @param {Object} options.critique - Structured critique from CritiqueGenerator (pipeline interface)
+   * @param {string} options.userPrompt - Original user request (for alignment)
    * @returns {Promise<Object>} Object with refinedPrompt and metadata
    */
   async refinePrompt(prompt, options = {}) {
     try {
       const dimension = options.dimension || 'what';
       let systemPrompt;
-      let userPrompt;
+      let userPromptText;
 
-      if (options.previousResult) {
-        // Critique-based refinement
+      if (options.critique) {
+        // Pipeline interface: structured critique from CritiqueGenerator
+        const { critique, recommendation, reason } = options.critique;
+        const originalUserPrompt = options.userPrompt || prompt;
+
+        systemPrompt = dimension === 'what' ?
+          'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on the critique and recommendation, improve the prompt to better match user intent while maintaining alignment with the original request.' :
+          'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on the critique and recommendation, improve the prompt to enhance aesthetic quality and visual appeal.';
+
+        userPromptText = `Original user request: "${originalUserPrompt}"
+Current ${dimension.toUpperCase()} prompt: "${prompt}"
+
+Critique: ${critique}
+Recommendation: ${recommendation}
+Reason: ${reason}
+
+Provide an improved ${dimension.toUpperCase()} prompt that addresses the critique while staying aligned with the original user request.`;
+      } else if (options.previousResult) {
+        // Test interface: previousResult with scores
         const { prompt: prevPrompt, clipScore, aestheticScore, caption } = options.previousResult;
         const focusMetric = dimension === 'what' ?
           `CLIP score: ${clipScore}` :
@@ -47,7 +66,7 @@ class LocalLLMProvider {
           'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score.' :
           'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on critique, improve the prompt to enhance aesthetic quality and visual appeal.';
 
-        userPrompt = `Original prompt: "${prompt}"
+        userPromptText = `Original prompt: "${prompt}"
 Previous result: "${prevPrompt}"
 Image caption: "${caption}"
 Current ${focusMetric}
@@ -57,14 +76,14 @@ Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignme
         // Dimension-aware expansion/refinement
         if (dimension === 'what') {
           systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Write a concise description (2-4 sentences) that vividly describes WHAT is in the scene: characters, objects, actions, setting, and mood. Use immersive, sensory-rich prose.';
-          userPrompt = `Expand this prompt focusing on CONTENT: "${prompt}"`;
+          userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
         } else {
           systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Write a concise description (2-4 sentences) that vividly describes HOW the image appears: lighting, composition, color palette, texture, and atmosphere. Use concrete, descriptive language referencing photographic or cinematic techniques.';
-          userPrompt = `Expand this prompt focusing on STYLE: "${prompt}"`;
+          userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
         }
       }
 
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+      const fullPrompt = `${systemPrompt}\n\n${userPromptText}`;
 
       const { text, usage } = await this._generate(fullPrompt, options);
       const refinedPrompt = text.trim();
