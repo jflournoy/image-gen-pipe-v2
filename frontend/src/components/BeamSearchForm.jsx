@@ -1,6 +1,6 @@
 /**
  * @file BeamSearchForm Component
- * Form for submitting beam search parameters
+ * Form for submitting beam search parameters with Flux generation settings
  */
 
 import { useState } from 'react'
@@ -13,6 +13,12 @@ export default function BeamSearchForm({ onSubmit }) {
   const [alpha, setAlpha] = useState(0.7)
   const [error, setError] = useState('')
 
+  // Advanced settings (Flux generation options)
+  const [showAdvanced, setShowAdvanced] = useState(false)
+  const [steps, setSteps] = useState(25)
+  const [guidance, setGuidance] = useState(3.5)
+  const [seed, setSeed] = useState('')
+
   const handleSubmit = (e) => {
     e.preventDefault()
 
@@ -24,13 +30,32 @@ export default function BeamSearchForm({ onSubmit }) {
 
     // Clear error and submit
     setError('')
-    onSubmit({
+
+    // Build submit data
+    const data = {
       prompt,
       n,
       m,
       iterations,
       alpha
-    })
+    }
+
+    // Include fluxOptions if any advanced settings were modified
+    const fluxOptions = {}
+    if (steps !== 25) fluxOptions.steps = steps
+    if (guidance !== 3.5) fluxOptions.guidance = guidance
+    if (seed !== '') fluxOptions.seed = Number(seed)
+
+    // Always include fluxOptions if advanced settings have been opened and modified
+    if (Object.keys(fluxOptions).length > 0 || showAdvanced) {
+      data.fluxOptions = {
+        steps,
+        guidance,
+        ...(seed !== '' && { seed: Number(seed) })
+      }
+    }
+
+    onSubmit(data)
   }
 
   return (
@@ -91,6 +116,57 @@ export default function BeamSearchForm({ onSubmit }) {
           min="0"
           max="1"
         />
+      </div>
+
+      {/* Collapsible Advanced Settings Section */}
+      <div className="advanced-settings">
+        <button
+          type="button"
+          onClick={() => setShowAdvanced(!showAdvanced)}
+          aria-expanded={showAdvanced}
+        >
+          Advanced Settings {showAdvanced ? '▼' : '▶'}
+        </button>
+
+        {showAdvanced && (
+          <div className="advanced-settings-content">
+            <div>
+              <label htmlFor="steps">Steps</label>
+              <input
+                id="steps"
+                type="number"
+                value={steps}
+                onChange={(e) => setSteps(Number(e.target.value))}
+                min="15"
+                max="50"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="guidance">Guidance</label>
+              <input
+                id="guidance"
+                type="number"
+                value={guidance}
+                onChange={(e) => setGuidance(Number(e.target.value))}
+                step="0.5"
+                min="1"
+                max="20"
+              />
+            </div>
+
+            <div>
+              <label htmlFor="seed">Seed (optional)</label>
+              <input
+                id="seed"
+                type="number"
+                value={seed}
+                onChange={(e) => setSeed(e.target.value)}
+                placeholder="Leave empty for random"
+              />
+            </div>
+          </div>
+        )}
       </div>
 
       <button type="submit">Start Beam Search</button>
