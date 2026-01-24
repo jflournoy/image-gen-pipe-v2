@@ -1,5 +1,5 @@
 /**
- * 🔴 RED: Model Coordinator Tests
+ * 🟢 GREEN: Model Coordinator Tests (Retrofit TDD)
  *
  * Tests for GPU memory coordination between local services (LLM, Flux, Vision, VLM)
  * Ensures proper service switching on single 12GB GPU
@@ -11,8 +11,13 @@ const nock = require('nock');
 
 describe('ModelCoordinator', () => {
   let modelCoordinator;
+  let originalCleanupDelay;
 
   beforeEach(() => {
+    // Disable GPU cleanup delay for tests (instant execution)
+    originalCleanupDelay = process.env.GPU_CLEANUP_DELAY_MS;
+    process.env.GPU_CLEANUP_DELAY_MS = '0';
+
     // Clear module cache to get fresh instance with clean state
     delete require.cache[require.resolve('../../src/utils/model-coordinator.js')];
     modelCoordinator = require('../../src/utils/model-coordinator.js');
@@ -20,12 +25,23 @@ describe('ModelCoordinator', () => {
   });
 
   afterEach(() => {
+    // Restore original delay setting
+    if (originalCleanupDelay !== undefined) {
+      process.env.GPU_CLEANUP_DELAY_MS = originalCleanupDelay;
+    } else {
+      delete process.env.GPU_CLEANUP_DELAY_MS;
+    }
     nock.cleanAll();
   });
 
-  describe('🔴 prepareForLLM', () => {
+  describe('🟢 prepareForLLM', () => {
     test('should unload Flux service to free GPU memory', async () => {
       const fluxUnload = nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      // VLM endpoint - may or may not be called depending on implementation
+      nock('http://localhost:8004')
         .post('/unload')
         .reply(200, { status: 'unloaded' });
 
@@ -34,10 +50,29 @@ describe('ModelCoordinator', () => {
       assert.ok(fluxUnload.isDone(), 'Should POST to flux /unload endpoint');
     });
 
+    test('should unload VLM service to free GPU memory (12GB GPU constraint)', async () => {
+      const fluxUnload = nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      const vlmUnload = nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      await modelCoordinator.prepareForLLM();
+
+      assert.ok(vlmUnload.isDone(), 'Should POST to vlm /unload endpoint - VLM ~5-7GB conflicts with LLM ~4GB on 12GB GPU');
+      assert.ok(fluxUnload.isDone(), 'Should also unload flux');
+    });
+
     test('should handle Flux service unavailable gracefully', async () => {
       nock('http://localhost:8001')
         .post('/unload')
         .replyWithError('ECONNREFUSED');
+
+      nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
 
       // Should not throw
       await assert.doesNotReject(
@@ -47,9 +82,14 @@ describe('ModelCoordinator', () => {
     });
   });
 
-  describe('🔴 prepareForVLM', () => {
+  describe('🟢 prepareForVLM', () => {
     test('should unload Flux service to free GPU memory for VLM', async () => {
       const fluxUnload = nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      // LLM endpoint - may or may not be called depending on implementation
+      nock('http://localhost:8003')
         .post('/unload')
         .reply(200, { status: 'unloaded' });
 
@@ -58,10 +98,29 @@ describe('ModelCoordinator', () => {
       assert.ok(fluxUnload.isDone(), 'Should POST to flux /unload endpoint');
     });
 
+    test('should unload LLM service to free GPU memory (12GB GPU constraint)', async () => {
+      const fluxUnload = nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      const llmUnload = nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      await modelCoordinator.prepareForVLM();
+
+      assert.ok(llmUnload.isDone(), 'Should POST to llm /unload endpoint - LLM ~4GB conflicts with VLM ~5-7GB on 12GB GPU');
+      assert.ok(fluxUnload.isDone(), 'Should also unload flux');
+    });
+
     test('should handle Flux service unavailable gracefully', async () => {
       nock('http://localhost:8001')
         .post('/unload')
         .replyWithError('Connection timeout');
+
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
 
       // Should not throw
       await assert.doesNotReject(
@@ -71,9 +130,14 @@ describe('ModelCoordinator', () => {
     });
   });
 
-  describe('🔴 prepareForImageGen', () => {
+  describe('🟢 prepareForImageGen', () => {
     test('should unload LLM service to free GPU memory for Flux', async () => {
       const llmUnload = nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      // VLM endpoint - may or may not be called depending on implementation
+      nock('http://localhost:8004')
         .post('/unload')
         .reply(200, { status: 'unloaded' });
 
@@ -82,10 +146,29 @@ describe('ModelCoordinator', () => {
       assert.ok(llmUnload.isDone(), 'Should POST to llm /unload endpoint');
     });
 
+    test('should unload VLM service to free GPU memory (Flux needs ~10GB)', async () => {
+      const llmUnload = nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      const vlmUnload = nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
+
+      await modelCoordinator.prepareForImageGen();
+
+      assert.ok(vlmUnload.isDone(), 'Should POST to vlm /unload endpoint - Flux ~10GB needs full GPU');
+      assert.ok(llmUnload.isDone(), 'Should also unload llm');
+    });
+
     test('should handle LLM service unavailable gracefully', async () => {
       nock('http://localhost:8003')
         .post('/unload')
         .replyWithError('ECONNREFUSED');
+
+      nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, { status: 'unloaded' });
 
       // Should not throw
       await assert.doesNotReject(
@@ -95,7 +178,7 @@ describe('ModelCoordinator', () => {
     });
   });
 
-  describe('🔴 service unavailable handling', () => {
+  describe('🟢 service unavailable handling', () => {
     test('should handle all services unavailable without throwing', async () => {
       nock('http://localhost:8001')
         .post('/unload')
@@ -136,7 +219,7 @@ describe('ModelCoordinator', () => {
     });
   });
 
-  describe('🔴 getModelStates', () => {
+  describe('🟢 getModelStates', () => {
     test('should return current state of all models', async () => {
       const state = modelCoordinator.getModelStates();
 
@@ -173,7 +256,7 @@ describe('ModelCoordinator', () => {
     });
   });
 
-  describe('🔴 cleanupAll', () => {
+  describe('🟢 cleanupAll', () => {
     test('should unload all services', async () => {
       const llmUnload = nock('http://localhost:8003')
         .post('/unload')
@@ -221,6 +304,332 @@ describe('ModelCoordinator', () => {
         () => modelCoordinator.cleanupAll(),
         'Should handle partial service failures'
       );
+    });
+  });
+
+  describe('🟢 GPU Lock (serialize model operations)', () => {
+    test('should serialize concurrent prepareForLLM and prepareForVLM calls', async () => {
+      // Track the order of operations
+      const operationOrder = [];
+
+      // Mock slow unload for flux (simulates real GPU unload time)
+      nock('http://localhost:8001')
+        .post('/unload')
+        .delay(100) // 100ms delay
+        .reply(200, () => {
+          operationOrder.push('flux-unload-1');
+          return { status: 'unloaded' };
+        });
+
+      // Second flux unload (for prepareForVLM)
+      nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, () => {
+          operationOrder.push('flux-unload-2');
+          return { status: 'unloaded' };
+        });
+
+      // VLM unload (for prepareForLLM)
+      nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, () => {
+          operationOrder.push('vlm-unload');
+          return { status: 'unloaded' };
+        });
+
+      // LLM unload (for prepareForVLM)
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, () => {
+          operationOrder.push('llm-unload');
+          return { status: 'unloaded' };
+        });
+
+      // Start both operations concurrently
+      const llmPromise = modelCoordinator.prepareForLLM();
+      const vlmPromise = modelCoordinator.prepareForVLM();
+
+      await Promise.all([llmPromise, vlmPromise]);
+
+      // With proper locking, operations should be serialized
+      // First operation's unloads should complete before second operation starts
+      // The exact order depends on which acquires the lock first, but they shouldn't interleave
+      assert.ok(operationOrder.length >= 3, `Should have at least 3 operations, got ${operationOrder.length}`);
+
+      // Check that operations don't interleave (all of first op before second)
+      // Either LLM ops finish first, or VLM ops finish first
+      const firstTwoOps = operationOrder.slice(0, 2);
+      const isLLMFirst = firstTwoOps.includes('flux-unload-1') && firstTwoOps.includes('vlm-unload');
+      const isVLMFirst = firstTwoOps.includes('flux-unload-2') && firstTwoOps.includes('llm-unload');
+
+      assert.ok(isLLMFirst || isVLMFirst,
+        `Operations should not interleave. Order was: ${operationOrder.join(' -> ')}`);
+    });
+
+    test('should have acquireGPULock method', () => {
+      assert.strictEqual(typeof modelCoordinator.acquireGPULock, 'function',
+        'Should export acquireGPULock method');
+    });
+
+    test('should have releaseGPULock method', () => {
+      assert.strictEqual(typeof modelCoordinator.releaseGPULock, 'function',
+        'Should export releaseGPULock method');
+    });
+
+    test('acquireGPULock should return a release function', async () => {
+      const release = await modelCoordinator.acquireGPULock();
+      assert.strictEqual(typeof release, 'function', 'Should return a release function');
+      release(); // Clean up
+    });
+
+    test('second acquireGPULock should wait until first is released', async () => {
+      const events = [];
+
+      // Acquire first lock
+      const release1 = await modelCoordinator.acquireGPULock();
+      events.push('lock1-acquired');
+
+      // Try to acquire second lock (should wait)
+      const lock2Promise = modelCoordinator.acquireGPULock().then(release => {
+        events.push('lock2-acquired');
+        return release;
+      });
+
+      // Give time for lock2 to potentially acquire (it shouldn't)
+      await new Promise(r => setTimeout(r, 50));
+
+      // lock2 should NOT have acquired yet
+      assert.ok(!events.includes('lock2-acquired'),
+        'Second lock should wait for first to be released');
+
+      // Release first lock
+      release1();
+      events.push('lock1-released');
+
+      // Now lock2 should acquire
+      const release2 = await lock2Promise;
+      release2();
+
+      assert.deepStrictEqual(events, ['lock1-acquired', 'lock1-released', 'lock2-acquired'],
+        'Locks should be serialized');
+    });
+
+    test('prepareForImageGen should wait for ongoing prepareForVLM to complete', async () => {
+      const events = [];
+
+      // Mock slow VLM unload operations
+      nock('http://localhost:8001')
+        .post('/unload')
+        .delay(100)
+        .reply(200, () => {
+          events.push('flux-unload-vlm');
+          return { status: 'unloaded' };
+        });
+
+      nock('http://localhost:8003')
+        .post('/unload')
+        .delay(50)
+        .reply(200, () => {
+          events.push('llm-unload-vlm');
+          return { status: 'unloaded' };
+        });
+
+      // Mock ImageGen unloads (will happen after VLM completes)
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('llm-unload-flux');
+          return { status: 'unloaded' };
+        });
+
+      nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('vlm-unload-flux');
+          return { status: 'unloaded' };
+        });
+
+      // Start VLM prep first
+      const vlmPromise = modelCoordinator.prepareForVLM().then(() => {
+        events.push('vlm-complete');
+      });
+
+      // Start ImageGen prep immediately after (should wait)
+      const imageGenPromise = modelCoordinator.prepareForImageGen().then(() => {
+        events.push('imagegen-complete');
+      });
+
+      await Promise.all([vlmPromise, imageGenPromise]);
+
+      // VLM should complete before ImageGen starts its unloads
+      const vlmCompleteIdx = events.indexOf('vlm-complete');
+      const imageGenUnloadIdx = events.findIndex(e => e.includes('-flux'));
+
+      assert.ok(vlmCompleteIdx < imageGenUnloadIdx,
+        `VLM should complete before ImageGen unloads. Order: ${events.join(' -> ')}`);
+    });
+
+    test('should have withGPULock method for holding lock during full operations', () => {
+      assert.strictEqual(typeof modelCoordinator.withGPULock, 'function',
+        'Should export withGPULock method');
+    });
+
+    test('withGPULock should hold lock for entire async operation', async () => {
+      const events = [];
+
+      // Long operation that holds the lock
+      const longOpPromise = modelCoordinator.withGPULock(async () => {
+        events.push('long-op-start');
+        await new Promise(r => setTimeout(r, 100));
+        events.push('long-op-end');
+        return 'long-op-result';
+      });
+
+      // Short operation that tries to run immediately after
+      const shortOpPromise = modelCoordinator.withGPULock(async () => {
+        events.push('short-op-start');
+        return 'short-op-result';
+      });
+
+      const [longResult, shortResult] = await Promise.all([longOpPromise, shortOpPromise]);
+
+      // Short op should wait for long op to finish
+      assert.deepStrictEqual(events, ['long-op-start', 'long-op-end', 'short-op-start'],
+        'Short op should wait for long op to complete');
+      assert.strictEqual(longResult, 'long-op-result');
+      assert.strictEqual(shortResult, 'short-op-result');
+    });
+
+    test('withGPULock should release lock even if operation throws', async () => {
+      // First operation throws
+      try {
+        await modelCoordinator.withGPULock(async () => {
+          throw new Error('Operation failed');
+        });
+      } catch (e) {
+        // Expected
+      }
+
+      // Second operation should still be able to acquire lock
+      let secondOpRan = false;
+      await modelCoordinator.withGPULock(async () => {
+        secondOpRan = true;
+      });
+
+      assert.ok(secondOpRan, 'Second operation should run after first throws');
+    });
+
+    test('withGPULock should block prepareFor* calls during long operation', async () => {
+      const events = [];
+
+      // Mock endpoints
+      nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('flux-unload');
+          return { status: 'unloaded' };
+        });
+
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('llm-unload');
+          return { status: 'unloaded' };
+        });
+
+      // Long VLM operation holding the lock
+      const vlmOpPromise = modelCoordinator.withGPULock(async () => {
+        events.push('vlm-inference-start');
+        await new Promise(r => setTimeout(r, 100));
+        events.push('vlm-inference-end');
+      });
+
+      // prepareForImageGen tries to run (should wait)
+      const imageGenPromise = modelCoordinator.prepareForImageGen().then(() => {
+        events.push('imagegen-ready');
+      });
+
+      await Promise.all([vlmOpPromise, imageGenPromise]);
+
+      // VLM inference should complete BEFORE ImageGen prepares (unloads models)
+      const vlmEndIdx = events.indexOf('vlm-inference-end');
+      const unloadIdx = events.findIndex(e => e.includes('unload'));
+
+      assert.ok(vlmEndIdx < unloadIdx,
+        `VLM inference must complete before model unloading. Order: ${events.join(' -> ')}`);
+    });
+
+    test('should have withVLMOperation for combined prepare+operation', () => {
+      assert.strictEqual(typeof modelCoordinator.withVLMOperation, 'function',
+        'Should export withVLMOperation method');
+    });
+
+    test('withVLMOperation should prepare and hold lock for entire operation', async () => {
+      const events = [];
+
+      // Mock VLM prepare endpoints
+      nock('http://localhost:8001')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('flux-unload');
+          return { status: 'unloaded' };
+        });
+
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('llm-unload');
+          return { status: 'unloaded' };
+        });
+
+      // Mock ImageGen prepare endpoints (for second operation)
+      nock('http://localhost:8003')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('llm-unload-imagegen');
+          return { status: 'unloaded' };
+        });
+
+      nock('http://localhost:8004')
+        .post('/unload')
+        .reply(200, () => {
+          events.push('vlm-unload-imagegen');
+          return { status: 'unloaded' };
+        });
+
+      // VLM operation with prepare + long inference
+      const vlmPromise = modelCoordinator.withVLMOperation(async () => {
+        events.push('vlm-inference-start');
+        await new Promise(r => setTimeout(r, 100));
+        events.push('vlm-inference-end');
+        return 'vlm-result';
+      });
+
+      // ImageGen prep tries to run (should wait for VLM inference to complete)
+      const imageGenPromise = modelCoordinator.prepareForImageGen().then(() => {
+        events.push('imagegen-ready');
+      });
+
+      const [vlmResult] = await Promise.all([vlmPromise, imageGenPromise]);
+
+      assert.strictEqual(vlmResult, 'vlm-result');
+
+      // VLM inference must complete BEFORE ImageGen unloads (vlm-unload-imagegen)
+      const vlmEndIdx = events.indexOf('vlm-inference-end');
+      const imageGenUnloadIdx = events.indexOf('vlm-unload-imagegen');
+
+      assert.ok(vlmEndIdx < imageGenUnloadIdx,
+        `VLM inference must complete before ImageGen unloads VLM. Order: ${events.join(' -> ')}`);
+    });
+
+    test('should have withImageGenOperation for combined prepare+operation', () => {
+      assert.strictEqual(typeof modelCoordinator.withImageGenOperation, 'function',
+        'Should export withImageGenOperation method');
+    });
+
+    test('should have withLLMOperation for combined prepare+operation', () => {
+      assert.strictEqual(typeof modelCoordinator.withLLMOperation, 'function',
+        'Should export withLLMOperation method');
     });
   });
 });
