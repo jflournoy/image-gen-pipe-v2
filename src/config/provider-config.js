@@ -94,7 +94,15 @@ const providerConfig = {
   flux: {
     apiUrl: process.env.FLUX_API_URL || 'http://localhost:8001',
     model: process.env.FLUX_MODEL || 'flux-dev',  // FLUX.1-dev for quality + LoRA support (auto fp8)
-    loras: process.env.FLUX_LORAS ? JSON.parse(process.env.FLUX_LORAS) : []
+    loras: process.env.FLUX_LORAS ? JSON.parse(process.env.FLUX_LORAS) : [],
+    // Generation settings - can be overridden per-request or via environment variables
+    generation: {
+      steps: parseInt(process.env.FLUX_STEPS || '25', 10),        // Inference steps (15-50, default 25)
+      guidance: parseFloat(process.env.FLUX_GUIDANCE || '3.5'),   // Guidance scale (1.0-20.0, Flux uses lower values)
+      width: parseInt(process.env.FLUX_WIDTH || '1024', 10),      // Image width (512-2048)
+      height: parseInt(process.env.FLUX_HEIGHT || '1024', 10),    // Image height (512-2048)
+      loraScale: process.env.FLUX_LORA_SCALE ? parseFloat(process.env.FLUX_LORA_SCALE) : null  // LoRA strength (0.0-2.0)
+    }
   },
 
   // Local Vision Configuration (CLIP + Aesthetics)

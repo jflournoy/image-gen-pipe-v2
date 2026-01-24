@@ -8,6 +8,7 @@ const axios = require('axios');
 const fs = require('fs').promises;
 const path = require('path');
 const OutputPathManager = require('../utils/output-path-manager.js');
+const providerConfig = require('../config/provider-config.js');
 
 /**
  * Flux Image Provider
@@ -20,12 +21,23 @@ class FluxImageProvider {
    * @param {string} options.model - Model identifier/path
    * @param {string} options.sessionId - Session ID for output organization
    * @param {string} options.outputDir - Base output directory
+   * @param {Object} options.generation - Generation settings (steps, guidance, width, height, loraScale)
    */
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || 'http://localhost:8001';
     this.model = options.model || 'flux-dev'; // Default to FLUX.1-dev (quality + LoRA, auto fp8)
     this.sessionId = options.sessionId;
     this.outputDir = options.outputDir || 'output';
+
+    // Merge generation settings: options > config defaults
+    const configDefaults = providerConfig.flux?.generation || {};
+    this.generation = {
+      steps: options.generation?.steps ?? configDefaults.steps ?? 25,
+      guidance: options.generation?.guidance ?? configDefaults.guidance ?? 3.5,
+      width: options.generation?.width ?? configDefaults.width ?? 1024,
+      height: options.generation?.height ?? configDefaults.height ?? 1024,
+      loraScale: options.generation?.loraScale ?? configDefaults.loraScale ?? null
+    };
   }
 
   /**
@@ -62,17 +74,18 @@ class FluxImageProvider {
       const modelStatus = await this.checkModelStatus();
       const isFirstTimeDownload = modelStatus.status === 'not_downloaded';
 
-      // Build request payload
+      // Build request payload - merge per-request options with instance defaults
       const payload = {
         model: this.model,
         prompt: prompt,
-        height: options.height || 1024,
-        width: options.width || 1024,
-        steps: options.steps || 30,
-        guidance: options.guidance || 7.5,
+        height: options.height ?? this.generation.height,
+        width: options.width ?? this.generation.width,
+        steps: options.steps ?? this.generation.steps,
+        guidance: options.guidance ?? this.generation.guidance,
         seed: options.seed !== undefined ? options.seed : null, // null = random
         negativePrompt: options.negativePrompt || '',
-        loras: options.loras || []
+        loras: options.loras || [],
+        lora_scale: options.loraScale ?? this.generation.loraScale
       };
 
       // Use extended timeout if model needs downloading (~12GB can take 30+ min)
