@@ -236,11 +236,15 @@ describe('LocalVLMProvider', () => {
         { localPath: '/img3.png', metadata: { id: 3 } }
       ];
 
-      const ranked = await provider.rankImages(images, 'test prompt');
+      const result = await provider.rankImages(images, 'test prompt');
 
-      assert.ok(Array.isArray(ranked), 'Should return array');
-      assert.strictEqual(ranked.length, images.length, 'Should return all images');
-      assert.ok(ranked[0].rank !== undefined, 'Should have rank property');
+      // Should return object with rankings array and metadata
+      assert.ok(result.rankings, 'Should return rankings');
+      assert.ok(Array.isArray(result.rankings), 'rankings should be array');
+      assert.strictEqual(result.rankings.length, images.length, 'Should return all images');
+      assert.ok(result.rankings[0].rank !== undefined, 'Should have rank property');
+      assert.ok(result.metadata, 'Should have metadata');
+      assert.ok(Array.isArray(result.metadata.errors), 'Should have errors array in metadata');
     });
 
     it('should perform O(n log n) comparisons using sorting', async () => {
@@ -457,7 +461,8 @@ describe('LocalVLMProvider', () => {
         { localPath: '/img3.png', candidateId: 3 }
       ];
 
-      const ranked = await provider.rankImages(images, 'test prompt');
+      const result = await provider.rankImages(images, 'test prompt');
+      const ranked = result.rankings;
 
       // Top-ranked image should have feedback for CritiqueGenerator
       const winner = ranked.find(r => r.rank === 1);
