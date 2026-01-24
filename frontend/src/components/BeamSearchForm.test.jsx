@@ -106,3 +106,135 @@ describe('🔴 RED: BeamSearchForm Component', () => {
     )
   })
 })
+
+describe('🔴 RED: BeamSearchForm - Flux Generation Settings', () => {
+  it('should have a collapsible Advanced Settings section', () => {
+    render(<BeamSearchForm />)
+
+    // Should have an expandable section for advanced settings
+    const advancedToggle = screen.getByRole('button', { name: /advanced settings/i })
+    expect(advancedToggle).toBeInTheDocument()
+  })
+
+  it('should render Flux settings inputs when expanded', async () => {
+    const user = userEvent.setup()
+    render(<BeamSearchForm />)
+
+    // Expand advanced settings
+    const advancedToggle = screen.getByRole('button', { name: /advanced settings/i })
+    await user.click(advancedToggle)
+
+    // Should have Flux-specific inputs
+    expect(screen.getByLabelText(/steps/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/guidance/i)).toBeInTheDocument()
+  })
+
+  it('should have default values for Flux settings', async () => {
+    const user = userEvent.setup()
+    render(<BeamSearchForm />)
+
+    // Expand advanced settings
+    await user.click(screen.getByRole('button', { name: /advanced settings/i }))
+
+    // Default values should match Flux service defaults
+    expect(screen.getByLabelText(/steps/i)).toHaveValue(25)
+    expect(screen.getByLabelText(/guidance/i)).toHaveValue(3.5)
+  })
+
+  it('should include fluxOptions in submit data when modified', async () => {
+    const handleSubmit = vi.fn()
+    const user = userEvent.setup()
+
+    render(<BeamSearchForm onSubmit={handleSubmit} />)
+
+    // Fill prompt
+    await user.type(screen.getByLabelText(/prompt/i), 'test prompt')
+
+    // Expand advanced settings and modify Flux options
+    await user.click(screen.getByRole('button', { name: /advanced settings/i }))
+
+    const stepsInput = screen.getByLabelText(/steps/i)
+    await user.clear(stepsInput)
+    await user.type(stepsInput, '35')
+
+    const guidanceInput = screen.getByLabelText(/guidance/i)
+    await user.clear(guidanceInput)
+    await user.type(guidanceInput, '4.5')
+
+    // Submit form
+    await user.click(screen.getByRole('button', { name: /start beam search/i }))
+
+    // Assert: fluxOptions should be included in submit data
+    expect(handleSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        prompt: 'test prompt',
+        fluxOptions: expect.objectContaining({
+          steps: 35,
+          guidance: 4.5
+        })
+      })
+    )
+  })
+
+  it('should have optional seed input for reproducibility', async () => {
+    const handleSubmit = vi.fn()
+    const user = userEvent.setup()
+
+    render(<BeamSearchForm onSubmit={handleSubmit} />)
+
+    // Fill prompt
+    await user.type(screen.getByLabelText(/prompt/i), 'test prompt')
+
+    // Expand advanced settings
+    await user.click(screen.getByRole('button', { name: /advanced settings/i }))
+
+    // Should have seed input (optional, empty by default)
+    const seedInput = screen.getByLabelText(/seed/i)
+    expect(seedInput).toBeInTheDocument()
+    expect(seedInput).toHaveValue(null) // Empty number input
+
+    // Set a seed value
+    await user.type(seedInput, '42')
+
+    // Submit form
+    await user.click(screen.getByRole('button', { name: /start beam search/i }))
+
+    // Assert: seed should be included in fluxOptions
+    expect(handleSubmit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fluxOptions: expect.objectContaining({
+          seed: 42
+        })
+      })
+    )
+  })
+
+  it('should validate steps is within range (15-50)', async () => {
+    const user = userEvent.setup()
+    render(<BeamSearchForm />)
+
+    // Expand advanced settings
+    await user.click(screen.getByRole('button', { name: /advanced settings/i }))
+
+    const stepsInput = screen.getByLabelText(/steps/i)
+
+    // Check min/max attributes
+    expect(stepsInput).toHaveAttribute('min', '15')
+    expect(stepsInput).toHaveAttribute('max', '50')
+  })
+
+  it('should validate guidance is within range (1.0-20.0)', async () => {
+    const user = userEvent.setup()
+    render(<BeamSearchForm />)
+
+    // Expand advanced settings
+    await user.click(screen.getByRole('button', { name: /advanced settings/i }))
+
+    const guidanceInput = screen.getByLabelText(/guidance/i)
+
+    // Check min/max attributes
+    expect(guidanceInput).toHaveAttribute('min', '1')
+    expect(guidanceInput).toHaveAttribute('max', '20')
+    expect(guidanceInput).toHaveAttribute('step', '0.5')
+  })
+})
