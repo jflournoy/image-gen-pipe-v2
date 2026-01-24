@@ -1293,7 +1293,10 @@ async function beamSearch(userPrompt, providers, config) {
   let rankingResults = null; // Store ranking results for emission in worker
 
   if (useComparativeRanking) {
-    rankingResults = await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker, onStepProgress });
+    // Hold GPU lock during entire VLM ranking to prevent model switching mid-operation
+    rankingResults = await modelCoordinator.withVLMOperation(async () => {
+      return await rankAndSelectComparative(candidates, keepTop, imageRanker, userPrompt, { ensembleSize, tokenTracker, onStepProgress });
+    });
     topCandidates = rankingResults.topCandidates;
     // Update candidates array to include ranking data for metadata tracking
     candidates = rankingResults.allRanked;
@@ -1344,6 +1347,9 @@ async function beamSearch(userPrompt, providers, config) {
 
   // Iterations 1+: Refinement
   for (let iteration = 1; iteration < maxIterations; iteration++) {
+    // Unload VLM (from previous ranking) before LLM operations
+    await modelCoordinator.prepareForLLM();
+
     // Generate N children from M parents
     // Note: onCandidateProcessed is called inside refinementIteration as each candidate completes
     candidates = await refinementIteration(
@@ -1363,9 +1369,11 @@ async function beamSearch(userPrompt, providers, config) {
 
     // Use comparative ranking if imageRanker provided, otherwise use score-based ranking
     if (useComparativeRanking) {
-      // Pass previous top candidates to avoid re-comparing known pairs
+      // Hold GPU lock during entire VLM ranking to prevent model switching mid-operation
       const previousTop = topCandidates;
-      const iterationRankingResults = await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker, onStepProgress });
+      const iterationRankingResults = await modelCoordinator.withVLMOperation(async () => {
+        return await rankAndSelectComparative(allCandidates, keepTop, imageRanker, userPrompt, { previousTopCandidates: previousTop, ensembleSize, tokenTracker, onStepProgress });
+      });
       topCandidates = iterationRankingResults.topCandidates;
       rankingResults = iterationRankingResults; // Store for emission
 
