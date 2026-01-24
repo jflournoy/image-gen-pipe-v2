@@ -10,6 +10,10 @@ const axios = require('axios');
 const DEFAULT_API_URL = process.env.LOCAL_VLM_URL || 'http://localhost:8004';
 const DEFAULT_MODEL = 'llava-v1.6-mistral-7b.Q4_K_M.gguf';
 
+// Multi-factor ranking weights (matching ImageRanker)
+// Default: 70% alignment (prompt match), 30% aesthetics
+const DEFAULT_ALIGNMENT_WEIGHT = 0.7;
+
 /**
  * Comparison Graph for transitive inference
  * Tracks A > B relationships and infers A > C when A > B and B > C
@@ -68,10 +72,25 @@ class LocalVLMProvider {
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || DEFAULT_API_URL;
     this.model = options.model || DEFAULT_MODEL;
-    this.timeout = options.timeout || 60000; // 60s for VLM inference
+    // VLM comparisons take 150-160s on 12GB GPU with Qwen2.5-VL-7B
+    // Default 180s (3min) with env override for flexibility
+    this.timeout = options.timeout || parseInt(process.env.VLM_TIMEOUT_MS || '180000', 10);
     this._axios = axios; // Allow injection for testing
     this._comparisonGraph = new ComparisonGraph();
     this._errors = [];
+    // Multi-factor ranking weight (matching ImageRanker)
+    this.alignmentWeight = options.alignmentWeight ?? DEFAULT_ALIGNMENT_WEIGHT;
+  }
+
+  /**
+   * Calculate combined rank score from alignment and aesthetics ranks
+   * Lower combined score is better (rank 1 is better than rank 2)
+   * @private
+   */
+  _calculateCombinedRank(imageRanks) {
+    const alignWeight = this.alignmentWeight;
+    const aestheticWeight = 1 - alignWeight;
+    return (alignWeight * imageRanks.alignment) + (aestheticWeight * imageRanks.aesthetics);
   }
 
   /**
@@ -94,10 +113,11 @@ class LocalVLMProvider {
 
   /**
    * Compare two images against a prompt
+   * Returns structured feedback matching OpenAI ImageRanker.compareTwo() interface
    * @param {string} imageA - Path to first image
    * @param {string} imageB - Path to second image
    * @param {string} prompt - The prompt to evaluate images against
-   * @returns {Promise<{choice: 'A'|'B'|'TIE', explanation: string, confidence: number}>}
+   * @returns {Promise<{choice: 'A'|'B'|'TIE', explanation: string, confidence: number, ranks: Object, winnerStrengths: string[], loserWeaknesses: string[], improvementSuggestion: string}>}
    */
   async compareImages(imageA, imageB, prompt) {
     try {
@@ -111,10 +131,33 @@ class LocalVLMProvider {
         { timeout: this.timeout }
       );
 
+      const data = response.data;
+
+      // Parse ranks and calculate combined scores
+      let ranks = data.ranks || {
+        A: { alignment: 1, aesthetics: 1 },
+        B: { alignment: 2, aesthetics: 2 }
+      };
+
+      // Ensure ranks have alignment and aesthetics
+      for (const img of ['A', 'B']) {
+        if (ranks[img]) {
+          ranks[img].alignment = ranks[img].alignment || 1;
+          ranks[img].aesthetics = ranks[img].aesthetics || 1;
+          // Calculate combined rank score (lower is better)
+          ranks[img].combined = this._calculateCombinedRank(ranks[img]);
+        }
+      }
+
+      // Map snake_case from Python to camelCase for JS
       return {
-        choice: response.data.choice,
-        explanation: response.data.explanation || '',
-        confidence: response.data.confidence || 0.5
+        choice: data.choice,
+        explanation: data.explanation || '',
+        confidence: data.confidence || 0.5,
+        ranks: ranks,
+        winnerStrengths: data.winner_strengths || [],
+        loserWeaknesses: data.loser_weaknesses || [],
+        improvementSuggestion: data.improvement_suggestion || ''
       };
     } catch (error) {
       if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
@@ -205,12 +248,20 @@ class LocalVLMProvider {
 
   /**
    * All-pairs comparison strategy for small N
+   * Tracks structured feedback for CritiqueGenerator
    * @private
    */
   async _rankAllPairs(images, prompt, options = {}) {
     const { onProgress, gracefulDegradation } = options;
     const winCounts = new Map(images.map(img => [img.candidateId, 0]));
     const pairs = [];
+    // Track feedback per candidate for final ranking
+    const candidateFeedback = new Map(images.map(img => [img.candidateId, {
+      strengths: [],
+      weaknesses: [],
+      lastRanks: null,
+      improvementSuggestion: ''
+    }]));
 
     // Generate all unique pairs
     for (let i = 0; i < images.length; i++) {
@@ -242,16 +293,39 @@ class LocalVLMProvider {
           const result = await this.compareImages(this._getImagePath(a), this._getImagePath(b), prompt);
           this._comparisonGraph.recordComparison(a.candidateId, b.candidateId, result.choice);
 
+          // Track feedback for winner and loser
+          const winnerId = result.choice === 'A' ? a.candidateId : b.candidateId;
+          const loserId = result.choice === 'A' ? b.candidateId : a.candidateId;
+
           if (result.choice === 'A' || result.choice === 'TIE') {
             winCounts.set(a.candidateId, winCounts.get(a.candidateId) + 1);
           } else {
             winCounts.set(b.candidateId, winCounts.get(b.candidateId) + 1);
           }
+
+          // Store feedback for the winner
+          const winnerFeedback = candidateFeedback.get(winnerId);
+          if (result.winnerStrengths?.length > 0) {
+            winnerFeedback.strengths.push(...result.winnerStrengths);
+          }
+          if (result.ranks) {
+            winnerFeedback.lastRanks = result.choice === 'A' ? result.ranks.A : result.ranks.B;
+          }
+          if (result.improvementSuggestion) {
+            winnerFeedback.improvementSuggestion = result.improvementSuggestion;
+          }
+
+          // Store weaknesses for the loser
+          const loserFeedback = candidateFeedback.get(loserId);
+          if (result.loserWeaknesses?.length > 0) {
+            loserFeedback.weaknesses.push(...result.loserWeaknesses);
+          }
+
           completed++;
           if (onProgress) {
             onProgress({
               type: 'comparison', completed, total, candidateA: a.candidateId, candidateB: b.candidateId,
-              winner: result.choice === 'A' ? a.candidateId : b.candidateId, inferred: false
+              winner: winnerId, inferred: false
             });
           }
         } catch (error) {
@@ -270,17 +344,30 @@ class LocalVLMProvider {
       .map(img => ({ ...img, wins: winCounts.get(img.candidateId) || 0 }))
       .sort((a, b) => b.wins - a.wins);
 
-    return ranked.map((img, i) => ({
-      candidateId: img.candidateId,
-      localPath: img.localPath,
-      rank: i + 1,
-      wins: img.wins,
-      reason: `Rank ${i + 1} with ${img.wins} wins in all-pairs comparison`
-    }));
+    return ranked.map((img, i) => {
+      const feedback = candidateFeedback.get(img.candidateId);
+      // Deduplicate strengths/weaknesses
+      const uniqueStrengths = [...new Set(feedback.strengths)];
+      const uniqueWeaknesses = [...new Set(feedback.weaknesses)];
+
+      return {
+        candidateId: img.candidateId,
+        localPath: img.localPath,
+        rank: i + 1,
+        wins: img.wins,
+        reason: `Rank ${i + 1} with ${img.wins} wins in all-pairs comparison`,
+        // Include structured feedback for CritiqueGenerator
+        strengths: uniqueStrengths.length > 0 ? uniqueStrengths : undefined,
+        weaknesses: uniqueWeaknesses.length > 0 ? uniqueWeaknesses : undefined,
+        ranks: feedback.lastRanks || undefined,
+        improvementSuggestion: feedback.improvementSuggestion || undefined
+      };
+    });
   }
 
   /**
    * Tournament-style selection for large N
+   * Returns structured feedback for CritiqueGenerator
    * @private
    */
   async _rankTournament(images, prompt, options = {}) {
@@ -302,13 +389,19 @@ class LocalVLMProvider {
       }
 
       // Find best among remaining using tournament
-      const { winner, reason } = await this._findBestWithTransitivity(remaining, prompt, { onProgress, gracefulDegradation });
+      const { winner, reason, strengths, weaknesses, ranks, improvementSuggestion } =
+        await this._findBestWithTransitivity(remaining, prompt, { onProgress, gracefulDegradation });
 
       ranked.push({
         candidateId: winner.candidateId,
         localPath: winner.localPath,
         rank,
-        reason
+        reason,
+        // Include structured feedback for CritiqueGenerator
+        strengths: strengths?.length > 0 ? strengths : undefined,
+        weaknesses: weaknesses?.length > 0 ? weaknesses : undefined,
+        ranks: ranks || undefined,
+        improvementSuggestion: improvementSuggestion || undefined
       });
 
       const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
@@ -320,17 +413,22 @@ class LocalVLMProvider {
 
   /**
    * Find best candidate using tournament with transitivity
+   * Returns structured feedback for CritiqueGenerator
    * @private
    */
   async _findBestWithTransitivity(candidates, prompt, options = {}) {
     const { onProgress, gracefulDegradation } = options;
 
     if (candidates.length === 1) {
-      return { winner: candidates[0], reason: 'Only candidate' };
+      return { winner: candidates[0], reason: 'Only candidate', strengths: [], weaknesses: [] };
     }
 
     let champion = candidates[0];
     let championReason = 'Initial candidate';
+    let championStrengths = [];
+    let championWeaknesses = [];
+    let championRanks = null;
+    let championImprovementSuggestion = '';
 
     for (let i = 1; i < candidates.length; i++) {
       const challenger = candidates[i];
@@ -340,6 +438,9 @@ class LocalVLMProvider {
         if (inferred.winner !== champion.candidateId) {
           champion = challenger;
           championReason = 'Better than previous champion (inferred via transitivity)';
+          // Reset feedback when champion changes via inference
+          championStrengths = [];
+          championWeaknesses = [];
         }
         if (onProgress) {
           onProgress({ type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId, inferred: true });
@@ -352,9 +453,19 @@ class LocalVLMProvider {
           if (result.choice === 'B') {
             champion = challenger;
             championReason = result.explanation || 'Won comparison';
+            // Update feedback with winner's strengths
+            championStrengths = result.winnerStrengths || [];
+            championRanks = result.ranks?.B || null;
           } else {
             championReason = result.explanation || 'Defended championship';
+            // Update feedback with winner's strengths
+            championStrengths = result.winnerStrengths || [];
+            championRanks = result.ranks?.A || null;
           }
+          // Store weaknesses from comparison (for loser context)
+          championWeaknesses = result.loserWeaknesses || [];
+          championImprovementSuggestion = result.improvementSuggestion || '';
+
           if (onProgress) {
             onProgress({
               type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId,
@@ -368,7 +479,14 @@ class LocalVLMProvider {
       }
     }
 
-    return { winner: champion, reason: championReason };
+    return {
+      winner: champion,
+      reason: championReason,
+      strengths: championStrengths,
+      weaknesses: championWeaknesses,
+      ranks: championRanks,
+      improvementSuggestion: championImprovementSuggestion
+    };
   }
 
   /**

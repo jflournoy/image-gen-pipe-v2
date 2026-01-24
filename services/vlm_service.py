@@ -80,11 +80,21 @@ class CompareRequest(BaseModel):
     prompt: str   # The prompt to evaluate images against
 
 
+class ImageRanks(BaseModel):
+    """Per-image ranking scores"""
+    alignment: int     # Rank 1 (better) or 2 (worse) for prompt adherence
+    aesthetics: int    # Rank 1 (better) or 2 (worse) for visual quality
+
+
 class CompareResponse(BaseModel):
-    """Pairwise image comparison response"""
-    choice: str        # 'A', 'B', or 'TIE'
-    explanation: str   # Reasoning for the choice
-    confidence: float  # 0.0-1.0 confidence score
+    """Pairwise image comparison response - matches OpenAI ImageRanker interface"""
+    choice: str                          # 'A', 'B', or 'TIE'
+    explanation: str                     # Reasoning for the choice
+    confidence: float                    # 0.0-1.0 confidence score
+    ranks: Optional[dict] = None         # {A: {alignment, aesthetics}, B: {alignment, aesthetics}}
+    winner_strengths: Optional[list] = None   # What winner does well
+    loser_weaknesses: Optional[list] = None   # What loser could improve
+    improvement_suggestion: Optional[str] = None  # Actionable prompt refinement
 
 
 def encode_image(image_path: str) -> str:
@@ -293,18 +303,25 @@ async def compare_images(request: CompareRequest):
         except FileNotFoundError as e:
             raise HTTPException(status_code=400, detail=str(e))
 
-        # Create comparison prompt
+        # Create comparison prompt with multi-factor evaluation
+        # This format matches OpenAI ImageRanker for drop-in compatibility
         comparison_prompt = f"""You are an image evaluation expert. Compare these two images (A and B) against this prompt:
 
 PROMPT: "{request.prompt}"
 
-Evaluate both images and determine which one better matches the prompt. Consider:
-1. How well does each image capture the subject matter described?
-2. How well does each image capture the style/mood described?
-3. Overall quality and coherence of each image
+Evaluate both images on TWO dimensions:
+1. ALIGNMENT (prompt adherence): How well does each image match the content/subject described?
+2. AESTHETICS (visual quality): Composition, lighting, color harmony, technical quality
+
+For each dimension, rank the images 1 (better) or 2 (worse).
+
+Also identify:
+- Winner's STRENGTHS: What the better image does well (2-3 points)
+- Loser's WEAKNESSES: What the worse image could improve (2-3 points)
+- IMPROVEMENT: One specific, actionable suggestion to improve the prompt
 
 Respond ONLY with a JSON object in this exact format:
-{{"choice": "A" or "B" or "TIE", "explanation": "brief reason", "confidence": 0.0-1.0}}"""
+{{"choice": "A" or "B" or "TIE", "explanation": "brief reason mentioning alignment and aesthetics", "confidence": 0.0-1.0, "ranks": {{"A": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}, "B": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}}}, "winner_strengths": ["strength1", "strength2"], "loser_weaknesses": ["weakness1", "weakness2"], "improvement_suggestion": "specific prompt improvement"}}"""
 
         print(f'[VLM Service] Comparing images for: {request.prompt[:50]}...')
         start_time = time.time()
@@ -330,34 +347,90 @@ Respond ONLY with a JSON object in this exact format:
 
         # Parse response
         response_text = response['choices'][0]['message']['content']
+        print(f'[VLM Service] Raw response: {response_text[:500]}{"..." if len(response_text) > 500 else ""}')
 
         # Try to extract JSON from response
         import json
         import re
 
-        # Find JSON in response
-        json_match = re.search(r'\{[^}]+\}', response_text)
+        # Find JSON in response - support nested objects
+        json_match = re.search(r'\{(?:[^{}]|\{[^{}]*\})*\}', response_text)
         if json_match:
             try:
                 result = json.loads(json_match.group())
                 choice = result.get('choice', 'TIE').upper()
                 if choice not in ('A', 'B', 'TIE'):
+                    print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
                     choice = 'TIE'
+
+                # Extract multi-factor evaluation data
+                ranks = result.get('ranks')
+                winner_strengths = result.get('winner_strengths', [])
+                loser_weaknesses = result.get('loser_weaknesses', [])
+                improvement_suggestion = result.get('improvement_suggestion', '')
+
+                # Validate and fix ranks structure
+                if ranks:
+                    for img in ['A', 'B']:
+                        if img in ranks:
+                            # Ensure alignment and aesthetics are integers 1 or 2
+                            if isinstance(ranks[img], dict):
+                                ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
+                                ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+
+                print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
                 return CompareResponse(
                     choice=choice,
                     explanation=result.get('explanation', response_text),
-                    confidence=float(result.get('confidence', 0.5))
+                    confidence=float(result.get('confidence', 0.5)),
+                    ranks=ranks,
+                    winner_strengths=winner_strengths if winner_strengths else None,
+                    loser_weaknesses=loser_weaknesses if loser_weaknesses else None,
+                    improvement_suggestion=improvement_suggestion if improvement_suggestion else None
                 )
-            except json.JSONDecodeError:
+            except json.JSONDecodeError as e:
+                print(f'[VLM Service] JSON parse error: {e}')
                 pass
 
-        # Fallback: look for A or B in response
+        # Fallback: look for A or B in response - provide default ranks
+        print(f'[VLM Service] No valid JSON found, using fallback parsing')
+        default_ranks_a_wins = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 2, 'aesthetics': 2}}
+        default_ranks_b_wins = {'A': {'alignment': 2, 'aesthetics': 2}, 'B': {'alignment': 1, 'aesthetics': 1}}
+
         if 'image a' in response_text.lower() or response_text.strip().upper().startswith('A'):
-            return CompareResponse(choice='A', explanation=response_text, confidence=0.6)
+            print(f'[VLM Service] Fallback: chose A')
+            return CompareResponse(
+                choice='A',
+                explanation=response_text,
+                confidence=0.6,
+                ranks=default_ranks_a_wins,
+                winner_strengths=['Better overall match (inferred)'],
+                loser_weaknesses=['Lower quality match (inferred)'],
+                improvement_suggestion='Review prompt for clarity'
+            )
         elif 'image b' in response_text.lower() or response_text.strip().upper().startswith('B'):
-            return CompareResponse(choice='B', explanation=response_text, confidence=0.6)
+            print(f'[VLM Service] Fallback: chose B')
+            return CompareResponse(
+                choice='B',
+                explanation=response_text,
+                confidence=0.6,
+                ranks=default_ranks_b_wins,
+                winner_strengths=['Better overall match (inferred)'],
+                loser_weaknesses=['Lower quality match (inferred)'],
+                improvement_suggestion='Review prompt for clarity'
+            )
         else:
-            return CompareResponse(choice='TIE', explanation=response_text, confidence=0.4)
+            print(f'[VLM Service] Fallback: defaulting to TIE')
+            tie_ranks = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 1, 'aesthetics': 1}}
+            return CompareResponse(
+                choice='TIE',
+                explanation=response_text,
+                confidence=0.4,
+                ranks=tie_ranks,
+                winner_strengths=['Both images comparable'],
+                loser_weaknesses=['No clear weakness'],
+                improvement_suggestion='Add more specific details to differentiate'
+            )
 
     except HTTPException:
         raise
