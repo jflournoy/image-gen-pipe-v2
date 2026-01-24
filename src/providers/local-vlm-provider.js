@@ -184,22 +184,26 @@ class LocalVLMProvider {
    * @param {Array} [options.knownComparisons] - Pre-existing comparisons to skip
    * @param {number} [options.ensembleSize] - Ignored (VLM doesn't do ensemble voting)
    * @param {boolean} [options.gracefulDegradation] - Continue on errors
-   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string}>>}
+   * @returns {Promise<{rankings: Array, metadata: {errors: Array}}>}
    */
   async rankImages(images, prompt, options = {}) {
     if (images.length <= 1) {
-      return images.map((img, i) => ({
-        ...img,
-        candidateId: img.candidateId,
-        rank: i + 1,
-        reason: 'Only candidate'
-      }));
+      return {
+        rankings: images.map((img, i) => ({
+          ...img,
+          candidateId: img.candidateId,
+          rank: i + 1,
+          reason: 'Only candidate'
+        })),
+        metadata: { errors: [] }
+      };
     }
 
     // Delegate to the full implementation
     return this.rankImagesWithTransitivity(images, prompt, {
       knownComparisons: options.knownComparisons || [],
       gracefulDegradation: options.gracefulDegradation ?? false,
+      onProgress: options.onProgress,
       // Use all-pairs for small sets, tournament for larger
       strategy: images.length <= 8 ? 'all-pairs' : 'tournament'
     });
@@ -215,7 +219,7 @@ class LocalVLMProvider {
    * @param {string} [options.strategy] - 'all-pairs' or 'tournament'
    * @param {Function} [options.onProgress] - Progress callback
    * @param {boolean} [options.gracefulDegradation] - Continue on errors
-   * @returns {Promise<Array<{candidateId: number, rank: number, reason: string, wins?: number}>>}
+   * @returns {Promise<{rankings: Array, metadata: {errors: Array}}>}
    */
   async rankImagesWithTransitivity(images, prompt, options = {}) {
     const { knownComparisons = [], strategy, onProgress, gracefulDegradation = false } = options;
@@ -232,15 +236,24 @@ class LocalVLMProvider {
     const useAllPairs = strategy === 'all-pairs' || images.length <= 8;
 
     try {
+      let rankings;
       if (useAllPairs) {
-        return await this._rankAllPairs(images, prompt, { onProgress, gracefulDegradation });
+        rankings = await this._rankAllPairs(images, prompt, { onProgress, gracefulDegradation });
       } else {
-        return await this._rankTournament(images, prompt, { onProgress, gracefulDegradation });
+        rankings = await this._rankTournament(images, prompt, { onProgress, gracefulDegradation });
       }
+      // Return object format with errors for visibility
+      return {
+        rankings,
+        metadata: { errors: this._errors }
+      };
     } catch (error) {
       if (gracefulDegradation) {
         this._errors.push({ message: error.message, type: 'ranking_failure', fatal: true });
-        return images.map((img, i) => ({ ...img, rank: i + 1, reason: 'Ranking failed' }));
+        return {
+          rankings: images.map((img, i) => ({ ...img, rank: i + 1, reason: 'Ranking failed' })),
+          metadata: { errors: this._errors }
+        };
       }
       throw error;
     }
