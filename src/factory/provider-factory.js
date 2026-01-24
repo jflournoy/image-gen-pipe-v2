@@ -108,7 +108,8 @@ function createImageProvider(options = {}) {
     case 'flux': {
       return new FluxImageProvider({
         apiUrl: options.apiUrl || config.flux?.apiUrl || 'http://localhost:8001',
-        model: options.model || config.flux?.model || 'flux-dev'
+        model: options.model || config.flux?.model || 'flux-dev',
+        generation: options.generation || config.flux?.generation
       });
     }
 
