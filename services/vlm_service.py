@@ -338,7 +338,7 @@ Respond ONLY with a JSON object in this exact format:
                     ]
                 }
             ],
-            max_tokens=200,
+            max_tokens=500,  # Enough for full JSON response with arrays
             temperature=0.1  # Low temperature for consistent evaluations
         )
 
