@@ -361,52 +361,56 @@ Respond ONLY with a JSON object in this exact format:
             print(f'[VLM Service] Extracted from code block: {clean_text[:200]}...')
 
         # Try to parse the clean text directly as JSON first
+        result = None
         try:
-            result = json.loads(clean_text)
-            json_match = True  # Flag that we found valid JSON
+            parsed = json.loads(clean_text)
+            if isinstance(parsed, dict):
+                result = parsed
+                print(f'[VLM Service] Parsed JSON directly from clean text')
         except json.JSONDecodeError:
-            # Fallback: find JSON object with regex (handles 3 levels of nesting)
+            pass
+
+        # Fallback: find JSON object with regex (handles 3 levels of nesting)
+        if result is None:
             json_match = re.search(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', clean_text)
-            result = None
-
-        if json_match:
-            try:
-                # Parse from regex match if we haven't already parsed
-                if result is None:
+            if json_match:
+                try:
                     result = json.loads(json_match.group())
-                choice = result.get('choice', 'TIE').upper()
-                if choice not in ('A', 'B', 'TIE'):
-                    print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
-                    choice = 'TIE'
+                    print(f'[VLM Service] Parsed JSON from regex match')
+                except json.JSONDecodeError:
+                    pass
 
-                # Extract multi-factor evaluation data
-                ranks = result.get('ranks')
-                winner_strengths = result.get('winner_strengths', [])
-                loser_weaknesses = result.get('loser_weaknesses', [])
-                improvement_suggestion = result.get('improvement_suggestion', '')
+        if result is not None:
+            choice = result.get('choice', 'TIE').upper()
+            if choice not in ('A', 'B', 'TIE'):
+                print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
+                choice = 'TIE'
 
-                # Validate and fix ranks structure
-                if ranks:
-                    for img in ['A', 'B']:
-                        if img in ranks:
-                            # Ensure alignment and aesthetics are integers 1 or 2
-                            if isinstance(ranks[img], dict):
-                                ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
-                                ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+            # Extract multi-factor evaluation data
+            ranks = result.get('ranks')
+            winner_strengths = result.get('winner_strengths', [])
+            loser_weaknesses = result.get('loser_weaknesses', [])
+            improvement_suggestion = result.get('improvement_suggestion', '')
 
-                print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
-                return CompareResponse(
-                    choice=choice,
-                    explanation=result.get('explanation', response_text),
-                    confidence=float(result.get('confidence', 0.5)),
-                    ranks=ranks,
-                    winner_strengths=winner_strengths if winner_strengths else None,
-                    loser_weaknesses=loser_weaknesses if loser_weaknesses else None,
-                    improvement_suggestion=improvement_suggestion if improvement_suggestion else None
-                )
-            except json.JSONDecodeError as e:
-                print(f'[VLM Service] JSON parse error: {e}')
-                pass
+            # Validate and fix ranks structure
+            if ranks:
+                for img in ['A', 'B']:
+                    if img in ranks:
+                        # Ensure alignment and aesthetics are integers 1 or 2
+                        if isinstance(ranks[img], dict):
+                            ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
+                            ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+
+            print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
+            return CompareResponse(
+                choice=choice,
+                explanation=result.get('explanation', response_text),
+                confidence=float(result.get('confidence', 0.5)),
+                ranks=ranks,
+                winner_strengths=winner_strengths if winner_strengths else None,
+                loser_weaknesses=loser_weaknesses if loser_weaknesses else None,
+                improvement_suggestion=improvement_suggestion if improvement_suggestion else None
+            )
 
         # Fallback: look for A or B in response - provide default ranks
         print(f'[VLM Service] No valid JSON found, using fallback parsing')
