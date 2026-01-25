@@ -129,10 +129,10 @@ def load_model():
 
     try:
         from llama_cpp import Llama
-        # Try Qwen2VL handler first (for Qwen2.5-VL models), fall back to Llava15
+        # Try Qwen25VL handler first (for Qwen2.5-VL models), fall back to Llava15
         try:
-            from llama_cpp.llama_chat_format import Qwen2VLChatHandler as VisionChatHandler
-            handler_name = 'Qwen2VL'
+            from llama_cpp.llama_chat_format import Qwen25VLChatHandler as VisionChatHandler
+            handler_name = 'Qwen25VL'
         except ImportError:
             from llama_cpp.llama_chat_format import Llava15ChatHandler as VisionChatHandler
             handler_name = 'Llava15'
