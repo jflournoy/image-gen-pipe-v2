@@ -353,11 +353,27 @@ Respond ONLY with a JSON object in this exact format:
         import json
         import re
 
-        # Find JSON in response - support nested objects
-        json_match = re.search(r'\{(?:[^{}]|\{[^{}]*\})*\}', response_text)
+        # Strip markdown code blocks if present (```json ... ```)
+        clean_text = response_text
+        code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+        if code_block_match:
+            clean_text = code_block_match.group(1).strip()
+            print(f'[VLM Service] Extracted from code block: {clean_text[:200]}...')
+
+        # Try to parse the clean text directly as JSON first
+        try:
+            result = json.loads(clean_text)
+            json_match = True  # Flag that we found valid JSON
+        except json.JSONDecodeError:
+            # Fallback: find JSON object with regex (handles 3 levels of nesting)
+            json_match = re.search(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', clean_text)
+            result = None
+
         if json_match:
             try:
-                result = json.loads(json_match.group())
+                # Parse from regex match if we haven't already parsed
+                if result is None:
+                    result = json.loads(json_match.group())
                 choice = result.get('choice', 'TIE').upper()
                 if choice not in ('A', 'B', 'TIE'):
                     print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
