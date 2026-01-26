@@ -72,14 +72,16 @@ class LocalVLMProvider {
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || DEFAULT_API_URL;
     this.model = options.model || DEFAULT_MODEL;
-    // VLM comparisons take 150-160s on 12GB GPU with Qwen2.5-VL-7B
-    // Default 180s (3min) with env override for flexibility
-    this.timeout = options.timeout || parseInt(process.env.VLM_TIMEOUT_MS || '180000', 10);
+    // VLM comparisons ~5-6s on GPU when other models unloaded
+    // Default 60s with env override for flexibility
+    this.timeout = options.timeout || parseInt(process.env.VLM_TIMEOUT_MS || '60000', 10);
     this._axios = axios; // Allow injection for testing
     this._comparisonGraph = new ComparisonGraph();
     this._errors = [];
     // Multi-factor ranking weight (matching ImageRanker)
     this.alignmentWeight = options.alignmentWeight ?? DEFAULT_ALIGNMENT_WEIGHT;
+    // Ensemble voting for reliability (matching ImageRanker default of 3)
+    this.defaultEnsembleSize = options.defaultEnsembleSize ?? parseInt(process.env.VLM_ENSEMBLE_SIZE || '3', 10);
   }
 
   /**
@@ -91,6 +93,23 @@ class LocalVLMProvider {
     const alignWeight = this.alignmentWeight;
     const aestheticWeight = 1 - alignWeight;
     return (alignWeight * imageRanks.alignment) + (aestheticWeight * imageRanks.aesthetics);
+  }
+
+  /**
+   * Map comparison result back after swapping image order
+   * Used for position bias mitigation
+   * @private
+   */
+  _mapResultBack(result, wasSwapped) {
+    if (!wasSwapped) return result;
+    return {
+      ...result,
+      choice: result.choice === 'A' ? 'B' : result.choice === 'B' ? 'A' : 'TIE',
+      ranks: result.ranks ? {
+        A: result.ranks.B,
+        B: result.ranks.A
+      } : result.ranks
+    };
   }
 
   /**
@@ -174,6 +193,126 @@ class LocalVLMProvider {
   }
 
   /**
+   * Compare images with position bias mitigation
+   * Randomly swaps order 50% of the time, maps result back
+   * This statistically balances bias over many comparisons
+   * @param {string} imageA - Path to first image
+   * @param {string} imageB - Path to second image
+   * @param {string} prompt - The prompt to evaluate images against
+   * @returns {Promise<Object>} Same structure as compareImages()
+   */
+  async compareWithDebiasing(imageA, imageB, prompt) {
+    const shouldSwap = Math.random() < 0.5;
+    const [first, second] = shouldSwap ? [imageB, imageA] : [imageA, imageB];
+    const result = await this.compareImages(first, second, prompt);
+    return this._mapResultBack(result, shouldSwap);
+  }
+
+  /**
+   * Compare two images with ensemble voting for reliability
+   * Makes multiple comparisons with random swapping and uses majority vote
+   * Matches OpenAI ImageRanker.compareWithEnsemble() interface
+   * @param {string} imageA - Path to first image
+   * @param {string} imageB - Path to second image
+   * @param {string} prompt - The prompt to evaluate against
+   * @param {Object} [options] - Comparison options
+   * @param {number} [options.ensembleSize] - Number of comparisons (default: this.defaultEnsembleSize)
+   * @returns {Promise<{winner: string, votes: {A: number, B: number}, confidence: number, aggregatedRanks: Object}>}
+   */
+  async compareWithEnsemble(imageA, imageB, prompt, options = {}) {
+    const ensembleSize = options.ensembleSize || this.defaultEnsembleSize;
+    const votes = { A: 0, B: 0 };
+
+    // Accumulate ranks for averaging
+    const rankAccumulators = {
+      A: { alignment: 0, aesthetics: 0 },
+      B: { alignment: 0, aesthetics: 0 }
+    };
+
+    // Collect feedback (use Sets to deduplicate)
+    const strengthsA = new Set();
+    const strengthsB = new Set();
+    const weaknessesA = new Set();
+    const weaknessesB = new Set();
+    let lastExplanation = '';
+    let lastImprovementSuggestion = '';
+
+    // Run comparisons sequentially (VLM is serial, not parallel like OpenAI)
+    for (let i = 0; i < ensembleSize; i++) {
+      const result = await this.compareWithDebiasing(imageA, imageB, prompt);
+
+      // Count votes
+      if (result.choice === 'A') {
+        votes.A++;
+        (result.winnerStrengths || []).forEach(s => strengthsA.add(s));
+        (result.loserWeaknesses || []).forEach(w => weaknessesB.add(w));
+      } else if (result.choice === 'B') {
+        votes.B++;
+        (result.winnerStrengths || []).forEach(s => strengthsB.add(s));
+        (result.loserWeaknesses || []).forEach(w => weaknessesA.add(w));
+      }
+
+      // Accumulate ranks
+      if (result.ranks) {
+        rankAccumulators.A.alignment += result.ranks.A?.alignment || 0;
+        rankAccumulators.A.aesthetics += result.ranks.A?.aesthetics || 0;
+        rankAccumulators.B.alignment += result.ranks.B?.alignment || 0;
+        rankAccumulators.B.aesthetics += result.ranks.B?.aesthetics || 0;
+      }
+
+      lastExplanation = result.explanation || lastExplanation;
+      lastImprovementSuggestion = result.improvementSuggestion || lastImprovementSuggestion;
+    }
+
+    // Determine winner by majority
+    let winner;
+    if (votes.A > votes.B) {
+      winner = 'A';
+    } else if (votes.B > votes.A) {
+      winner = 'B';
+    } else {
+      winner = 'TIE';
+    }
+
+    // Calculate confidence as majority votes / total
+    const majorityVotes = Math.max(votes.A, votes.B);
+    const confidence = ensembleSize > 0 ? majorityVotes / ensembleSize : 0;
+
+    // Average ranks and calculate combined scores
+    const avgAlignmentA = ensembleSize > 0 ? rankAccumulators.A.alignment / ensembleSize : 0;
+    const avgAestheticsA = ensembleSize > 0 ? rankAccumulators.A.aesthetics / ensembleSize : 0;
+    const avgAlignmentB = ensembleSize > 0 ? rankAccumulators.B.alignment / ensembleSize : 0;
+    const avgAestheticsB = ensembleSize > 0 ? rankAccumulators.B.aesthetics / ensembleSize : 0;
+
+    const aggregatedRanks = {
+      A: {
+        alignment: avgAlignmentA,
+        aesthetics: avgAestheticsA,
+        combined: this._calculateCombinedRank({ alignment: avgAlignmentA, aesthetics: avgAestheticsA })
+      },
+      B: {
+        alignment: avgAlignmentB,
+        aesthetics: avgAestheticsB,
+        combined: this._calculateCombinedRank({ alignment: avgAlignmentB, aesthetics: avgAestheticsB })
+      }
+    };
+
+    return {
+      winner,
+      choice: winner, // Alias for compatibility
+      votes,
+      confidence,
+      explanation: lastExplanation,
+      aggregatedRanks,
+      ranks: aggregatedRanks, // Alias for compatibility
+      winnerStrengths: winner === 'A' ? [...strengthsA] : [...strengthsB],
+      loserWeaknesses: winner === 'A' ? [...weaknessesB] : [...weaknessesA],
+      improvementSuggestion: lastImprovementSuggestion,
+      ensembleSize
+    };
+  }
+
+  /**
    * Rank multiple images using pairwise comparisons
    * Implements ImageRanker interface for beam search integration
    * Delegates to rankImagesWithTransitivity for full functionality
@@ -182,7 +321,7 @@ class LocalVLMProvider {
    * @param {Object} [options] - Ranking options (same as ImageRanker)
    * @param {number} [options.keepTop] - Number of top candidates needed
    * @param {Array} [options.knownComparisons] - Pre-existing comparisons to skip
-   * @param {number} [options.ensembleSize] - Ignored (VLM doesn't do ensemble voting)
+   * @param {number} [options.ensembleSize] - Number of votes per comparison
    * @param {boolean} [options.gracefulDegradation] - Continue on errors
    * @returns {Promise<{rankings: Array, metadata: {errors: Array}}>}
    */
@@ -204,6 +343,7 @@ class LocalVLMProvider {
       knownComparisons: options.knownComparisons || [],
       gracefulDegradation: options.gracefulDegradation ?? false,
       onProgress: options.onProgress,
+      ensembleSize: options.ensembleSize || this.defaultEnsembleSize,
       // Use all-pairs for small sets, tournament for larger
       strategy: images.length <= 8 ? 'all-pairs' : 'tournament'
     });
@@ -219,10 +359,12 @@ class LocalVLMProvider {
    * @param {string} [options.strategy] - 'all-pairs' or 'tournament'
    * @param {Function} [options.onProgress] - Progress callback
    * @param {boolean} [options.gracefulDegradation] - Continue on errors
+   * @param {number} [options.ensembleSize] - Number of votes per comparison
    * @returns {Promise<{rankings: Array, metadata: {errors: Array}}>}
    */
   async rankImagesWithTransitivity(images, prompt, options = {}) {
-    const { knownComparisons = [], strategy, onProgress, gracefulDegradation = false } = options;
+    const { knownComparisons = [], strategy, onProgress, gracefulDegradation = false, ensembleSize } = options;
+    const effectiveEnsembleSize = ensembleSize || this.defaultEnsembleSize;
 
     // Reset errors for this ranking session
     this._errors = [];
@@ -238,9 +380,9 @@ class LocalVLMProvider {
     try {
       let rankings;
       if (useAllPairs) {
-        rankings = await this._rankAllPairs(images, prompt, { onProgress, gracefulDegradation });
+        rankings = await this._rankAllPairs(images, prompt, { onProgress, gracefulDegradation, ensembleSize: effectiveEnsembleSize });
       } else {
-        rankings = await this._rankTournament(images, prompt, { onProgress, gracefulDegradation });
+        rankings = await this._rankTournament(images, prompt, { onProgress, gracefulDegradation, ensembleSize: effectiveEnsembleSize });
       }
       // Return object format with errors for visibility
       return {
@@ -265,7 +407,7 @@ class LocalVLMProvider {
    * @private
    */
   async _rankAllPairs(images, prompt, options = {}) {
-    const { onProgress, gracefulDegradation } = options;
+    const { onProgress, gracefulDegradation, ensembleSize = 1 } = options;
     const winCounts = new Map(images.map(img => [img.candidateId, 0]));
     const pairs = [];
     // Track feedback per candidate for final ranking
@@ -301,9 +443,11 @@ class LocalVLMProvider {
           onProgress({ type: 'comparison', completed, total, candidateA: a.candidateId, candidateB: b.candidateId, inferred: true });
         }
       } else {
-        // Need actual comparison
+        // Need actual comparison (with ensemble voting for reliability)
         try {
-          const result = await this.compareImages(this._getImagePath(a), this._getImagePath(b), prompt);
+          const result = ensembleSize > 1
+            ? await this.compareWithEnsemble(this._getImagePath(a), this._getImagePath(b), prompt, { ensembleSize })
+            : await this.compareWithDebiasing(this._getImagePath(a), this._getImagePath(b), prompt);
           this._comparisonGraph.recordComparison(a.candidateId, b.candidateId, result.choice);
 
           // Track feedback for winner and loser
@@ -384,7 +528,7 @@ class LocalVLMProvider {
    * @private
    */
   async _rankTournament(images, prompt, options = {}) {
-    const { onProgress, gracefulDegradation } = options;
+    const { onProgress, gracefulDegradation, ensembleSize = 1 } = options;
     const ranked = [];
     const remaining = [...images];
 
@@ -403,7 +547,7 @@ class LocalVLMProvider {
 
       // Find best among remaining using tournament
       const { winner, reason, strengths, weaknesses, ranks, improvementSuggestion } =
-        await this._findBestWithTransitivity(remaining, prompt, { onProgress, gracefulDegradation });
+        await this._findBestWithTransitivity(remaining, prompt, { onProgress, gracefulDegradation, ensembleSize });
 
       ranked.push({
         candidateId: winner.candidateId,
@@ -430,7 +574,7 @@ class LocalVLMProvider {
    * @private
    */
   async _findBestWithTransitivity(candidates, prompt, options = {}) {
-    const { onProgress, gracefulDegradation } = options;
+    const { onProgress, gracefulDegradation, ensembleSize = 1 } = options;
 
     if (candidates.length === 1) {
       return { winner: candidates[0], reason: 'Only candidate', strengths: [], weaknesses: [] };
@@ -460,7 +604,9 @@ class LocalVLMProvider {
         }
       } else {
         try {
-          const result = await this.compareImages(this._getImagePath(champion), this._getImagePath(challenger), prompt);
+          const result = ensembleSize > 1
+            ? await this.compareWithEnsemble(this._getImagePath(champion), this._getImagePath(challenger), prompt, { ensembleSize })
+            : await this.compareWithDebiasing(this._getImagePath(champion), this._getImagePath(challenger), prompt);
           this._comparisonGraph.recordComparison(champion.candidateId, challenger.candidateId, result.choice);
 
           if (result.choice === 'B') {
@@ -546,7 +692,7 @@ class LocalVLMProvider {
     let i = 0, j = 0;
 
     while (i < left.length && j < right.length) {
-      const comparison = await this.compareImages(
+      const comparison = await this.compareWithDebiasing(
         this._getImagePath(left[i]),
         this._getImagePath(right[j]),
         prompt

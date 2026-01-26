@@ -498,6 +498,359 @@ describe('LocalVLMProvider', () => {
     });
   });
 
+  describe('Position Bias Mitigation', () => {
+    it('should have _mapResultBack method for swapping results', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+      assert.strictEqual(typeof provider._mapResultBack, 'function', 'Should have _mapResultBack method');
+    });
+
+    it('should map result back correctly when swapped (A becomes B)', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      const originalResult = {
+        choice: 'A',
+        explanation: 'First image won',
+        confidence: 0.8,
+        ranks: {
+          A: { alignment: 1, aesthetics: 1 },
+          B: { alignment: 2, aesthetics: 2 }
+        }
+      };
+
+      // When swapped, VLM's "A" was actually our "B"
+      const mapped = provider._mapResultBack(originalResult, true);
+
+      assert.strictEqual(mapped.choice, 'B', 'A should become B when swapped');
+      assert.strictEqual(mapped.ranks.A.alignment, 2, 'Original A should get B ranks');
+      assert.strictEqual(mapped.ranks.B.alignment, 1, 'Original B should get A ranks');
+    });
+
+    it('should map result back correctly when swapped (B becomes A)', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      const originalResult = {
+        choice: 'B',
+        explanation: 'Second image won',
+        confidence: 0.7,
+        ranks: {
+          A: { alignment: 2, aesthetics: 2 },
+          B: { alignment: 1, aesthetics: 1 }
+        }
+      };
+
+      // When swapped, VLM's "B" was actually our "A"
+      const mapped = provider._mapResultBack(originalResult, true);
+
+      assert.strictEqual(mapped.choice, 'A', 'B should become A when swapped');
+    });
+
+    it('should preserve TIE choice when mapping back', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      const tieResult = {
+        choice: 'TIE',
+        explanation: 'Equal quality',
+        confidence: 0.5,
+        ranks: {
+          A: { alignment: 1, aesthetics: 2 },
+          B: { alignment: 2, aesthetics: 1 }
+        }
+      };
+
+      const mapped = provider._mapResultBack(tieResult, true);
+
+      assert.strictEqual(mapped.choice, 'TIE', 'TIE should stay TIE');
+    });
+
+    it('should not alter result when not swapped', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      const originalResult = {
+        choice: 'A',
+        explanation: 'First image won',
+        confidence: 0.8,
+        ranks: {
+          A: { alignment: 1, aesthetics: 1 },
+          B: { alignment: 2, aesthetics: 2 }
+        }
+      };
+
+      const mapped = provider._mapResultBack(originalResult, false);
+
+      assert.strictEqual(mapped.choice, 'A', 'A should stay A when not swapped');
+      assert.strictEqual(mapped.ranks.A.alignment, 1, 'Ranks should be unchanged');
+    });
+
+    it('should have compareWithDebiasing method', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+      assert.strictEqual(typeof provider.compareWithDebiasing, 'function', 'Should have compareWithDebiasing method');
+    });
+
+    it('should swap image order approximately 50% of the time', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      // Track which order images are sent
+      let firstImagePaths = [];
+      provider._axios = {
+        post: async (url, data) => {
+          firstImagePaths.push(data.image_a);
+          return {
+            data: {
+              choice: 'A',
+              explanation: 'test',
+              confidence: 0.8,
+              ranks: { A: { alignment: 1 }, B: { alignment: 2 } }
+            }
+          };
+        }
+      };
+
+      // Run many comparisons
+      const iterations = 100;
+      for (let i = 0; i < iterations; i++) {
+        await provider.compareWithDebiasing('/imgA.png', '/imgB.png', 'test');
+      }
+
+      // Count how many times A was first
+      const aFirstCount = firstImagePaths.filter(p => p === '/imgA.png').length;
+      const bFirstCount = firstImagePaths.filter(p => p === '/imgB.png').length;
+
+      // Should be roughly 50/50 (allowing for randomness variance)
+      // With 100 iterations, expect between 30-70 for each
+      assert.ok(aFirstCount >= 30 && aFirstCount <= 70,
+        `A should be first ~50% of time (got ${aFirstCount}%)`);
+      assert.ok(bFirstCount >= 30 && bFirstCount <= 70,
+        `B should be first ~50% of time (got ${bFirstCount}%)`);
+    });
+
+    it('should correctly map result back after random swap', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      // Always return 'A' as winner (simulating position bias)
+      let callOrder = [];
+      provider._axios = {
+        post: async (url, data) => {
+          callOrder.push({ first: data.image_a, second: data.image_b });
+          return {
+            data: {
+              choice: 'A', // Always first image wins (position bias)
+              explanation: 'First is best',
+              confidence: 0.9,
+              ranks: {
+                A: { alignment: 1, aesthetics: 1 },
+                B: { alignment: 2, aesthetics: 2 }
+              }
+            }
+          };
+        }
+      };
+
+      // Run many comparisons - if debiasing works, winners should be balanced
+      const iterations = 100;
+      let aWins = 0, bWins = 0;
+
+      for (let i = 0; i < iterations; i++) {
+        const result = await provider.compareWithDebiasing('/imgA.png', '/imgB.png', 'test');
+        if (result.choice === 'A') aWins++;
+        else if (result.choice === 'B') bWins++;
+      }
+
+      // With position bias and 50% swapping, A and B should win roughly equally
+      assert.ok(aWins >= 30 && aWins <= 70,
+        `A wins should be ~50% (got ${aWins}%)`);
+      assert.ok(bWins >= 30 && bWins <= 70,
+        `B wins should be ~50% (got ${bWins}%)`);
+    });
+  });
+
+  describe('Ensemble Voting', () => {
+    it('should have compareWithEnsemble method', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+      assert.strictEqual(typeof provider.compareWithEnsemble, 'function', 'Should have compareWithEnsemble method');
+    });
+
+    it('should return single comparison result when ensembleSize=1', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      // Mock single comparison
+      provider._axios = {
+        post: async () => ({
+          data: {
+            choice: 'A',
+            reasoning: 'Image A is better',
+            ranks: { A: { alignment: 1 }, B: { alignment: 2 } }
+          }
+        })
+      };
+
+      const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 1 });
+      assert.strictEqual(result.choice, 'A');
+      assert.ok(result.explanation || result.choice, 'Should have explanation or choice');
+    });
+
+    it('should use majority voting with ensembleSize=3', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      // Mock Math.random to disable swapping (always return >= 0.5)
+      const originalRandom = Math.random;
+      Math.random = () => 0.7;
+
+      let callCount = 0;
+      // Mock: A wins twice, B wins once -> A should win
+      provider._axios = {
+        post: async () => {
+          callCount++;
+          const choice = callCount === 2 ? 'B' : 'A';
+          return {
+            data: {
+              choice,
+              reasoning: `Image ${choice} is better`,
+              ranks: choice === 'A'
+                ? { A: { alignment: 1 }, B: { alignment: 2 } }
+                : { A: { alignment: 2 }, B: { alignment: 1 } }
+            }
+          };
+        }
+      };
+
+      try {
+        const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 3 });
+
+        assert.strictEqual(callCount, 3, 'Should make 3 comparisons');
+        assert.strictEqual(result.choice, 'A', 'A should win with 2/3 votes');
+        assert.ok(result.votes, 'Should include vote counts');
+        assert.strictEqual(result.votes.A, 2);
+        assert.strictEqual(result.votes.B, 1);
+      } finally {
+        Math.random = originalRandom;
+      }
+    });
+
+    it('should handle TIE when votes are split evenly', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      let callCount = 0;
+      // Mock: A wins once, B wins once, TIE once -> should be TIE
+      provider._axios = {
+        post: async () => {
+          callCount++;
+          const choices = ['A', 'B', 'TIE'];
+          const choice = choices[callCount - 1];
+          return {
+            data: {
+              choice,
+              reasoning: `Result ${choice}`,
+              ranks: { A: { alignment: 1 }, B: { alignment: 2 } }
+            }
+          };
+        }
+      };
+
+      const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 3 });
+
+      assert.strictEqual(callCount, 3, 'Should make 3 comparisons');
+      assert.strictEqual(result.choice, 'TIE', 'Should be TIE when no majority');
+    });
+
+    it('should apply position debiasing in each ensemble vote', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      const imageOrders = [];
+      provider._axios = {
+        post: async (url, data) => {
+          // Track which image was sent first (image_a is the first image)
+          imageOrders.push(data.image_a);
+          return {
+            data: {
+              choice: 'A',
+              reasoning: 'First image wins',
+              ranks: { A: { alignment: 1 }, B: { alignment: 2 } }
+            }
+          };
+        }
+      };
+
+      // Run 20 comparisons to statistically verify random swapping
+      for (let i = 0; i < 20; i++) {
+        await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 1 });
+      }
+
+      // With 50% swap rate, we should see both orderings
+      const imgAFirst = imageOrders.filter(img => img === '/imgA.png').length;
+      const imgBFirst = imageOrders.filter(img => img === '/imgB.png').length;
+
+      // Allow wide margin for randomness (expect 5-15 of each in 20 trials)
+      assert.ok(imgAFirst >= 3 && imgAFirst <= 17,
+        `Random swapping should produce mixed orders (A first: ${imgAFirst}/20)`);
+      assert.ok(imgBFirst >= 3 && imgBFirst <= 17,
+        `Random swapping should produce mixed orders (B first: ${imgBFirst}/20)`);
+    });
+
+    it('should use defaultEnsembleSize from constructor', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({
+        apiUrl: 'http://localhost:8004',
+        defaultEnsembleSize: 5
+      });
+      assert.strictEqual(provider.defaultEnsembleSize, 5, 'Should store defaultEnsembleSize');
+    });
+
+    it('should default to ensembleSize=3', () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      // Clear env var
+      const original = process.env.VLM_ENSEMBLE_SIZE;
+      delete process.env.VLM_ENSEMBLE_SIZE;
+
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+      assert.strictEqual(provider.defaultEnsembleSize, 3, 'Default ensembleSize should be 3');
+
+      if (original) process.env.VLM_ENSEMBLE_SIZE = original;
+    });
+
+    it('should aggregate ranks from ensemble votes', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
+
+      let callCount = 0;
+      // Mock varied rank scores
+      provider._axios = {
+        post: async () => {
+          callCount++;
+          return {
+            data: {
+              choice: 'A',
+              reasoning: 'A is better',
+              ranks: {
+                A: { alignment: callCount, aesthetics: callCount * 2 },
+                B: { alignment: callCount + 1, aesthetics: callCount * 2 + 1 }
+              }
+            }
+          };
+        }
+      };
+
+      const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', 3);
+
+      // Should have aggregated ranks (averaged or from winning votes)
+      assert.ok(result.ranks, 'Should have aggregated ranks');
+      assert.ok(result.ranks.A, 'Should have ranks for A');
+      assert.ok(result.ranks.B, 'Should have ranks for B');
+    });
+  });
+
   describe('Error Handling', () => {
     it('should handle service unavailable', async () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
