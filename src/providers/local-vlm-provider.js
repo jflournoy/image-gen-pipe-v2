@@ -490,7 +490,7 @@ class LocalVLMProvider {
           if (!gracefulDegradation) throw error;
           completed++;
           if (onProgress) {
-            onProgress({ type: 'comparison', completed, total, candidateA: a.candidateId, candidateB: b.candidateId, error: true });
+            onProgress({ type: 'comparison', completed, total, candidateA: a.candidateId, candidateB: b.candidateId, error: true, errorMessage: error.message });
           }
         }
       }
@@ -512,7 +512,7 @@ class LocalVLMProvider {
         localPath: img.localPath,
         rank: i + 1,
         wins: img.wins,
-        reason: `Rank ${i + 1} with ${img.wins} wins in all-pairs comparison`,
+        reason: `Rank ${i + 1} with ${img.wins}/${total} wins${ensembleSize > 1 ? ` (${ensembleSize}x ensemble voting)` : ''}`,
         // Include structured feedback for CritiqueGenerator
         strengths: uniqueStrengths.length > 0 ? uniqueStrengths : undefined,
         weaknesses: uniqueWeaknesses.length > 0 ? uniqueWeaknesses : undefined,
@@ -634,6 +634,12 @@ class LocalVLMProvider {
         } catch (error) {
           this._errors.push({ message: error.message, type: 'comparison_failure' });
           if (!gracefulDegradation) throw error;
+          if (onProgress) {
+            onProgress({
+              type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId,
+              error: true, errorMessage: error.message
+            });
+          }
         }
       }
     }

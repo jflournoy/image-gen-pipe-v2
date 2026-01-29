@@ -367,11 +367,12 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
     onProgress: (progressData) => {
       // Emit ranking progress updates via WebSocket
       if (onStepProgress) {
-        const { completed, total, candidateA, candidateB, inferred, error } = progressData;
+        const { completed, total, candidateA, candidateB, inferred, error, errorMessage } = progressData;
+        const failSuffix = error ? ` (failed${errorMessage ? ': ' + errorMessage : ''})` : '';
         onStepProgress({
           stage: 'ranking',
           status: 'progress',
-          message: `🔄 Ranking: Comparing ${candidateA} vs ${candidateB} (${completed}/${total})${inferred ? ' (inferred)' : ''}${error ? ' (failed)' : ''}`,
+          message: `🔄 Ranking: Comparing ${candidateA} vs ${candidateB} (${completed}/${total})${inferred ? ' (inferred)' : ''}${failSuffix}`,
           progress: { completed, total }
         });
       }
