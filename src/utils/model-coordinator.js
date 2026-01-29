@@ -15,7 +15,8 @@ const SERVICE_URLS = {
 };
 
 // Delay after unloads to allow GPU memory cleanup (CUDA memory release is async)
-const GPU_CLEANUP_DELAY_MS = parseInt(process.env.GPU_CLEANUP_DELAY_MS || '2000', 10);
+// 5000ms default provides buffer for VRAM deallocation when switching Flux (10GB) ↔ VLM (5GB)
+const GPU_CLEANUP_DELAY_MS = parseInt(process.env.GPU_CLEANUP_DELAY_MS || '5000', 10);
 
 /**
  * GPU Lock - ensures only one model operation runs at a time
