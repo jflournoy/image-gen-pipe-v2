@@ -104,6 +104,33 @@ Examples of honest responses:
 - **Integration tests for confidence** - real-world validation (<30s)
 - **Performance budgets** - enforce time limits to prevent hanging tests
 
+### GPU/Resource-Intensive Tests
+
+**CRITICAL: Always use `--test-concurrency=1` for GPU or resource-intensive tests**
+
+Node.js test runner defaults to running tests in parallel (one per CPU core). For tests that:
+- Load large ML models (GPU or CPU)
+- Consume significant RAM (>5GB per test)
+- Access exclusive resources (GPU, file locks, ports)
+
+**Always force sequential execution**:
+
+```bash
+# ✅ CORRECT: Sequential execution
+node --test --test-concurrency=1 test/integration/*.test.js
+
+# ❌ WRONG: Parallel execution (default)
+node --test test/integration/*.test.js  # Can run 20+ tests in parallel!
+```
+
+**Why this matters**: On a 20-core system, parallel execution can spawn 20 simultaneous tests.
+If each test loads a 10GB model, that's 200GB RAM spike → system OOM → desktop crash.
+
+**Example from this project**:
+- Flux model load: ~20GB RAM per test
+- Parallel execution: 2 tests × 20GB = 40GB spike → OOM crash
+- Sequential execution: 1 test × 20GB = safe on 62GB system
+
 ## Markdown Standards
 
 **All markdown files must pass validation before commit**
