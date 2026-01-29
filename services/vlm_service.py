@@ -9,6 +9,7 @@ import os
 import gc
 import time
 import base64
+import asyncio
 from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
@@ -35,6 +36,17 @@ N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '4096'))
 # Global model reference
 llm = None
 chat_handler = None
+
+# Inference lock - ensures only one comparison runs at a time
+# llama_cpp.Llama.create_chat_completion() is NOT thread-safe
+# Concurrent calls can crash or produce corrupted results
+inference_lock = asyncio.Lock()
+
+# Track sequential inference count for preventive model reload
+# After many sequential inferences (ensemble voting), GGML memory
+# fragmentation can cause crashes. Reload threshold is a safety valve.
+inference_count = 0
+INFERENCE_RELOAD_THRESHOLD = int(os.getenv('VLM_INFERENCE_RELOAD_THRESHOLD', '50'))
 
 
 @asynccontextmanager
@@ -121,7 +133,12 @@ def encode_image(image_path: str) -> str:
 
 
 def load_model():
-    """Load the VLM model using llama-cpp-python with vision support"""
+    """Load the VLM model using llama-cpp-python with vision support.
+
+    Includes retry logic with exponential backoff for GPU memory allocation
+    failures that can occur when CUDA hasn't fully released memory from
+    other services (e.g., Flux).
+    """
     global llm, chat_handler
 
     if llm is not None:
@@ -144,6 +161,10 @@ def load_model():
 
     print(f'[VLM Service] Loading model...')
     print(f'[VLM Service] GPU layers: {N_GPU_LAYERS}')
+
+    # Retry configuration for GPU memory allocation failures
+    max_retries = int(os.getenv('VLM_LOAD_RETRIES', '3'))
+    base_delay = float(os.getenv('VLM_RETRY_DELAY', '2.0'))
 
     try:
         from huggingface_hub import hf_hub_download
@@ -186,26 +207,169 @@ def load_model():
         print(f'[VLM Service] CLIP path: {clip_path}')
         print(f'[VLM Service] Using chat handler: {handler_name}')
 
-        # Create chat handler for vision
-        chat_handler = VisionChatHandler(clip_model_path=clip_path, verbose=False)
+        # Retry loop for model initialization (GPU memory can take time to free)
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                # Clear any lingering GPU memory before loading
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                except ImportError:
+                    pass
 
-        # Load model with vision chat handler
-        llm = Llama(
-            model_path=model_path,
-            chat_handler=chat_handler,
-            n_ctx=N_CTX,
-            n_gpu_layers=N_GPU_LAYERS,
-            verbose=False
-        )
+                # Create chat handler for vision
+                chat_handler = VisionChatHandler(clip_model_path=clip_path, verbose=False)
 
-        print('[VLM Service] Model loaded successfully')
-        return llm
+                # Load model with vision chat handler
+                llm = Llama(
+                    model_path=model_path,
+                    chat_handler=chat_handler,
+                    n_ctx=N_CTX,
+                    n_gpu_layers=N_GPU_LAYERS,
+                    verbose=False
+                )
+
+                print('[VLM Service] Model loaded successfully')
+                return llm
+
+            except Exception as e:
+                last_error = e
+                error_str = str(e).lower()
+                # Check if this is a GPU memory error worth retrying
+                is_memory_error = any(x in error_str for x in [
+                    'ggml', 'alloc', 'memory', 'cuda', 'gpu', 'out of memory'
+                ])
+
+                if is_memory_error and attempt < max_retries - 1:
+                    delay = base_delay * (2 ** attempt)  # Exponential backoff
+                    print(f'[VLM Service] GPU memory error on attempt {attempt + 1}/{max_retries}, retrying in {delay}s...')
+                    time.sleep(delay)
+                    # Force cleanup before retry
+                    gc.collect()
+                else:
+                    raise
+
+        # If we got here, all retries failed
+        raise last_error
 
     except Exception as e:
         print(f'[VLM Service] Failed to load model: {e}')
         import traceback
         traceback.print_exc()
         raise
+
+
+def reset_kv_cache():
+    """Reset KV cache to prevent memory fragmentation during repeated inference.
+
+    Prefers kv_cache_clear() over reset() because:
+    - kv_cache_clear() only zeros out the cache (safe for sequential calls)
+    - reset() deallocates/reallocates internal state, which can crash in some
+      llama-cpp-python versions during rapid sequential inference (ensemble voting)
+    """
+    global llm
+    if llm is not None:
+        try:
+            # Prefer kv_cache_clear (safe) over reset (destructive)
+            if hasattr(llm, 'kv_cache_clear'):
+                llm.kv_cache_clear()
+                print('[VLM Service] KV cache cleared')
+            elif hasattr(llm, 'reset'):
+                llm.reset()
+                print('[VLM Service] KV cache reset')
+        except Exception as e:
+            print(f'[VLM Service] Warning: could not reset KV cache: {e}')
+
+
+def run_inference_with_retry(model, messages, max_tokens, temperature, max_retries=2):
+    """
+    Run inference with retry logic that handles GGML memory crashes.
+
+    On memory allocation failure:
+    1. Unload the model completely
+    2. Clear GPU memory
+    3. Reload the model
+    4. Retry inference
+
+    Post-inference cleanup prevents memory accumulation during sequential
+    calls (ensemble voting: N sequential inferences without model unload).
+    """
+    global llm, chat_handler, inference_count
+
+    last_error = None
+    for attempt in range(max_retries):
+        try:
+            # Reset KV cache before inference to prevent fragmentation
+            reset_kv_cache()
+
+            # Run inference
+            response = model.create_chat_completion(
+                messages=messages,
+                max_tokens=max_tokens,
+                temperature=temperature
+            )
+
+            # Post-inference cleanup: prevent memory accumulation during
+            # sequential calls (ensemble voting runs N inferences back-to-back)
+            inference_count += 1
+            gc.collect()
+            try:
+                import torch
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except ImportError:
+                pass
+
+            return response
+
+        except Exception as e:
+            last_error = e
+            error_str = str(e).lower()
+
+            # Check if this is a recoverable GGML/memory error
+            is_memory_error = any(x in error_str for x in [
+                'ggml', 'alloc', 'memory', 'cuda', 'gpu', 'buffer', 'assert'
+            ])
+
+            if is_memory_error and attempt < max_retries - 1:
+                print(f'[VLM Service] Inference memory error on attempt {attempt + 1}/{max_retries}, reloading model...')
+
+                # Force complete model reload
+                try:
+                    # Unload current model
+                    if llm is not None:
+                        llm.close()
+                        llm = None
+                        chat_handler = None
+
+                    # Clear GPU memory aggressively
+                    gc.collect()
+                    try:
+                        import torch
+                        if torch.cuda.is_available():
+                            torch.cuda.empty_cache()
+                            torch.cuda.synchronize()
+                    except ImportError:
+                        pass
+
+                    # Wait for memory to settle
+                    time.sleep(2.0)
+
+                    # Reload model
+                    model = load_model()
+                    print('[VLM Service] Model reloaded after memory error')
+
+                except Exception as reload_error:
+                    print(f'[VLM Service] Failed to reload model: {reload_error}')
+                    raise last_error
+            else:
+                raise
+
+    raise last_error
 
 
 def unload_model():
@@ -281,31 +445,35 @@ async def compare_images(request: CompareRequest):
     """
     Compare two images against a prompt.
     Returns which image (A or B) better matches the prompt.
+
+    Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
     """
-    try:
-        # Load model if not loaded
+    # Serialize all inference requests - llama_cpp crashes on concurrent access
+    async with inference_lock:
         try:
-            model = load_model()
-        except Exception as e:
-            error_msg = str(e)
-            if '404' in error_msg or 'Repository Not Found' in error_msg:
-                raise HTTPException(
-                    status_code=503,
-                    detail=f'VLM model not available: {error_msg}\n\nConfigure VLM_MODEL_REPO or VLM_MODEL_PATH environment variable with a valid model.'
-                )
-            else:
-                raise HTTPException(status_code=500, detail=f'Failed to load VLM model: {error_msg}')
+            # Load model if not loaded
+            try:
+                model = load_model()
+            except Exception as e:
+                error_msg = str(e)
+                if '404' in error_msg or 'Repository Not Found' in error_msg:
+                    raise HTTPException(
+                        status_code=503,
+                        detail=f'VLM model not available: {error_msg}\n\nConfigure VLM_MODEL_REPO or VLM_MODEL_PATH environment variable with a valid model.'
+                    )
+                else:
+                    raise HTTPException(status_code=500, detail=f'Failed to load VLM model: {error_msg}')
 
-        # Encode images
-        try:
-            image_a_uri = encode_image(request.image_a)
-            image_b_uri = encode_image(request.image_b)
-        except FileNotFoundError as e:
-            raise HTTPException(status_code=400, detail=str(e))
+            # Encode images
+            try:
+                image_a_uri = encode_image(request.image_a)
+                image_b_uri = encode_image(request.image_b)
+            except FileNotFoundError as e:
+                raise HTTPException(status_code=400, detail=str(e))
 
-        # Create comparison prompt with multi-factor evaluation
-        # This format matches OpenAI ImageRanker for drop-in compatibility
-        comparison_prompt = f"""You are an image evaluation expert. Compare these two images (A and B) against this prompt:
+            # Create comparison prompt with multi-factor evaluation
+            # This format matches OpenAI ImageRanker for drop-in compatibility
+            comparison_prompt = f"""You are an image evaluation expert. Compare these two images (A and B) against this prompt:
 
 PROMPT: "{request.prompt}"
 
@@ -323,12 +491,11 @@ Also identify:
 Respond ONLY with a JSON object in this exact format:
 {{"choice": "A" or "B" or "TIE", "explanation": "brief reason mentioning alignment and aesthetics", "confidence": 0.0-1.0, "ranks": {{"A": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}, "B": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}}}, "winner_strengths": ["strength1", "strength2"], "loser_weaknesses": ["weakness1", "weakness2"], "improvement_suggestion": "specific prompt improvement"}}"""
 
-        print(f'[VLM Service] Comparing images for: {request.prompt[:50]}...')
-        start_time = time.time()
+            print(f'[VLM Service] Comparing images for: {request.prompt[:50]}...')
+            start_time = time.time()
 
-        # Create chat completion with images
-        response = model.create_chat_completion(
-            messages=[
+            # Create chat completion with images (with retry on memory errors)
+            messages = [
                 {
                     "role": "user",
                     "content": [
@@ -337,128 +504,277 @@ Respond ONLY with a JSON object in this exact format:
                         {"type": "image_url", "image_url": {"url": image_b_uri}}
                     ]
                 }
-            ],
-            max_tokens=500,  # Enough for full JSON response with arrays
-            temperature=0.1  # Low temperature for consistent evaluations
-        )
+            ]
 
-        elapsed = time.time() - start_time
-        print(f'[VLM Service] Comparison completed in {elapsed:.1f}s')
+            # Use retry helper for inference (handles GGML memory crashes)
+            response = run_inference_with_retry(
+                model=model,
+                messages=messages,
+                max_tokens=500,  # Enough for full JSON response with arrays
+                temperature=0.1,  # Low temperature for consistent evaluations
+                max_retries=int(os.getenv('VLM_INFERENCE_RETRIES', '2'))
+            )
 
-        # Parse response
-        response_text = response['choices'][0]['message']['content']
-        print(f'[VLM Service] Raw response: {response_text[:500]}{"..." if len(response_text) > 500 else ""}')
+            elapsed = time.time() - start_time
+            print(f'[VLM Service] Comparison completed in {elapsed:.1f}s')
 
-        # Try to extract JSON from response
-        import json
-        import re
+            # Parse response
+            response_text = response['choices'][0]['message']['content']
+            print(f'[VLM Service] Raw response: {response_text[:500]}{"..." if len(response_text) > 500 else ""}')
 
-        # Strip markdown code blocks if present (```json ... ```)
-        clean_text = response_text
-        code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
-        if code_block_match:
-            clean_text = code_block_match.group(1).strip()
-            print(f'[VLM Service] Extracted from code block: {clean_text[:200]}...')
+            # Try to extract JSON from response
+            import json
+            import re
 
-        # Try to parse the clean text directly as JSON first
-        result = None
-        try:
-            parsed = json.loads(clean_text)
-            if isinstance(parsed, dict):
-                result = parsed
-                print(f'[VLM Service] Parsed JSON directly from clean text')
-        except json.JSONDecodeError:
-            pass
+            # Strip markdown code blocks if present (```json ... ```)
+            clean_text = response_text
+            code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+            if code_block_match:
+                clean_text = code_block_match.group(1).strip()
+                print(f'[VLM Service] Extracted from code block: {clean_text[:200]}...')
 
-        # Fallback: find JSON object with regex (handles 3 levels of nesting)
-        if result is None:
-            json_match = re.search(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', clean_text)
-            if json_match:
+            # Try to parse the clean text directly as JSON first
+            result = None
+            try:
+                parsed = json.loads(clean_text)
+                if isinstance(parsed, dict):
+                    result = parsed
+                    print(f'[VLM Service] Parsed JSON directly from clean text')
+            except json.JSONDecodeError:
+                pass
+
+            # Fallback: find JSON object with regex (handles 3 levels of nesting)
+            if result is None:
+                json_match = re.search(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', clean_text)
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group())
+                        print(f'[VLM Service] Parsed JSON from regex match')
+                    except json.JSONDecodeError:
+                        pass
+
+            if result is not None:
+                choice = result.get('choice', 'TIE').upper()
+                if choice not in ('A', 'B', 'TIE'):
+                    print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
+                    choice = 'TIE'
+
+                # Extract multi-factor evaluation data
+                ranks = result.get('ranks')
+                winner_strengths = result.get('winner_strengths', [])
+                loser_weaknesses = result.get('loser_weaknesses', [])
+                improvement_suggestion = result.get('improvement_suggestion', '')
+
+                # Validate and fix ranks structure
+                if ranks:
+                    for img in ['A', 'B']:
+                        if img in ranks:
+                            # Ensure alignment and aesthetics are integers 1 or 2
+                            if isinstance(ranks[img], dict):
+                                ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
+                                ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+
+                print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
+                return CompareResponse(
+                    choice=choice,
+                    explanation=result.get('explanation', response_text),
+                    confidence=float(result.get('confidence', 0.5)),
+                    ranks=ranks,
+                    winner_strengths=winner_strengths if winner_strengths else None,
+                    loser_weaknesses=loser_weaknesses if loser_weaknesses else None,
+                    improvement_suggestion=improvement_suggestion if improvement_suggestion else None
+                )
+
+            # Fallback: look for A or B in response - provide default ranks
+            print(f'[VLM Service] No valid JSON found, using fallback parsing')
+            default_ranks_a_wins = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 2, 'aesthetics': 2}}
+            default_ranks_b_wins = {'A': {'alignment': 2, 'aesthetics': 2}, 'B': {'alignment': 1, 'aesthetics': 1}}
+
+            if 'image a' in response_text.lower() or response_text.strip().upper().startswith('A'):
+                print(f'[VLM Service] Fallback: chose A')
+                return CompareResponse(
+                    choice='A',
+                    explanation=response_text,
+                    confidence=0.6,
+                    ranks=default_ranks_a_wins,
+                    winner_strengths=['Better overall match (inferred)'],
+                    loser_weaknesses=['Lower quality match (inferred)'],
+                    improvement_suggestion='Review prompt for clarity'
+                )
+            elif 'image b' in response_text.lower() or response_text.strip().upper().startswith('B'):
+                print(f'[VLM Service] Fallback: chose B')
+                return CompareResponse(
+                    choice='B',
+                    explanation=response_text,
+                    confidence=0.6,
+                    ranks=default_ranks_b_wins,
+                    winner_strengths=['Better overall match (inferred)'],
+                    loser_weaknesses=['Lower quality match (inferred)'],
+                    improvement_suggestion='Review prompt for clarity'
+                )
+            else:
+                print(f'[VLM Service] Fallback: defaulting to TIE')
+                tie_ranks = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 1, 'aesthetics': 1}}
+                return CompareResponse(
+                    choice='TIE',
+                    explanation=response_text,
+                    confidence=0.4,
+                    ranks=tie_ranks,
+                    winner_strengths=['Both images comparable'],
+                    loser_weaknesses=['No clear weakness'],
+                    improvement_suggestion='Add more specific details to differentiate'
+                )
+
+        except HTTPException:
+            raise
+        except Exception as e:
+            print(f'[VLM Service] Comparison error: {e}')
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=str(e))
+
+
+class CompareBatchRequest(BaseModel):
+    """Batch comparison request for ensemble voting"""
+    comparisons: list  # List of {image_a, image_b, prompt} dicts
+    cleanup_between: bool = True  # Whether to run GC between comparisons
+
+
+@app.post('/compare-batch')
+async def compare_images_batch(request: CompareBatchRequest):
+    """
+    Compare multiple image pairs in a single request.
+
+    Designed for ensemble voting: instead of N HTTP round-trips,
+    the client sends all comparisons at once. The service manages
+    memory cleanup between sequential inferences to prevent crashes.
+    """
+    async with inference_lock:
+        results = []
+        for i, comp in enumerate(request.comparisons):
+            try:
+                # Reuse the single-compare logic via internal call
+                single_req = CompareRequest(
+                    image_a=comp['image_a'],
+                    image_b=comp['image_b'],
+                    prompt=comp['prompt']
+                )
+
+                # Load model if needed
                 try:
-                    result = json.loads(json_match.group())
-                    print(f'[VLM Service] Parsed JSON from regex match')
+                    model = load_model()
+                except Exception as e:
+                    error_msg = str(e)
+                    results.append({'error': True, 'detail': f'Failed to load model: {error_msg}'})
+                    continue
+
+                # Encode images
+                try:
+                    image_a_uri = encode_image(single_req.image_a)
+                    image_b_uri = encode_image(single_req.image_b)
+                except FileNotFoundError as e:
+                    results.append({'error': True, 'detail': str(e)})
+                    continue
+
+                # Build messages
+                comparison_prompt = f"""You are an image evaluation expert. Compare these two images (A and B) against this prompt:
+
+PROMPT: "{single_req.prompt}"
+
+Evaluate both images on TWO dimensions:
+1. ALIGNMENT (prompt adherence): How well does each image match the content/subject described?
+2. AESTHETICS (visual quality): Composition, lighting, color harmony, technical quality
+
+For each dimension, rank the images 1 (better) or 2 (worse).
+
+Also identify:
+- Winner's STRENGTHS: What the better image does well (2-3 points)
+- Loser's WEAKNESSES: What the worse image could improve (2-3 points)
+- IMPROVEMENT: One specific, actionable suggestion to improve the prompt
+
+Respond ONLY with a JSON object in this exact format:
+{{"choice": "A" or "B" or "TIE", "explanation": "brief reason mentioning alignment and aesthetics", "confidence": 0.0-1.0, "ranks": {{"A": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}, "B": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}}}, "winner_strengths": ["strength1", "strength2"], "loser_weaknesses": ["weakness1", "weakness2"], "improvement_suggestion": "specific prompt improvement"}}"""
+
+                messages = [
+                    {
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": comparison_prompt},
+                            {"type": "image_url", "image_url": {"url": image_a_uri}},
+                            {"type": "image_url", "image_url": {"url": image_b_uri}}
+                        ]
+                    }
+                ]
+
+                print(f'[VLM Service] Batch comparison {i+1}/{len(request.comparisons)}: {single_req.prompt[:50]}...')
+                start_time = time.time()
+
+                response = run_inference_with_retry(
+                    model=model,
+                    messages=messages,
+                    max_tokens=500,
+                    temperature=0.1,
+                    max_retries=int(os.getenv('VLM_INFERENCE_RETRIES', '2'))
+                )
+
+                elapsed = time.time() - start_time
+                print(f'[VLM Service] Batch comparison {i+1} completed in {elapsed:.1f}s')
+
+                # Parse response (same logic as single compare)
+                import json
+                import re
+
+                response_text = response['choices'][0]['message']['content']
+                clean_text = response_text
+                code_block_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', response_text)
+                if code_block_match:
+                    clean_text = code_block_match.group(1).strip()
+
+                result = None
+                try:
+                    parsed = json.loads(clean_text)
+                    if isinstance(parsed, dict):
+                        result = parsed
                 except json.JSONDecodeError:
                     pass
 
-        if result is not None:
-            choice = result.get('choice', 'TIE').upper()
-            if choice not in ('A', 'B', 'TIE'):
-                print(f'[VLM Service] Invalid choice "{choice}", defaulting to TIE')
-                choice = 'TIE'
+                if result is None:
+                    json_match = re.search(r'\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}', clean_text)
+                    if json_match:
+                        try:
+                            result = json.loads(json_match.group())
+                        except json.JSONDecodeError:
+                            pass
 
-            # Extract multi-factor evaluation data
-            ranks = result.get('ranks')
-            winner_strengths = result.get('winner_strengths', [])
-            loser_weaknesses = result.get('loser_weaknesses', [])
-            improvement_suggestion = result.get('improvement_suggestion', '')
+                if result:
+                    choice = result.get('choice', 'TIE').upper()
+                    if choice not in ('A', 'B', 'TIE'):
+                        choice = 'TIE'
+                    results.append({
+                        'choice': choice,
+                        'explanation': result.get('explanation', ''),
+                        'confidence': float(result.get('confidence', 0.5)),
+                        'ranks': result.get('ranks'),
+                        'winner_strengths': result.get('winner_strengths', []),
+                        'loser_weaknesses': result.get('loser_weaknesses', []),
+                        'improvement_suggestion': result.get('improvement_suggestion', '')
+                    })
+                else:
+                    results.append({
+                        'choice': 'TIE',
+                        'explanation': response_text[:200],
+                        'confidence': 0.3,
+                        'ranks': None,
+                        'winner_strengths': [],
+                        'loser_weaknesses': [],
+                        'improvement_suggestion': ''
+                    })
 
-            # Validate and fix ranks structure
-            if ranks:
-                for img in ['A', 'B']:
-                    if img in ranks:
-                        # Ensure alignment and aesthetics are integers 1 or 2
-                        if isinstance(ranks[img], dict):
-                            ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
-                            ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+            except Exception as e:
+                print(f'[VLM Service] Batch comparison {i+1} error: {e}')
+                results.append({'error': True, 'detail': str(e)})
 
-            print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
-            return CompareResponse(
-                choice=choice,
-                explanation=result.get('explanation', response_text),
-                confidence=float(result.get('confidence', 0.5)),
-                ranks=ranks,
-                winner_strengths=winner_strengths if winner_strengths else None,
-                loser_weaknesses=loser_weaknesses if loser_weaknesses else None,
-                improvement_suggestion=improvement_suggestion if improvement_suggestion else None
-            )
-
-        # Fallback: look for A or B in response - provide default ranks
-        print(f'[VLM Service] No valid JSON found, using fallback parsing')
-        default_ranks_a_wins = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 2, 'aesthetics': 2}}
-        default_ranks_b_wins = {'A': {'alignment': 2, 'aesthetics': 2}, 'B': {'alignment': 1, 'aesthetics': 1}}
-
-        if 'image a' in response_text.lower() or response_text.strip().upper().startswith('A'):
-            print(f'[VLM Service] Fallback: chose A')
-            return CompareResponse(
-                choice='A',
-                explanation=response_text,
-                confidence=0.6,
-                ranks=default_ranks_a_wins,
-                winner_strengths=['Better overall match (inferred)'],
-                loser_weaknesses=['Lower quality match (inferred)'],
-                improvement_suggestion='Review prompt for clarity'
-            )
-        elif 'image b' in response_text.lower() or response_text.strip().upper().startswith('B'):
-            print(f'[VLM Service] Fallback: chose B')
-            return CompareResponse(
-                choice='B',
-                explanation=response_text,
-                confidence=0.6,
-                ranks=default_ranks_b_wins,
-                winner_strengths=['Better overall match (inferred)'],
-                loser_weaknesses=['Lower quality match (inferred)'],
-                improvement_suggestion='Review prompt for clarity'
-            )
-        else:
-            print(f'[VLM Service] Fallback: defaulting to TIE')
-            tie_ranks = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 1, 'aesthetics': 1}}
-            return CompareResponse(
-                choice='TIE',
-                explanation=response_text,
-                confidence=0.4,
-                ranks=tie_ranks,
-                winner_strengths=['Both images comparable'],
-                loser_weaknesses=['No clear weakness'],
-                improvement_suggestion='Add more specific details to differentiate'
-            )
-
-    except HTTPException:
-        raise
-    except Exception as e:
-        print(f'[VLM Service] Comparison error: {e}')
-        import traceback
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=str(e))
+        return {'results': results, 'total': len(results)}
 
 
 @app.get('/download/status')
