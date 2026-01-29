@@ -1,27 +1,32 @@
 # GPU Integration Tests
 
-## Current Status: Flux Tests DISABLED
+## Current Status: One Flux Test DISABLED
 
-**Problem**: Flux model loading causes **system RAM OOM** and desktop crashes.
+**Problem**: Tests were running in **parallel**, causing multiple simultaneous Flux loads → RAM OOM.
 
-### Why Flux Causes Crashes
+### Root Cause: Parallel Test Execution
 
-1. **Massive RAM usage**: Flux.1-dev with sequential CPU offload requires:
-   - ~10-15GB for checkpoint shards loading to CPU RAM
-   - ~10GB GPU VRAM once loaded
-   - Total: ~20-25GB combined during load
+Node.js test runner defaults to `--test-concurrency=20` (one per CPU core). When GPU tests ran:
 
-2. **Your system**: 62GB RAM total, but:
-   - Desktop apps using ~12GB (Firefox, Zoom, VSCode, etc.)
-   - Leaves ~50GB free, BUT:
-   - Flux load spikes to 20-25GB temporarily
-   - Plus page cache, buffers, other processes
-   - **Kernel OOM killer activates** → kills desktop session
+1. **Test 1** starts → Flux loads (20GB RAM spike)
+2. **Test 2** starts **simultaneously** → Second Flux load (another 20GB spike)
+3. **Combined**: 40-50GB RAM usage → **OOM** → desktop crash
 
-3. **Load time**: 7+ minutes for full model load from disk
-   - 2 checkpoint shards × ~56 seconds each
-   - 7 pipeline components × ~20-40 seconds each
-   - Any retry/timeout causes double-load
+### The Fix
+
+**Sequential execution**: GPU tests now run with `--test-concurrency=1` (one at a time).
+
+```bash
+npm run test:gpu  # Now runs tests sequentially
+```
+
+### Flux RAM Usage (Per Load)
+
+Flux.1-dev with sequential CPU offload per load:
+- ~10-15GB for checkpoint shards loading to CPU RAM
+- ~10GB GPU VRAM once loaded
+- Total: ~20-25GB combined during load
+- Load time: ~7 minutes (2 shards + 7 pipeline components)
 
 ## Test Hierarchy
 
@@ -38,15 +43,20 @@ Runs only the VLM ensemble test with static ImageMagick images:
 - Tests ensemble voting (ensembleSize=3) stability
 - **Safe for your desktop**
 
-### ❌ DISABLED: Flux integration tests
+### ⚠️ PARTIALLY ENABLED: Flux integration tests
 
-These are `.skip`'d to prevent desktop crashes:
+**Enabled** (safe with sequential execution):
+- **Ensemble with Flux**: Generate images once, then VLM ensemble (ensembleSize=3)
 
-1. **Full pipeline test**: VLM → Flux → VLM (multiple model swaps)
-2. **Ensemble with Flux**: Generate images once, then VLM ensemble
+**Still disabled** (multiple model swaps):
+- **Full pipeline test**: VLM → Flux → VLM → Flux (causes multiple reloads)
+- To enable: Set `ENABLE_FLUX_TESTS=1`
 
-To enable (NOT RECOMMENDED until RAM issue solved):
 ```bash
+# Safe: Single Flux load + VLM ensemble test
+npm run test:gpu
+
+# Advanced: Enable full pipeline test (multiple Flux reloads)
 ENABLE_GPU_TESTS=1 ENABLE_FLUX_TESTS=1 npm run test:gpu
 ```
 

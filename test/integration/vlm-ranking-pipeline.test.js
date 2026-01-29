@@ -433,7 +433,7 @@ describe('Multi-round VLM → Flux → VLM (GPU integration)', { skip: !process.
     );
   });
 
-  it.skip('should complete ensemble voting (ensembleSize=3) without VLM crash (uses Flux, DISABLED)', async () => {
+  it('should complete ensemble voting (ensembleSize=3) without VLM crash (uses Flux once)', async () => {
     // Simpler test: uses pre-generated images to avoid Flux reload stress.
     // This isolates the ensemble voting crash from GPU driver reload issues.
     console.log('[Test] Ensemble voting stability test (ensembleSize=3, VLM-only)');
