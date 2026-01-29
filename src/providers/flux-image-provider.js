@@ -88,9 +88,10 @@ class FluxImageProvider {
         lora_scale: options.loraScale ?? this.generation.loraScale
       };
 
-      // Use extended timeout if model needs downloading (~12GB can take 30+ min)
-      // Normal generation: 5 minutes (sequential offload is slow), First-time download: 45 minutes
-      const timeout = isFirstTimeDownload ? 2700000 : 300000;
+      // Timeouts include model load time (Flux reload after GPU swap takes ~7 min)
+      // Normal generation (model may need reloading): 10 minutes
+      // First-time download (~12GB): 45 minutes
+      const timeout = isFirstTimeDownload ? 2700000 : 600000;
 
       if (isFirstTimeDownload) {
         console.log('[Flux Provider] Model not cached - using extended timeout for first-time download');
