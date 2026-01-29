@@ -1,0 +1,73 @@
+# Claude Current Status
+
+## Session: 2026-01-28 21:28 — Fix VLM Ensemble Crash
+
+Root cause: VLM service crashed during ensemble voting (multiple sequential
+`/compare` calls). `llm.reset()` is destructive and can crash llama-cpp-python
+during rapid sequential inference. Also missing GC/CUDA cleanup between calls.
+
+### Fixes Applied
+
+| Fix | File | Description |
+|-----|------|-------------|
+| Prefer `kv_cache_clear()` | `vlm_service.py` | Use safe cache clear instead of destructive `reset()` |
+| Post-inference GC | `vlm_service.py` | `gc.collect()` + `torch.cuda.empty_cache()` after each inference |
+| Inference count tracking | `vlm_service.py` | Track sequential inference count (safety valve for reload) |
+| `/compare-batch` endpoint | `vlm_service.py` | Batch comparisons in one HTTP call for ensemble voting |
+| Error visibility | `local-vlm-provider.js` | `errorMessage` in progress callbacks |
+| Ensemble reason string | `local-vlm-provider.js` | Shows `X/total wins (Nx ensemble voting)` |
+| Error detail in UI | `beam-search.js` | Shows failure reason in progress messages |
+| Flux timeout | `flux-image-provider.js` | 5min → 10min for model reload after GPU swap |
+
+### Tests Added
+
+- `test/services/test_vlm_sequential_inference.py` — 7 tests for sequential inference stability
+- `test/integration/vlm-ranking-pipeline.test.js` — 10 tests:
+  - 8 mock tests (error visibility, ensemble info, happy path)
+  - 1 GPU test: full VLM→Flux→VLM cycle (requires model swaps)
+  - 1 GPU test: VLM-only ensemble with static images (safer, no model swaps)
+
+### GPU Stability Improvements
+
+- `scripts/gpu-setup.sh` — Check/enable NVIDIA persistence mode to prevent driver crashes
+- GPU VRAM monitoring in tests — Log memory usage before/after operations
+- npm scripts: `gpu:setup`, `gpu:status`, `gpu:monitor`, `test:gpu`
+
+**Root cause of desktop crash**: NVIDIA persistence mode was disabled. When disabled,
+the driver can be unloaded/reloaded during heavy GPU cycling (Flux 10GB model swaps),
+which can crash the X server. Enabling persistence mode prevents this.
+
+### Open Issues
+
+- #29: Test VLM resilience fixes with beam search
+- #30: Wire UI settings to backend
+- #31: VLM ensemble voting (partially addressed — need GPU verification)
+
+## Previous Session: 2026-01-27 — VLM Stability Fixes
+
+### Summary
+
+Added VLM crash resilience across two failure modes:
+
+| Fix | Description |
+|-----|-------------|
+| Request serialization | `asyncio.Lock` prevents concurrent VLM requests (llama_cpp thread-safety) |
+| GPU cleanup delay | Increased to 5000ms for Flux -> VLM transitions |
+| Load retry | Exponential backoff (3 attempts) for model load failures |
+| KV cache clearing | `reset_kv_cache()` before each inference to prevent fragmentation |
+| Inference retry | `run_inference_with_retry()` — unload/reload on mid-inference crash |
+
+### Configuration
+
+| Env Variable | Default | Description |
+|-------------|---------|-------------|
+| `GPU_CLEANUP_DELAY_MS` | 5000 | Wait after model unload before next load |
+| `VLM_LOAD_RETRIES` | 3 | Max load attempts |
+| `VLM_RETRY_DELAY` | 2.0 | Base delay (s) for load retry backoff |
+| `VLM_INFERENCE_RETRIES` | 2 | Max inference retry attempts |
+
+### Files Changed
+
+- `services/vlm_service.py` — lock, retry, cache clearing
+- `src/utils/model-coordinator.js` — GPU cleanup delay
+- `test/services/test_vlm_service_concurrency.py` (new) — concurrency tests
