@@ -133,11 +133,11 @@ describe('Pipeline: VLM/LLM Integration', () => {
     test('should rank multiple images using pairwise comparisons', async () => {
       const provider = new LocalVLMProvider();
 
-      // Mock multiple comparison responses
+      // Mock multiple comparison responses (with ranks field required by VLM provider)
       const comparisons = [
-        { choice: 'A', explanation: 'A better', confidence: 0.8 },
-        { choice: 'B', explanation: 'B better', confidence: 0.75 },
-        { choice: 'A', explanation: 'A better', confidence: 0.85 }
+        { choice: 'A', explanation: 'A better', confidence: 0.8, ranks: { A: { alignment: 1, aesthetics: 1 }, B: { alignment: 2, aesthetics: 2 } } },
+        { choice: 'B', explanation: 'B better', confidence: 0.75, ranks: { A: { alignment: 2, aesthetics: 2 }, B: { alignment: 1, aesthetics: 1 } } },
+        { choice: 'A', explanation: 'A better', confidence: 0.85, ranks: { A: { alignment: 1, aesthetics: 1 }, B: { alignment: 2, aesthetics: 2 } } }
       ];
 
       let comparisonIndex = 0;
@@ -295,13 +295,14 @@ describe('Pipeline: VLM/LLM Integration', () => {
       assert.ok(combinedResult.combinedPrompt, 'Combined prompt should be generated');
       const finalPrompt = combinedResult.combinedPrompt;
 
-      // Step 2: Ranking phase (mock VLM comparison)
+      // Step 2: Ranking phase (mock VLM comparison with required ranks field)
       vlmProvider._axios = {
         post: async () => ({
           data: {
             choice: 'A',
             explanation: 'Better match',
-            confidence: 0.85
+            confidence: 0.85,
+            ranks: { A: { alignment: 1, aesthetics: 1 }, B: { alignment: 2, aesthetics: 2 } }
           }
         }),
         get: async () => ({ data: {} })
