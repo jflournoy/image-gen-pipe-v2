@@ -1,0 +1,26 @@
+# NVIDIA Persistence Mode systemd service
+#
+# This keeps the NVIDIA driver loaded even when no CUDA apps are running,
+# preventing driver reload crashes during heavy GPU cycling.
+#
+# Installation:
+#   sudo cp scripts/nvidia-persistence.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable nvidia-persistence
+#   sudo systemctl start nvidia-persistence
+#
+# Verify:
+#   systemctl status nvidia-persistence
+#   nvidia-smi -q | grep "Persistence Mode"
+
+[Unit]
+Description=NVIDIA Persistence Mode
+After=syslog.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/nvidia-smi -pm 1
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
