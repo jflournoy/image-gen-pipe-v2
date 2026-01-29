@@ -21,6 +21,8 @@ coverage/
 *.lcov
 test-results.log
 test-results.tap
+test-gpu-results.log
+test-gpu-verbose.log
 gpu-test-results.log
 role-test-results.log
 
