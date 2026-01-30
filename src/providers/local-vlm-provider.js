@@ -72,9 +72,10 @@ class LocalVLMProvider {
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || DEFAULT_API_URL;
     this.model = options.model || DEFAULT_MODEL;
-    // VLM comparisons ~5-6s on GPU when other models unloaded
-    // Default 60s with env override for flexibility
-    this.timeout = options.timeout || parseInt(process.env.VLM_TIMEOUT_MS || '60000', 10);
+    // VLM comparisons ~5-6s on GPU when model loaded
+    // After model swap: ~60s load + ~30s first inference = 90s
+    // Default 180s (3min) with env override for flexibility
+    this.timeout = options.timeout || parseInt(process.env.VLM_TIMEOUT_MS || '180000', 10);
     this._axios = axios; // Allow injection for testing
     this._comparisonGraph = new ComparisonGraph();
     this._errors = [];
