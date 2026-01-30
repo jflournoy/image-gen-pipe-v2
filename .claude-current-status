@@ -46,13 +46,37 @@ Ran full GPU test suite with all fixes (25 minutes total):
 - All models properly unloaded between tests
 - No OOM crash during test sequence
 
-**❌ Test 3: VLM-only Ensemble - FAILED**
-- VLM service crashed with "socket hang up"
-- VLM became unresponsive after extended testing
-- Images saved: `/tmp/vlm-test-*.png` (2 files)
-- Separate issue from pipeline testing (needs investigation)
+**✅ Test 2: Ensemble with Flux (ensembleSize=3) - PASSED** (8.5 min)
+- VLM ensemble ranking: 3x sequential comparisons ✅
+- Winner: "ens0 — Rank 1 with 1/1 wins (3x ensemble voting)"
+- GPU VRAM peak: 10069 MB (no crash with optimizations!)
+- Images saved: `output/temp/flux_*.png` (2 files)
 
-**Final Score: 10/11 tests passed (91%)**
+**✅ Test 3: VLM-only Ensemble - PASSED** (26 sec)
+- VLM ensemble with static images (ensembleSize=3) ✅
+- Winner: "static0 — Rank 1 with 1/1 wins (3x ensemble voting)"
+- GPU VRAM peak: 11548 MB (stable, no crash!)
+- Images saved: `/tmp/vlm-test-*.png` (2 files)
+
+**Final Score: 11/11 tests passed (100%)** 🎉
+
+### VLM Memory Optimization Results (Commit: a54513e)
+
+**Optimizations Applied:**
+- GPU layers: -1 (all) → 24 (partial offload)
+- Context size: 4096 → 2048 tokens
+- Inference reload threshold: 50 → 20
+
+**Memory Measurements:**
+- VLM loading: ~7GB (was ~10GB)
+- VLM ensemble peak: ~11.5GB (with fragmentation during 3x voting)
+- **Savings: ~3GB base, prevents OOM crashes**
+
+**Test Results After Optimization (2026-01-29 21:30):**
+- All GPU integration tests: **11/11 PASSED (100%)**
+- Total duration: 24.3 minutes
+- No crashes during ensemble voting ✅
+- VLM remained stable even at 11.5GB peak usage
 
 ### Key Achievements
 
