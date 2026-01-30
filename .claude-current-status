@@ -1,6 +1,6 @@
 # Claude Current Status
 
-## Session: 2026-01-29 16:00 — GPU Ensemble Voting Verification
+## Session: 2026-01-29 16:00 — GPU Ensemble Voting & Full Pipeline Verification
 
 ### Test Fixes (Continuation from 2026-01-28)
 
@@ -11,26 +11,64 @@ Fixed 3 test failures in `test/integration/pipeline-vlm-llm.test.js`:
 
 All 14 tests now passing (was 12/14). Commit: f062c75
 
-### GPU Ensemble Voting Test Results
+### Critical Fixes Applied
 
-Ran GPU integration tests with `ENABLE_GPU_TESTS=1 ENABLE_FLUX_TESTS=1`:
+**1. VLM Timeout Increase (Commit: 99a78fd)**
+- Increased VLM comparison timeout: 60s → 180s
+- Allows VLM to load + run first inference after model swap
+- File: `src/providers/local-vlm-provider.js:77`
+- Env var: `VLM_TIMEOUT_MS` (default now 180000)
 
-**✅ Success: VLM Ensemble Voting Works!**
-- Test: "should complete ensemble voting with pre-existing images (VLM-only, no Flux reload)"
-- **PASSED** - 3x ensemble voting completed successfully without VLM crash
-- Ranking shows: "Rank 1 with 1/1 wins (3x ensemble voting)"
-- All 3 sequential `/compare` calls succeeded
+**2. GPU Model Cleanup Between Tests (Commit: ec9a3fb)**
+- Added `afterEach` cleanup calling `modelCoordinator.cleanupAll()`
+- Prevents GPU memory accumulation across test sequence
+- Root cause: VLM stayed loaded (10.7GB) after pipeline test → OOM on next test
+- Added `KEEP_TEST_IMAGES=1` env var to preserve generated images
 
-**❌ Timeout: Flux→VLM Model Swap**
-- Test: "should complete ensemble voting (ensembleSize=3) without VLM crash (uses Flux once)"
-- **FAILED** - VLM comparison timed out after 60 seconds
-- Root cause: VLM auto-loads on first comparison request (model-coordinator.js:264)
-  - VLM model load: ~60s
-  - First inference: ~20-30s
-  - **Total: 80-90s** vs 60s timeout
-- Fix: Increased VLM comparison timeout from 60s → 180s (3 minutes)
-  - File: `src/providers/local-vlm-provider.js:77`
-  - Env var: `VLM_TIMEOUT_MS` (default now 180000)
+**3. Re-enabled Full Pipeline Test**
+- Changed `it.skip()` to `it()` for Flux→VLM→Flux→VLM test
+- Updated test name to reflect 180s timeout fix
+
+### Final GPU Integration Test Results (2026-01-29 20:00)
+
+Ran full GPU test suite with all fixes (25 minutes total):
+
+**✅ Test 1: Full Pipeline (Flux→VLM→Flux→VLM) - PASSED** (16.7 min)
+- Step 1: Flux generates 2 images ✅
+- Step 2: VLM ranks round 1 (i0c0 vs i0c1 → ok) ✅
+- Step 3: Flux generates 1 new image ✅
+- Step 4: VLM ranks round 2 (i0c0 vs i1c0 → ok) ✅
+- All model swaps successful with 180s timeout
+- Images saved: `output/temp/flux_*.png` (3 files)
+
+**✅ Cleanup Between Tests - WORKING**
+- GPU VRAM before Test 2: 4553 MB (clean state)
+- All models properly unloaded between tests
+- No OOM crash during test sequence
+
+**❌ Test 3: VLM-only Ensemble - FAILED**
+- VLM service crashed with "socket hang up"
+- VLM became unresponsive after extended testing
+- Images saved: `/tmp/vlm-test-*.png` (2 files)
+- Separate issue from pipeline testing (needs investigation)
+
+**Final Score: 10/11 tests passed (91%)**
+
+### Key Achievements
+
+✅ **Full sequential Flux→VLM→Flux→VLM pipeline works**
+✅ **180s VLM timeout handles model swap delays**
+✅ **GPU cleanup prevents OOM between tests**
+✅ **Image preservation for inspection (KEEP_TEST_IMAGES=1)**
+✅ **Sequential test execution (--test-concurrency=1) prevents parallel RAM spikes**
+
+### Architecture Notes
+
+**Flux Sequential CPU Offload (12GB GPU)**:
+- Flux loads model into CPU RAM (34.5GB)
+- During generation, moves each layer to GPU temporarily
+- Prevents OOM on 12GB GPUs
+- Expected behavior, not a bug
 
 ## Session: 2026-01-28 21:28 — Fix VLM Ensemble Crash
 
