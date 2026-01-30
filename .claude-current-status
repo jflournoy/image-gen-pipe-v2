@@ -1,5 +1,37 @@
 # Claude Current Status
 
+## Session: 2026-01-29 16:00 — GPU Ensemble Voting Verification
+
+### Test Fixes (Continuation from 2026-01-28)
+
+Fixed 3 test failures in `test/integration/pipeline-vlm-llm.test.js`:
+- Set `ensembleSize: 1` to match mock response count (avoid mock array exhaustion)
+- Access `result.rankings` instead of `rankings` (rankImages returns `{rankings, metadata}`)
+- Fixed undefined reference in pipeline flow verification
+
+All 14 tests now passing (was 12/14). Commit: f062c75
+
+### GPU Ensemble Voting Test Results
+
+Ran GPU integration tests with `ENABLE_GPU_TESTS=1 ENABLE_FLUX_TESTS=1`:
+
+**✅ Success: VLM Ensemble Voting Works!**
+- Test: "should complete ensemble voting with pre-existing images (VLM-only, no Flux reload)"
+- **PASSED** - 3x ensemble voting completed successfully without VLM crash
+- Ranking shows: "Rank 1 with 1/1 wins (3x ensemble voting)"
+- All 3 sequential `/compare` calls succeeded
+
+**❌ Timeout: Flux→VLM Model Swap**
+- Test: "should complete ensemble voting (ensembleSize=3) without VLM crash (uses Flux once)"
+- **FAILED** - VLM comparison timed out after 60 seconds
+- Root cause: VLM auto-loads on first comparison request (model-coordinator.js:264)
+  - VLM model load: ~60s
+  - First inference: ~20-30s
+  - **Total: 80-90s** vs 60s timeout
+- Fix: Increased VLM comparison timeout from 60s → 180s (3 minutes)
+  - File: `src/providers/local-vlm-provider.js:77`
+  - Env var: `VLM_TIMEOUT_MS` (default now 180000)
+
 ## Session: 2026-01-28 21:28 — Fix VLM Ensemble Crash
 
 Root cause: VLM service crashed during ensemble voting (multiple sequential
@@ -33,9 +65,14 @@ during rapid sequential inference. Also missing GC/CUDA cleanup between calls.
 - GPU VRAM monitoring in tests — Log memory usage before/after operations
 - npm scripts: `gpu:setup`, `gpu:status`, `gpu:monitor`, `test:gpu`
 
-**Root cause of desktop crash**: NVIDIA persistence mode was disabled. When disabled,
-the driver can be unloaded/reloaded during heavy GPU cycling (Flux 10GB model swaps),
-which can crash the X server. Enabling persistence mode prevents this.
+**Root cause of desktop crash**: **Parallel test execution**. Node.js test runner defaults
+to running tests in parallel (20 concurrent on 20-core system). Both Flux tests started
+simultaneously, each loading 20GB model → 40GB combined RAM spike → OOM → crash.
+Fix: `--test-concurrency=1` forces sequential execution.
+
+**Secondary issue**: NVIDIA persistence mode was disabled. When disabled, the driver can
+be unloaded/reloaded during heavy GPU cycling, which can crash X server. Enable with
+`sudo nvidia-smi -pm 1`.
 
 ### Open Issues
 
