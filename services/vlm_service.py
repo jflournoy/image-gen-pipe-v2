@@ -30,8 +30,11 @@ CLIP_MODEL_FILE = os.getenv('VLM_CLIP_FILE', '*mmproj-F16.gguf')
 MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only
-N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '-1'))
-N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '4096'))
+# For 12GB GPU: Use 24 layers (partial offload) to save ~3-4GB
+N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '24'))
+# Context size: 2048 is sufficient for image comparison (not long documents)
+# Smaller context = less KV cache memory (saves ~2-3GB)
+N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '2048'))
 
 # Global model reference
 llm = None
@@ -45,8 +48,9 @@ inference_lock = asyncio.Lock()
 # Track sequential inference count for preventive model reload
 # After many sequential inferences (ensemble voting), GGML memory
 # fragmentation can cause crashes. Reload threshold is a safety valve.
+# Lower threshold (20) prevents memory accumulation during intensive testing
 inference_count = 0
-INFERENCE_RELOAD_THRESHOLD = int(os.getenv('VLM_INFERENCE_RELOAD_THRESHOLD', '50'))
+INFERENCE_RELOAD_THRESHOLD = int(os.getenv('VLM_INFERENCE_RELOAD_THRESHOLD', '20'))
 
 
 @asynccontextmanager
