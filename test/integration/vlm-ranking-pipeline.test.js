@@ -318,15 +318,32 @@ describe('Multi-round VLM → Flux → VLM (GPU integration)', { skip: !process.
     });
   });
 
-  afterEach(() => {
-    // Clean up generated images
-    for (const filePath of generatedFiles) {
-      try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+  afterEach(async () => {
+    // Clean up generated images (unless KEEP_TEST_IMAGES is set)
+    if (!process.env.KEEP_TEST_IMAGES) {
+      for (const filePath of generatedFiles) {
+        try { fs.unlinkSync(filePath); } catch { /* ignore */ }
+      }
+      console.log(`[Test] Cleanup: Deleted ${generatedFiles.length} test images`);
+    } else {
+      console.log(`[Test] Keeping ${generatedFiles.length} test images:`);
+      generatedFiles.forEach(f => console.log(`[Test]   - ${f}`));
     }
     generatedFiles.length = 0;
+
+    // Clean up GPU models between tests to prevent memory accumulation
+    if (process.env.ENABLE_GPU_TESTS) {
+      console.log('[Test] Cleanup: Unloading all GPU models...');
+      try {
+        await modelCoordinator.cleanupAll();
+        console.log('[Test] Cleanup: All models unloaded');
+      } catch (e) {
+        console.log(`[Test] Cleanup warning: ${e.message}`);
+      }
+    }
   });
 
-  it.skip('should complete VLM rank → Flux gen → VLM rank cycle (DISABLED: causes RAM OOM)', async () => {
+  it('should complete VLM rank → Flux gen → VLM rank cycle (with 180s timeout)', async () => {
     console.log('[Test] Step 1: Generate 2 initial images via Flux');
 
     // --- Step 1: Generate 2 images with Flux ---
