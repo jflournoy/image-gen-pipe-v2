@@ -154,13 +154,13 @@ describe('Pipeline: VLM/LLM Integration', () => {
         { candidateId: 'img3', localPath: '/tmp/img3.png' }
       ];
 
-      const rankings = await provider.rankImages(candidates, 'test prompt');
+      const result = await provider.rankImages(candidates, 'test prompt', { ensembleSize: 1 });
 
-      assert.ok(Array.isArray(rankings), 'Should return array of rankings');
-      assert.strictEqual(rankings.length, candidates.length, 'Should rank all candidates');
+      assert.ok(result.rankings && Array.isArray(result.rankings), 'Should return object with rankings array');
+      assert.strictEqual(result.rankings.length, candidates.length, 'Should rank all candidates');
 
       // All candidates should be ranked
-      const rankedIds = rankings.map(r => r.candidateId);
+      const rankedIds = result.rankings.map(r => r.candidateId);
       for (const candidate of candidates) {
         assert.ok(rankedIds.includes(candidate.candidateId), `Should rank candidate ${candidate.candidateId}`);
       }
@@ -313,9 +313,9 @@ describe('Pipeline: VLM/LLM Integration', () => {
         { candidateId: 'img2', localPath: '/tmp/img2.png' }
       ];
 
-      const rankings = await vlmProvider.rankImages(candidates, finalPrompt);
-      assert.ok(Array.isArray(rankings), 'Should return rankings');
-      assert.ok(rankings.length > 0, 'Should have ranked candidates');
+      const result = await vlmProvider.rankImages(candidates, finalPrompt, { ensembleSize: 1 });
+      assert.ok(result.rankings && Array.isArray(result.rankings), 'Should return object with rankings array');
+      assert.ok(result.rankings.length > 0, 'Should have ranked candidates');
 
       // Step 3: Refining phase
       nock('http://localhost:8003')
@@ -339,7 +339,7 @@ describe('Pipeline: VLM/LLM Integration', () => {
 
       // Verify complete flow
       assert.ok(whatResult.refinedPrompt, 'Generation step completed');
-      assert.ok(rankings.length > 0, 'Ranking step completed');
+      assert.ok(result.rankings.length > 0, 'Ranking step completed');
       assert.ok(refinedResult.refinedPrompt, 'Refining step completed');
     });
 
