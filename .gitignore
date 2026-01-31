@@ -40,6 +40,7 @@ test/fixtures/images/
 .claude/workflows/
 .claude/issues/
 .claude/designs/
+.claude-current-status
 
 # Monitoring status and runtime data
 .monitor-status.json
