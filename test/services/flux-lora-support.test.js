@@ -94,7 +94,7 @@ describe('🔴 RED: Flux LoRA Support', () => {
   describe('LoRA Integration with Generation', () => {
     it('should pass LoRA scale to generation request', () => {
       // Check if lora_scale is part of the GenerationRequest model
-      const generationRequestMatch = fluxServiceContent.match(/class GenerationRequest.*?(?=class|\Z)/s);
+      const generationRequestMatch = fluxServiceContent.match(/class GenerationRequest.*?(?=class|$)/s);
 
       if (generationRequestMatch) {
         assert.ok(
@@ -148,7 +148,7 @@ describe('🔴 RED: Flux LoRA Support', () => {
     });
 
     it('should report LoRA memory usage in health check', () => {
-      const healthMatch = fluxServiceContent.match(/@app\.get\(['"]\/health['"]\).*?(?=@app|\Z)/s);
+      const healthMatch = fluxServiceContent.match(/@app\.get\(['"]\/health['"]\).*?(?=@app|$)/s);
 
       if (healthMatch) {
         // Will validate in GREEN phase

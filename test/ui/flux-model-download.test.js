@@ -3,7 +3,7 @@
  * Tests for FLUX.1-dev-fp8 model download in UI settings
  */
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const axios = require('axios');
 

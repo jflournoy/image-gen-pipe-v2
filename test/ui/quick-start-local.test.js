@@ -255,8 +255,6 @@ describe('Integration: Quick Start Flow', () => {
     // 4. Providers switch to local
     // 5. UI updates
 
-    const hfToken = 'hf_testToken123456789';
-
     // Mock API response
     const mockResponse = {
       success: true,

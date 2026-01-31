@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import WebSocket from 'ws';
+import { findAvailablePort } from './test-utils.js';
 
 test('🔴 RED: WebSocket connection', async (t) => {
   await t.test('should establish WebSocket connection', async () => {
@@ -16,7 +17,7 @@ test('🔴 RED: WebSocket connection', async (t) => {
     _resetWebSocketState();
 
     const app = createApp();
-    const port = 3100;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Wait for server to be ready
@@ -53,7 +54,7 @@ test('🔴 RED: WebSocket progress updates', async (t) => {
     _resetWebSocketState();
 
     const app = createApp();
-    const port = 3101;
+    const port = await findAvailablePort();
     const server = app.listen(port);
     await new Promise((resolve) => server.on('listening', resolve));
     attachWebSocket(server);
@@ -94,7 +95,7 @@ test('🔴 RED: WebSocket progress updates', async (t) => {
     _resetWebSocketState();
 
     const app = createApp();
-    const port = 3102;
+    const port = await findAvailablePort();
     const server = app.listen(port);
     await new Promise((resolve) => server.on('listening', resolve));
     attachWebSocket(server);
@@ -144,7 +145,7 @@ test('🔴 RED: WebSocket progress updates', async (t) => {
     _resetWebSocketState();
 
     const app = createApp();
-    const port = 3103;
+    const port = await findAvailablePort();
     const server = app.listen(port);
     await new Promise((resolve) => server.on('listening', resolve));
     attachWebSocket(server);
