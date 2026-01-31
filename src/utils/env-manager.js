@@ -35,7 +35,7 @@ export async function readEnvFile(filePath = '.env') {
         // Remove quotes if present
         let value = rawValue.trim();
         if ((value.startsWith('"') && value.endsWith('"')) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
+            (value.startsWith('\'') && value.endsWith('\''))) {
           value = value.slice(1, -1);
         }
         // Remove inline comments (everything after # outside quotes)
@@ -126,7 +126,7 @@ export async function updateEnvFile(updates, filePath = '.env') {
     // Clean up temp file if it exists
     try {
       await fs.unlink(tempPath);
-    } catch (e) {
+    } catch {
       // Ignore cleanup errors
     }
     throw error;
@@ -232,7 +232,7 @@ export async function validatePath(filePath) {
       exists: true,
       path: fullPath
     };
-  } catch (error) {
+  } catch {
     return {
       exists: false,
       path: filePath,

@@ -496,7 +496,7 @@ async function downloadLocalLLMModel(modelName, sendProgress) {
   // First check if LLM service is running
   try {
     await axios.get(`${llmUrl}/health`, { timeout: 5000 });
-  } catch (error) {
+  } catch {
     sendProgress({
       status: 'error',
       message: 'LLM service is not running. Start it first with: python services/llm_service.py'
@@ -543,7 +543,7 @@ async function downloadLocalLLMModel(modelName, sendProgress) {
             try {
               const data = JSON.parse(line.substring(6));
               sendProgress(data);
-            } catch (e) {
+            } catch {
               // Ignore parse errors
             }
           }
@@ -583,7 +583,7 @@ async function downloadFluxModel(sendProgress) {
   // First check if Flux service is running
   try {
     await axios.get(`${fluxUrl}/health`, { timeout: 5000 });
-  } catch (error) {
+  } catch {
     sendProgress({
       status: 'error',
       message: 'Flux service is not running. Start it first with: python services/flux_service.py'
@@ -607,7 +607,7 @@ async function downloadFluxModel(sendProgress) {
       status: 'info',
       message: 'Flux model not cached. Starting download (~12GB, may take 10-30 minutes)...'
     });
-  } catch (error) {
+  } catch {
     sendProgress({
       status: 'info',
       message: 'Starting Flux model download...'
@@ -639,7 +639,7 @@ async function downloadFluxModel(sendProgress) {
             try {
               const data = JSON.parse(line.substring(6));
               sendProgress(data);
-            } catch (e) {
+            } catch {
               // Ignore parse errors
             }
           }
@@ -1239,7 +1239,7 @@ async function killProcessByPort(port) {
       try {
         process.kill(parseInt(pid), 'SIGTERM');
         console.log(`[Service Stop] Sent SIGTERM to PID ${pid} on port ${port}`);
-      } catch (e) {
+      } catch {
         console.log(`[Service Stop] PID ${pid} already terminated`);
       }
     }
@@ -1250,7 +1250,7 @@ async function killProcessByPort(port) {
     for (const pid of pids) {
       try {
         process.kill(parseInt(pid), 'SIGKILL');
-      } catch (e) {
+      } catch {
         // Already dead
       }
     }
@@ -1290,7 +1290,7 @@ router.post('/services/stop', async (req, res) => {
       // Force kill if still running
       try {
         serviceInfo.process.kill('SIGKILL');
-      } catch (error) {
+      } catch {
         // Process already terminated
       }
 
@@ -1478,7 +1478,7 @@ router.post('/quick-local', async (req, res) => {
 
         for (const service of servicesToStart) {
           try {
-            const healthCheck = await axios.get(
+            await axios.get(
               `http://localhost:${getServicePort(service)}/health`,
               { timeout: 2000 }
             );
@@ -1519,8 +1519,6 @@ router.post('/quick-local', async (req, res) => {
  */
 router.get('/flux/discovery', async (req, res) => {
   try {
-    const fs = require('fs').promises;
-    const fsSync = require('fs');
     const path = require('path');
 
     const projectRoot = path.join(__dirname, '../../');
@@ -1584,9 +1582,6 @@ router.get('/flux/discovery', async (req, res) => {
  */
 router.get('/flux/models', async (req, res) => {
   try {
-    const fs = require('fs').promises;
-    const fsSync = require('fs');
-
     const projectRoot = path.join(__dirname, '../../');
     const checkpointsDir = path.join(projectRoot, 'services/checkpoints');
 
@@ -1668,7 +1663,7 @@ async function discoverFiles(dirPath, pattern) {
 /**
  * Generate intelligent presets by matching models with encoders using regex patterns
  */
-function generatePresets(models, encodersDir) {
+function generatePresets(models, _encodersDir) {
   const presets = [];
 
   // Default preset: use all models with standard encoders
