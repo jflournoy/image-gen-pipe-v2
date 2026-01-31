@@ -8,6 +8,7 @@ import assert from 'node:assert';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import path from 'node:path';
+import { findAvailablePort } from './test-utils.js';
 
 test('🔴 RED: Image serving endpoint', async (t) => {
   await t.test('should serve image by ID', async () => {
@@ -31,10 +32,10 @@ test('🔴 RED: Image serving endpoint', async (t) => {
 
     await fs.writeFile(testImagePath, minimalPng);
 
-    // Import server and start it
+    // Import server and start it with dynamic port
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
-    const port = 3010;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Act: Request the image
@@ -71,10 +72,10 @@ test('🔴 RED: Image serving endpoint', async (t) => {
   });
 
   await t.test('should return 404 for non-existent image', async () => {
-    // Arrange: Start server
+    // Arrange: Start server with dynamic port
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
-    const port = 3011;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Act: Request non-existent image
@@ -107,10 +108,10 @@ test('🔴 RED: Image serving endpoint', async (t) => {
   });
 
   await t.test('should prevent path traversal attacks', async () => {
-    // Arrange: Start server
+    // Arrange: Start server with dynamic port
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
-    const port = 3012;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Act: Attempt path traversal

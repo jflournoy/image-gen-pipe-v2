@@ -80,7 +80,7 @@ describe('GPU Coordination', () => {
 
       // Mock LLM unload (VLM doesn't need to unload LLM if both fit)
       // But for this test, we'll unload to free resources
-      const llmUnload = nock('http://localhost:8003')
+      nock('http://localhost:8003')
         .post('/unload')
         .reply(200, { status: 'unloaded' });
 

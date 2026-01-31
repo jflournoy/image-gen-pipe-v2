@@ -153,11 +153,11 @@ test('🟢 GREEN: Configuration Preview - Encoder Display', async (t) => {
     await t.test('no more references to non-existent HTML elements in critical paths', () => {
       // These specific patterns should be gone
       const badPatterns = [
-        "getElementById('fluxEncoderInputs')",
-        "getElementById('useLocalEncoders')",
-        "getElementById('fluxModelSelector')",
-        "getElementById('hfModelSection')",
-        "getElementById('localModelSection')"
+        'getElementById(\'fluxEncoderInputs\')',
+        'getElementById(\'useLocalEncoders\')',
+        'getElementById(\'fluxModelSelector\')',
+        'getElementById(\'hfModelSection\')',
+        'getElementById(\'localModelSection\')'
       ];
 
       for (const pattern of badPatterns) {

@@ -402,7 +402,7 @@ describe('Local Provider Chaining', () => {
 
       let capturedImagePath;
       const mockVision = {
-        analyzeImage: async (imagePath, prompt) => {
+        analyzeImage: async (imagePath, _prompt) => {
           capturedImagePath = imagePath;
           return {
             alignmentScore: 85,
@@ -421,7 +421,7 @@ describe('Local Provider Chaining', () => {
         dimension: 'what'
       };
 
-      const result = await processCandidateStream(
+      await processCandidateStream(
         'what prompt',
         'how prompt',
         mockLLM,

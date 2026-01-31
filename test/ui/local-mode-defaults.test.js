@@ -170,13 +170,6 @@ describe('🔴 RED: Local Mode Default Population', () => {
       const populateFunctionMatch = demoJsContent.match(/function populateLocalDefaults[^{]*{([^}]+(?:{[^}]*})*[^}]*)}/);
 
       if (populateFunctionMatch) {
-        const populateBody = populateFunctionMatch[1];
-
-        // Should check if localStorage already has values before setting
-        const checksExisting = populateBody.includes('localStorage.getItem') ||
-                                populateBody.includes('!localStorage.getItem') ||
-                                populateBody.includes('|| localStorage.getItem');
-
         // We actually WANT to populate even if set, for "reset to defaults" behavior
         // So this test should pass if it always sets the values
         assert.ok(true, 'Function should populate defaults regardless of existing values (reset behavior)');

@@ -3,7 +3,7 @@
  * Tests for UI toggle between VLM tournament ranking and CLIP/aesthetic scoring
  */
 
-const { describe, it, beforeEach } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -18,7 +18,7 @@ let demoJs;
 try {
   demoHtml = fs.readFileSync(demoHtmlPath, 'utf-8');
   demoJs = fs.readFileSync(demoJsPath, 'utf-8');
-} catch (e) {
+} catch {
   demoHtml = '';
   demoJs = '';
 }
@@ -79,8 +79,8 @@ describe('Ranking Mode Toggle UI', () => {
       assert.ok(demoJs, 'demo.js should exist');
       // Default should be vlm
       assert.ok(
-        demoJs.includes("rankingMode") &&
-        (demoJs.includes("'vlm'") || demoJs.includes('"vlm"')),
+        demoJs.includes('rankingMode') &&
+        (demoJs.includes('\'vlm\'') || demoJs.includes('"vlm"')),
         'Should default to vlm ranking mode'
       );
     });
@@ -155,7 +155,7 @@ describe('VLM Provider Integration', () => {
     let LocalVLMProvider;
     try {
       LocalVLMProvider = require('../../src/providers/local-vlm-provider');
-    } catch (e) {
+    } catch {
       LocalVLMProvider = null;
     }
     assert.ok(LocalVLMProvider, 'LocalVLMProvider should be importable');

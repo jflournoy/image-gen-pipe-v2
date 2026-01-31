@@ -11,9 +11,6 @@
 
 const test = require('node:test');
 const assert = require('assert');
-const path = require('path');
-
-const projectRoot = path.join(__dirname, '../..');
 
 test('🔴 RED: Service Manager Encoder Validation', async (t) => {
   await t.test('validateFluxEncoderPaths() export', async (t) => {
