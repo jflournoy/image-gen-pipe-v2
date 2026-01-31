@@ -13,6 +13,7 @@ const MetadataTracker = require('../services/metadata-tracker.js');
 const TokenTracker = require('../utils/token-tracker.js');
 const { MODEL_PRICING } = require('../config/model-pricing.js');
 const { getDateString } = require('../utils/timezone.js');
+const providerConfig = require('../config/provider-config.js');
 const path = require('path');
 
 // Read output directory from environment (set in .env on production)
@@ -63,8 +64,9 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
                       runtimeProviders.vision === 'openai' ||
                       runtimeProviders.vision === 'gpt-vision';
 
-  // Only require API key if using OpenAI providers
-  if (needsOpenAI) {
+  // Only require API key if using OpenAI providers AND not in mock mode
+  const isMockMode = providerConfig.mode === 'mock';
+  if (needsOpenAI && !isMockMode) {
     if (!userApiKey || typeof userApiKey !== 'string' || userApiKey.trim() === '') {
       throw new Error('OpenAI API key is required when using OpenAI providers. Switch to local providers or provide an API key.');
     }

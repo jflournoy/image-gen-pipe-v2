@@ -10,7 +10,6 @@ import {
   updateEnvFile,
   getRelevantConfig,
   validatePath,
-  backupEnvFile,
   resetToDefaults
 } from '../utils/env-manager.js';
 

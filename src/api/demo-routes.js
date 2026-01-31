@@ -9,6 +9,10 @@ import { startBeamSearchJob, getJobStatus } from './beam-search-worker.js';
 import { getRuntimeProviders } from './provider-routes.js';
 import fs, { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+const providerConfig = require('../config/provider-config.js');
 
 const router = express.Router();
 
@@ -40,8 +44,9 @@ router.post('/start', async (req, res) => {
                         runtimeProviders.vision === 'openai' ||
                         runtimeProviders.vision === 'gpt-vision';
 
-    // Only validate API key if OpenAI providers are being used
-    if (needsOpenAI) {
+    // Only validate API key if OpenAI providers are being used AND not in mock mode
+    const isMockMode = providerConfig.mode === 'mock';
+    if (needsOpenAI && !isMockMode) {
       if (!userApiKey || !userApiKey.trim()) {
         return res.status(401).json({
           error: 'Missing API key',

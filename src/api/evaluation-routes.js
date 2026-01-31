@@ -16,7 +16,6 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const EvaluationTracker = require('../services/evaluation-tracker.js');
-const OutputPathManager = require('../utils/output-path-manager.js');
 
 const router = express.Router();
 

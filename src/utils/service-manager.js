@@ -15,7 +15,7 @@ const LOG_DIR = '/tmp/beam-search-services';
 const ensureLogDir = () => {
   try {
     fsSync.mkdirSync(LOG_DIR, { recursive: true });
-  } catch (err) {
+  } catch {
     // Ignore if already exists
   }
 };
@@ -86,7 +86,7 @@ async function readPIDFile(serviceName) {
   try {
     const content = await fs.readFile(pidPath, 'utf8');
     return parseInt(content.trim(), 10);
-  } catch (error) {
+  } catch {
     return null;
   }
 }
@@ -99,7 +99,7 @@ async function deletePIDFile(serviceName) {
   try {
     await fs.unlink(pidPath);
     console.log(`[ServiceManager] Deleted PID file ${pidPath}`);
-  } catch (error) {
+  } catch {
     // Ignore if file doesn't exist
   }
 }
@@ -112,7 +112,7 @@ function isProcessRunning(pid) {
     // signal 0 doesn't kill, just checks if process exists
     process.kill(pid, 0);
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
