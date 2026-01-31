@@ -681,7 +681,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Initialize Flux model dropdown
-  initializeFluxModelDropdown();
+  // initializeFluxModelDropdown(); // Function not defined
 });
 
 /**
@@ -701,7 +701,7 @@ async function checkVLMHealth() {
       indicator.title = `Model: ${data.model_repo || 'LLaVA'}`;
       return true;
     }
-  } catch (e) {
+  } catch {
     // Service unavailable
   }
 
@@ -1612,7 +1612,7 @@ function stopBeamSearch(userInitiated = true) {
             addMessage('⏹ Cancelling job and stopping service tasks...', 'event');
           }
         })
-        .catch(err => console.warn(`[UI] Could not send cancellation request:`, err));
+        .catch(err => console.warn('[UI] Could not send cancellation request:', err));
     }
   }
 
@@ -2093,7 +2093,7 @@ async function showProviderSettings() {
     const healthResponse = await fetch('/api/providers/health');
     const health = await healthResponse.json();
     updateHfTokenStatus(health.flux);
-  } catch (e) {
+  } catch {
     // Ignore - status will show based on token presence
     updateHfTokenStatus(null);
   }
@@ -2105,7 +2105,7 @@ async function showProviderSettings() {
   initializeFluxModelConfig();
 
   // Initialize Flux LoRA configuration UI
-  initializeFluxLoraConfig();
+  // initializeFluxLoraConfig(); // Function not defined
 
   // Load and display configuration status (.env vs localStorage)
   loadConfigurationStatus();
@@ -2138,7 +2138,7 @@ function initializeFluxModelConfig() {
   // Handle model source toggle (HuggingFace vs Local)
   modelSourceRadios.forEach(radio => {
     radio.addEventListener('change', () => {
-      toggleFluxModelSource(radio.value);
+      // toggleFluxModelSource(radio.value); // Function not defined
     });
   });
 }
@@ -2280,7 +2280,7 @@ async function displayModelSource() {
         const localRadio = document.querySelector('input[name="fluxModelSource"][value="local"]');
         if (localRadio) {
           localRadio.checked = true;
-          toggleFluxModelSource('local');
+          // toggleFluxModelSource('local'); // Function not defined
         }
         // Update the saved path display
         updateFluxModelPathDisplay();
@@ -2298,20 +2298,6 @@ async function displayModelSource() {
   }
 }
 
-/**
- * Escape HTML special characters for safe display
- */
-function escapeHtml(str) {
-  if (typeof str !== 'string') str = JSON.stringify(str);
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return str.replace(/[&<>"']/g, m => map[m]);
-}
 
 /**
  * Load available Flux models from API and populate dropdown
@@ -2355,7 +2341,7 @@ async function loadConfigurationStatus() {
 
     if (localStorageOverrides.modelPath) {
       statusHtml += `<small style="color: #666;">🔄 Override: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #d32f2f;">${escapeHtml(localStorageOverrides.modelPath)}</code>`;
-      statusHtml += `<button onclick="resetFluxModelToEnvDefault()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset to .env Default</button>`;
+      statusHtml += '<button onclick="resetFluxModelToEnvDefault()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset to .env Default</button>';
     } else {
       statusHtml += '<small style="color: #4CAF50;">✓ Using .env default</small>';
     }
@@ -2370,7 +2356,7 @@ async function loadConfigurationStatus() {
 
     if (localStorageOverrides.loraPath) {
       statusHtml += `<small style="color: #666;">🔄 Override Path: </small><code style="display: block; padding: 4px 6px; background: #fff; border-radius: 2px; margin: 2px 0; font-size: 10px; color: #d32f2f;">${escapeHtml(localStorageOverrides.loraPath)}</code>`;
-      statusHtml += `<button onclick="resetFluxLoraSettingsComplete()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset LoRA</button>`;
+      statusHtml += '<button onclick="resetFluxLoraSettingsComplete()" style="margin-top: 4px; padding: 3px 6px; background: #d32f2f; color: white; border: none; border-radius: 2px; cursor: pointer; font-size: 10px;">Reset LoRA</button>';
     } else {
       statusHtml += '<small style="color: #4CAF50;">✓ Using .env defaults</small>';
     }
@@ -2606,13 +2592,13 @@ async function renderConfigPreview(mode = 'local') {
         }
       }
 
-      html += `</div>`;
+      html += '</div>';
     }
 
     configSections.innerHTML = html;
   } catch (error) {
     console.error('[Config] Error rendering config preview:', error);
-    configSections.innerHTML = `<div class="config-error">Failed to load configuration</div>`;
+    configSections.innerHTML = '<div class="config-error">Failed to load configuration</div>';
   }
 }
 
@@ -3745,26 +3731,6 @@ async function restartServiceInModal(serviceName) {
 }
 
 /**
- * Stop all local services (used when switching to OpenAI mode)
- */
-async function stopAllLocalServices() {
-  const services = ['llm', 'flux', 'vision', 'vlm'];
-
-  console.log('[UI Modal] Stopping all local services...');
-
-  // Stop all services in parallel
-  const stopPromises = services.map(service =>
-    stopServiceInModal(service).catch(err => {
-      console.warn(`[UI Modal] Failed to stop ${service}:`, err);
-      // Don't fail if one service can't be stopped
-    })
-  );
-
-  await Promise.allSettled(stopPromises);
-  console.log('[UI Modal] All local services stopped');
-}
-
-/**
  * Apply quick local configuration (LLM + Flux + Local Vision + VLM Ranking)
  */
 async function applyQuickLocalSettings() {
@@ -4126,7 +4092,7 @@ async function downloadModel(type, modelName) {
               statusMessage.style.color = '#4CAF50';
               setTimeout(() => {
                 progressSection.style.display = 'none';
-                refreshModelStatus();
+                // refreshModelStatus(); // Function not defined
               }, 2000);
             } else if (data.status === 'error') {
               clearInterval(progressInterval);
@@ -4154,10 +4120,10 @@ async function downloadModel(type, modelName) {
           statusMessage.style.color = '#4CAF50';
           setTimeout(() => {
             progressSection.style.display = 'none';
-            refreshModelStatus();
+            // refreshModelStatus(); // Function not defined
           }, 2000);
         }
-      } catch (e) {
+      } catch {
         // Ignore parsing errors for final buffer
       }
     }
@@ -4433,14 +4399,14 @@ async function stopAllLocalServices() {
     // Final message
     if (failCount === 0) {
       addMessage(`✓ All ${successCount} local services stopped successfully`, 'event');
-      console.log(`[UI] All services stopped successfully`);
+      console.log('[UI] All services stopped successfully');
     } else {
       addMessage(`⚠️ Stopped ${successCount} services, ${failCount} failed to stop`, 'event');
       console.warn(`[UI] ${failCount} services failed to stop`);
     }
   } catch (error) {
     console.error('[UI] Error stopping services:', error);
-    addMessage(`✗ Error stopping services. Check console for details.`, 'error');
+    addMessage('✗ Error stopping services. Check console for details.', 'error');
   }
 }
 
