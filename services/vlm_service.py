@@ -32,9 +32,10 @@ MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
 # GPU layers: -1 = all layers on GPU, 0 = CPU only
 # For 12GB GPU: Use 24 layers (partial offload) to save ~3-4GB
 N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '24'))
-# Context size: 2048 is sufficient for image comparison (not long documents)
-# Smaller context = less KV cache memory (saves ~2-3GB)
-N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '2048'))
+# Context size: 4096 needed for dual-image comparisons with high-res images
+# Each image can use ~1400 tokens (37x37 patches), so 2 images + prompt ~3000 tokens
+# Using 4096 provides headroom and prevents "failed to find memory slot" errors
+N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '4096'))
 
 # Global model reference
 llm = None
