@@ -10,7 +10,8 @@ export default [
       'output/**',
       'session-history/**',
       'frontend/dist/**',
-      'archive/**'
+      'archive/**',
+      '.venv/**'
     ]
   },
   js.configs.recommended,
@@ -54,7 +55,10 @@ export default [
         beforeAll: 'readonly',
         afterAll: 'readonly',
         jest: 'readonly',
-        fetch: 'readonly'
+        fetch: 'readonly',
+        URL: 'readonly',
+        AbortController: 'readonly',
+        localStorage: 'readonly'
       }
     }
   },
@@ -67,8 +71,18 @@ export default [
         WebSocket: 'readonly',
         localStorage: 'readonly',
         sessionStorage: 'readonly',
-        fetch: 'readonly'
+        fetch: 'readonly',
+        alert: 'readonly',
+        confirm: 'readonly',
+        AbortController: 'readonly',
+        TextDecoder: 'readonly'
       }
+    },
+    rules: {
+      'no-unused-vars': ['error', {
+        'argsIgnorePattern': '^_',
+        'varsIgnorePattern': '^(loadJob|confirmClearHistory|showProviderSettings|setFluxModelPath|clearFluxModelPath|displayModelSource|resetFluxModelToEnvDefault|resetFluxLoraSettingsComplete|editConfigValueAsText|restartAllServicesAndDismiss|resetConfigToDefaults|updateModelSourceAndRefresh|saveHfToken|showAdvancedConfig|updateRankingMode|restartServiceInModal|applyQuickLocalSettings|applyProviderSettings|downloadModel|startService|stopService|switchToLocalProviders|DEFAULT_CLIP_ENCODER_PATH|DEFAULT_T5_ENCODER_PATH|DEFAULT_VAE_PATH|failed)$'
+      }]
     }
   },
   {

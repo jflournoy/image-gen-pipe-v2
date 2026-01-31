@@ -19,6 +19,10 @@ frontend/dist/
 # Node modules
 node_modules/
 
+# Python virtual environment
+.venv/
+**/.venv/**
+
 # Output directories
 output/
 session-history/
