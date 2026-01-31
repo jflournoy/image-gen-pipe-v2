@@ -4,18 +4,18 @@
  * Uses llama-cpp-python with multimodal GGUF models (LLaVA, etc.)
  */
 
-const { describe, it, beforeEach, mock } = require('node:test');
+const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
 
 // Mock axios for HTTP tests
 const mockAxios = {
   responses: [],
-  post: async (url, data, config) => {
+  post: async (_url, _data, _config) => {
     const response = mockAxios.responses.shift();
     if (response?.error) throw response.error;
     return { data: response || {} };
   },
-  get: async (url, config) => {
+  get: async (_url, _config) => {
     const response = mockAxios.responses.shift();
     if (response?.error) throw response.error;
     return { data: response || {} };
@@ -28,7 +28,7 @@ const mockAxios = {
 let LocalVLMProvider;
 try {
   LocalVLMProvider = require('../../src/providers/local-vlm-provider');
-} catch (e) {
+} catch {
   // Expected to fail initially - TDD RED phase
   LocalVLMProvider = null;
 }

@@ -224,10 +224,10 @@ describe('ModelCoordinator', () => {
       const state = modelCoordinator.getModelStates();
 
       assert.ok(typeof state === 'object', 'Should return object');
-      assert.ok(state.hasOwnProperty('llm'), 'Should have llm state');
-      assert.ok(state.hasOwnProperty('flux'), 'Should have flux state');
-      assert.ok(state.hasOwnProperty('vision'), 'Should have vision state');
-      assert.ok(state.hasOwnProperty('vlm'), 'Should have vlm state');
+      assert.ok(Object.hasOwn(state, 'llm'), 'Should have llm state');
+      assert.ok(Object.hasOwn(state, 'flux'), 'Should have flux state');
+      assert.ok(Object.hasOwn(state, 'vision'), 'Should have vision state');
+      assert.ok(Object.hasOwn(state, 'vlm'), 'Should have vlm state');
 
       // All should be boolean
       assert.strictEqual(typeof state.llm, 'boolean', 'llm state should be boolean');
@@ -506,7 +506,7 @@ describe('ModelCoordinator', () => {
         await modelCoordinator.withGPULock(async () => {
           throw new Error('Operation failed');
         });
-      } catch (e) {
+      } catch {
         // Expected
       }
 

@@ -11,7 +11,7 @@ const assert = require('node:assert');
 let LocalVLMProvider;
 try {
   LocalVLMProvider = require('../../src/providers/local-vlm-provider');
-} catch (e) {
+} catch {
   LocalVLMProvider = null;
 }
 
@@ -285,7 +285,6 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
       });
 
       // Some comparisons may be inferred via transitivity
-      const hasInferred = progressEvents.some(e => e.inferred === true);
       // This is optional - not all rankings will have inferences
       assert.ok(progressEvents.length > 0, 'Should emit at least some events');
     });
@@ -297,7 +296,7 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
 
       let failCount = 0;
       provider._axios = {
-        post: async (url, data) => {
+        post: async (_url, _data) => {
           failCount++;
           if (failCount === 2) {
             throw new Error('VLM service timeout');
@@ -338,7 +337,7 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         await provider.rankImagesWithTransitivity(images, 'test', {
           gracefulDegradation: true
         });
-      } catch (e) {
+      } catch {
         // May or may not throw depending on implementation
       }
 

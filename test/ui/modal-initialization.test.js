@@ -40,13 +40,13 @@ describe('🔴 RED: Modal Initialization', () => {
 
       // Should handle OpenAI mode
       assert.ok(
-        funcChunk.includes('isOpenAIMode') || funcChunk.includes("=== 'openai'"),
+        funcChunk.includes('isOpenAIMode') || funcChunk.includes('=== \'openai\''),
         'Should detect OpenAI mode'
       );
 
       // Should handle Local mode
       assert.ok(
-        funcChunk.includes('isLocalMode') || funcChunk.includes("=== 'flux'"),
+        funcChunk.includes('isLocalMode') || funcChunk.includes('=== \'flux\''),
         'Should detect Local mode'
       );
 
@@ -64,10 +64,10 @@ describe('🔴 RED: Modal Initialization', () => {
       const funcChunk = jsContent.substring(funcStart, funcStart + 3000);
 
       // Should hide config section in OpenAI mode
-      const hidesInOpenAI = funcChunk.includes("configSection.style.display = 'none'");
+      const hidesInOpenAI = funcChunk.includes('configSection.style.display = \'none\'');
 
       // Should hide advanced config in Local mode
-      const hidesAdvancedInLocal = funcChunk.includes("advancedConfigSection.style.display = 'none'");
+      const hidesAdvancedInLocal = funcChunk.includes('advancedConfigSection.style.display = \'none\'');
 
       assert.ok(
         hidesInOpenAI || hidesAdvancedInLocal,
@@ -99,8 +99,8 @@ describe('🔴 RED: Modal Initialization', () => {
       const hasModalOpen =
         jsContent.includes('function openProviderModal') ||
         jsContent.includes('function showProviderModal') ||
-        jsContent.includes("getElementById('providerModal')") &&
-        jsContent.includes(".style.display = 'flex'");
+        jsContent.includes('getElementById(\'providerModal\')') &&
+        jsContent.includes('.style.display = \'flex\'');
 
       assert.ok(
         hasModalOpen,

@@ -95,7 +95,7 @@ describe('VLM Ranking Pipeline', () => {
       const progressEvents = [];
       const images = makeImages(3);
 
-      const result = await provider.rankImages(images, 'a beautiful sunset', {
+      await provider.rankImages(images, 'a beautiful sunset', {
         gracefulDegradation: true,
         ensembleSize: 1,
         onProgress: (data) => progressEvents.push(data)
@@ -465,11 +465,11 @@ describe('Multi-round VLM → Flux → VLM (GPU integration)', { skip: !process.
         try {
           execSync('sudo nvidia-smi -pm 1', { encoding: 'utf8' });
           console.log('[Test] ✓ Persistence mode enabled');
-        } catch (e) {
+        } catch {
           console.log('[Test] ⚠️  Could not enable persistence mode (needs sudo)');
         }
       }
-    } catch (e) {
+    } catch {
       console.log('[Test] ⚠️  Could not check persistence mode');
     }
 

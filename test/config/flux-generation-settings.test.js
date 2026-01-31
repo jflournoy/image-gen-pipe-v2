@@ -145,7 +145,6 @@ describe('🔴 Flux Generation Settings', () => {
       };
 
       // Replace axios with mock
-      const originalAxios = require('axios');
       const axios = require('axios');
       const originalPost = axios.post;
       const originalGet = axios.get;

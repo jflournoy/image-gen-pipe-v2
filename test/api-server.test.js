@@ -6,6 +6,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert';
 import http from 'node:http';
+import { findAvailablePort } from './test-utils.js';
 
 test('🔴 RED: Express server setup', async (t) => {
   await t.test('should create an Express app instance', async () => {
@@ -32,10 +33,10 @@ test('🔴 RED: Express server setup', async (t) => {
 
 test('🔴 RED: Beam search POST endpoint', async (t) => {
   await t.test('should accept POST /api/beam-search requests', async () => {
-    // Arrange: Start server
+    // Arrange: Start server with dynamic port
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
-    const port = 3001;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Act: Make POST request to beam search endpoint
@@ -79,10 +80,10 @@ test('🔴 RED: Beam search POST endpoint', async (t) => {
   });
 
   await t.test('should validate required parameters', async () => {
-    // Arrange: Start server on different port
+    // Arrange: Start server with dynamic port
     const { createApp } = await import('../src/api/server.js');
     const app = createApp();
-    const port = 3002;
+    const port = await findAvailablePort();
     const server = app.listen(port);
 
     // Act: Make POST request with missing prompt

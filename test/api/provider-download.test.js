@@ -5,7 +5,7 @@
  * Tests both the Node.js proxy and the integration with the LLM service.
  */
 
-const { describe, test, before, after } = require('node:test');
+const { describe, test, before } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 
@@ -25,7 +25,6 @@ function makeRequest(options, body = null) {
 
 describe('Provider Model Download API', () => {
   let serverAvailable = false;
-  let llmServiceAvailable = false;
 
   before(async () => {
     // Check if Node.js server is running
@@ -39,19 +38,6 @@ describe('Provider Model Download API', () => {
       serverAvailable = res.status === 200;
     } catch {
       serverAvailable = false;
-    }
-
-    // Check if LLM service is running
-    try {
-      const res = await makeRequest({
-        hostname: 'localhost',
-        port: 8003,
-        path: '/health',
-        method: 'GET'
-      });
-      llmServiceAvailable = res.status === 200;
-    } catch {
-      llmServiceAvailable = false;
     }
   });
 

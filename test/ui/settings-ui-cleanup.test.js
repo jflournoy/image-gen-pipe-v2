@@ -30,9 +30,6 @@ describe('🔴 RED: Settings UI Cleanup', () => {
     it('should not have duplicate service control sections', () => {
       const content = fs.readFileSync(demoHtmlPath, 'utf8');
 
-      // Find all sections with service controls
-      const serviceControlSections = [];
-
       // Look for sections with service status divs
       const serviceStatusMatches = content.match(/id="serviceStatus"/g) || [];
 

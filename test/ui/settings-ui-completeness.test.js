@@ -3,7 +3,7 @@
  * Tests to ensure Settings UI has all configuration options and Quick Local button works
  */
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const axios = require('axios');
 

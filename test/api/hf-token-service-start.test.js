@@ -31,10 +31,6 @@ describe('HF Token Service Start API', () => {
       // For now, verify the expected behavior pattern
 
       const hfToken = 'hf_testToken123';
-      const expectedEnvPattern = {
-        ...process.env,
-        HF_TOKEN: hfToken
-      };
 
       // Simulate what the implementation should do
       const spawnOptions = {

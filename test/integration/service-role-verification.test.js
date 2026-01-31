@@ -22,8 +22,6 @@ const FIXTURES_DIR = path.join(__dirname, '../fixtures/images');
 const SHARP_DOG = path.join(FIXTURES_DIR, 'sharp-dog.jpg');
 const BLURRY_DOG = path.join(FIXTURES_DIR, 'blurry-dog.jpg');
 const CAT = path.join(FIXTURES_DIR, 'cat.jpg');
-const AESTHETIC_GOOD = path.join(FIXTURES_DIR, 'aesthetic-good.jpg');
-const AESTHETIC_POOR = path.join(FIXTURES_DIR, 'aesthetic-poor.jpg');
 
 describe('Service Role Verification', { skip: skipUnlessGPU }, () => {
   let LocalLLMProvider;
@@ -468,7 +466,7 @@ describe('Service Role Verification', { skip: skipUnlessGPU }, () => {
 
       assert.ok(
         choiceIsCorrect || explanationIdentifiesA || tieWithACloser,
-        `VLM should recognize dog (A) matches dog prompt better than cat (B). ` +
+        'VLM should recognize dog (A) matches dog prompt better than cat (B). ' +
         `Choice: ${vlmResult.choice}. Prompt: "${llmResult.refinedPrompt}". Explanation: ${vlmResult.explanation}`
       );
     });
@@ -477,7 +475,7 @@ describe('Service Role Verification', { skip: skipUnlessGPU }, () => {
       // Ensure VLM is loaded (may still be from previous test)
       try {
         await axios.post('http://localhost:8004/load', {}, { timeout: 60000 });
-      } catch (e) { /* ignore if already loaded */ }
+      } catch { /* ignore if already loaded */ }
 
       // Given a VLM comparison result
       const vlmResult = await vlmProvider.compareImages(

@@ -357,8 +357,8 @@ describe('Pipeline: VLM/LLM Integration', () => {
       const result = await llmProvider.refinePrompt('test', { dimension: 'what' });
 
       // Verify structure
-      assert.ok(result.hasOwnProperty('refinedPrompt'), 'Should have refinedPrompt field');
-      assert.ok(result.hasOwnProperty('metadata'), 'Should have metadata field');
+      assert.ok(Object.hasOwn(result, 'refinedPrompt'), 'Should have refinedPrompt field');
+      assert.ok(Object.hasOwn(result, 'metadata'), 'Should have metadata field');
 
       // Verify metadata structure
       assert.ok(result.metadata.tokensUsed, 'Metadata should have tokensUsed');

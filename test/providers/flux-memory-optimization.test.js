@@ -3,7 +3,7 @@
  * 🔴 RED: Verify memory optimization features are properly configured
  */
 
-const { describe, it, beforeEach, afterEach } = require('node:test');
+const { describe, it, beforeEach } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -107,7 +107,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
   describe('Download Status Endpoint', () => {
     it('should have /download/status endpoint', () => {
       assert.ok(
-        fluxServiceCode.includes("@app.get('/download/status')"),
+        fluxServiceCode.includes('@app.get(\'/download/status\')'),
         'Should have download status endpoint'
       );
     });
@@ -121,7 +121,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
 
     it('should return cached status with size', () => {
       assert.ok(
-        fluxServiceCode.includes("'status': 'cached'"),
+        fluxServiceCode.includes('\'status\': \'cached\''),
         'Should return cached status'
       );
       assert.ok(
@@ -132,7 +132,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
 
     it('should return not_downloaded status when model missing', () => {
       assert.ok(
-        fluxServiceCode.includes("'status': 'not_downloaded'"),
+        fluxServiceCode.includes('\'status\': \'not_downloaded\''),
         'Should return not_downloaded status'
       );
     });
@@ -141,7 +141,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
   describe('Download Endpoint', () => {
     it('should have /download POST endpoint', () => {
       assert.ok(
-        fluxServiceCode.includes("@app.post('/download')"),
+        fluxServiceCode.includes('@app.post(\'/download\')'),
         'Should have download endpoint'
       );
     });
@@ -152,7 +152,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
         'Should use streaming response'
       );
       assert.ok(
-        fluxServiceCode.includes("media_type='text/event-stream'"),
+        fluxServiceCode.includes('media_type=\'text/event-stream\''),
         'Should use SSE media type'
       );
     });
@@ -175,7 +175,7 @@ describe('🔴 RED: Flux Service Memory Optimizations', () => {
 
     it('should handle download errors gracefully', () => {
       assert.ok(
-        fluxServiceCode.includes("'status': 'error'"),
+        fluxServiceCode.includes('\'status\': \'error\''),
         'Should return error status on failure'
       );
     });

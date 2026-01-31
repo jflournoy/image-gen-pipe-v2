@@ -4,7 +4,7 @@
  * Supports cross-session service detection
  */
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 const fs = require('fs');
@@ -37,7 +37,7 @@ function makeRequest(method, url, body = null) {
         try {
           const json = data ? JSON.parse(data) : {};
           resolve({ status: res.statusCode, data: json });
-        } catch (err) {
+        } catch {
           resolve({ status: res.statusCode, data: { raw: data } });
         }
       });
@@ -46,21 +46,6 @@ function makeRequest(method, url, body = null) {
     req.on('error', reject);
     if (body) req.write(JSON.stringify(body));
     req.end();
-  });
-}
-
-/**
- * Helper: Check if port is in use
- */
-function isPortInUse(port) {
-  return new Promise((resolve) => {
-    const server = require('net').createServer();
-    server.once('error', () => resolve(true));
-    server.once('listening', () => {
-      server.close();
-      resolve(false);
-    });
-    server.listen(port);
   });
 }
 
@@ -281,13 +266,11 @@ describe('🔴 RED: Service Control API', () => {
       fs.writeFileSync(pidPath, proc.pid.toString());
 
       let sigTermSent = false;
-      let sigKillSent = false;
 
       // Mock kill to track signals
       const originalKill = process.kill;
       process.kill = (pid, signal) => {
         if (signal === 'SIGTERM') sigTermSent = true;
-        if (signal === 'SIGKILL') sigKillSent = true;
         return originalKill(pid, signal);
       };
 
@@ -405,8 +388,6 @@ describe('🔴 RED: Service Control API', () => {
     });
 
     it('should stop service started in different session', async () => {
-      const ServiceManager = require('../../src/utils/service-manager.js');
-
       // Manually start service (simulate different session)
       const proc = spawn('sleep', ['30']);
       const pidPath = path.join('/tmp', 'flux_service.pid');
