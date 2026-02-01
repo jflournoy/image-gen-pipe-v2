@@ -30,8 +30,9 @@ CLIP_MODEL_FILE = os.getenv('VLM_CLIP_FILE', '*mmproj-F16.gguf')
 MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only
-# For 12GB GPU: Use 24 layers (partial offload) to save ~3-4GB
-N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '24'))
+# For 12GB GPU with frequent model swaps: Use 16 layers to prevent fragmentation crashes
+# More conservative than 24 to handle Flux↔VLM swap cycles without GGML allocation failures
+N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '16'))
 # Context size: 4096 needed for dual-image comparisons with high-res images
 # Each image can use ~1400 tokens (37x37 patches), so 2 images + prompt ~3000 tokens
 # Using 4096 provides headroom and prevents "failed to find memory slot" errors
@@ -378,7 +379,11 @@ def run_inference_with_retry(model, messages, max_tokens, temperature, max_retri
 
 
 def unload_model():
-    """Unload the model to free GPU memory"""
+    """Unload the model to free GPU memory
+
+    Aggressively cleans up GGML/CUDA resources to prevent fragmentation
+    during repeated Flux↔VLM model swaps.
+    """
     global llm, chat_handler
 
     if llm is not None:
@@ -386,14 +391,21 @@ def unload_model():
         llm.close()
         llm = None
         chat_handler = None
+
+        # Aggressive cleanup for GGML/CUDA memory
         gc.collect()
-        # Try to clear CUDA cache if available
+        gc.collect()  # Run twice to catch circular references
+
+        # Synchronize CUDA to ensure cleanup completes before next model load
         try:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()  # Wait for all CUDA operations to complete
+                torch.cuda.empty_cache()  # Clear again after sync
         except ImportError:
             pass
+
         print('[VLM Service] Model unloaded, GPU memory freed')
         return True
     return False
