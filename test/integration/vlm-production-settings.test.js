@@ -24,7 +24,7 @@ const { describe, it, before, after } = require('node:test');
 const path = require('path');
 const fs = require('fs');
 
-const LocalFluxProvider = require('../../src/providers/local-flux-provider.js');
+const FluxImageProvider = require('../../src/providers/flux-image-provider.js');
 const LocalVLMProvider = require('../../src/providers/local-vlm-provider.js');
 const modelCoordinator = require('../../src/utils/model-coordinator.js');
 
@@ -59,7 +59,7 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
 
   before(async () => {
     console.log('[Test] Initializing providers...');
-    fluxProvider = new LocalFluxProvider({
+    fluxProvider = new FluxImageProvider({
       modelName: 'black-forest-labs/FLUX.1-schnell',
       numInferenceSteps: 1, // Fast generation for testing
       enableSequentialCpuOffload: true
