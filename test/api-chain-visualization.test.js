@@ -13,10 +13,25 @@ const { attachWebSocket } = require('../src/api/server.js');
 const { _resetWebSocketState } = require('../src/api/server.js');
 
 let server;
+let port;
+let baseUrl;
 
 describe('🟢 GREEN: Chain of Results Visualization', () => {
   before(async () => {
-    server = await startServer(3000);
+    // Use OS-assigned port to avoid conflicts with other tests
+    const net = require('net');
+    port = await new Promise((resolve, reject) => {
+      const srv = net.createServer();
+      srv.once('error', reject);
+      srv.once('listening', () => {
+        const assignedPort = srv.address().port;
+        srv.close(() => resolve(assignedPort));
+      });
+      srv.listen(0);
+    });
+
+    baseUrl = `http://localhost:${port}`;
+    server = await startServer(port);
     attachWebSocket(server);
   });
 
@@ -30,7 +45,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
   describe('Metadata Endpoint for Visualization', () => {
     test('should provide /api/jobs/:jobId/metadata endpoint', async () => {
       // Start a small demo job to get a real jobId
-      const startResponse = await fetch('http://localhost:3000/api/demo/start', {
+      const startResponse = await fetch(`${baseUrl}/api/demo/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -49,7 +64,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
       await new Promise(resolve => setTimeout(resolve, 500));
 
       // Now fetch metadata
-      const metadataResponse = await fetch(`http://localhost:3000/api/jobs/${jobId}/metadata`);
+      const metadataResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/metadata`);
       assert.strictEqual(metadataResponse.status, 200, 'Metadata endpoint should exist');
 
       const metadata = await metadataResponse.json();
@@ -57,7 +72,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
     });
 
     test('should return metadata structure for visualization', async () => {
-      const startResponse = await fetch('http://localhost:3000/api/demo/start', {
+      const startResponse = await fetch(`${baseUrl}/api/demo/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -74,7 +89,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
       // Wait a short time for metadata to be available
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const metadataResponse = await fetch(`http://localhost:3000/api/jobs/${jobId}/metadata`);
+      const metadataResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/metadata`);
       assert.strictEqual(metadataResponse.status, 200, 'Metadata endpoint should return 200');
 
       const metadata = await metadataResponse.json();
@@ -102,7 +117,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
     });
 
     test('should return metadata with optional winner and finalists', async () => {
-      const startResponse = await fetch('http://localhost:3000/api/demo/start', {
+      const startResponse = await fetch(`${baseUrl}/api/demo/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -118,7 +133,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const metadataResponse = await fetch(`http://localhost:3000/api/jobs/${jobId}/metadata`);
+      const metadataResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/metadata`);
       const metadata = await metadataResponse.json();
 
       // Winner is optional - only present if job has completed
@@ -139,14 +154,14 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
     });
 
     test('should return 404 for non-existent job', async () => {
-      const response = await fetch('http://localhost:3000/api/jobs/nonexistent-job-id/metadata');
+      const response = await fetch(`${baseUrl}/api/jobs/nonexistent-job-id/metadata`);
       assert.strictEqual(response.status, 404, 'Should return 404 for non-existent job');
     });
   });
 
   describe('Visualization Data Format', () => {
     test('should support optional lineage information for winner', async () => {
-      const startResponse = await fetch('http://localhost:3000/api/demo/start', {
+      const startResponse = await fetch(`${baseUrl}/api/demo/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -162,7 +177,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const metadataResponse = await fetch(`http://localhost:3000/api/jobs/${jobId}/metadata`);
+      const metadataResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/metadata`);
       const metadata = await metadataResponse.json();
 
       // Lineage is optional - only populated if tracking is enabled
@@ -179,7 +194,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
     });
 
     test('should support optional survival tracking for candidates', async () => {
-      const startResponse = await fetch('http://localhost:3000/api/demo/start', {
+      const startResponse = await fetch(`${baseUrl}/api/demo/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -195,7 +210,7 @@ describe('🟢 GREEN: Chain of Results Visualization', () => {
 
       await new Promise(resolve => setTimeout(resolve, 500));
 
-      const metadataResponse = await fetch(`http://localhost:3000/api/jobs/${jobId}/metadata`);
+      const metadataResponse = await fetch(`${baseUrl}/api/jobs/${jobId}/metadata`);
       const metadata = await metadataResponse.json();
 
       // Validate that metadata structure supports determining survivors
