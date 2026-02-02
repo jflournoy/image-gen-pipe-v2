@@ -21,7 +21,6 @@
 
 const assert = require('assert');
 const { describe, it, before, after } = require('node:test');
-const path = require('path');
 const fs = require('fs');
 
 const FluxImageProvider = require('../../src/providers/flux-image-provider.js');
@@ -35,12 +34,12 @@ const generatedFiles = [];
 const VLM_GPU_LAYERS = process.env.VLM_GPU_LAYERS || '24';
 const VLM_CONTEXT_SIZE = process.env.VLM_CONTEXT_SIZE || '4096';
 
-console.log(`\n========================================`);
-console.log(`🧪 VLM Production Settings Test`);
-console.log(`========================================`);
+console.log('\n========================================');
+console.log('🧪 VLM Production Settings Test');
+console.log('========================================');
 console.log(`VLM_GPU_LAYERS: ${VLM_GPU_LAYERS}`);
 console.log(`VLM_CONTEXT_SIZE: ${VLM_CONTEXT_SIZE}`);
-console.log(`========================================\n`);
+console.log('========================================\n');
 
 // GPU memory helper
 function getGpuMemory() {
@@ -222,14 +221,14 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
     const memoryMeasurements = [memStart, memAfterFlux1, memAfterVLM1, memAfterFlux2, memAfterVLM2, memEnd].filter(m => m !== null);
     if (memoryMeasurements.length > 0) {
       const peakMemory = Math.max(...memoryMeasurements);
-      console.log(`\n========================================`);
-      console.log(`📊 Test Results`);
-      console.log(`========================================`);
+      console.log('\n========================================');
+      console.log('📊 Test Results');
+      console.log('========================================');
       console.log(`VLM_GPU_LAYERS: ${VLM_GPU_LAYERS}`);
       console.log(`VLM_CONTEXT_SIZE: ${VLM_CONTEXT_SIZE}`);
       console.log(`Peak GPU memory: ${peakMemory} MB`);
       console.log(`Status: ${peakMemory > 12000 ? '⚠️  OVER 12GB LIMIT' : '✅ WITHIN 12GB LIMIT'}`);
-      console.log(`========================================\n`);
+      console.log('========================================\n');
     }
 
     // Verify no errors in ranking
