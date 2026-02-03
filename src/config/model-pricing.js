@@ -188,12 +188,17 @@ function getPricing(modelName) {
  */
 function getRecommendedModel(useCase) {
   // Find the tier that includes this use case
-  for (const [tier, config] of Object.entries(MODEL_RECOMMENDATIONS)) {
+  for (const [recommendationTier, config] of Object.entries(MODEL_RECOMMENDATIONS)) {
     if (config.use_cases.includes(useCase)) {
-      const pricing = MODEL_PRICING[config.model];
+      let pricing = MODEL_PRICING[config.model];
+      // Handle tiered pricing (standard/flex)
+      const pricingTier = config.tier || 'standard';
+      if (typeof pricing === 'object' && pricing.standard !== undefined) {
+        pricing = pricing[pricingTier];
+      }
       return {
         model: config.model,
-        tier,
+        tier: recommendationTier,
         pricePerToken: typeof pricing === 'object' ? pricing.input : pricing,
         costPer1M: config.cost_per_1m
       };
@@ -201,7 +206,10 @@ function getRecommendedModel(useCase) {
   }
 
   // Default to moderate tier if not found
-  const moderatePricing = MODEL_PRICING[MODEL_RECOMMENDATIONS.moderate.model];
+  let moderatePricing = MODEL_PRICING[MODEL_RECOMMENDATIONS.moderate.model];
+  if (typeof moderatePricing === 'object' && moderatePricing.standard !== undefined) {
+    moderatePricing = moderatePricing.standard;
+  }
   return {
     model: MODEL_RECOMMENDATIONS.moderate.model,
     tier: 'moderate',
@@ -214,12 +222,18 @@ function getRecommendedModel(useCase) {
  * Calculate cost for token usage
  * @param {string} modelName - Model name
  * @param {number|Object} tokens - Number of tokens (legacy) or {input, output} object
+ * @param {string} tier - Optional tier ('standard' or 'flex'), defaults to 'standard'
  * @returns {number} Cost in USD
  */
-function calculateCost(modelName, tokens) {
-  const pricing = getPricing(modelName);
+function calculateCost(modelName, tokens, tier = 'standard') {
+  let pricing = getPricing(modelName);
   if (!pricing) {
     throw new Error(`Unknown model: ${modelName}`);
+  }
+
+  // Handle tiered pricing (standard/flex) - use specified tier, default to standard
+  if (typeof pricing === 'object' && pricing.standard !== undefined) {
+    pricing = pricing[tier] || pricing.standard;
   }
 
   // Handle new format: {input, output} token counts
