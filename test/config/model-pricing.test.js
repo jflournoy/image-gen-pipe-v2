@@ -36,21 +36,21 @@ describe('Model Pricing Configuration', () => {
   });
 
   test('should have correct pricing values (December 2025 rates)', () => {
-    // GPT-5 models (with input/output pricing)
-    assert.strictEqual(MODEL_PRICING['gpt-5.1'].input, 0.00000125, 'gpt-5.1 input = $1.25/1M tokens');
-    assert.strictEqual(MODEL_PRICING['gpt-5.1'].output, 0.000005, 'gpt-5.1 output = $5.00/1M tokens');
-    assert.strictEqual(MODEL_PRICING['gpt-5-mini'].input, 0.00000025, 'gpt-5-mini input = $0.25/1M tokens');
-    assert.strictEqual(MODEL_PRICING['gpt-5-mini'].output, 0.000001, 'gpt-5-mini output = $1.00/1M tokens');
-    assert.strictEqual(MODEL_PRICING['gpt-5-nano'].input, 0.00000005, 'gpt-5-nano input = $0.05/1M tokens');
-    assert.strictEqual(MODEL_PRICING['gpt-5-nano'].output, 0.0000002, 'gpt-5-nano output = $0.20/1M tokens');
+    // GPT-5 models (with standard/flex tiers)
+    assert.strictEqual(MODEL_PRICING['gpt-5.1'].standard.input, 0.00000125, 'gpt-5.1 standard input = $1.25/1M tokens');
+    assert.strictEqual(MODEL_PRICING['gpt-5.1'].standard.output, 0.000005, 'gpt-5.1 standard output = $5.00/1M tokens');
+    assert.strictEqual(MODEL_PRICING['gpt-5-mini'].standard.input, 0.00000025, 'gpt-5-mini standard input = $0.25/1M tokens');
+    assert.strictEqual(MODEL_PRICING['gpt-5-mini'].standard.output, 0.000001, 'gpt-5-mini standard output = $1.00/1M tokens');
+    assert.strictEqual(MODEL_PRICING['gpt-5-nano'].standard.input, 0.00000005, 'gpt-5-nano standard input = $0.05/1M tokens');
+    assert.strictEqual(MODEL_PRICING['gpt-5-nano'].standard.output, 0.0000002, 'gpt-5-nano standard output = $0.20/1M tokens');
 
-    // GPT-4o models (with input/output pricing)
+    // GPT-4o models (direct input/output pricing)
     assert.strictEqual(MODEL_PRICING['gpt-4o'].input, 0.0000025, 'gpt-4o input = $2.50/1M tokens');
     assert.strictEqual(MODEL_PRICING['gpt-4o'].output, 0.00001, 'gpt-4o output = $10.00/1M tokens');
     assert.strictEqual(MODEL_PRICING['gpt-4o-mini'].input, 0.00000015, 'gpt-4o-mini input = $0.15/1M tokens');
     assert.strictEqual(MODEL_PRICING['gpt-4o-mini'].output, 0.0000006, 'gpt-4o-mini output = $0.60/1M tokens');
 
-    // Legacy models (with input/output pricing)
+    // Legacy models (direct input/output pricing)
     assert.strictEqual(MODEL_PRICING['gpt-4'].input, 0.00003, 'gpt-4 input = $30.00/1M tokens');
     assert.strictEqual(MODEL_PRICING['gpt-4'].output, 0.00012, 'gpt-4 output = $120.00/1M tokens');
     assert.strictEqual(MODEL_PRICING['gpt-3.5-turbo'].input, 0.0000005, 'gpt-3.5-turbo input = $0.50/1M tokens');
@@ -60,8 +60,10 @@ describe('Model Pricing Configuration', () => {
   test('getPricing() should return correct pricing for valid models', () => {
     const price = getPricing('gpt-5-nano');
     assert.ok(typeof price === 'object', 'Should return pricing object');
-    assert.strictEqual(price.input, 0.00000005);
-    assert.strictEqual(price.output, 0.0000002);
+    assert.strictEqual(price.standard.input, 0.00000005);
+    assert.strictEqual(price.standard.output, 0.0000002);
+    assert.strictEqual(price.flex.input, 0.000000025);
+    assert.strictEqual(price.flex.output, 0.0000001);
 
     const price2 = getPricing('gpt-4o');
     assert.ok(typeof price2 === 'object', 'Should return pricing object');
@@ -128,9 +130,9 @@ describe('Model Pricing Configuration', () => {
     assert.strictEqual(refineRec.model, 'gpt-5-mini');
     assert.strictEqual(refineRec.tier, 'moderate');
 
-    // Vision operations should use gpt-4o-mini
+    // Vision operations should use gpt-5-nano with flex tier
     const visionRec = getRecommendedModel('image_analysis');
-    assert.strictEqual(visionRec.model, 'gpt-4o-mini');
+    assert.strictEqual(visionRec.model, 'gpt-5-nano');
     assert.strictEqual(visionRec.tier, 'vision');
   });
 
@@ -156,32 +158,33 @@ describe('Model Pricing Configuration', () => {
   });
 
   test('pricing should reflect cost hierarchy (cheaper models have lower costs)', () => {
-    // GPT-5 hierarchy (comparing input prices)
-    assert.ok(MODEL_PRICING['gpt-5-nano'].input < MODEL_PRICING['gpt-5-mini'].input);
-    assert.ok(MODEL_PRICING['gpt-5-mini'].input < MODEL_PRICING['gpt-5.1'].input);
+    // GPT-5 hierarchy (comparing standard tier input prices)
+    assert.ok(MODEL_PRICING['gpt-5-nano'].standard.input < MODEL_PRICING['gpt-5-mini'].standard.input);
+    assert.ok(MODEL_PRICING['gpt-5-mini'].standard.input < MODEL_PRICING['gpt-5.1'].standard.input);
 
     // GPT-4o hierarchy (comparing input prices)
     assert.ok(MODEL_PRICING['gpt-4o-mini'].input < MODEL_PRICING['gpt-4o'].input);
 
     // Legacy to modern comparison (comparing input prices)
-    assert.ok(MODEL_PRICING['gpt-5-nano'].input < MODEL_PRICING['gpt-3.5-turbo'].input);
-    assert.ok(MODEL_PRICING['gpt-5-mini'].input < MODEL_PRICING['gpt-4-turbo'].input);
+    assert.ok(MODEL_PRICING['gpt-5-nano'].standard.input < MODEL_PRICING['gpt-3.5-turbo'].input);
+    assert.ok(MODEL_PRICING['gpt-5-mini'].standard.input < MODEL_PRICING['gpt-4-turbo'].input);
   });
 
   // 🔴 TDD RED: Test for separate input/output token pricing
   test('🔴 should have separate input and output token pricing for each model', () => {
-    // Verify that pricing has input/output structure
+    // Verify that pricing has standard tier with input/output structure
     const gpt5nano = MODEL_PRICING['gpt-5-nano'];
-    assert.ok(typeof gpt5nano === 'object', 'Pricing should be an object with input/output');
-    assert.ok(typeof gpt5nano.input === 'number', 'Should have input token price');
-    assert.ok(typeof gpt5nano.output === 'number', 'Should have output token price');
+    assert.ok(typeof gpt5nano === 'object', 'Pricing should be an object');
+    assert.ok(typeof gpt5nano.standard === 'object', 'Should have standard tier');
+    assert.ok(typeof gpt5nano.standard.input === 'number', 'Should have input token price');
+    assert.ok(typeof gpt5nano.standard.output === 'number', 'Should have output token price');
 
     // Verify output is more expensive than input (typical 4x multiplier for GPT-5)
-    assert.ok(gpt5nano.output > gpt5nano.input, 'Output tokens should be more expensive than input');
+    assert.ok(gpt5nano.standard.output > gpt5nano.standard.input, 'Output tokens should be more expensive than input');
 
     // Check correct pricing from official docs (Standard tier)
-    assert.strictEqual(gpt5nano.input, 0.00000005, 'gpt-5-nano input = $0.05/1M');
-    assert.strictEqual(gpt5nano.output, 0.0000002, 'gpt-5-nano output = $0.20/1M');
+    assert.strictEqual(gpt5nano.standard.input, 0.00000005, 'gpt-5-nano standard input = $0.05/1M');
+    assert.strictEqual(gpt5nano.standard.output, 0.0000002, 'gpt-5-nano standard output = $0.20/1M');
   });
 
   test('🔴 calculateCost() should handle separate input and output tokens', () => {
