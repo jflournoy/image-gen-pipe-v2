@@ -54,38 +54,38 @@ describe('CritiqueGenerator', () => {
     it('should require evaluation results parameter', async () => {
       await assert.rejects(
         async () => await generator.generateCritique(),
-        /evaluation.*required/i,
-        'Should throw when evaluation is missing'
+        /feedback.*required/i,
+        'Should throw when feedback is missing'
       );
     });
 
     it('should require prompts parameter', async () => {
-      const evaluation = { alignmentScore: 75 };
+      const feedback = { alignmentScore: 75 };
 
       await assert.rejects(
-        async () => await generator.generateCritique(evaluation),
+        async () => await generator.generateCritique(feedback),
         /prompts.*required/i,
         'Should throw when prompts are missing'
       );
     });
 
     it('should require dimension parameter', async () => {
-      const evaluation = { alignmentScore: 75 };
+      const feedback = { alignmentScore: 75 };
       const prompts = { what: 'test', how: 'test', combined: 'test' };
 
       await assert.rejects(
-        async () => await generator.generateCritique(evaluation, prompts, 'test prompt'),
+        async () => await generator.generateCritique(feedback, prompts, 'test prompt'),
         /dimension.*required/i,
         'Should throw when dimension is missing'
       );
     });
 
     it('should validate dimension is "what" or "how"', async () => {
-      const evaluation = { alignmentScore: 75 };
+      const feedback = { alignmentScore: 75 };
       const prompts = { what: 'test', how: 'test', combined: 'test' };
 
       await assert.rejects(
-        async () => await generator.generateCritique(evaluation, prompts, 'test prompt', { dimension: 'invalid' }),
+        async () => await generator.generateCritique(feedback, prompts, 'test prompt', { dimension: 'invalid' }),
         /dimension.*what.*how/i,
         'Should throw for invalid dimension'
       );
