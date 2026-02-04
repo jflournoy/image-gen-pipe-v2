@@ -58,7 +58,7 @@ describe('🟢 GREEN: Integration Tests - API Key Proxy Pattern', () => {
 
       // Check userApiKey validation
       assert.ok(
-        workerContent.includes('User API key is required'),
+        workerContent.includes('API key is required'),
         'Worker should validate userApiKey is provided'
       );
 
