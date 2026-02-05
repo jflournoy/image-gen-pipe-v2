@@ -58,7 +58,7 @@ describe('OpenAIImageProvider Interface', () => {
 
     beforeEach(() => {
       const OpenAIImageProvider = require('../../src/providers/openai-image-provider.js');
-      provider = new OpenAIImageProvider('fake-api-key');
+      provider = new OpenAIImageProvider('fake-api-key', { model: 'dall-e-3' });
     });
 
     it('should accept a prompt string', () => {

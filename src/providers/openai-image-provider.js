@@ -271,19 +271,24 @@ class OpenAIImageProvider {
       dimension
     } = options;
 
-    // Use model-specific defaults if not provided or if invalid for this model
-    const quality = requestedQuality && this.validQualities.includes(requestedQuality)
-      ? requestedQuality
-      : this.defaultQuality;
-
-    const style = requestedStyle && this.validStyles.includes(requestedStyle)
-      ? requestedStyle
-      : (this.model === 'dall-e-3' ? 'vivid' : null);
-
     // Validate size
     if (!this.validSizes.includes(size)) {
       throw new Error(`Invalid size: ${size}. Must be one of: ${this.validSizes.join(', ')}`);
     }
+
+    // Validate quality if provided
+    if (requestedQuality && !this.validQualities.includes(requestedQuality)) {
+      throw new Error(`Invalid quality: ${requestedQuality}. Must be one of: ${this.validQualities.join(', ')}`);
+    }
+
+    // Validate style if provided
+    if (requestedStyle && !this.validStyles.includes(requestedStyle)) {
+      throw new Error(`Invalid style: ${requestedStyle}. Must be one of: ${this.validStyles.join(', ')}`);
+    }
+
+    // Use model-specific defaults if not provided
+    const quality = requestedQuality || this.defaultQuality;
+    const style = requestedStyle || (this.model === 'dall-e-3' ? 'vivid' : null);
 
     try {
       // Build API parameters
