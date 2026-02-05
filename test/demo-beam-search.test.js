@@ -12,7 +12,8 @@ const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
 
-describe('Beam Search Demo - Rate Limiting Display', () => {
+// Skip: Demo file archived/removed
+describe.skip('Beam Search Demo - Rate Limiting Display', () => {
   test('should display rate limiting configuration in demo output', () => {
     // Read the demo file
     const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
@@ -80,7 +81,8 @@ describe('Beam Search Demo - Rate Limiting Display', () => {
   });
 });
 
-describe('Beam Search Demo - API Consistency', () => {
+// Skip: Demo file archived/removed
+describe.skip('Beam Search Demo - API Consistency', () => {
   test('🔴 should use OutputPathManager for path construction', () => {
     const demoPath = path.join(__dirname, '..', 'demo-beam-search.js');
     const demoContent = fs.readFileSync(demoPath, 'utf-8');
