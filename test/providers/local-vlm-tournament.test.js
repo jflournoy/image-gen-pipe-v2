@@ -74,7 +74,8 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         { localPath: '/img3.png', candidateId: 3 }
       ];
 
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test prompt');
+      const result = await provider.rankImagesWithTransitivity(images, 'test prompt');
+      const ranked = result.rankings;
 
       // With transitivity, should need fewer than n*(n-1)/2 = 6 comparisons
       // Because if A > B and B > C, we infer A > C
@@ -94,7 +95,8 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         { localPath: '/img1.png', candidateId: 20 }
       ];
 
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test');
+      const result = await provider.rankImagesWithTransitivity(images, 'test');
+      const ranked = result.rankings;
 
       assert.ok(ranked[0].candidateId !== undefined, 'Should have candidateId');
       assert.ok(ranked[0].rank !== undefined, 'Should have rank');
@@ -139,9 +141,11 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         { localPath: '/img3.png', candidateId: 3 }
       ];
 
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test', {
-        strategy: 'all-pairs'
+      const result = await provider.rankImagesWithTransitivity(images, 'test', {
+        strategy: 'all-pairs',
+        ensembleSize: 1 // Disable ensemble voting to test strategy logic
       });
+      const ranked = result.rankings;
 
       // For 4 images, all-pairs = C(4,2) = 6 comparisons max
       // But with transitivity some may be skipped
@@ -158,9 +162,10 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         { localPath: '/img2.png', candidateId: 2 }
       ];
 
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test', {
+      const result = await provider.rankImagesWithTransitivity(images, 'test', {
         strategy: 'all-pairs'
       });
+      const ranked = result.rankings;
 
       // Winner (img0) should have most wins
       assert.ok(ranked[0].wins !== undefined, 'Should track wins');
@@ -179,9 +184,10 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
       }));
 
       // Force tournament strategy explicitly
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test', {
+      const result = await provider.rankImagesWithTransitivity(images, 'test', {
         strategy: 'tournament'
       });
+      const ranked = result.rankings;
 
       // Tournament ranks all images
       assert.strictEqual(ranked.length, 10, 'Should rank all images');
@@ -201,7 +207,8 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
         { localPath: '/img9.png', candidateId: 9 }
       ];
 
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test');
+      const result = await provider.rankImagesWithTransitivity(images, 'test');
+      const ranked = result.rankings;
 
       // Based on mock (lower index wins), img1 should win
       assert.strictEqual(ranked[0].candidateId, 1, 'Should find true winner via tournament');
@@ -314,11 +321,11 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
       ];
 
       // Should not throw, should gracefully handle failure
-      const ranked = await provider.rankImagesWithTransitivity(images, 'test', {
+      const result = await provider.rankImagesWithTransitivity(images, 'test', {
         gracefulDegradation: true
       });
 
-      assert.ok(ranked, 'Should return rankings despite error');
+      assert.ok(result.rankings, 'Should return rankings despite error');
     });
 
     it('should track errors during ranking', async () => {
