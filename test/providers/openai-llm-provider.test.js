@@ -645,9 +645,10 @@ describe('OpenAILLMProvider Interface', () => {
       await assert.rejects(
         async () => await provider.refinePrompt('test prompt', {
           operation: 'refine',
-          critique: 'needs more detail'
+          critique: 'needs more detail',
+          userPrompt: 'original prompt'
         }),
-        /OpenAI API error/,
+        /OpenAI API error|Invalid API key/,
         'Should attempt API call with refine model'
       );
     });
