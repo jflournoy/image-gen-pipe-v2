@@ -682,6 +682,10 @@ describe('LocalVLMProvider', () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
       const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
 
+      // Mock Math.random to disable swapping (always return >= 0.5)
+      const originalRandom = Math.random;
+      Math.random = () => 0.7;
+
       // Mock single comparison
       provider._axios = {
         post: async () => ({
@@ -693,9 +697,13 @@ describe('LocalVLMProvider', () => {
         })
       };
 
-      const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 1 });
-      assert.strictEqual(result.choice, 'A');
-      assert.ok(result.explanation || result.choice, 'Should have explanation or choice');
+      try {
+        const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 1 });
+        assert.strictEqual(result.choice, 'A');
+        assert.ok(result.explanation || result.choice, 'Should have explanation or choice');
+      } finally {
+        Math.random = originalRandom;
+      }
     });
 
     it('should use majority voting with ensembleSize=3', async () => {
@@ -741,6 +749,10 @@ describe('LocalVLMProvider', () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
       const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });
 
+      // Mock Math.random to disable swapping (always return >= 0.5)
+      const originalRandom = Math.random;
+      Math.random = () => 0.7;
+
       let callCount = 0;
       // Mock: A wins once, B wins once, TIE once -> should be TIE
       provider._axios = {
@@ -758,10 +770,14 @@ describe('LocalVLMProvider', () => {
         }
       };
 
-      const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 3 });
+      try {
+        const result = await provider.compareWithEnsemble('/imgA.png', '/imgB.png', 'test', { ensembleSize: 3 });
 
-      assert.strictEqual(callCount, 3, 'Should make 3 comparisons');
-      assert.strictEqual(result.choice, 'TIE', 'Should be TIE when no majority');
+        assert.strictEqual(callCount, 3, 'Should make 3 comparisons');
+        assert.strictEqual(result.choice, 'TIE', 'Should be TIE when no majority');
+      } finally {
+        Math.random = originalRandom;
+      }
     });
 
     it('should apply position debiasing in each ensemble vote', async () => {
