@@ -2020,7 +2020,7 @@ function buildLineageVisualization(jobData) {
 
   const lineageSteps = jobData.lineage.map((step, idx) => {
     const isWinner = idx === jobData.lineage.length - 1;
-    const imageUrl = step.imageUrl || `/api/demo/images/${jobData.date}/${jobData.sessionId}/iter${step.iteration}-cand${step.candidateId}.png`;
+    const imageUrl = step.imageUrl || `/api/images/${jobData.sessionId}/iter${step.iteration}-cand${step.candidateId}.png`;
 
     return `
       <div class="lineage-step" data-iteration="${step.iteration}" data-candidate="${step.candidateId}">
