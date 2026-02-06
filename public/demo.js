@@ -3376,6 +3376,18 @@ function updateMainFormForProviders(activeProviders) {
 
   console.log('[UI] After update - localModeNote.style.display:', localModeNote?.style.display);
 
+  // Update cost-related sections visibility
+  const costSection = document.getElementById('costConsiderationsSection');
+  if (costSection) {
+    costSection.style.display = needsOpenAI ? 'block' : 'none';
+  }
+
+  // Hide iteration warning (cost-related) when fully local
+  const iterationWarning = document.getElementById('iterationWarning');
+  if (iterationWarning) {
+    iterationWarning.style.display = isFullyLocal ? 'none' : 'block';
+  }
+
   // Update model selection section
   const modelSection = document.getElementById('modelSelectionSection');
   if (modelSection) {
