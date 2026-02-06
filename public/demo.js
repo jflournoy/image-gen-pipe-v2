@@ -842,6 +842,14 @@ window.handleReconnect = function(jobId) {
   document.getElementById('alphaNumber').disabled = true;
   document.getElementById('temperature').disabled = true;
   document.getElementById('temperatureNumber').disabled = true;
+  const stepsSliderReload = document.getElementById('steps');
+  const stepsNumberReload = document.getElementById('stepsNumber');
+  const guidanceSliderReload = document.getElementById('guidance');
+  const guidanceNumberReload = document.getElementById('guidanceNumber');
+  if (stepsSliderReload) stepsSliderReload.disabled = true;
+  if (stepsNumberReload) stepsNumberReload.disabled = true;
+  if (guidanceSliderReload) guidanceSliderReload.disabled = true;
+  if (guidanceNumberReload) guidanceNumberReload.disabled = true;
 
   // Reconnect to WebSocket
   connectWebSocket();
@@ -993,6 +1001,44 @@ temperatureNumber.addEventListener('change', (e) => {
   temperatureNumber.value = val;
   temperatureValue.textContent = val.toFixed(2);
 });
+
+// Sync steps slider and number input (Flux diffusion steps)
+const stepsSlider = document.getElementById('steps');
+const stepsNumber = document.getElementById('stepsNumber');
+const stepsValue = document.getElementById('stepsValue');
+
+if (stepsSlider) {
+  stepsSlider.addEventListener('input', (e) => {
+    stepsNumber.value = e.target.value;
+    stepsValue.textContent = e.target.value;
+  });
+
+  stepsNumber.addEventListener('change', (e) => {
+    const val = Math.min(50, Math.max(15, parseInt(e.target.value) || 25));
+    stepsSlider.value = val;
+    stepsNumber.value = val;
+    stepsValue.textContent = val;
+  });
+}
+
+// Sync guidance slider and number input (Flux guidance scale)
+const guidanceSlider = document.getElementById('guidance');
+const guidanceNumber = document.getElementById('guidanceNumber');
+const guidanceValue = document.getElementById('guidanceValue');
+
+if (guidanceSlider) {
+  guidanceSlider.addEventListener('input', (e) => {
+    guidanceNumber.value = e.target.value;
+    guidanceValue.textContent = parseFloat(e.target.value).toFixed(1);
+  });
+
+  guidanceNumber.addEventListener('change', (e) => {
+    const val = Math.min(20, Math.max(1, parseFloat(e.target.value) || 3.5));
+    guidanceSlider.value = val;
+    guidanceNumber.value = val;
+    guidanceValue.textContent = val.toFixed(1);
+  });
+}
 
 // Update cost estimate when parameters change
 keepTopSelect.addEventListener('change', updateCostEstimate);
@@ -1412,6 +1458,16 @@ async function startBeamSearch() {
       rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
     };
 
+    // Add Flux generation options (steps and guidance)
+    const steps = document.getElementById('steps')?.value;
+    const guidance = document.getElementById('guidance')?.value;
+    if (steps || guidance) {
+      params.fluxOptions = {
+        ...(steps && { steps: parseInt(steps) }),
+        ...(guidance && { guidance: parseFloat(guidance) })
+      };
+    }
+
     // Add selected models (if user selected non-default options)
     const llmModelValue = document.getElementById('llmModel').value;
     const imageModelValue = document.getElementById('imageModel').value;
@@ -1515,6 +1571,14 @@ async function startBeamSearch() {
     document.getElementById('alphaNumber').disabled = true;
     document.getElementById('temperature').disabled = true;
     document.getElementById('temperatureNumber').disabled = true;
+    const stepsSliderStart = document.getElementById('steps');
+    const stepsNumberStart = document.getElementById('stepsNumber');
+    const guidanceSliderStart = document.getElementById('guidance');
+    const guidanceNumberStart = document.getElementById('guidanceNumber');
+    if (stepsSliderStart) stepsSliderStart.disabled = true;
+    if (stepsNumberStart) stepsNumberStart.disabled = true;
+    if (guidanceSliderStart) guidanceSliderStart.disabled = true;
+    if (guidanceNumberStart) guidanceNumberStart.disabled = true;
 
     // Connect to WebSocket
     connectWebSocket();
@@ -1638,6 +1702,14 @@ function stopBeamSearch(userInitiated = true) {
   document.getElementById('alphaNumber').disabled = false;
   document.getElementById('temperature').disabled = false;
   document.getElementById('temperatureNumber').disabled = false;
+  const stepsSliderStop = document.getElementById('steps');
+  const stepsNumberStop = document.getElementById('stepsNumber');
+  const guidanceSliderStop = document.getElementById('guidance');
+  const guidanceNumberStop = document.getElementById('guidanceNumber');
+  if (stepsSliderStop) stepsSliderStop.disabled = false;
+  if (stepsNumberStop) stepsNumberStop.disabled = false;
+  if (guidanceSliderStop) guidanceSliderStop.disabled = false;
+  if (guidanceNumberStop) guidanceNumberStop.disabled = false;
 
   // Reset images gallery for next job
   seenImages.clear();
