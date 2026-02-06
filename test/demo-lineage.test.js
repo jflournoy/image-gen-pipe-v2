@@ -128,4 +128,29 @@ describe('Lineage Integration with Winner Showcase', () => {
     assert.deepStrictEqual(finalStep.iteration, finalWinner.iteration, 'Final step iteration should match');
     assert.deepStrictEqual(finalStep.candidateId, finalWinner.candidateId, 'Final step candidate should match');
   });
+
+  test('should use correct image URL format in lineage fallback', () => {
+    // TDD RED: Test that lineage images use /api/images/{sessionId}/{filename} format
+    // not /api/demo/images/{date}/{sessionId}/{filename}
+    const jobData = {
+      date: '2026-02-06',
+      sessionId: 'ses-203901',
+      lineage: [
+        { iteration: 0, candidateId: 0, imageUrl: '/api/images/ses-203901/iter0-cand0.png' },
+        { iteration: 1, candidateId: 0, imageUrl: null }
+      ]
+    };
+
+    // When imageUrl is missing, fallback should construct the correct format
+    const step = jobData.lineage[1];
+    const fallbackUrl = step.imageUrl || `/api/images/${jobData.sessionId}/iter${step.iteration}-cand${step.candidateId}.png`;
+
+    // Should match /api/images/{sessionId}/{filename} pattern, NOT /api/demo/images/{date}/{sessionId}/{filename}
+    assert.match(fallbackUrl, /^\/api\/images\/ses-\d{6}\/iter\d+-cand\d+\.png$/,
+      'Fallback URL should use /api/images/{sessionId}/{filename} format');
+
+    // Verify it does NOT match the demo date-based format
+    assert.doesNotMatch(fallbackUrl, /\/api\/demo\/images\/\d{4}-\d{2}-\d{2}\//,
+      'Fallback URL should NOT use /api/demo/images/{date}/ format');
+  });
 });

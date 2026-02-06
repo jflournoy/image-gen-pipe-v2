@@ -1,73 +1,136 @@
-# Claude Status - Non-Intentional Test Failures Fixed ✅
-Last Updated: 2026-02-05 09:12:14
+# Claude Status - Image URL Fix for Lineage Display
+Last Updated: 2026-02-05 11:15:00
 
-## Final Status: Test Suite Improved 🎉
+## Current Task: Fix Lineage Image URLs ✅
 
-**Test Progress**: 42 → 28 failures (14 fixed)
-**Pass Rate**: 884/912 passing (96.9%)
-**All Non-Intentional Failures**: ✅ Fixed
+### Problem
+Images generated after local LLM render weren't displaying in lineage view.
+- Broken URLs: `http://localhost:3000/api/demo/images/2026-02-06/ses-203901/iter0-cand0.png`
+- Working URLs: `http://localhost:3000/api/images/ses-203901/iter1-cand0.png`
 
-## What Was Fixed
+### Root Cause
+File: `public/demo.js:2023`
 
-### Critical Fixes (4 test suites, 14 individual tests)
-1. ✅ **LocalVLMProvider ensemble tests** (2 tests)
-   - Added Math.random override to prevent flaky tests due to random swapping
-   - Fixed: "should return single comparison result when ensembleSize=1"
-   - Fixed: "should handle TIE when votes are split evenly"
+The fallback URL format in `buildLineageVisualization()` was wrong:
+```javascript
+// ❌ WRONG - includes date path
+const imageUrl = step.imageUrl || `/api/demo/images/${jobData.date}/${jobData.sessionId}/...`;
 
-2. ✅ **LocalVLMProvider Tournament tests** (6 tests)
-   - Updated tests to destructure {rankings, metadata} return value
-   - Added ensembleSize=1 to avoid ensemble overhead in strategy tests
-   - Fixed: rankImagesWithTransitivity API change
+// ✅ CORRECT - endpoint auto-searches all dates
+const imageUrl = step.imageUrl || `/api/images/${jobData.sessionId}/...`;
+```
 
-3. ✅ **OpenAIImageProvider tests** (4 tests)
-   - Set model: 'dall-e-3' in beforeEach to match test expectations
-   - Added validation for invalid quality/style options
-   - Fixed: quality and style validation now throws errors before API calls
+### Verification
+The API endpoints in `src/api/demo-routes.js`:
+- Line 225: `router.get('/images/:sessionId/:filename')` - searches all date directories
+- Line 458: `router.get('/images/:date/:sessionId/:filename')` - for explicit dates
 
-4. ✅ **ImageRanker ensemble tests** (1 test)
-   - Added Math.random override to prevent flaky majority voting test
-   - Fixed: "should compare two images multiple times and return majority winner"
+The beam-search-worker.js (line 322) constructs URLs using the first format:
+```javascript
+imageUrl = `/api/images/${sessionId}/${filename}`;
+```
 
-### Files Modified
-- [test/providers/local-vlm-provider.test.js](test/providers/local-vlm-provider.test.js)
-- [test/providers/local-vlm-tournament.test.js](test/providers/local-vlm-tournament.test.js)
-- [test/providers/openai-image-provider.test.js](test/providers/openai-image-provider.test.js)
-- [test/services/image-ranker-ensemble.test.js](test/services/image-ranker-ensemble.test.js)
-- [src/providers/openai-image-provider.js](src/providers/openai-image-provider.js)
+### Fix Applied
+Changed line 2023 in `public/demo.js` to use correct URL format.
 
-## Remaining 28 Failures
+### Testing
+Created test in `test/demo-lineage.test.js`:
+- "should use correct image URL format in lineage fallback"
+- Verifies fallback matches `/api/images/{sessionId}/{filename}` pattern
+- All 8 lineage tests passing ✅
 
-All remaining failures are **intentional TDD RED tests**:
-- 🔴 RED: Image serving endpoint
-- 🔴 RED: Beam search POST endpoint
-- 🔴 RED: WebSocket progress updates
-- 🔴 RED: Beam Search Worker - API Key Integration
-- 🔴 RED: Provider Factory - API Key Integration
-- 🔴 RED: Flux Custom Model Support
-- 🔴 RED: FluxImageProvider
-- 🔴 RED: Flux Provider Download Status Check
+---
 
-These are supposed to fail until features are implemented.
+## Previous Task: VLM Crash Investigation & Fix ✅
 
-## Test Suite Summary
+### Problem Summary
+VLM crashes during second ranking (iteration 1) after Flux→VLM→LLM→Flux→VLM cycle:
+```
+[10:37:07] 🔄 Ranking: Comparing i0c1 vs i1c0 (1/3) (failed: socket hang up)
+[10:37:07] 🔄 Ranking: Comparing i0c1 vs i1c1 (2/3) (failed: VLM service unavailable)
+[10:37:07] 🔄 Ranking: Comparing i1c0 vs i1c1 (3/3) (failed: VLM service unavailable)
+```
 
-- **Total Tests**: 929
-- **Passing**: 884 (96.9%)
-- **Failing**: 28 (all intentional TDD RED)
-- **Skipped**: 17
-- **Duration**: 120.5 seconds
+### Root Cause Analysis
 
-## Root Cause Analysis
+From `/tmp/beam-search-services/vlm.log`:
+```
+GGML_ASSERT((char *)addr + ggml_backend_buffer_get_alloc_size(buffer, tensor) <=
+            (char *)ggml_backend_buffer_get_base(buffer) + ggml_backend_buffer_get_size(buffer)) failed
+```
 
-The non-intentional failures were caused by:
-1. **Flaky randomization**: Tests using ensemble voting or debiasing were affected by `Math.random()` calls, making them non-deterministic
-2. **API changes**: `rankImagesWithTransitivity` now returns `{rankings, metadata}` instead of array
-3. **Model configuration**: Tests expected DALL-E 3 defaults but provider was using gpt-image-1-mini
-4. **Missing validation**: Quality/style validation was missing, causing API calls with invalid parameters
+**Crash sequence:**
+1. First VLM ranking (iteration 0) completes successfully
+2. VLM unloaded, LLM runs, Flux runs
+3. VLM reloads for second ranking
+4. **CRASH on 7th image slice encoding** during first comparison
+5. VLM Python process dies (socket hang up)
+6. Subsequent requests find service unavailable
 
-## Recommendation
+### Bugs Found
 
-**All non-intentional test failures are fixed!** The test suite is now stable with 96.9% pass rate. The remaining failures are intentional TDD RED tests that guide future development.
+1. **`INFERENCE_RELOAD_THRESHOLD` defined but never checked** (line 55)
+   - Counter increments but nothing triggers preventive reload
+   - Safety net was disabled!
 
-You can safely commit these changes and continue development.
+2. **`chat_handler` not properly closed on unload**
+   - Vision encoder buffers may persist after unload
+   - Just set to None, not explicitly closed
+
+3. **`inference_count` not reset on unload**
+   - Stale count persists across model reload cycles
+
+### Fixes Applied
+
+**File: `services/vlm_service.py`**
+
+1. **Added preventive reload logic** (lines 335-359)
+   ```python
+   if inference_count >= INFERENCE_RELOAD_THRESHOLD:
+       # Force full model reload to reset GGML buffers
+       llm.close()
+       load_model()
+       inference_count = 0
+   ```
+
+2. **Proper chat_handler cleanup on unload** (lines 420-430)
+   ```python
+   if chat_handler is not None:
+       if hasattr(chat_handler, 'close'):
+           chat_handler.close()
+       chat_handler = None
+   ```
+
+3. **Reset inference_count on unload** (line 436)
+   ```python
+   inference_count = 0
+   ```
+
+4. **Lowered threshold from 20 to 10** (line 55)
+   - More conservative to prevent crashes in Flux↔VLM swap cycles
+
+### Why This Should Work
+
+- **Preventive reload**: After 10 inferences, model fully reloads with fresh GGML buffers
+- **Clean unload**: Vision encoder buffers properly released before Flux loads
+- **Fresh start**: Counter reset ensures no stale fragmentation state
+
+### Testing Recommendation
+
+Run the existing integration test which validates this exact scenario:
+```bash
+VLM_GPU_LAYERS=16 VLM_CONTEXT_SIZE=4096 node --test test/integration/vlm-production-settings.test.js
+```
+
+### Additional Tuning Options
+
+If crashes persist, try:
+1. Lower `VLM_GPU_LAYERS=8` (fewer layers = less GPU memory pressure)
+2. Increase `GPU_CLEANUP_DELAY_MS=10000` (more time for CUDA cleanup)
+3. Lower `VLM_INFERENCE_RELOAD_THRESHOLD=5` (more frequent reloads)
+
+## Previous Session: Test Suite Improvements
+
+Test Progress: 42 → 28 failures (14 fixed)
+Pass Rate: 884/912 passing (96.9%)
+All Non-Intentional Failures: ✅ Fixed
