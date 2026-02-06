@@ -33,7 +33,7 @@ The pipeline implements **beam search**—a standard ML algorithm for exploring 
 - 🔄 **Iterative prompt refinement** using beam search
 - 🎯 **Multi-model integration**: GPT-4 for language, DALL-E 3 for images, GPT-4V for evaluation
 - 📊 **Dual scoring system**: Alignment (how well it matches) + aesthetics (how good it looks)
-- 🖥️ **Live web demo**: React UI with real-time WebSocket updates
+- 🖥️ **Live web demo**: Vanilla JS UI with real-time WebSocket updates
 - ⚡ **Test-driven**: 410+ tests covering the pipeline end-to-end
 - 🛠️ **Claude Code integration**: Custom slash commands and TDD workflow
 
@@ -94,7 +94,7 @@ The final score is a weighted combination (configurable alpha). This dual-object
 
 ```
 ┌─────────────┐
-│  Web UI     │  React + Vite + accessibility features
+│  Web UI     │  Vanilla JavaScript + accessibility features
 └──────┬──────┘
        │
 ┌──────▼──────┐
@@ -158,7 +158,7 @@ The test suite was critical for learning—it forces you to think through edge c
 | Vision Provider (OpenAI) | ✅ | GPT-4V for alignment + aesthetic scoring |
 | Beam Search Orchestrator | ✅ | Streaming parallel implementation |
 | API Server | ✅ | Express + WebSocket with job management |
-| React Frontend | ✅ | Accessible components with live updates |
+| Web Frontend | ✅ | Accessible interface with live updates |
 | Mock Providers | ✅ | Fast testing without API costs |
 
 ### What's next
@@ -177,7 +177,7 @@ See [GitHub Issues](https://github.com/jflournoy/image-gen-pipe-v2/issues) for d
 
 | Layer | Technology | Why |
 |-------|------------|-----|
-| **Frontend** | React 18 + Vite | Modern, fast, easy WebSocket integration |
+| **Frontend** | Vanilla JavaScript | Simple, no build step, fast iteration |
 | **Backend** | Node.js + Express | Async-first, good LLM SDK support |
 | **Testing** | Node.js built-in test runner | Simple, no extra dependencies |
 | **AI Services** | OpenAI API | Mature, well-documented, easy to start |
