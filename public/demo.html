@@ -1372,6 +1372,28 @@
             | <strong>High (0.7-1.0):</strong> Creative, diverse
           </small>
         </div>
+
+        <div class="form-group">
+          <label for="steps">Diffusion Steps (15-50): <span id="stepsValue">25</span></label>
+          <input type="range" id="steps" min="15" max="50" step="1" value="25">
+          <input type="number" id="stepsNumber" min="15" max="50" step="1" value="25" style="width: 60px; margin-left: 10px;">
+          <small style="display: block; margin-top: 5px; color: #666;">
+            Number of diffusion steps for image generation. <strong>15 steps:</strong> Minimum quality
+            | <strong>25 steps:</strong> Balanced quality & speed (recommended)
+            | <strong>40+ steps:</strong> Maximum quality (slower)
+          </small>
+        </div>
+
+        <div class="form-group">
+          <label for="guidance">Guidance Scale (1-20): <span id="guidanceValue">3.5</span></label>
+          <input type="range" id="guidance" min="1" max="20" step="0.5" value="3.5">
+          <input type="number" id="guidanceNumber" min="1" max="20" step="0.5" value="3.5" style="width: 60px; margin-left: 10px;">
+          <small style="display: block; margin-top: 5px; color: #666;">
+            How strongly the model follows your prompt. <strong>Low (1-5):</strong> More creative, less literal
+            | <strong>Medium (5-10):</strong> Balanced (3.5 default)
+            | <strong>High (10-20):</strong> Strict adherence to prompt
+          </small>
+        </div>
       </div>
 
       <div id="modelSelectionSection" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
