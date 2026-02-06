@@ -2,6 +2,15 @@
 
 All notable changes to the Image Generation Pipeline are documented here.
 
+## [2.0.1] - 2026-02-06
+
+### Removed
+
+- Deprecated React frontend (`frontend/` directory)
+  - Replaced by actively maintained vanilla JS frontend in `public/demo.html`
+  - Removes 99MB of dependencies (Vite, React, 190 node_modules)
+  - Simplifies development - no build step required
+
 ## [2.0.0] - 2025-11-21
 
 ### Added

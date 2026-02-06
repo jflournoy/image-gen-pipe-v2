@@ -12,14 +12,14 @@ Image Generation Pipeline (IGP) v2 is a Node.js application that iteratively ref
 - **OpenAI Integration**: GPT-4 for prompt refinement, DALL-E 3 for image generation, GPT-4V for evaluation
 - **Intelligent Scoring**: Alignment scoring (0-100) + aesthetic quality scoring (0-10)
 - **Real-time Updates**: WebSocket-based progress monitoring
-- **React Frontend**: Production-ready UI components with accessibility features
+- **Web Frontend**: Production-ready UI with accessibility features
 - **Test-Driven**: Comprehensive test coverage with 410+ tests
 
 ## Architecture
 
 ```
 ┌─────────────┐
-│  Web UI     │  React + Vite
+│  Web UI     │  Vanilla JavaScript
 │  API Client │
 └──────┬──────┘
        │
@@ -66,7 +66,7 @@ node demo-single-iteration.js
 | Vision Provider (OpenAI) | ✅ Complete | GPT-4V for alignment + aesthetic scoring |
 | Beam Search Orchestrator | ✅ Complete | Full streaming parallel implementation |
 | API Server | ✅ Complete | Express + WebSocket |
-| React Frontend | ✅ Complete | Production-ready components |
+| Web Frontend | ✅ Complete | Production-ready interface |
 | Mock Providers | ✅ Complete | For testing (5 mock providers) |
 
 ## Documentation

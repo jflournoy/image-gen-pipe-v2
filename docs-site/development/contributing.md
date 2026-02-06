@@ -67,10 +67,10 @@ test/
 ├── orchestrator/ # Orchestrator tests
 └── ...           # Other test files
 
-frontend/
-└── src/
-    ├── components/ # React components
-    └── hooks/      # Custom hooks
+public/
+├── demo.html     # Main web UI
+├── demo.js       # Client-side application logic
+└── evaluation.html # Evaluation page
 ```
 
 ### Testing

@@ -9,7 +9,6 @@ export default [
       'node_modules/**',
       'output/**',
       'session-history/**',
-      'frontend/dist/**',
       'archive/**',
       '.venv/**'
     ]

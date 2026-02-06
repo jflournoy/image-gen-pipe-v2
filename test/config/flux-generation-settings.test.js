@@ -191,7 +191,7 @@ describe('🔴 Flux Generation Settings', () => {
 
 describe('🔴 Flux Generation Settings - UI Integration', () => {
   // These tests verify the data flow from frontend to backend
-  // The actual React component tests are in frontend/src/components/
+  // The actual UI implementation is in public/demo.html + demo.js
 
   describe('BeamSearchWorker - Flux Options', () => {
     test('should accept fluxOptions in job params', async () => {
