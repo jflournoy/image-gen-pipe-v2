@@ -543,6 +543,11 @@ async function processCandidateStream(
     llmProvider,
     {
       ...options,
+      // Flatten fluxOptions so they're available as top-level properties for the image generator
+      ...(options.fluxOptions && {
+        steps: options.fluxOptions.steps,
+        guidance: options.fluxOptions.guidance
+      }),
       onStepProgress,
       // Don't override candidateId with string - keep numeric for image saving
       // The string version is only used for progress messages
@@ -875,6 +880,11 @@ async function initialExpansion(
             dimension: 'what',
             alpha,
             sessionId: config.sessionId,
+            // Flatten fluxOptions so they're available for the image generator
+            ...(config.fluxOptions && {
+              steps: config.fluxOptions.steps,
+              guidance: config.fluxOptions.guidance
+            }),
             onStepProgress,
             candidateIdStr: candidateId_str
           }

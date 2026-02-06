@@ -51,6 +51,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     alpha = 0.7,
     temperature = 0.7,
     models,
+    fluxOptions,
     rankingMode = 'vlm'  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
   } = params;
 
@@ -196,6 +197,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       maxIterations: iterations,
       alpha,
       temperature,
+      ...(fluxOptions && { fluxOptions }), // Pass Flux generation options (steps, guidance)
       sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking
