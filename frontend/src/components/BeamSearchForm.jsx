@@ -4,6 +4,9 @@
  */
 
 import { useState } from 'react'
+import GuidanceSettings from './GuidanceSettings'
+import StepsSettings from './StepsSettings'
+import './BeamSearchForm.css'
 
 export default function BeamSearchForm({ onSubmit }) {
   const [prompt, setPrompt] = useState('')
@@ -59,7 +62,7 @@ export default function BeamSearchForm({ onSubmit }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
+    <form className="beam-search-form" onSubmit={handleSubmit}>
       <div>
         <label htmlFor="prompt">Prompt</label>
         <input
@@ -130,32 +133,11 @@ export default function BeamSearchForm({ onSubmit }) {
 
         {showAdvanced && (
           <div className="advanced-settings-content">
-            <div>
-              <label htmlFor="steps">Steps</label>
-              <input
-                id="steps"
-                type="number"
-                value={steps}
-                onChange={(e) => setSteps(Number(e.target.value))}
-                min="15"
-                max="50"
-              />
-            </div>
+            <StepsSettings value={steps} onChange={setSteps} helpLevel="detailed" />
 
-            <div>
-              <label htmlFor="guidance">Guidance</label>
-              <input
-                id="guidance"
-                type="number"
-                value={guidance}
-                onChange={(e) => setGuidance(Number(e.target.value))}
-                step="0.5"
-                min="1"
-                max="20"
-              />
-            </div>
+            <GuidanceSettings value={guidance} onChange={setGuidance} helpLevel="detailed" />
 
-            <div>
+            <div className="seed-settings">
               <label htmlFor="seed">Seed (optional)</label>
               <input
                 id="seed"
@@ -164,6 +146,9 @@ export default function BeamSearchForm({ onSubmit }) {
                 onChange={(e) => setSeed(e.target.value)}
                 placeholder="Leave empty for random"
               />
+              <p className="help-text">
+                Leave empty for random results, or enter a number for reproducible generation.
+              </p>
             </div>
           </div>
         )}
