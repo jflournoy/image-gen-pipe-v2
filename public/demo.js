@@ -4689,3 +4689,51 @@ loadProviderStatus().catch(err => {
 
 // Initial message
 addMessage('Ready. Configure parameters and click "Start Beam Search"', 'event');
+
+/**
+ * Initialize sidebar layout by moving modal content to sidebar sections.
+ * This enables the always-visible sidebar while reusing existing modal content.
+ */
+function initializeSidebarLayout() {
+  console.log('[Sidebar] Initializing sidebar layout...');
+
+  // Move configSection (contains localConfigSection and advancedConfigSection) to sidebar
+  const configSection = document.getElementById('configSection');
+  const providerConfigSidebar = document.getElementById('provider-config-sidebar');
+
+  if (configSection && providerConfigSidebar) {
+    // Move the entire configSection into the sidebar
+    providerConfigSidebar.appendChild(configSection);
+    configSection.style.display = 'block'; // Make it visible in sidebar
+    console.log('[Sidebar] Moved configSection to sidebar');
+  }
+
+  // Show the provider config sidebar by default
+  if (providerConfigSidebar) {
+    providerConfigSidebar.style.display = 'block';
+  }
+
+  // Hide the modal (it should stay hidden)
+  const providerModal = document.getElementById('providerModal');
+  if (providerModal) {
+    providerModal.style.display = 'none';
+  }
+
+  // Start service status polling (was previously started on modal open)
+  startStatusPolling();
+
+  // Load provider status to initialize the sidebar
+  loadProviderStatus().catch(err => {
+    console.warn('[Sidebar] Failed to load initial provider status:', err);
+  });
+
+  console.log('[Sidebar] Sidebar layout initialized');
+}
+
+// Initialize sidebar layout after DOM is ready
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initializeSidebarLayout);
+} else {
+  // DOM already loaded, initialize immediately
+  initializeSidebarLayout();
+}
