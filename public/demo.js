@@ -93,6 +93,141 @@ function clearJobHistory() {
 }
 
 /**
+ * Dynamic Service Management
+ * Excludes Flux service when using cloud-based BFL provider
+ */
+
+/**
+ * Get list of active services based on current provider configuration
+ * Excludes Flux service when BFL (cloud Flux) is selected
+ * @returns {Array<string>} List of service names to manage
+ */
+function getActiveServices() {
+  const imageProvider = localStorage.getItem('imageProvider') || 'flux';
+  const baseServices = ['llm', 'vision', 'vlm'];
+
+  // Only include Flux if using local Flux, not BFL
+  if (imageProvider === 'flux') {
+    return ['flux', ...baseServices];
+  }
+
+  return baseServices;
+}
+
+/**
+ * Update service control visibility based on provider selection
+ * Hides Flux service UI when BFL (cloud Flux) is selected
+ */
+function updateServiceVisibility() {
+  const imageProvider = localStorage.getItem('imageProvider') || 'flux';
+  const fluxServiceRow = document.getElementById('fluxServiceRow');
+
+  if (fluxServiceRow) {
+    fluxServiceRow.style.display = imageProvider === 'bfl' ? 'none' : '';
+  }
+}
+
+/**
+ * Show/hide provider-specific settings based on image provider
+ * BFL, Flux, and OpenAI have different control options
+ */
+function updateImageProviderSettings() {
+  const provider = document.getElementById('imageProvider')?.value || 'flux';
+
+  // Get settings sections
+  const bflSettings = document.getElementById('bflSettings');
+
+  // Toggle BFL settings visibility
+  if (bflSettings) {
+    bflSettings.style.display = provider === 'bfl' ? 'block' : 'none';
+  }
+
+  // Update service visibility
+  updateServiceVisibility();
+}
+
+/**
+ * Update BFL model-specific settings visibility
+ *
+ * Shows guidance and steps controls ONLY for FLUX.2 [flex], which supports these advanced parameters.
+ * Other BFL models don't support guidance/steps control, so those UI elements are hidden.
+ */
+function updateBFLModelSettings() {
+  const bflModelSelect = document.getElementById('bflModel');
+  const flexSettingsContainer = document.getElementById('bflFlexSettings');
+
+  if (!bflModelSelect || !flexSettingsContainer) return;
+
+  const selectedModel = bflModelSelect.value;
+  const isFlexModel = selectedModel === 'flux.2-flex';
+
+  // Show flex-specific settings (guidance/steps) only for FLUX.2 [flex]
+  flexSettingsContainer.style.display = isFlexModel ? 'block' : 'none';
+}
+
+/**
+ * Save BFL settings to localStorage
+ * Persists model choice, dimensions, safety tolerance, quality settings
+ */
+function saveBFLSettings() {
+  const model = document.getElementById('bflModel')?.value;
+  const width = document.getElementById('bflWidth')?.value;
+  const height = document.getElementById('bflHeight')?.value;
+  const safetyTolerance = document.getElementById('bflSafetyTolerance')?.value;
+  const guidance = document.getElementById('bflGuidance')?.value;
+  const steps = document.getElementById('bflSteps')?.value;
+  const outputFormat = document.getElementById('bflOutputFormat')?.value;
+  const seed = document.getElementById('bflSeed')?.value;
+
+  if (model) localStorage.setItem('bflModel', model);
+  if (width) localStorage.setItem('bflWidth', width);
+  if (height) localStorage.setItem('bflHeight', height);
+  if (safetyTolerance !== undefined) localStorage.setItem('bflSafetyTolerance', safetyTolerance);
+  if (guidance) localStorage.setItem('bflGuidance', guidance);
+  if (steps) localStorage.setItem('bflSteps', steps);
+  if (outputFormat) localStorage.setItem('bflOutputFormat', outputFormat);
+  if (seed) localStorage.setItem('bflSeed', seed);
+}
+
+/**
+ * Load BFL settings from localStorage
+ * Restores previous BFL configuration when user switches back to BFL provider
+ */
+function loadBFLSettings() {
+  const model = localStorage.getItem('bflModel') || 'flux.2-pro';
+  const width = localStorage.getItem('bflWidth') || '1024';
+  const height = localStorage.getItem('bflHeight') || '1024';
+  const safetyTolerance = localStorage.getItem('bflSafetyTolerance') || '2';
+  const guidance = localStorage.getItem('bflGuidance') || '4.5';
+  const steps = localStorage.getItem('bflSteps') || '50';
+  const outputFormat = localStorage.getItem('bflOutputFormat') || 'jpeg';
+  const seed = localStorage.getItem('bflSeed') || '';
+
+  if (document.getElementById('bflModel')) document.getElementById('bflModel').value = model;
+  if (document.getElementById('bflWidth')) document.getElementById('bflWidth').value = width;
+  if (document.getElementById('bflHeight')) document.getElementById('bflHeight').value = height;
+  if (document.getElementById('bflSafetyTolerance')) {
+    document.getElementById('bflSafetyTolerance').value = safetyTolerance;
+    const valueDisplay = document.getElementById('bflSafetyValue');
+    if (valueDisplay) valueDisplay.textContent = safetyTolerance;
+  }
+  if (document.getElementById('bflGuidance')) {
+    document.getElementById('bflGuidance').value = guidance;
+    const valueDisplay = document.getElementById('bflGuidanceValue');
+    if (valueDisplay) valueDisplay.textContent = guidance;
+  }
+  if (document.getElementById('bflSteps')) {
+    document.getElementById('bflSteps').value = steps;
+    const valueDisplay = document.getElementById('bflStepsValue');
+    if (valueDisplay) valueDisplay.textContent = steps;
+  }
+  if (document.getElementById('bflOutputFormat')) document.getElementById('bflOutputFormat').value = outputFormat;
+  if (document.getElementById('bflSeed')) document.getElementById('bflSeed').value = seed;
+
+  updateBFLModelSettings();
+}
+
+/**
  * Update connection health indicator
  * Shows spinner only when job is running AND connected
  */
@@ -529,43 +664,11 @@ function updateCostEstimate() {
  */
 function updateIterationWarning(n, m, maxIterations, costData) {
   const warningBox = document.getElementById('iterationWarning');
-  const warningMsg = document.getElementById('warningMessage');
 
-  if (!warningBox || !warningMsg) return;
+  if (!warningBox) return;
 
-  // Calculate pairwise comparison count per iteration
-  const comparisonsPerIteration = m * (m - 1) / 2;
-  const totalComparisons = comparisonsPerIteration * (maxIterations - 1); // -1 because first iteration is generation only
-
-  const { breakdown } = costData;
-  const totalImages = breakdown.totalImages;
-
-  // Determine if we should show warning
-  let showWarning = false;
-  let warningText = '';
-
-  // Warning 1: High total images
-  if (totalImages > 60) {
-    showWarning = true;
-    warningText = `<strong>Very High Comparison Overhead:</strong> You're evaluating ~${totalImages} images. This requires ${totalComparisons} pairwise comparisons, which is the most expensive operation. Reduce Keep Top (M=${m}) or Iterations (${maxIterations}) to lower costs.`;
-  }
-  // Warning 2: M too high with moderate iterations
-  else if (m >= 5 && maxIterations >= 3) {
-    showWarning = true;
-    warningText = `<strong>Expensive Configuration:</strong> Keep Top (M=${m}) with ${maxIterations} iterations creates ${totalComparisons} comparisons. Consider reducing M to 2-4 or iterations to 2.`;
-  }
-  // Warning 3: Moderate high cost
-  else if (totalComparisons > 30) {
-    showWarning = true;
-    warningText = `<strong>Elevated Comparison Cost:</strong> ${totalComparisons} pairwise comparisons needed. Each comparison uses the vision model (expensive). Consider lower Keep Top or fewer iterations.`;
-  }
-
-  if (showWarning) {
-    warningMsg.innerHTML = warningText;
-    warningBox.style.display = 'block';
-  } else {
-    warningBox.style.display = 'none';
-  }
+  // Hide comparison cost warnings
+  warningBox.style.display = 'none';
 }
 
 /**
@@ -682,6 +785,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Initialize Flux model dropdown
   // initializeFluxModelDropdown(); // Function not defined
+
+  // Initialize BFL settings on page load
+  loadBFLSettings();
+  updateImageProviderSettings();
+  updateServiceVisibility();
+
+  // Wire up event listeners for provider changes
+  const imageProviderSelect = document.getElementById('imageProvider');
+  if (imageProviderSelect) {
+    imageProviderSelect.addEventListener('change', function() {
+      localStorage.setItem('imageProvider', this.value);
+      updateImageProviderSettings();
+      loadBFLSettings();
+    });
+  }
+
+  // Wire up BFL model change to show/hide flex settings
+  const bflModelSelect = document.getElementById('bflModel');
+  if (bflModelSelect) {
+    bflModelSelect.addEventListener('change', updateBFLModelSettings);
+  }
+
+  // Wire up BFL safety tolerance slider display
+  const bflSafetySlider = document.getElementById('bflSafetyTolerance');
+  if (bflSafetySlider) {
+    bflSafetySlider.addEventListener('input', function() {
+      const valueDisplay = document.getElementById('bflSafetyValue');
+      if (valueDisplay) valueDisplay.textContent = this.value;
+    });
+  }
+
+  // Wire up BFL guidance slider display
+  const bflGuidanceSlider = document.getElementById('bflGuidance');
+  if (bflGuidanceSlider) {
+    bflGuidanceSlider.addEventListener('input', function() {
+      const valueDisplay = document.getElementById('bflGuidanceValue');
+      if (valueDisplay) valueDisplay.textContent = this.value;
+    });
+  }
+
+  // Wire up BFL steps slider display
+  const bflStepsSlider = document.getElementById('bflSteps');
+  if (bflStepsSlider) {
+    bflStepsSlider.addEventListener('input', function() {
+      const valueDisplay = document.getElementById('bflStepsValue');
+      if (valueDisplay) valueDisplay.textContent = this.value;
+    });
+  }
 });
 
 /**
@@ -3071,10 +3222,19 @@ function initializeModeCardHighlighting() {
     localCard.style.border = '2px solid #81c784';
     localCard.style.boxShadow = 'none';
 
-    // Hide all config sections - prompt user to choose a mode
+    // Show advanced config section (provider dropdowns) in mixed mode
     configSection.style.display = 'none';
-    localConfigSection.style.display = 'none';
-    advancedConfigSection.style.display = 'none';
+    advancedConfigSection.style.display = 'block';
+
+    // Show local config section if any local provider is selected
+    const hasLocalProvider = llmProvider === 'local-llm' || imageProvider === 'flux' || visionProvider === 'local';
+    if (hasLocalProvider) {
+      localConfigSection.style.display = 'block';
+      updateServiceStatuses();
+      startStatusPolling();
+    } else {
+      localConfigSection.style.display = 'none';
+    }
   }
 }
 
@@ -3122,6 +3282,21 @@ function updateProviderHighlight(llm, image, vision) {
     openaiCard.style.boxShadow = 'none';
     localCard.style.border = '2px solid #81c784';
     localCard.style.boxShadow = 'none';
+
+    // Show advanced config section (provider dropdowns) in mixed mode
+    if (configSection) configSection.style.display = 'none';
+    if (advancedConfigSection) advancedConfigSection.style.display = 'block';
+
+    // Show local config section if any local provider is selected
+    const hasLocalProvider = llm === 'local-llm' || image === 'flux' || vision === 'local';
+    if (localConfigSection) {
+      if (hasLocalProvider) {
+        localConfigSection.style.display = 'block';
+        updateServiceStatuses();
+      } else {
+        localConfigSection.style.display = 'none';
+      }
+    }
   }
 }
 
@@ -3187,9 +3362,9 @@ function showAdvancedConfig() {
   const localConfigSection = document.getElementById('localConfigSection');
   const advancedConfigSection = document.getElementById('advancedConfigSection');
 
-  // Show advanced config, hide local config
+  // Show advanced config with service controls for local providers
   configSection.style.display = 'block';
-  localConfigSection.style.display = 'none';
+  localConfigSection.style.display = 'block';
   advancedConfigSection.style.display = 'block';
 
   console.log('[UI] Switched to advanced/mixed mode configuration');
@@ -4333,7 +4508,8 @@ async function quickStartLocalServices() {
   try {
     addMessage('🚀 Starting all local services...', 'info');
 
-    const services = ['flux', 'llm', 'vision', 'vlm'];
+    // Use dynamic service list based on current provider
+    const services = getActiveServices();
     const startPromises = services.map(serviceName =>
       fetch(`/api/services/${serviceName}/start`, {
         method: 'POST',
@@ -4432,7 +4608,13 @@ async function stopAllLocalServices() {
   try {
     console.log('[UI] Stopping all local services...');
 
-    const services = ['llm', 'flux', 'vision', 'vlm'];
+    // Use dynamic service list based on current configuration
+    // Note: stopAllLocalServices() stops ALL services, including hidden ones
+    // (e.g., Flux when BFL is selected)
+    const visibleServices = getActiveServices();
+    // Also stop any services not in the active list but might still be running
+    const allServices = ['llm', 'flux', 'vision', 'vlm'];
+    const services = allServices;
 
     // Set all services to "stopping" state immediately
     services.forEach(serviceName => {

@@ -1349,7 +1349,6 @@
           </select>
           <small style="display: block; margin-top: 5px; color: #666;">
             Number of refinement rounds. More iterations = better quality but higher cost and time.
-            <br>⚠️ Keep Top (M) especially impacts costs—each higher M with multiple iterations multiplies comparison overhead.
           </small>
         </div>
         <div class="form-group">
@@ -1572,13 +1571,6 @@
             </div>
           </div>
         </div>
-
-        <!-- Advanced/Mixed Mode Link -->
-        <div style="text-align: center; margin-top: 15px;">
-          <a href="javascript:void(0)" onclick="showAdvancedConfig()" style="color: #666; font-size: 12px; text-decoration: none; border-bottom: 1px dashed #999;">
-            ⚙️ Advanced: Mix & match providers
-          </a>
-        </div>
       </div>
 
       <!-- Configuration Section (Context-Aware) -->
@@ -1643,7 +1635,7 @@
               </div>
 
               <!-- Flux Service -->
-              <div style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
+              <div id="fluxServiceRow" style="padding: 12px; background: white; border-radius: 4px; border: 1px solid #e0e0e0;">
                 <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
                   <input type="checkbox" id="serviceFlux" checked style="width: 16px; height: 16px;">
                   <label for="serviceFlux" style="flex: 1; cursor: pointer; margin: 0;">
@@ -1733,6 +1725,13 @@
               </small>
             </div>
 
+            <!-- Mix & Match Advanced Config Link -->
+            <div style="text-align: center; margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+              <a href="javascript:void(0)" onclick="showAdvancedConfig()" style="color: #1976d2; font-size: 12px; text-decoration: none;">
+                ⚙️ Advanced: Mix & match providers (cloud LLM + local Flux, etc.)
+              </a>
+            </div>
+
           </div>
 
         </div>
@@ -1761,9 +1760,100 @@
             <select id="imageProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
               <option value="openai">OpenAI (DALL-E)</option>
               <option value="flux">Flux (Local Generation)</option>
+              <option value="bfl">BFL API (Cloud Flux)</option>
             </select>
             <small style="display: block; margin-top: 6px; color: #888; font-size: 11px;">
-              Flux model configuration available in Local Mode.
+              Flux (local) requires GPU setup. BFL API requires API key. DALL-E requires OpenAI key.
+            </small>
+          </div>
+
+          <!-- BFL Settings (shown when imageProvider === 'bfl') -->
+          <div id="bflSettings" style="display: none; margin-bottom: 15px; padding: 12px; background: #f0f7ff; border-radius: 6px; border: 1px solid #b3d9ff;">
+            <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
+              BFL Model:
+            </label>
+            <select id="bflModel" onchange="updateBFLModelSettings(); saveBFLSettings()" style="width: 100%; padding: 6px; border-radius: 3px; margin-bottom: 12px;">
+              <optgroup label="FLUX.2 Models">
+                <option value="flux.2-klein-4b">FLUX.2 [klein] 4B - Fast, real-time ($0.014+)</option>
+                <option value="flux.2-klein-9b">FLUX.2 [klein] 9B - Balanced ($0.015+)</option>
+                <option value="flux.2-pro" selected>FLUX.2 [pro] - Production quality ($0.03+)</option>
+                <option value="flux.2-flex">FLUX.2 [flex] - Max quality, adjustable ($0.05+)</option>
+                <option value="flux.2-dev">FLUX.2 [dev] - Free (non-commercial)</option>
+              </optgroup>
+              <optgroup label="FLUX.1 Models">
+                <option value="flux-1.1-pro">FLUX 1.1 [pro] - Legacy ($0.04)</option>
+                <option value="flux-pro">FLUX [pro] - Legacy ($0.04)</option>
+              </optgroup>
+            </select>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+              <div style="flex: 1;">
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Width:</label>
+                <input type="number" id="bflWidth" value="1024" min="64" max="4096" step="16"
+                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
+                <small style="font-size: 10px; color: #999;">64-4096, multiples of 16</small>
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Height:</label>
+                <input type="number" id="bflHeight" value="1024" min="64" max="4096" step="16"
+                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
+                <small style="font-size: 10px; color: #999;">64-4096, multiples of 16</small>
+              </div>
+            </div>
+
+            <div style="margin-bottom: 12px;">
+              <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
+                Safety Tolerance: <span id="bflSafetyValue">2</span>
+              </label>
+              <input type="range" id="bflSafetyTolerance" min="0" max="5" value="2" step="1"
+                     oninput="document.getElementById('bflSafetyValue').textContent = this.value"
+                     onchange="saveBFLSettings()" style="width: 100%;">
+              <div style="display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 2px;">
+                <span>Strict (0)</span>
+                <span>Permissive (5)</span>
+              </div>
+            </div>
+
+            <!-- FLUX.2 [flex] Only Settings -->
+            <div id="bflFlexSettings" style="display: none; margin-bottom: 12px; padding: 10px; background: #fff; border-radius: 4px; border: 1px solid #b3d9ff;">
+              <div style="margin-bottom: 10px;">
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
+                  Guidance: <span id="bflGuidanceValue">4.5</span>
+                </label>
+                <input type="range" id="bflGuidance" min="1.5" max="10" value="4.5" step="0.5"
+                       oninput="document.getElementById('bflGuidanceValue').textContent = this.value"
+                       onchange="saveBFLSettings()" style="width: 100%;">
+                <small style="font-size: 10px; color: #999;">How closely output follows prompt</small>
+              </div>
+              <div>
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
+                  Steps: <span id="bflStepsValue">50</span>
+                </label>
+                <input type="range" id="bflSteps" min="1" max="50" value="50" step="1"
+                       oninput="document.getElementById('bflStepsValue').textContent = this.value"
+                       onchange="saveBFLSettings()" style="width: 100%;">
+                <small style="font-size: 10px; color: #999;">Higher = more detail, slower</small>
+              </div>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+              <div style="flex: 1;">
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Output Format:</label>
+                <select id="bflOutputFormat" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
+                  <option value="jpeg" selected>JPEG</option>
+                  <option value="png">PNG</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Seed (optional):</label>
+                <input type="number" id="bflSeed" placeholder="Random" min="0"
+                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
+                <small style="font-size: 10px; color: #999;">For reproducibility</small>
+              </div>
+            </div>
+
+            <small style="color: #666; font-size: 11px;">
+              ☁️ Cloud-based Flux generation. No local GPU required. Requires BFL API key. Prices vary by model and resolution.
             </small>
           </div>
 
