@@ -2255,6 +2255,7 @@ async function startBeamSearch() {
       iterations: parseInt(document.getElementById('maxIterations').value),
       alpha: parseFloat(document.getElementById('alpha').value),
       temperature: parseFloat(document.getElementById('temperature').value),
+      descriptiveness: parseInt(document.getElementById('combine-descriptiveness').value),
       rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
     };
 
@@ -2623,6 +2624,19 @@ document.getElementById('clearBtn').addEventListener('click', () => {
   messagesDiv.innerHTML = '';
   addMessage('Log cleared', 'event');
 });
+
+// Descriptiveness slider event listener
+// Three descriptiveness levels: concise, balanced, descriptive
+const descriptiveSlider = document.getElementById('combine-descriptiveness');
+const descriptivityLabel = document.getElementById('descriptivityLabel');
+if (descriptiveSlider) {
+  const descriptivityLevels = ['', 'Concise', 'Balanced', 'Descriptive']; // Index 0 unused
+
+  descriptiveSlider.addEventListener('input', (e) => {
+    const level = parseInt(e.target.value);
+    descriptivityLabel.textContent = descriptivityLevels[level];
+  });
+}
 
 // Build lineage string for a candidate (traces back through parents)
 function buildLineage(candidateId) {

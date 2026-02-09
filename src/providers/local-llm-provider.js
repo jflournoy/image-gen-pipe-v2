@@ -198,9 +198,23 @@ Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignme
    * @param {string} howPrompt - Style description
    * @returns {Promise<Object>} Object with combinedPrompt and metadata
    */
-  async combinePrompts(whatPrompt, howPrompt) {
+  async combinePrompts(whatPrompt, howPrompt, options = {}) {
     try {
-      const systemPrompt = 'You are an SDXL prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, comma-separated SDXL prompt that captures both the content and the style. Do not lose any important details from either prompt. Maintain a richly detailed and concise prompt.';
+      // Get descriptiveness level (1=concise, 2=balanced, 3=descriptive)
+      const descriptiveness = options.descriptiveness || 2;
+
+      // Build system prompt based on descriptiveness level
+      let systemPrompt;
+      if (descriptiveness === 1) {
+        // Concise: minimal instructions
+        systemPrompt = 'You are an SDXL prompt combiner. Merge the WHAT (content) and HOW (style) prompts into a single SDXL prompt.';
+      } else if (descriptiveness === 3) {
+        // Descriptive: extensive guidelines
+        systemPrompt = 'You are an SDXL prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a comprehensive, richly detailed SDXL prompt that captures all elements from both. Preserve every important detail from both prompts. Use comma-separated style descriptors. Maximize quality and specificity while maintaining coherence.';
+      } else {
+        // Balanced (default): current balanced instructions
+        systemPrompt = 'You are an SDXL prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, comma-separated SDXL prompt that captures both the content and the style. Do not lose any important details from either prompt. Maintain a richly detailed and concise prompt.';
+      }
 
       const userPrompt = `WHAT prompt: ${whatPrompt || '(none)'}
 HOW prompt: ${howPrompt || '(none)'}

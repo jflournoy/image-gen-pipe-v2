@@ -209,7 +209,7 @@ ${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays 
    * @param {string} howPrompt - Style description (how it looks)
    * @returns {Promise<string>} Combined prompt suitable for image generation
    */
-  async combinePrompts(whatPrompt, howPrompt) {
+  async combinePrompts(whatPrompt, howPrompt, options = {}) {
     // Validate whatPrompt
     if (whatPrompt === null || whatPrompt === undefined) {
       throw new Error('whatPrompt is required and cannot be null or undefined');
@@ -226,7 +226,36 @@ ${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays 
       throw new Error('howPrompt is required and cannot be empty');
     }
 
-    const systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style.
+    // Get descriptiveness level (1=concise, 2=balanced, 3=descriptive)
+    const descriptiveness = options.descriptiveness || 2;
+
+    // Build system prompt based on descriptiveness level
+    let systemPrompt;
+    if (descriptiveness === 1) {
+      // Concise: minimal instructions
+      systemPrompt = `You are an image prompt combiner. Merge the WHAT prompt (content) and HOW prompt (style) into a single prompt.
+
+Output only the combined prompt, no explanations.`;
+    } else if (descriptiveness === 3) {
+      // Descriptive: extensive guidelines
+      systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style with maximum quality.
+
+Critical guidelines:
+- Do NOT lose any important details from either prompt - preserve everything meaningful
+- Preserve ALL semantic content from both WHAT and HOW prompts
+- Create a natural, flowing description that integrates content and style seamlessly
+- Maintain specificity and avoid generalizations or abstractions of the details
+- Ensure the combined prompt would generate an image matching both the content and visual style requirements
+- Keep the prompt richly detailed and comprehensive while remaining coherent
+- Consider composition, lighting, mood, texture, and all artistic elements from HOW prompt
+- Incorporate all substantive objects, subjects, and scenarios from WHAT prompt
+- Use vivid, descriptive language that reinforces both dimensions
+- Apply industry-standard image generation prompt best practices
+
+Output only the combined prompt, with no preamble, explanations, or commentary.`;
+    } else {
+      // Balanced (default): current balanced instructions
+      systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style.
 
 Important guidelines:
 - Do NOT lose any important details from either prompt
@@ -237,6 +266,7 @@ Important guidelines:
 - Keep the prompt richly detailed yet concise
 
 Output only the combined prompt, with no preamble, explanations, or commentary.`;
+    }
 
     const userPrompt = `WHAT prompt: ${whatPrompt}
 
