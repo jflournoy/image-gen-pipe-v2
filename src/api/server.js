@@ -82,7 +82,7 @@ export function createApp() {
 
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha, temperature, models, fluxOptions, bflOptions, modalOptions } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, models, fluxOptions, bflOptions, modalOptions } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
     // Check if OpenAI providers are being used
@@ -128,6 +128,7 @@ export function createApp() {
       iterations,
       alpha,
       temperature,
+      descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       models, // Pass user-selected models (if provided)
       fluxOptions, // Pass Flux generation options (steps, guidance)
       bflOptions,  // Pass BFL generation options (safety_tolerance, width, height)
@@ -140,7 +141,7 @@ export function createApp() {
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha, temperature, models, fluxOptions, bflOptions, modalOptions }
+      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, models, fluxOptions, bflOptions, modalOptions }
     });
   });
 

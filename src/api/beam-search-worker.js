@@ -50,6 +50,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     iterations = 2,
     alpha = 0.7,
     temperature = 0.7,
+    descriptiveness = 2,  // 1=concise, 2=balanced (default), 3=descriptive
     models,
     fluxOptions,
     bflOptions,
@@ -219,6 +220,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       maxIterations: iterations,
       alpha,
       temperature,
+      descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       ...(fluxOptions && { fluxOptions }), // Pass Flux generation options (steps, guidance)
       ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)

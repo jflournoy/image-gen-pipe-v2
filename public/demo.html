@@ -1761,6 +1761,19 @@
             Number of refinement rounds. More iterations = better quality but higher cost and time.
           </small>
         </div>
+        <div class="form-group">
+          <label for="combine-descriptiveness">Combine Descriptiveness:
+            <span id="descriptivityLabel" style="font-weight: normal; color: #0066cc;">Balanced</span>
+          </label>
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <span style="font-size: 12px; color: #999; min-width: 50px;">Concise</span>
+            <input type="range" id="combine-descriptiveness" min="1" max="3" value="2" style="flex: 1;">
+            <span style="font-size: 12px; color: #999; min-width: 80px; text-align: right;">Descriptive</span>
+          </div>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            Controls how detailed the WHAT+HOW prompt combination instructions are. Concise = brief merging, Balanced = default style (preserve all details), Descriptive = extensive quality guidelines.
+          </small>
+        </div>
       </div>
 
       <!-- Cost Summary (OpenAI mode only) -->

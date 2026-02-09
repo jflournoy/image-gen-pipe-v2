@@ -487,7 +487,7 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
-  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress } = options;
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness } = options;
   const candidateId_str = `i${iteration}c${candidateId}`;
 
   // Progress: Combine start
@@ -500,8 +500,8 @@ async function processCandidateStream(
     });
   }
 
-  // Stage 1: Combine prompts
-  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt);
+  // Stage 1: Combine prompts with descriptiveness level
+  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness });
   const combined = combineResult.combinedPrompt;
 
   // Track combine operation tokens using actual metadata
@@ -757,7 +757,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
 
   // Rate limiters are initialized at module load time
   // They are reused across all jobs to maintain consistent metrics
@@ -877,8 +877,8 @@ async function initialExpansion(
           });
         }
 
-        // Combine prompts (no rate limiting needed)
-        const combineResult = await llmProvider.combinePrompts(what, how);
+        // Combine prompts (no rate limiting needed) with descriptiveness level
+        const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness });
         const combined = combineResult.combinedPrompt;
 
         // Track combine operation tokens using actual metadata
@@ -1292,6 +1292,7 @@ async function refinementIteration(
               tokenTracker,
               skipVisionAnalysis,
               onStepProgress,
+              descriptiveness: config.descriptiveness,
               sessionId: config.sessionId,
               // Pass Flux generation options so they're available in processCandidateStream
               ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
