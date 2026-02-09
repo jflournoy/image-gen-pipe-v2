@@ -14,6 +14,16 @@
 require('dotenv').config();
 
 /**
+ * Environment-aware defaults
+ * - Production (NODE_ENV=production): Forces OpenAI-only providers, real mode
+ * - Development/local: All providers available, mock mode default
+ *
+ * This allows Linode deployments to work with just OPENAI_API_KEY env var
+ * while local development has access to all provider options.
+ */
+const isProduction = process.env.NODE_ENV === 'production';
+
+/**
  * Get the appropriate image model with soft fallback
  * gpt-5-image-mini requires org registration; falls back to gpt-image-1 with warning
  * @returns {string} Model name to use
@@ -41,11 +51,13 @@ function getImageModel() {
 
 const providerConfig = {
   // Mode: 'mock' or 'real'
-  mode: process.env.PROVIDER_MODE || 'mock',
+  // Production defaults to 'real', development defaults to 'mock'
+  mode: process.env.PROVIDER_MODE || (isProduction ? 'real' : 'mock'),
 
   // LLM Provider Configuration
+  // Production forces 'openai', development allows any provider
   llm: {
-    provider: process.env.LLM_PROVIDER || 'openai',
+    provider: isProduction ? 'openai' : (process.env.LLM_PROVIDER || 'openai'),
     apiKey: process.env.OPENAI_API_KEY,
     // Support both single model (legacy) and operation-specific models
     // Using gpt-5 era models with FLEX pricing support
@@ -63,15 +75,17 @@ const providerConfig = {
   // Image Provider Configuration
   // Primary: gpt-5-image-mini (requires org registration)
   // Fallback: gpt-image-1 (with console warning if fallback is used)
+  // Production forces 'dalle' (OpenAI), development allows any provider
   image: {
-    provider: process.env.IMAGE_PROVIDER || 'dalle',
+    provider: isProduction ? 'dalle' : (process.env.IMAGE_PROVIDER || 'dalle'),
     apiKey: process.env.OPENAI_API_KEY,
     model: getImageModel()  // Smart fallback from gpt-5-image-mini to gpt-image-1
   },
 
   // Vision Provider Configuration
+  // Production forces 'gpt-vision' (OpenAI), development allows any provider
   vision: {
-    provider: process.env.VISION_PROVIDER || 'gpt-vision',
+    provider: isProduction ? 'gpt-vision' : (process.env.VISION_PROVIDER || 'gpt-vision'),
     apiKey: process.env.OPENAI_API_KEY,
     model: process.env.OPENAI_VISION_MODEL || 'gpt-5-nano',  // gpt-5-nano FLEX pricing: $0.025/1M tokens (50% savings vs Standard)
     tier: 'flex'  // Explicitly use FLEX pricing for 50% cost savings
@@ -154,3 +168,4 @@ const providerConfig = {
 
 module.exports = providerConfig;
 module.exports.getImageModel = getImageModel;
+module.exports.isProduction = isProduction;

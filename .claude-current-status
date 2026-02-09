@@ -1,90 +1,51 @@
 # Claude Current Status
 
-## Current Task: TDD REFACTOR - Add Per-Comparison Retry Robustness ✅
+## Current Task: Completed - VLM Modal Image Paths Fix (Issue #33)
 
-### Timestamp: 2026-02-09
+### Timestamp: 2026-02-09 14:16
 
 ### Summary
-Implemented robust per-comparison retry logic for beam search ranking when socket hang-ups occur. When a comparison fails with transient network errors (socket hang up, ECONNREFUSED), the comparison pair now retries automatically with exponential backoff before being marked as failed.
+Fixed VLM comparison failures when using Modal/BFL image providers. The issue was that image paths were relative, so the VLM Python service couldn't find them.
 
-### Problem Statement
-During beam search ranking with the message pattern:
-```
-🔄 Ranking: Comparing i2c1 vs i3c0 (2/15) (failed: socket hang up)
-```
+### The Bug
+When beam-search-worker.js created image providers for Modal/BFL:
+- `outputDir` was not passed to `createImageProvider`
+- Modal/BFL providers defaulted to `outputDir: 'output'` (relative)
+- Images were saved at relative paths like `output/2026-02-09/ses-123456/iter0-cand0.png`
+- VLM Python service (running from a different working directory) couldn't find these files
 
-Individual comparisons that fail due to transient socket errors should retry instead of being immediately marked as failed.
-
-### TDD Results
-- **🔴 RED**: 3 failing tests written for retry robustness
-- **🟢 GREEN**: All tests passing (1041/1041)
-- **✅ Tests added**:
-  - `should retry individual comparison on socket hang up`
-  - `should track retry attempts in progress callback`
-  - `should fail after max retries exceeded`
-  - `should handle graceful degradation when comparisons fail after retries`
-
-### Changes Made
-
-**File: [src/providers/local-vlm-provider.js](src/providers/local-vlm-provider.js)**
-
-1. **New retry wrapper method** `_compareWithRetry()` (line ~519):
-   - Wraps comparison calls for all ranking strategies (all-pairs and tournament)
-   - Leverages existing `compareImages` retry logic via `_retryWithBackoff`
-   - No service restart on per-pair failures (to avoid cascading restarts)
-
-2. **Updated `_rankAllPairs()`** (line ~576):
-   - Now calls `_compareWithRetry()` instead of direct comparison
-   - Individual pairs can retry on transient errors
-   - Graceful degradation still works when retries exhaust
-
-3. **Updated `_findBestWithTransitivity()`** (line ~759):
-   - Tournament ranking also uses `_compareWithRetry()`
-   - Consistent retry behavior across both ranking strategies
-
-### Retry Mechanism
-- **Max Retries**: 3 (configurable via `maxRetries` option or env var `VLM_MAX_RETRIES`)
-- **Initial Delay**: 2000ms (configurable via `VLM_INITIAL_RETRY_DELAY_MS`)
-- **Max Delay**: 30000ms (configurable via `VLM_MAX_RETRY_DELAY_MS`)
-- **Backoff**: Exponential (delay doubles each attempt, capped at max)
-- **Transient Errors Retried**: ECONNREFUSED, socket hang up, connection timeouts
-- **Non-transient Errors**: File not found, model not loaded (fail immediately)
-
-### Graceful Degradation
-- If comparison retries fail, the pair is marked as failed
-- Error is recorded in metadata with full error message
-- Ranking continues with remaining comparisons
-- Circuit breaker still applies: if >50% of comparisons fail, entire ranking aborts
-
-### Progress Reporting
-Error messages now show in progress callbacks:
+### The Fix
+Added `outputDir: OUTPUT_DIR` to the `createImageProvider` call in [beam-search-worker.js:154](src/api/beam-search-worker.js#L154):
 ```javascript
-onProgress({
-  type: 'comparison',
-  completed: 2,
-  total: 15,
-  candidateA: 'i2c1',
-  candidateB: 'i3c0',
-  error: true,
-  errorMessage: 'VLM service unavailable at http://localhost:8004'
-});
+imageGen: createImageProvider({
+  mode: 'real',
+  provider: runtimeProviders.image,
+  apiKey: userApiKey,
+  llmProvider: llmProvider,
+  outputDir: OUTPUT_DIR,  // Required for VLM access - must be absolute path (Issue #33)
+  ...(models?.imageGen && { model: models.imageGen })
+}),
 ```
 
-### Test File
-[test/providers/local-vlm-provider.test.js](test/providers/local-vlm-provider.test.js) - 4 new tests
+### Test Coverage
+Created [test/integration/vlm-modal-image-paths.test.js](test/integration/vlm-modal-image-paths.test.js) with 10 tests:
+- OUTPUT_DIR should be absolute
+- Modal provider produces absolute paths when outputDir is absolute
+- Documents the bug (Modal/BFL with default outputDir)
+- Verifies beam-search-worker passes outputDir
+- Verifies actual code contains the fix
+- VLM _getImagePath works with absolute paths
+- VLM throws error for URL-only images
+- Provider factory integration for modal/bfl
 
-Tests verify:
-- Single comparison retries on socket hang up
-- Retries with ensemble voting during ranking
-- Max retries exceeded results in proper error
-- Graceful degradation handles persistent failures
+### TDD Workflow
+1. 🔴 RED: Wrote failing test that showed Modal provider created without outputDir produces relative paths
+2. 🟢 GREEN: Added `outputDir: OUTPUT_DIR` to createImageProvider call
+3. ✅ Tests pass (10/10)
 
 ### Files Modified
-- `src/providers/local-vlm-provider.js` - Added per-pair retry wrapper
-- `test/providers/local-vlm-provider.test.js` - Added 4 retry robustness tests
+- [src/api/beam-search-worker.js](src/api/beam-search-worker.js) - Line 154: Added outputDir parameter
+- [test/integration/vlm-modal-image-paths.test.js](test/integration/vlm-modal-image-paths.test.js) - New test file
 
-### Benefits
-- **Reliability**: Transient network issues no longer immediately fail comparisons
-- **Resilience**: Automatic retry with exponential backoff reduces noise
-- **Observability**: Error messages include full context for debugging
-- **Robustness**: Graceful degradation still works while attempting recovery
+### Previous Task: Vary Descriptiveness Randomly Feature (Completed)
+- Implemented random descriptiveness variation during beam search
