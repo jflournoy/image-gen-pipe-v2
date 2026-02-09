@@ -126,7 +126,7 @@ function createImageProvider(options = {}) {
       return new BFLImageProvider({
         apiKey: options.apiKey || config.bfl?.apiKey,
         baseUrl: options.baseUrl || config.bfl?.baseUrl || 'https://api.bfl.ai',
-        model: options.model || config.bfl?.model || 'flux-pro-1.1',
+        model: options.model || config.bfl?.model || 'flux-2-pro',
         generation: options.generation || config.bfl?.generation,
         maxPollTime: options.maxPollTime || config.bfl?.maxPollTime,
         pollInterval: options.pollInterval || config.bfl?.pollInterval,

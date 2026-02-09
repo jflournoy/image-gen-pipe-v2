@@ -41,7 +41,7 @@ class BFLImageProvider {
   constructor(options = {}) {
     this.apiKey = options.apiKey || process.env.BFL_API_KEY;
     this.baseUrl = options.baseUrl || process.env.BFL_API_URL || 'https://api.bfl.ai';
-    this.model = options.model || 'flux-pro-1.1';
+    this.model = options.model || process.env.BFL_MODEL || 'flux-2-pro';
     this.sessionId = options.sessionId;
     this.outputDir = options.outputDir || 'output';
 

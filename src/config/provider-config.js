@@ -121,7 +121,7 @@ const providerConfig = {
   bfl: {
     apiKey: process.env.BFL_API_KEY,
     baseUrl: process.env.BFL_API_URL || 'https://api.bfl.ai',
-    model: process.env.BFL_MODEL || 'flux-pro-1.1',
+    model: process.env.BFL_MODEL || 'flux-2-pro',
     // Generation settings for BFL
     generation: {
       width: parseInt(process.env.BFL_WIDTH || '1024', 10),    // Image width (256-2048, multiples of 16)
