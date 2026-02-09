@@ -1788,6 +1788,15 @@
             Controls how detailed the WHAT+HOW prompt combination instructions are. Concise = brief merging, Balanced = default style (preserve all details), Descriptive = extensive quality guidelines.
           </small>
         </div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+            <input type="checkbox" id="vary-descriptiveness-randomly" style="width: 16px; height: 16px;">
+            <span>Vary prompt length randomly</span>
+          </label>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            When enabled, randomly selects concise/balanced/descriptive for each prompt combination, creating more variety in output lengths.
+          </small>
+        </div>
       </div>
 
       <!-- Cost Summary (OpenAI mode only) -->

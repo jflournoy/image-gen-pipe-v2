@@ -2256,6 +2256,7 @@ async function startBeamSearch() {
       alpha: parseFloat(document.getElementById('alpha').value),
       temperature: parseFloat(document.getElementById('temperature').value),
       descriptiveness: parseInt(document.getElementById('combine-descriptiveness').value),
+      varyDescriptivenessRandomly: document.getElementById('vary-descriptiveness-randomly')?.checked || false,
       rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
     };
 
