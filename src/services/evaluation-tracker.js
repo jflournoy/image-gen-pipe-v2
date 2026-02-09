@@ -122,12 +122,19 @@ class EvaluationTracker {
   /**
    * Get next pairwise comparison task
    * Returns the next pair that hasn't been evaluated yet
+   *
+   * IMPORTANT: Randomizes presentation order to prevent position bias.
+   * Without randomization, the first candidate (e.g., i0c0) always appears
+   * on the left/A position, causing it to win due to position bias.
+   *
    * @returns {Promise<Object|null>} Next comparison task or null if all complete
    */
   async getNextComparison() {
     const candidates = this.evaluation.candidates;
+    // Use comparisonId (original pair key) to track completed pairs,
+    // since candidateA/B may be swapped for presentation
     const completedPairs = new Set(
-      this.evaluation.comparisons.map(c => `${c.candidateA}-${c.candidateB}`)
+      this.evaluation.comparisons.map(c => c.comparisonId)
     );
 
     // Generate all possible pairs
@@ -137,10 +144,26 @@ class EvaluationTracker {
 
         if (!completedPairs.has(pairKey)) {
           // Found next unevaluated pair
+          const first = candidates[i];
+          const second = candidates[j];
+
+          // Randomize presentation order to mitigate position bias
+          // 50% chance to swap A and B positions
+          const shouldSwap = Math.random() < 0.5;
+          const presentedA = shouldSwap ? second : first;
+          const presentedB = shouldSwap ? first : second;
+
           return {
             comparisonId: pairKey,
-            candidateA: candidates[i],
-            candidateB: candidates[j],
+            candidateA: presentedA,
+            candidateB: presentedB,
+            // Track presentation order for bias analysis
+            presentationOrder: shouldSwap ? 'swapped' : 'original',
+            // Preserve original pair info for correct winner mapping
+            originalPair: {
+              first: first.candidateId,
+              second: second.candidateId
+            },
             progress: {
               completed: this.evaluation.progress.completedPairs,
               total: this.evaluation.progress.totalPairs,
@@ -159,10 +182,11 @@ class EvaluationTracker {
    * Record a comparison result
    * @param {Object} comparison - Comparison result
    * @param {string} comparison.comparisonId - Comparison identifier (e.g., "0-1")
-   * @param {number} comparison.candidateA - First candidate ID
-   * @param {number} comparison.candidateB - Second candidate ID
+   * @param {number} comparison.candidateA - First candidate ID (as presented)
+   * @param {number} comparison.candidateB - Second candidate ID (as presented)
    * @param {string} comparison.winner - Winner: 'A', 'B', or 'tie'
    * @param {number} comparison.responseTimeMs - Time taken to make decision
+   * @param {string} [comparison.presentationOrder] - 'original' or 'swapped' for bias analysis
    * @returns {Promise<void>}
    */
   async recordComparison(comparison) {
@@ -224,7 +248,9 @@ class EvaluationTracker {
         candidateB: c.candidateB,
         winner: c.winner,
         responseTimeMs: c.responseTimeMs,
-        timestamp: c.timestamp
+        timestamp: c.timestamp,
+        // Include presentation order for position bias analysis
+        presentationOrder: c.presentationOrder || 'original'
       })),
       progress: this.evaluation.progress
     };

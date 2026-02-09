@@ -52,16 +52,16 @@ function getGpuMemory() {
   }
 }
 
-describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)', { timeout: 600000 }, () => {
+describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)', { timeout: 2700000 }, () => {  // 45 min - Flux reload takes ~7-10min after each VLM swap
   let fluxProvider;
   let vlmProvider;
 
   before(async () => {
     console.log('[Test] Initializing providers...');
     fluxProvider = new FluxImageProvider({
-      modelName: 'black-forest-labs/FLUX.1-schnell',
-      numInferenceSteps: 1, // Fast generation for testing
-      enableSequentialCpuOffload: true
+      // Uses whatever model the Flux service is configured with (FLUX_MODEL env var)
+      // Note: model parameter in requests is ignored by service - it's set at startup
+      generation: { steps: 4 }  // Minimal steps for faster testing
     });
 
     vlmProvider = new LocalVLMProvider({
@@ -98,7 +98,7 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
 
     // Unload all models
     console.log('[Test] Unloading all models...');
-    await modelCoordinator.unloadAll();
+    await modelCoordinator.cleanupAll();
   });
 
   it(`should complete Flux→VLM→Flux→VLM cycle with ${VLM_GPU_LAYERS} layers + ${VLM_CONTEXT_SIZE} context`, async () => {
@@ -116,8 +116,8 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
         console.log(`[Test]   Generating image i0c${i}...`);
         const result = await fluxProvider.generateImage(TEST_PROMPT, {
           seed: 1000 + i,
-          width: 512,
-          height: 512
+          width: 1024,   // Production size - VLM service will resize to 512 for context fit
+          height: 1024
         });
         results.push({
           candidateId: `i0c${i}`,
@@ -156,7 +156,7 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
 
     const memAfterVLM1 = getGpuMemory();
     console.log(`[Test] GPU VRAM after VLM round 1: ${memAfterVLM1 || 'unknown'} MB`);
-    assert.ok(ranking1.rankedImages.length > 0, 'Should rank images in round 1');
+    assert.ok(ranking1.rankings.length > 0, 'Should rank images in round 1');
 
     // === ROUND 2: Flux generates 2 more images ===
     console.log('\n[Test] ROUND 2: Generating second batch (2 images)...');
@@ -166,8 +166,8 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
         console.log(`[Test]   Generating image i1c${i}...`);
         const result = await fluxProvider.generateImage(TEST_PROMPT, {
           seed: 2000 + i,
-          width: 512,
-          height: 512
+          width: 1024,   // Production size - VLM service will resize to 512 for context fit
+          height: 1024
         });
         results.push({
           candidateId: `i1c${i}`,
@@ -211,7 +211,7 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
 
     const memAfterVLM2 = getGpuMemory();
     console.log(`[Test] GPU VRAM after VLM round 2: ${memAfterVLM2 || 'unknown'} MB`);
-    assert.ok(ranking2.rankedImages.length > 0, 'Should rank images in round 2');
+    assert.ok(ranking2.rankings.length > 0, 'Should rank images in round 2');
 
     // === Final verification ===
     const memEnd = getGpuMemory();
@@ -232,7 +232,7 @@ describe('🎬 VLM Production Settings (Flux→VLM→Flux→VLM with ensemble)',
     }
 
     // Verify no errors in ranking
-    assert.strictEqual(ranking2.errors.length, 0, 'Round 2 ranking should complete without errors');
+    assert.strictEqual(ranking2.metadata.errors.length, 0, 'Round 2 ranking should complete without errors');
 
     console.log('[Test] ✅ Flux→VLM→Flux→VLM cycle completed successfully!');
   });

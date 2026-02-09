@@ -1325,42 +1325,358 @@
     <!-- Settings Sidebar (30%) -->
     <div id="main-container">
       <aside id="settings-sidebar" style="overflow-y: auto;">
-        <h3>⚙️ Settings</h3>
+        <h3>⚙️ Provider Settings</h3>
 
-        <!-- Mode Selection Section -->
-        <section id="mode-selection-sidebar">
-          <div style="margin-bottom: 20px;">
-            <h3 style="margin: 0 0 15px 0; color: #333; font-size: 16px;">Choose Your Setup</h3>
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-              <!-- OpenAI Mode Card -->
-              <div id="openaiModeCard" onclick="selectMode('openai')" style="padding: 15px; background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border: 2px solid #90caf9; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <i class="fas fa-cloud" style="color: #1976d2; font-size: 18px;"></i>
-                  <h4 style="margin: 0; color: #1565c0; font-size: 15px;">OpenAI Mode</h4>
+        <!-- LLM Provider Section -->
+        <section id="llmProviderSection" style="margin-bottom: 15px; padding: 12px; background: #f5f9ff; border-radius: 6px; border: 1px solid #b3d9ff;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              📝 Text Generation (LLM)
+            </label>
+            <span id="llmHealthSidebar" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+          </div>
+          <select id="llmProvider" onchange="updateLLMProviderSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px;">
+            <option value="openai">OpenAI (GPT-5 models)</option>
+            <option value="local-llm">Local LLM (Mistral 7B)</option>
+          </select>
+
+          <!-- OpenAI LLM Settings -->
+          <div id="openaiLLMSettings" style="margin-bottom: 10px;">
+            <div style="font-size: 11px; color: #666; padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="margin-bottom: 6px;">
+                <label style="display: block; color: #555; margin-bottom: 4px;"><strong>Model:</strong></label>
+                <select id="llmModel" onchange="updateCostEstimate()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 11px;">
+                  <option value="">Default (gpt-5-mini)</option>
+                </select>
+                <small style="display: block; margin-top: 4px; color: #888; font-size: 10px;">
+                  nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M
+                </small>
+              </div>
+              <div><strong>OPENAI_API_KEY:</strong> <span id="openaiKeyStatus">Not set</span></div>
+            </div>
+          </div>
+
+          <!-- Local LLM Settings (hidden by default) -->
+          <div id="localLLMSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                <span style="font-size: 12px;">Service: <strong>llm_service.py</strong></span>
+                <span id="llmStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+              </div>
+              <div style="display: flex; gap: 4px;">
+                <button onclick="startServiceInline('llm')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                <button onclick="stopServiceInline('llm')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                <button onclick="restartServiceInline('llm')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Alpha & Temperature (LLM options) -->
+          <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
+                Alpha: <span id="alphaValue">0.6</span>
+                <small style="color: #888;">(prompt alignment vs quality)</small>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="range" id="alpha" min="0" max="1" step="0.1" value="0.6" style="flex: 1;">
+                <input type="number" id="alphaNumber" min="0" max="1" step="0.1" value="0.6" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
+                Temperature: <span id="temperatureValue">1.0</span>
+                <small style="color: #888;">(creativity)</small>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="range" id="temperature" min="0" max="1" step="0.05" value="1.0" style="flex: 1;">
+                <input type="number" id="temperatureNumber" min="0" max="1" step="0.05" value="1.0" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Image Provider Section -->
+        <section id="imageProviderSection" style="margin-bottom: 15px; padding: 12px; background: #f5fff5; border-radius: 6px; border: 1px solid #a5d6a7;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              🖼️ Image Generation
+            </label>
+            <span id="imageHealthSidebar" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+          </div>
+          <select id="imageProvider" onchange="updateImageProviderSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px;">
+            <option value="openai">OpenAI (DALL-E)</option>
+            <option value="flux">Flux (Local GPU)</option>
+            <option value="bfl">BFL API (Cloud Flux)</option>
+            <option value="modal">Modal (Cloud GPU)</option>
+          </select>
+
+          <!-- DALL-E Settings -->
+          <div id="dalleSettings" style="margin-bottom: 10px;">
+            <div style="font-size: 11px; color: #666; padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="margin-bottom: 6px;">
+                <label style="display: block; color: #555; margin-bottom: 4px;"><strong>Ranking Model:</strong></label>
+                <select id="imageModel" onchange="updateCostEstimate()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 11px;">
+                  <option value="">Default (gpt-image-1-mini)</option>
+                </select>
+                <small style="display: block; margin-top: 4px; color: #888; font-size: 10px;">
+                  Compares images to find the best candidate.<br>
+                  mini: $2.50/1M in, $8/1M out | standard: $10/1M in, $40/1M out
+                </small>
+              </div>
+              <div style="font-size: 10px; color: #888;">Uses OpenAI API key from LLM settings</div>
+            </div>
+          </div>
+
+          <!-- Flux Settings (Local) -->
+          <div id="fluxSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 12px;">Service: <strong>flux_service.py</strong></span>
+                <span id="fluxStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+              </div>
+              <div style="display: flex; gap: 4px; margin-bottom: 10px;">
+                <button onclick="startServiceInline('flux')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                <button onclick="stopServiceInline('flux')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                <button onclick="restartServiceInline('flux')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻</button>
+              </div>
+              <!-- Flux Generation Settings -->
+              <div style="font-size: 11px;">
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Steps</label>
+                    <input type="number" id="fluxSteps" value="25" min="10" max="50" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
+                    <input type="number" id="fluxGuidance" value="3.5" min="1" max="10" step="0.5" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
                 </div>
-                <div style="font-size: 11px; color: #555; line-height: 1.5;">
-                  <div style="margin-bottom: 6px;"><strong style="color: #2e7d32;">✓ Pros:</strong> Fast & reliable, no setup, consistent quality</div>
-                  <div><strong style="color: #c62828;">✗ Cons:</strong> API costs, data leaves your PC</div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Scheduler</label>
+                  <select id="fluxScheduler" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <option value="">Default (DPMSolver)</option>
+                    <option value="euler">Euler</option>
+                    <option value="ddim">DDIM</option>
+                  </select>
+                </div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Model Source</label>
+                  <div style="display: flex; gap: 10px; margin-bottom: 4px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                      <input type="radio" name="fluxModelSource" value="huggingface" checked onchange="updateModelSourceAndRefresh(this.value)" style="margin-right: 4px;">
+                      <span>HuggingFace</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                      <input type="radio" name="fluxModelSource" value="local" onchange="updateModelSourceAndRefresh(this.value)" style="margin-right: 4px;">
+                      <span>Local File</span>
+                    </label>
+                  </div>
+                  <!-- Local Model Path (shown when "Local File" selected) -->
+                  <div id="fluxLocalPathSection" style="display: none; margin-top: 4px;">
+                    <input type="text" id="fluxCustomPath" placeholder="/path/to/model.safetensors" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; font-size: 10px;">
+                    <small style="display: block; color: #888; font-size: 9px; margin-top: 2px;">
+                      Download custom checkpoints from <a href="https://civitai.com" target="_blank" style="color: #1976d2;">CivitAI</a>
+                    </small>
+                  </div>
+                </div>
+                <!-- LoRA Configuration -->
+                <div style="margin-top: 6px; padding-top: 6px; border-top: 1px solid #eee;">
+                  <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                    <label style="display: block; color: #666;">LoRAs</label>
+                    <button id="addFluxLora" onclick="addFluxLora()" style="padding: 2px 8px; font-size: 9px; cursor: pointer; background: #e0e0e0; border: 1px solid #ccc; border-radius: 3px;">+ Add</button>
+                  </div>
+                  <div id="fluxLoraList" style="max-height: 100px; overflow-y: auto;"></div>
+                  <small style="display: block; color: #888; font-size: 9px;">Add LoRAs from <a href="https://civitai.com" target="_blank" style="color: #1976d2;">CivitAI</a>. Place .safetensors files in services/loras/</small>
                 </div>
               </div>
-              <!-- Local Mode Card -->
-              <div id="localModeCard" onclick="selectMode('local')" style="padding: 15px; background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%); border: 2px solid #81c784; border-radius: 8px; cursor: pointer; transition: all 0.2s;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                  <i class="fas fa-desktop" style="color: #388e3c; font-size: 18px;"></i>
-                  <h4 style="margin: 0; color: #2e7d32; font-size: 15px;">Local Mode</h4>
+            </div>
+          </div>
+
+          <!-- BFL Settings -->
+          <div id="bflSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="font-size: 11px;">
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Model</label>
+                  <select id="bflModel" onchange="updateBFLModelSettings(); saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <optgroup label="FLUX.2 (Latest)">
+                      <option value="flux.2-max">FLUX.2 [max] - Best quality ($0.20+)</option>
+                      <option value="flux.2-pro" selected>FLUX.2 [pro] - Professional ($0.03+)</option>
+                      <option value="flux.2-flex">FLUX.2 [flex] - Flexible settings ($0.05+)</option>
+                      <option value="flux.2-klein-4b">FLUX.2 [klein] 4B - Fastest ($0.014+)</option>
+                      <option value="flux.2-klein-9b">FLUX.2 [klein] 9B - Better quality ($0.014+)</option>
+                      <option value="flux.2-dev">FLUX.2 [dev] - Development (free)</option>
+                    </optgroup>
+                    <optgroup label="FLUX.1 (Legacy)">
+                      <option value="flux-pro-1.1">FLUX.1 [pro-1.1] - Professional</option>
+                      <option value="flux-pro-1.1-ultra">FLUX.1 [pro-1.1-ultra] - Ultra quality</option>
+                      <option value="flux-dev">FLUX.1 [dev] - Development (free)</option>
+                    </optgroup>
+                  </select>
                 </div>
-                <div style="font-size: 11px; color: #555; line-height: 1.5;">
-                  <div style="margin-bottom: 6px;"><strong style="color: #2e7d32;">✓ Pros:</strong> Private, no API costs, full control & customization</div>
-                  <div><strong style="color: #c62828;">✗ Cons:</strong> Requires 12GB+ GPU, model downloads (~15GB total)</div>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Width</label>
+                    <input type="number" id="bflWidth" value="1024" min="64" max="4096" step="16" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Height</label>
+                    <input type="number" id="bflHeight" value="1024" min="64" max="4096" step="16" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                </div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Safety: <span id="bflSafetyValue">2</span></label>
+                  <input type="range" id="bflSafetyTolerance" min="0" max="5" value="2" oninput="document.getElementById('bflSafetyValue').textContent=this.value" onchange="saveBFLSettings()" style="width: 100%;">
+                </div>
+                <!-- FLEX-only settings -->
+                <div id="bflFlexSettings" style="display: none;">
+                  <div style="margin-bottom: 6px;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Guidance: <span id="bflGuidanceValue">4.5</span></label>
+                    <input type="range" id="bflGuidance" min="1.5" max="10" value="4.5" step="0.5" oninput="document.getElementById('bflGuidanceValue').textContent=this.value" onchange="saveBFLSettings()" style="width: 100%;">
+                  </div>
+                  <div style="margin-bottom: 6px;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Steps: <span id="bflStepsValue">50</span></label>
+                    <input type="range" id="bflSteps" min="1" max="50" value="50" oninput="document.getElementById('bflStepsValue').textContent=this.value" onchange="saveBFLSettings()" style="width: 100%;">
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Format</label>
+                    <select id="bflOutputFormat" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="jpeg" selected>JPEG</option>
+                      <option value="png">PNG</option>
+                    </select>
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Seed</label>
+                    <input type="number" id="bflSeed" placeholder="Random" min="0" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                </div>
+                <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
+                  <strong>BFL_API_KEY:</strong> <span id="bflKeyStatus">Not configured</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Modal Settings -->
+          <div id="modalSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="font-size: 11px;">
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Model</label>
+                  <select id="modalModel" onchange="updateModalModelDefaults(); saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <option value="flux-dev">Flux Dev (25 steps)</option>
+                    <option value="flux-schnell">Flux Schnell (4 steps)</option>
+                    <option value="sdxl-turbo">SDXL Turbo (4 steps)</option>
+                  </select>
+                </div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">GPU</label>
+                  <select id="modalGpu" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <option value="T4">T4 ($0.27/hr)</option>
+                    <option value="A10G" selected>A10G ($0.76/hr)</option>
+                    <option value="A100">A100 ($1.80/hr)</option>
+                  </select>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Steps</label>
+                    <input type="number" id="modalSteps" value="25" min="1" max="50" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
+                    <input type="number" id="modalGuidance" value="3.5" min="0" max="20" step="0.5" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                </div>
+                <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
+                  <strong>MODAL_ENDPOINT:</strong> <span id="modalEndpointStatus">Not configured</span>
                 </div>
               </div>
             </div>
           </div>
         </section>
 
-        <!-- Provider Configuration Section (moved from modal via JavaScript) -->
-        <section id="provider-config-sidebar">
-          <!-- configSection with localConfigSection and advancedConfigSection will be moved here by initializeSidebarLayout() -->
+        <!-- Vision Provider Section -->
+        <section id="visionProviderSection" style="margin-bottom: 15px; padding: 12px; background: #fff5f5; border-radius: 6px; border: 1px solid #f5b3b3;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              👁️ Vision Scoring
+            </label>
+            <span id="visionHealthSidebar" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
+          </div>
+          <select id="visionProvider" onchange="updateVisionProviderSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px;">
+            <option value="openai">OpenAI (GPT-5 Vision)</option>
+            <option value="local">Local (CLIP + Aesthetics)</option>
+          </select>
+
+          <!-- OpenAI Vision Settings -->
+          <div id="openaiVisionSettings" style="margin-bottom: 10px;">
+            <div style="font-size: 11px; color: #666; padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="margin-bottom: 6px;">
+                <label style="display: block; color: #555; margin-bottom: 4px;"><strong>Vision Model:</strong></label>
+                <select id="visionModel" onchange="updateCostEstimate()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ccc; font-size: 11px;">
+                  <option value="">Default (gpt-5-nano)</option>
+                </select>
+                <small style="display: block; margin-top: 4px; color: #888; font-size: 10px;">
+                  Analyzes images for critiques and refinement.<br>
+                  nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M
+                </small>
+              </div>
+              <div style="font-size: 10px; color: #888;">Uses OpenAI API key from LLM settings</div>
+            </div>
+          </div>
+
+          <!-- Local Vision Settings -->
+          <div id="localVisionSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 12px;">Service: <strong>vision_service.py</strong></span>
+                <span id="visionStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+              </div>
+              <div style="display: flex; gap: 4px; margin-bottom: 8px;">
+                <button onclick="startServiceInline('vision')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                <button onclick="stopServiceInline('vision')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                <button onclick="restartServiceInline('vision')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻</button>
+              </div>
+              <div style="font-size: 11px;">
+                <label style="display: block; color: #666; margin-bottom: 4px;">Ranking Method</label>
+                <div style="display: flex; gap: 10px;">
+                  <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="rankingMode" value="scoring" onchange="updateRankingMode()" style="margin-right: 4px;">
+                    <span>Scored</span>
+                  </label>
+                  <label style="display: flex; align-items: center; cursor: pointer;">
+                    <input type="radio" name="rankingMode" value="vlm" checked onchange="updateRankingMode()" style="margin-right: 4px;">
+                    <span>Tournament (VLM)</span>
+                  </label>
+                </div>
+              </div>
+              <!-- VLM Service (for tournament mode) -->
+              <div id="vlmServiceSection" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                  <span style="font-size: 11px;">VLM (Tournament):</span>
+                  <span id="vlmStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+                </div>
+                <div style="display: flex; gap: 4px;">
+                  <button onclick="startServiceInline('vlm')" style="flex: 1; padding: 3px 4px; font-size: 9px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶</button>
+                  <button onclick="stopServiceInline('vlm')" style="flex: 1; padding: 3px 4px; font-size: 9px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹</button>
+                  <button onclick="restartServiceInline('vlm')" style="flex: 1; padding: 3px 4px; font-size: 9px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Quick Actions -->
+        <section id="quick-actions-sidebar" style="padding: 10px; background: #f0f0f0; border-radius: 6px;">
+          <button onclick="quickStartLocalServices()" style="width: 100%; margin-bottom: 6px; background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">
+            🚀 Start All Local Services
+          </button>
+          <button onclick="stopAllLocalServices()" style="width: 100%; background: linear-gradient(135deg, #f44336 0%, #da190b 100%); color: white; border: none; padding: 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-weight: bold;">
+            ⏹ Stop All Services
+          </button>
         </section>
       </aside>
 
@@ -1445,88 +1761,14 @@
             Number of refinement rounds. More iterations = better quality but higher cost and time.
           </small>
         </div>
-        <div class="form-group">
-          <label for="alpha">Alpha (0-1): <span id="alphaValue">0.6</span></label>
-          <input type="range" id="alpha" min="0" max="1" step="0.1" value="0.6">
-          <input type="number" id="alphaNumber" min="0" max="1" step="0.1" value="0.6" style="width: 60px; margin-left: 10px;">
-          <small style="display: block; margin-top: 5px; color: #666;">
-            Weights prompt alignment vs. visual quality.
-            <strong>Low (0.0-0.3):</strong> Prioritize beauty over exact prompt matching
-            | <strong>Medium (0.4-0.6):</strong> Balance both equally
-            | <strong>High (0.7-1.0):</strong> Ensure images match your prompt exactly
-          </small>
-        </div>
-        <div class="form-group">
-          <label for="temperature">Temperature (0-1): <span id="temperatureValue">1.0</span></label>
-          <input type="range" id="temperature" min="0" max="1" step="0.05" value="1.0">
-          <input type="number" id="temperatureNumber" min="0" max="1" step="0.05" value="1.0" style="width: 60px; margin-left: 10px;">
-          <small style="display: block; margin-top: 5px; color: #666;">
-            Randomness in prompt generation. <strong>Low (0.0-0.3):</strong> Predictable, focused
-            | <strong>High (0.7-1.0):</strong> Creative, diverse
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label for="steps">Diffusion Steps (15-50): <span id="stepsValue">25</span></label>
-          <input type="range" id="steps" min="15" max="50" step="1" value="25">
-          <input type="number" id="stepsNumber" min="15" max="50" step="1" value="25" style="width: 60px; margin-left: 10px;">
-          <small style="display: block; margin-top: 5px; color: #666;">
-            Number of diffusion steps for image generation. <strong>15 steps:</strong> Minimum quality
-            | <strong>25 steps:</strong> Balanced quality & speed (recommended)
-            | <strong>40+ steps:</strong> Maximum quality (slower)
-          </small>
-        </div>
-
-        <div class="form-group">
-          <label for="guidance">Guidance Scale (1-20): <span id="guidanceValue">3.5</span></label>
-          <input type="range" id="guidance" min="1" max="20" step="0.5" value="3.5">
-          <input type="number" id="guidanceNumber" min="1" max="20" step="0.5" value="3.5" style="width: 60px; margin-left: 10px;">
-          <small style="display: block; margin-top: 5px; color: #666;">
-            How strongly the model follows your prompt. <strong>Low (1-5):</strong> More creative, less literal
-            | <strong>Medium (5-10):</strong> Balanced (3.5 default)
-            | <strong>High (10-20):</strong> Strict adherence to prompt
-          </small>
-        </div>
       </div>
 
-      <div id="modelSelectionSection" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 15px;">
-        <h3 style="margin-top: 0;">Model Selection (Optional - OpenAI Only)</h3>
-        <p style="font-size: 12px; color: #666; margin: 0 0 15px 0;">
-          Choose which OpenAI models to use. Only applies when using OpenAI providers.
-          <br><strong style="color: #333;">📊 Estimated Cost: </strong><span id="costSummary">Calculating...</span>
-        </p>
-        <div class="params-grid">
-          <div class="form-group">
-            <label for="llmModel">LLM Model:</label>
-            <select id="llmModel">
-              <option value="">Default (gpt-5-mini)</option>
-            </select>
-            <small style="display: block; margin-top: 5px; color: #666;">
-              Used for generating and refining prompts at each iteration.
-              <br><span style="font-size: 11px;">nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M</span>
-            </small>
-          </div>
-          <div class="form-group">
-            <label for="imageModel">Image Ranking Model:</label>
-            <select id="imageModel">
-              <option value="">Default (gpt-image-1-mini - requires org registration)</option>
-            </select>
-            <small style="display: block; margin-top: 5px; color: #666;">
-              Compares generated images to find the best candidate at each iteration.
-              <br><span style="font-size: 11px;">mini: $2.50/1M in, $8/1M out | standard: $10/1M in, $40/1M out</span>
-            </small>
-          </div>
-          <div class="form-group">
-            <label for="visionModel">Vision Analysis Model:</label>
-            <select id="visionModel">
-              <option value="">Default (gpt-5-nano)</option>
-            </select>
-            <small style="display: block; margin-top: 5px; color: #666;">
-              Analyzes images to provide critiques and suggestions for refinement.
-              <br><span style="font-size: 11px;">nano: $0.025/1M | mini: $0.125/1M | gpt-5: $0.625/1M</span>
-            </small>
-          </div>
-        </div>
+      <!-- Cost Summary (OpenAI mode only) -->
+      <div id="costSummarySection" style="margin-top: 15px; padding: 10px 15px; background: #f0f7ff; border: 1px solid #b3d9ff; border-radius: 5px;">
+        <strong style="color: #0066cc;">📊 Estimated Cost: </strong><span id="costSummary">Calculating...</span>
+        <small style="display: block; margin-top: 5px; color: #666;">
+          Cost shown for OpenAI providers. Adjust models in the sidebar provider settings.
+        </small>
       </div>
 
       <div id="iterationWarning" style="display: none; margin-top: 20px; background: #ffe4e1; border: 2px solid #ff6347; border-radius: 5px; padding: 15px; margin-bottom: 15px;">
@@ -1832,165 +2074,7 @@
 
         </div>
 
-        <!-- Advanced/Mixed Mode Configuration (Dropdowns) -->
-        <div id="advancedConfigSection" style="display: none;">
-          <div style="padding: 15px; background: #fafafa; border-radius: 6px; border: 1px solid #e0e0e0;">
-            <!-- LLM Provider -->
-          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-weight: bold; color: #555; margin: 0;">LLM Provider:</label>
-              <span id="llmHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
-            </div>
-            <select id="llmProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-              <option value="openai">OpenAI (GPT-5 models)</option>
-              <option value="local-llm">Local LLM (Python/Transformers)</option>
-            </select>
-          </div>
-
-          <!-- Image Provider -->
-          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-weight: bold; color: #555; margin: 0;">Image Provider:</label>
-              <span id="imageHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
-            </div>
-            <select id="imageProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-              <option value="openai">OpenAI (DALL-E)</option>
-              <option value="flux">Flux (Local Generation)</option>
-              <option value="bfl">BFL API (Cloud Flux)</option>
-            </select>
-            <small style="display: block; margin-top: 6px; color: #888; font-size: 11px;">
-              Flux (local) requires GPU setup. BFL API requires API key. DALL-E requires OpenAI key.
-            </small>
-          </div>
-
-          <!-- BFL Settings (shown when imageProvider === 'bfl') -->
-          <div id="bflSettings" style="display: none; margin-bottom: 15px; padding: 12px; background: #f0f7ff; border-radius: 6px; border: 1px solid #b3d9ff;">
-            <label style="font-weight: bold; color: #555; font-size: 13px; display: block; margin-bottom: 8px;">
-              BFL Model:
-            </label>
-            <select id="bflModel" onchange="updateBFLModelSettings(); saveBFLSettings()" style="width: 100%; padding: 6px; border-radius: 3px; margin-bottom: 12px;">
-              <optgroup label="FLUX.2 Models">
-                <option value="flux.2-klein-4b">FLUX.2 [klein] 4B - Fast, real-time ($0.014+)</option>
-                <option value="flux.2-klein-9b">FLUX.2 [klein] 9B - Balanced ($0.015+)</option>
-                <option value="flux.2-pro" selected>FLUX.2 [pro] - Production quality ($0.03+)</option>
-                <option value="flux.2-flex">FLUX.2 [flex] - Max quality, adjustable ($0.05+)</option>
-                <option value="flux.2-dev">FLUX.2 [dev] - Free (non-commercial)</option>
-              </optgroup>
-              <optgroup label="FLUX.1 Models">
-                <option value="flux-1.1-pro">FLUX 1.1 [pro] - Legacy ($0.04)</option>
-                <option value="flux-pro">FLUX [pro] - Legacy ($0.04)</option>
-              </optgroup>
-            </select>
-
-            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-              <div style="flex: 1;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Width:</label>
-                <input type="number" id="bflWidth" value="1024" min="64" max="4096" step="16"
-                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
-                <small style="font-size: 10px; color: #999;">64-4096, multiples of 16</small>
-              </div>
-              <div style="flex: 1;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Height:</label>
-                <input type="number" id="bflHeight" value="1024" min="64" max="4096" step="16"
-                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
-                <small style="font-size: 10px; color: #999;">64-4096, multiples of 16</small>
-              </div>
-            </div>
-
-            <div style="margin-bottom: 12px;">
-              <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
-                Safety Tolerance: <span id="bflSafetyValue">2</span>
-              </label>
-              <input type="range" id="bflSafetyTolerance" min="0" max="5" value="2" step="1"
-                     oninput="document.getElementById('bflSafetyValue').textContent = this.value"
-                     onchange="saveBFLSettings()" style="width: 100%;">
-              <div style="display: flex; justify-content: space-between; font-size: 10px; color: #999; margin-top: 2px;">
-                <span>Strict (0)</span>
-                <span>Permissive (5)</span>
-              </div>
-            </div>
-
-            <!-- FLUX.2 [flex] Only Settings -->
-            <div id="bflFlexSettings" style="display: none; margin-bottom: 12px; padding: 10px; background: #fff; border-radius: 4px; border: 1px solid #b3d9ff;">
-              <div style="margin-bottom: 10px;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
-                  Guidance: <span id="bflGuidanceValue">4.5</span>
-                </label>
-                <input type="range" id="bflGuidance" min="1.5" max="10" value="4.5" step="0.5"
-                       oninput="document.getElementById('bflGuidanceValue').textContent = this.value"
-                       onchange="saveBFLSettings()" style="width: 100%;">
-                <small style="font-size: 10px; color: #999;">How closely output follows prompt</small>
-              </div>
-              <div>
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">
-                  Steps: <span id="bflStepsValue">50</span>
-                </label>
-                <input type="range" id="bflSteps" min="1" max="50" value="50" step="1"
-                       oninput="document.getElementById('bflStepsValue').textContent = this.value"
-                       onchange="saveBFLSettings()" style="width: 100%;">
-                <small style="font-size: 10px; color: #999;">Higher = more detail, slower</small>
-              </div>
-            </div>
-
-            <div style="display: flex; gap: 10px; margin-bottom: 12px;">
-              <div style="flex: 1;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Output Format:</label>
-                <select id="bflOutputFormat" onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
-                  <option value="jpeg" selected>JPEG</option>
-                  <option value="png">PNG</option>
-                </select>
-              </div>
-              <div style="flex: 1;">
-                <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">Seed (optional):</label>
-                <input type="number" id="bflSeed" placeholder="Random" min="0"
-                       onchange="saveBFLSettings()" style="width: 100%; padding: 4px; border-radius: 3px;">
-                <small style="font-size: 10px; color: #999;">For reproducibility</small>
-              </div>
-            </div>
-
-            <small style="color: #666; font-size: 11px;">
-              ☁️ Cloud-based Flux generation. No local GPU required. Requires BFL API key. Prices vary by model and resolution.
-            </small>
-          </div>
-
-          <!-- Vision Provider (for individual image scoring) -->
-          <div style="margin-bottom: 15px; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #ddd;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-weight: bold; color: #555; margin: 0;">Vision Scoring:</label>
-              <span id="visionHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Unknown</span>
-            </div>
-            <select id="visionProvider" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc;">
-              <option value="openai">OpenAI (GPT-5 Vision)</option>
-              <option value="local">Local (CLIP + Aesthetics)</option>
-            </select>
-            <small style="display: block; margin-top: 6px; color: #888; font-size: 11px;">
-              Scores each image individually for prompt alignment and visual quality.
-            </small>
-          </div>
-
-          <!-- Ranking Mode (for comparing/ranking images) -->
-          <div style="margin-bottom: 0; padding: 12px; background: #fff; border-radius: 6px; border: 1px solid #b3d9f7;">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
-              <label style="font-weight: bold; color: #1565c0; margin: 0;">🏆 Ranking Method:</label>
-              <span id="vlmHealth" class="health-indicator" style="font-size: 12px; padding: 3px 8px; border-radius: 3px; background: #ddd; color: #666;">Checking...</span>
-            </div>
-            <select id="rankingMode" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #90caf9;">
-              <option value="vlm" selected>VLM Tournament (Local pairwise comparison)</option>
-              <option value="scoring">Score-based (Use vision scores only)</option>
-            </select>
-            <small style="display: block; margin-top: 6px; color: #666; font-size: 11px;">
-              <strong>VLM Tournament:</strong> Local vision-language model compares images head-to-head in tournament brackets.
-              <em style="color: #1565c0;">Requires VLM service (port 8004).</em><br>
-              <strong>Score-based:</strong> Rank by vision scores alone (faster, no pairwise comparison).
-            </small>
-            <div style="margin-top: 8px; padding: 8px; background: #fff3e0; border-radius: 4px; font-size: 11px;">
-              <strong style="color: #e65100;">💡 VLM vs Score-based:</strong>
-              <span style="color: #666;">VLM compares pairs of images holistically (prompt match + quality). Score-based uses CLIP alignment + aesthetic scores.</span>
-              <br><code style="background: #fff; padding: 2px 4px; border-radius: 2px; font-size: 10px;">Start VLM: cd services && .venv/bin/python vlm_service.py</code>
-            </div>
-          </div>
-          </div>
-        </div>
+        <!-- Provider settings moved to sidebar - see llmProviderSection, imageProviderSection, visionProviderSection -->
       </div>
 
       <!-- Actions -->

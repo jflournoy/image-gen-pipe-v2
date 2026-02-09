@@ -560,7 +560,9 @@
             candidateA: currentComparison.candidateA.candidateId,
             candidateB: currentComparison.candidateB.candidateId,
             winner: winner,
-            responseTimeMs: responseTimeMs
+            responseTimeMs: responseTimeMs,
+            // Include presentation order for position bias analysis
+            presentationOrder: currentComparison.presentationOrder || 'original'
           })
         });
 

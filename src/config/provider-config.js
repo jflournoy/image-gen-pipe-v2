@@ -9,7 +9,9 @@
  * See docs/MODEL_SELECTION_GUIDE.md for pricing details.
  */
 
-require('dotenv').config({ override: true });
+// Load .env but don't override CLI environment variables
+// CLI env vars take precedence: VLM_GPU_LAYERS=16 node ... will use 16, not .env value
+require('dotenv').config();
 
 /**
  * Get the appropriate image model with soft fallback
@@ -101,8 +103,11 @@ const providerConfig = {
       guidance: parseFloat(process.env.FLUX_GUIDANCE || '3.5'),   // Guidance scale (1.0-20.0, Flux uses lower values)
       width: parseInt(process.env.FLUX_WIDTH || '1024', 10),      // Image width (512-2048)
       height: parseInt(process.env.FLUX_HEIGHT || '1024', 10),    // Image height (512-2048)
-      loraScale: process.env.FLUX_LORA_SCALE ? parseFloat(process.env.FLUX_LORA_SCALE) : null  // LoRA strength (0.0-2.0)
-    }
+      loraScale: process.env.FLUX_LORA_SCALE ? parseFloat(process.env.FLUX_LORA_SCALE) : null,  // LoRA strength (0.0-2.0)
+      scheduler: process.env.FLUX_SCHEDULER || null  // Scheduler: euler, dpmsolver, ddim, pndm (null = pipeline default)
+    },
+    // Available schedulers for fine-tunes (e.g., CustomFluxModel recommends euler)
+    supportedSchedulers: ['euler', 'dpmsolver', 'ddim', 'pndm']
   },
 
   // Local Vision Configuration (CLIP + Aesthetics)
@@ -110,6 +115,40 @@ const providerConfig = {
     apiUrl: process.env.LOCAL_VISION_API_URL || 'http://localhost:8002',
     clipModel: process.env.CLIP_MODEL || 'openai/clip-vit-base-patch32',
     aestheticModel: process.env.AESTHETIC_MODEL || 'aesthetic_predictor_v2_5'
+  },
+
+  // BFL (Black Forest Labs) API Configuration
+  bfl: {
+    apiKey: process.env.BFL_API_KEY,
+    baseUrl: process.env.BFL_API_URL || 'https://api.bfl.ai',
+    model: process.env.BFL_MODEL || 'flux-pro-1.1',
+    // Generation settings for BFL
+    generation: {
+      width: parseInt(process.env.BFL_WIDTH || '1024', 10),    // Image width (256-2048, multiples of 16)
+      height: parseInt(process.env.BFL_HEIGHT || '1024', 10)   // Image height (256-2048, multiples of 16)
+    },
+    // Polling configuration for async generation
+    maxPollTime: parseInt(process.env.BFL_MAX_POLL_TIME || '300000', 10),  // 5 minutes
+    pollInterval: parseInt(process.env.BFL_POLL_INTERVAL || '2000', 10)    // 2 seconds
+  },
+
+  // Modal (Cloud GPU) API Configuration
+  // Uses Modal.com for serverless GPU inference
+  modal: {
+    apiUrl: process.env.MODAL_ENDPOINT_URL,  // Modal web endpoint URL (e.g., https://your-app--generate.modal.run)
+    tokenId: process.env.MODAL_TOKEN_ID,      // Modal authentication token ID
+    tokenSecret: process.env.MODAL_TOKEN_SECRET,  // Modal authentication token secret
+    model: process.env.MODAL_MODEL || 'flux-dev',  // Default model (flux-dev, sdxl-turbo, sd3-medium)
+    gpu: process.env.MODAL_GPU || 'A10G',     // GPU type (T4, A10G, A100, H100)
+    // Generation settings for Modal
+    generation: {
+      width: parseInt(process.env.MODAL_WIDTH || '1024', 10),     // Image width
+      height: parseInt(process.env.MODAL_HEIGHT || '1024', 10),   // Image height
+      steps: parseInt(process.env.MODAL_STEPS || '25', 10),       // Inference steps
+      guidance: parseFloat(process.env.MODAL_GUIDANCE || '3.5')   // Guidance scale
+    },
+    // Extended timeout for Modal cold starts (containers can take 60-120s to spin up)
+    timeout: parseInt(process.env.MODAL_TIMEOUT || '300000', 10)  // 5 minutes default
   }
 };
 

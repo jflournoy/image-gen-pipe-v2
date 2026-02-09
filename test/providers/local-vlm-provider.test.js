@@ -868,6 +868,144 @@ describe('LocalVLMProvider', () => {
   });
 
   describe('Error Handling', () => {
+    it('🔴 should retry individual comparison on socket hang up (ECONNREFUSED)', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({
+        apiUrl: 'http://localhost:8004',
+        maxRetries: 3,
+        initialRetryDelay: 100,
+        maxRetryDelay: 500
+      });
+
+      let attemptCount = 0;
+      provider._axios = {
+        post: async () => {
+          attemptCount++;
+          if (attemptCount < 3) {
+            throw new Error('ECONNREFUSED: socket hang up');
+          }
+          return {
+            data: {
+              choice: 'A',
+              explanation: 'Recovered after retries',
+              confidence: 0.9
+            }
+          };
+        }
+      };
+
+      // Should succeed after 3 attempts
+      const result = await provider.compareImages('/a.png', '/b.png', 'test');
+      assert.strictEqual(result.choice, 'A', 'Should succeed after retries');
+      assert.strictEqual(attemptCount, 3, 'Should have retried twice before succeeding');
+    });
+
+    it('🔴 should track retry attempts in progress callback during rankAllPairs', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({
+        apiUrl: 'http://localhost:8004',
+        maxRetries: 2,
+        initialRetryDelay: 50,
+        maxRetryDelay: 200
+      });
+
+      let attemptCount = 0;
+      const progressEvents = [];
+      provider._axios = {
+        post: async () => {
+          attemptCount++;
+          if (attemptCount < 2) {
+            throw new Error('socket hang up');
+          }
+          return {
+            data: {
+              choice: 'A',
+              explanation: 'Success after retry',
+              confidence: 0.8
+            }
+          };
+        }
+      };
+
+      const images = [
+        { candidateId: 'i0c0', localPath: '/a.png' },
+        { candidateId: 'i0c1', localPath: '/b.png' }
+      ];
+
+      const result = await provider.rankImages(images, 'test prompt', {
+        gracefulDegradation: true,
+        onProgress: (event) => {
+          progressEvents.push(event);
+        }
+      });
+
+      // Should have completed successfully with retry
+      assert.ok(result.rankings, 'Should return rankings');
+      assert.strictEqual(result.rankings.length, 2, 'Should have 2 rankings');
+      // At least one progress event should exist for the comparison
+      assert.ok(progressEvents.length > 0, 'Should emit progress events');
+    });
+
+    it('🔴 should fail after max retries exceeded on persistent socket errors', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({
+        apiUrl: 'http://localhost:8004',
+        maxRetries: 2,
+        initialRetryDelay: 50,
+        maxRetryDelay: 200
+      });
+
+      provider._axios = {
+        post: async () => {
+          throw new Error('ECONNREFUSED: socket hang up');
+        }
+      };
+
+      await assert.rejects(
+        () => provider.compareImages('/a.png', '/b.png', 'test'),
+        /unavailable after \d+ attempts/,
+        'Should indicate service unavailable after max retries'
+      );
+    });
+
+    it('🔴 should handle graceful degradation when comparisons fail after retries', async () => {
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      const provider = new LocalVLMProvider({
+        apiUrl: 'http://localhost:8004',
+        maxRetries: 1,
+        initialRetryDelay: 50,
+        maxRetryDelay: 100
+      });
+
+      provider._axios = {
+        post: async () => {
+          // Always fail - test that graceful degradation and retries handle it
+          throw new Error('socket hang up');
+        }
+      };
+
+      const images = [
+        { candidateId: 'i0c0', localPath: '/path/a.png' },
+        { candidateId: 'i0c1', localPath: '/path/b.png' }
+      ];
+
+      const result = await provider.rankImages(images, 'test prompt', {
+        gracefulDegradation: true  // Enable graceful degradation
+      });
+
+      // Should gracefully degrade and still return rankings
+      assert.ok(result.rankings, 'Should return rankings despite failures');
+      assert.strictEqual(result.rankings.length, 2, 'Should have 2 rankings');
+      // Should have recorded errors (comparisons failed after retries)
+      assert.ok(result.metadata.errors.length > 0, 'Should have recorded comparison errors');
+      // Error message should indicate service was unavailable
+      const errorMsgs = result.metadata.errors.map(e => e.message).join(' ');
+      assert.ok(
+        errorMsgs.includes('hang up') || errorMsgs.includes('unavailable'),
+        'Error should mention the connection issue'
+      );
+    });
+
     it('should handle service unavailable', async () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
       const provider = new LocalVLMProvider({ apiUrl: 'http://localhost:8004' });

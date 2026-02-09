@@ -25,9 +25,16 @@ const FluxImageProvider = require('../providers/flux-image-provider');
 const LocalVisionProvider = require('../providers/local-vision-provider');
 const LocalVLMProvider = require('../providers/local-vlm-provider');
 
+// Real providers - Cloud APIs
+const BFLImageProvider = require('../providers/bfl-image-provider');
+const ModalImageProvider = require('../providers/modal-image-provider');
+
 // Services
 const CritiqueGenerator = require('../services/critique-generator');
 const ImageRanker = require('../services/image-ranker');
+
+// Utilities
+const modelCoordinator = require('../utils/model-coordinator');
 
 /**
  * Create an LLM provider instance
@@ -65,7 +72,9 @@ function createLLMProvider(options = {}) {
     case 'local-llm': {
       return new LocalLLMProvider({
         apiUrl: options.apiUrl || config.localLLM?.apiUrl || 'http://localhost:8003',
-        model: options.model || config.localLLM?.model || 'mistralai/Mistral-7B-Instruct-v0.2'
+        model: options.model || config.localLLM?.model || 'mistralai/Mistral-7B-Instruct-v0.2',
+        // Allow test injection of service restarter, otherwise use model coordinator
+        serviceRestarter: options.serviceRestarter || modelCoordinator.createLLMServiceRestarter()
       });
     }
 
@@ -110,6 +119,33 @@ function createImageProvider(options = {}) {
         apiUrl: options.apiUrl || config.flux?.apiUrl || 'http://localhost:8001',
         model: options.model || config.flux?.model || 'flux-dev',
         generation: options.generation || config.flux?.generation
+      });
+    }
+
+    case 'bfl': {
+      return new BFLImageProvider({
+        apiKey: options.apiKey || config.bfl?.apiKey,
+        baseUrl: options.baseUrl || config.bfl?.baseUrl || 'https://api.bfl.ai',
+        model: options.model || config.bfl?.model || 'flux-pro-1.1',
+        generation: options.generation || config.bfl?.generation,
+        maxPollTime: options.maxPollTime || config.bfl?.maxPollTime,
+        pollInterval: options.pollInterval || config.bfl?.pollInterval,
+        sessionId: options.sessionId,
+        outputDir: options.outputDir,
+        llmProvider: options.llmProvider
+      });
+    }
+
+    case 'modal': {
+      return new ModalImageProvider({
+        apiUrl: options.apiUrl || config.modal?.apiUrl,
+        tokenId: options.tokenId || config.modal?.tokenId,
+        tokenSecret: options.tokenSecret || config.modal?.tokenSecret,
+        model: options.model || config.modal?.model || 'flux-dev',
+        generation: options.generation || config.modal?.generation,
+        timeout: options.timeout || config.modal?.timeout,
+        sessionId: options.sessionId,
+        outputDir: options.outputDir
       });
     }
 
@@ -251,10 +287,13 @@ function createVLMProvider(options = {}) {
 
   switch (provider) {
     case 'local': {
-      return new LocalVLMProvider({
+      const vlmProvider = new LocalVLMProvider({
         apiUrl: options.apiUrl || config.vlm?.apiUrl || 'http://localhost:8004',
-        model: options.model || config.vlm?.model || 'llava-v1.6-mistral-7b.Q4_K_M.gguf'
+        model: options.model || config.vlm?.model || 'llava-v1.6-mistral-7b.Q4_K_M.gguf',
+        // Allow test injection of service restarter, otherwise use model coordinator
+        serviceRestarter: options.serviceRestarter || modelCoordinator.createVLMServiceRestarter()
       });
+      return vlmProvider;
     }
 
     default:

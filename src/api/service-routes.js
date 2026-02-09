@@ -8,6 +8,13 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const ServiceManager = require('../utils/service-manager');
+const ModelCoordinator = require('../utils/model-coordinator');
+
+// Wire up the service restarter for auto-restart functionality
+ModelCoordinator.setServiceRestarter(async (serviceName) => {
+  console.log(`[ServiceRoutes] Auto-restarting crashed service: ${serviceName}`);
+  return await ServiceManager.restartService(serviceName);
+});
 
 const router = express.Router();
 
@@ -101,6 +108,9 @@ router.post('/:name/start', async (req, res) => {
       });
     }
 
+    // Mark service as intended to be running (for auto-restart on crash)
+    ModelCoordinator.markServiceIntent(name, true);
+
     res.json({
       success: true,
       pid: result.pid,
@@ -134,6 +144,9 @@ router.post('/:name/stop', async (req, res) => {
 
   try {
     const result = await ServiceManager.stopService(name);
+
+    // Mark service as intentionally stopped (don't auto-restart)
+    ModelCoordinator.markServiceIntent(name, false);
 
     res.json({
       success: result.success,
@@ -183,6 +196,43 @@ router.post('/:name/restart', async (req, res) => {
     console.error(`[ServiceRoutes] Error restarting ${name}:`, error);
     res.status(500).json({
       error: 'Failed to restart service',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/services/health
+ * Get health status of all services and trigger auto-restart for crashed services
+ */
+router.get('/health', async (req, res) => {
+  try {
+    const report = await ModelCoordinator.getServiceHealthReport();
+    res.json(report);
+  } catch (error) {
+    console.error('[ServiceRoutes] Error getting health report:', error);
+    res.status(500).json({
+      error: 'Failed to get health report',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/services/ensure-healthy
+ * Check all services and auto-restart any that crashed
+ */
+router.post('/ensure-healthy', async (req, res) => {
+  try {
+    const results = await ModelCoordinator.ensureAllServicesHealthy();
+    res.json({
+      success: true,
+      results,
+    });
+  } catch (error) {
+    console.error('[ServiceRoutes] Error ensuring service health:', error);
+    res.status(500).json({
+      error: 'Failed to ensure service health',
       message: error.message,
     });
   }

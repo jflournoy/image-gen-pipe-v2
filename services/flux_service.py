@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
-from diffusers import FluxPipeline, AutoencoderKL
+from diffusers import FluxPipeline, AutoencoderKL, EulerDiscreteScheduler, DDIMScheduler, PNDMScheduler, DPMSolverMultistepScheduler
 from diffusers.utils import load_image
 from huggingface_hub import login
 from safetensors.torch import load_file
@@ -39,6 +39,18 @@ MODEL_NAME = os.getenv('FLUX_MODEL', 'black-forest-labs/FLUX.1-dev')
 # LoRA configuration
 FLUX_LORA_PATH = os.getenv('FLUX_LORA_PATH')  # Optional LoRA weights path
 LORA_DEFAULT_SCALE = float(os.getenv('FLUX_LORA_SCALE', '1.0'))  # Default LoRA strength
+LORAS_DIR = Path(os.getenv('FLUX_LORAS_DIR', 'services/loras'))  # Directory for LoRA files
+MAX_LORAS = 4  # Maximum number of simultaneous LoRAs
+
+# Scheduler configuration
+# Supported schedulers for Flux fine-tunes (e.g., CustomFluxModel recommends Euler)
+SUPPORTED_SCHEDULERS = {
+    'euler': EulerDiscreteScheduler,
+    'dpmsolver': DPMSolverMultistepScheduler,  # default for Flux
+    'ddim': DDIMScheduler,
+    'pndm': PNDMScheduler,
+}
+DEFAULT_SCHEDULER = os.getenv('FLUX_SCHEDULER')  # Optional default scheduler override
 
 # Custom encoder paths (for models like pixelwave that require specific encoders)
 FLUX_TEXT_ENCODER_PATH = os.getenv('FLUX_TEXT_ENCODER_PATH')  # Local CLIP-L encoder
@@ -123,12 +135,15 @@ app.add_middleware(
 # Global pipeline (loaded on first request)
 pipeline = None
 
-# Global LoRA state
+# Global LoRA state (single LoRA - legacy support)
 current_lora = {
     'path': None,
     'scale': LORA_DEFAULT_SCALE,
     'loaded': False
 }
+
+# Multiple LoRA state tracking
+current_loras = []  # List of loaded LoRAs: [{'path': ..., 'scale': ..., 'adapter_name': ..., 'loaded': True/False}]
 
 
 class GenerationRequest(BaseModel):
@@ -143,6 +158,7 @@ class GenerationRequest(BaseModel):
     negativePrompt: Optional[str] = None
     loras: List[dict] = []
     lora_scale: Optional[float] = None  # Per-request LoRA strength override
+    scheduler: Optional[str] = None  # euler, dpmsolver, ddim, pndm (per-request override)
 
 
 class GenerationResponse(BaseModel):
@@ -401,6 +417,148 @@ def unload_lora():
         return {'status': 'error', 'message': str(e)}
 
 
+def load_multiple_loras(loras: List[dict]):
+    """
+    Load multiple LoRA weights into the pipeline with weighted blending.
+
+    Args:
+        loras: List of dicts with 'path' and 'scale' keys
+               Example: [{'path': 'style.safetensors', 'scale': 0.8}, ...]
+
+    Returns:
+        List of dicts with loaded LoRA info
+    """
+    global pipeline, current_loras
+
+    if pipeline is None:
+        raise RuntimeError('Pipeline must be loaded before adding LoRAs')
+
+    # Handle empty/None loras
+    if not loras:
+        # Unload any existing LoRAs
+        if current_loras and hasattr(pipeline, 'unload_lora_weights'):
+            try:
+                pipeline.unload_lora_weights()
+                print('[Flux Service] LoRA: Unloaded existing LoRAs')
+            except Exception as e:
+                print(f'[Flux Service] LoRA: Warning during unload: {e}')
+        current_loras = []
+        return []
+
+    # Limit to MAX_LORAS
+    if len(loras) > MAX_LORAS:
+        print(f'[Flux Service] LoRA: Limiting to {MAX_LORAS} LoRAs (requested {len(loras)})')
+        loras = loras[:MAX_LORAS]
+
+    loaded_loras = []
+    adapter_names = []
+    adapter_weights = []
+
+    for i, lora_config in enumerate(loras):
+        lora_path = lora_config.get('path', '')
+        lora_scale = lora_config.get('scale', 1.0)
+
+        # Resolve path - check LORAS_DIR for relative paths
+        lora_file = Path(lora_path)
+        if not lora_file.is_absolute():
+            # Try LORAS_DIR first
+            lora_file = Path(LORAS_DIR) / lora_path
+            if not lora_file.exists():
+                # Try services/loras as fallback
+                lora_file = Path('services/loras') / lora_path
+
+        lora_file = lora_file.resolve()
+
+        # Validate file exists
+        if not lora_file.exists():
+            print(f'[Flux Service] LoRA: File not found: {lora_path} (checked {lora_file})')
+            loaded_loras.append({
+                'path': str(lora_path),
+                'scale': lora_scale,
+                'adapter_name': None,
+                'loaded': False,
+                'error': f'File not found: {lora_file}'
+            })
+            continue
+
+        # Validate .safetensors format
+        if not str(lora_file).endswith('.safetensors'):
+            print(f'[Flux Service] LoRA: Invalid format (must be .safetensors): {lora_path}')
+            loaded_loras.append({
+                'path': str(lora_path),
+                'scale': lora_scale,
+                'adapter_name': None,
+                'loaded': False,
+                'error': 'Must be .safetensors format'
+            })
+            continue
+
+        # Generate unique adapter name
+        adapter_name = f'lora_{i}_{lora_file.stem}'
+
+        try:
+            print(f'[Flux Service] LoRA: Loading {lora_file} as "{adapter_name}" with scale {lora_scale}')
+            pipeline.load_lora_weights(str(lora_file), adapter_name=adapter_name)
+
+            adapter_names.append(adapter_name)
+            adapter_weights.append(lora_scale)
+            loaded_loras.append({
+                'path': str(lora_path),
+                'scale': lora_scale,
+                'adapter_name': adapter_name,
+                'loaded': True
+            })
+            print(f'[Flux Service] LoRA: Successfully loaded {adapter_name}')
+
+        except Exception as e:
+            print(f'[Flux Service] LoRA: Error loading {lora_path}: {e}')
+            loaded_loras.append({
+                'path': str(lora_path),
+                'scale': lora_scale,
+                'adapter_name': adapter_name,
+                'loaded': False,
+                'error': str(e)
+            })
+            # Continue loading other LoRAs even if one fails
+
+    # Set adapters with weights for blending
+    if adapter_names and hasattr(pipeline, 'set_adapters'):
+        try:
+            pipeline.set_adapters(adapter_names, adapter_weights=adapter_weights)
+            print(f'[Flux Service] LoRA: Set {len(adapter_names)} adapters with weights {adapter_weights}')
+        except Exception as e:
+            print(f'[Flux Service] LoRA: Error setting adapters: {e}')
+
+    current_loras = loaded_loras
+    return loaded_loras
+
+
+@app.get('/loras')
+async def list_loras():
+    """List available LoRA files in LORAS_DIR"""
+    loras = []
+
+    # Ensure LORAS_DIR exists
+    loras_path = Path(LORAS_DIR)
+    if loras_path.exists():
+        for lora_file in loras_path.glob('*.safetensors'):
+            try:
+                loras.append({
+                    'name': lora_file.stem,
+                    'path': lora_file.name,
+                    'full_path': str(lora_file.resolve()),
+                    'size_mb': lora_file.stat().st_size / (1024 * 1024),
+                })
+            except Exception as e:
+                print(f'[Flux Service] Error reading LoRA file {lora_file}: {e}')
+
+    return {
+        'loras': loras,
+        'loras_dir': str(LORAS_DIR),
+        'current_loras': current_loras
+    }
+
+
 @app.get('/health')
 async def health_check():
     """Health check endpoint"""
@@ -417,6 +575,10 @@ async def health_check():
             'path': current_lora['path'],
             'scale': current_lora['scale'],
             'configured': FLUX_LORA_PATH is not None
+        },
+        'scheduler': {
+            'supported': list(SUPPORTED_SCHEDULERS.keys()),
+            'default': DEFAULT_SCHEDULER
         }
     }
 
@@ -529,9 +691,15 @@ async def generate_image(request: GenerationRequest):
         if request.seed is not None:
             generator = torch.Generator(device=DEVICE).manual_seed(request.seed)
 
-        # Handle per-request LoRA scale override
+        # Handle request LoRAs (multiple LoRA support)
+        lora_info = None
+        if request.loras:
+            print(f'[Flux Service] Loading {len(request.loras)} LoRAs from request')
+            lora_info = load_multiple_loras(request.loras)
+
+        # Handle per-request LoRA scale override (legacy single LoRA support)
         original_scale = None
-        if request.lora_scale is not None and current_lora['loaded']:
+        if request.lora_scale is not None and current_lora['loaded'] and not request.loras:
             # Temporarily adjust LoRA scale for this generation
             original_scale = current_lora['scale']
             if original_scale != request.lora_scale:
@@ -542,6 +710,15 @@ async def generate_image(request: GenerationRequest):
                     current_lora['scale'] = request.lora_scale
                 except Exception as e:
                     print(f'[Flux Service] Warning: Failed to adjust LoRA scale: {e}')
+
+        # Handle scheduler override (for fine-tunes that recommend specific samplers)
+        scheduler_to_use = request.scheduler or DEFAULT_SCHEDULER
+        original_scheduler = None
+        if scheduler_to_use and scheduler_to_use in SUPPORTED_SCHEDULERS:
+            original_scheduler = pipe.scheduler
+            scheduler_class = SUPPORTED_SCHEDULERS[scheduler_to_use]
+            pipe.scheduler = scheduler_class.from_config(pipe.scheduler.config)
+            print(f'[Flux Service] Using scheduler: {scheduler_to_use} ({scheduler_class.__name__})')
 
         # Generate image
         print(f'[Flux Service] Generating: {prompt[:50]}...')
@@ -565,6 +742,10 @@ async def generate_image(request: GenerationRequest):
                 current_lora['scale'] = original_scale
             except Exception as e:
                 print(f'[Flux Service] Warning: Failed to restore LoRA scale: {e}')
+
+        # Restore original scheduler if it was temporarily changed
+        if original_scheduler is not None:
+            pipe.scheduler = original_scheduler
 
         # Save image to temporary location
         output_dir = Path('output/temp')
@@ -590,6 +771,8 @@ async def generate_image(request: GenerationRequest):
                 'steps': request.steps,
                 'guidance': request.guidance,
                 'seed': request.seed,
+                'scheduler': scheduler_to_use,
+                'loras': lora_info if lora_info else current_loras if current_loras else None,
             }
         )
 

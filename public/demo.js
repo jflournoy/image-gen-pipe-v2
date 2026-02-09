@@ -129,21 +129,151 @@ function updateServiceVisibility() {
 
 /**
  * Show/hide provider-specific settings based on image provider
- * BFL, Flux, and OpenAI have different control options
+ * BFL, Flux, Modal, and OpenAI have different control options
  */
 function updateImageProviderSettings() {
   const provider = document.getElementById('imageProvider')?.value || 'flux';
 
   // Get settings sections
   const bflSettings = document.getElementById('bflSettings');
+  const modalSettings = document.getElementById('modalSettings');
+  const fluxSettings = document.getElementById('fluxSettings');
+  const dalleSettings = document.getElementById('dalleSettings');
+
+  // Toggle DALL-E settings visibility
+  if (dalleSettings) {
+    dalleSettings.style.display = provider === 'openai' ? 'block' : 'none';
+  }
 
   // Toggle BFL settings visibility
   if (bflSettings) {
     bflSettings.style.display = provider === 'bfl' ? 'block' : 'none';
   }
 
+  // Toggle Modal settings visibility
+  if (modalSettings) {
+    modalSettings.style.display = provider === 'modal' ? 'block' : 'none';
+  }
+
+  // Toggle Flux (local) settings visibility
+  if (fluxSettings) {
+    fluxSettings.style.display = provider === 'flux' ? 'block' : 'none';
+  }
+
   // Update service visibility
   updateServiceVisibility();
+}
+
+/**
+ * Show/hide LLM provider-specific settings
+ * Toggles between OpenAI and local LLM settings
+ */
+function updateLLMProviderSettings() {
+  const provider = document.getElementById('llmProvider')?.value || 'openai';
+
+  const openaiLLMSettings = document.getElementById('openaiLLMSettings');
+  const localLLMSettings = document.getElementById('localLLMSettings');
+
+  if (openaiLLMSettings) {
+    openaiLLMSettings.style.display = provider === 'openai' ? 'block' : 'none';
+  }
+
+  if (localLLMSettings) {
+    localLLMSettings.style.display = provider === 'local-llm' ? 'block' : 'none';
+  }
+}
+
+/**
+ * Show/hide Vision provider-specific settings
+ * Toggles between OpenAI Vision and local CLIP+Aesthetics
+ */
+function updateVisionProviderSettings() {
+  const provider = document.getElementById('visionProvider')?.value || 'openai';
+
+  const openaiVisionSettings = document.getElementById('openaiVisionSettings');
+  const localVisionSettings = document.getElementById('localVisionSettings');
+
+  if (openaiVisionSettings) {
+    openaiVisionSettings.style.display = provider === 'openai' ? 'block' : 'none';
+  }
+
+  if (localVisionSettings) {
+    localVisionSettings.style.display = provider === 'local' ? 'block' : 'none';
+  }
+}
+
+/**
+ * Inline service control wrappers for sidebar
+ * These delegate to the existing modal functions
+ */
+async function startServiceInline(serviceName) {
+  await startServiceInModal(serviceName);
+}
+
+async function stopServiceInline(serviceName) {
+  await stopServiceInModal(serviceName);
+}
+
+async function restartServiceInline(serviceName) {
+  await restartServiceInModal(serviceName);
+}
+
+/**
+ * Update sidebar API key status indicators
+ * Fetches provider status and updates the UI to show configured/not configured
+ */
+async function updateSidebarApiStatus() {
+  try {
+    const response = await fetch('/api/providers/status');
+    if (!response.ok) return;
+
+    const data = await response.json();
+
+    // Update BFL key status
+    const bflKeyStatus = document.getElementById('bflKeyStatus');
+    if (bflKeyStatus) {
+      const bflHealthy = data.health?.bfl?.available;
+      if (bflHealthy) {
+        bflKeyStatus.textContent = '✓ Configured';
+        bflKeyStatus.style.color = '#4CAF50';
+      } else {
+        bflKeyStatus.textContent = 'Not configured';
+        bflKeyStatus.style.color = '#888';
+      }
+    }
+
+    // Update Modal endpoint status
+    const modalEndpointStatus = document.getElementById('modalEndpointStatus');
+    if (modalEndpointStatus) {
+      const modalHealthy = data.health?.modal?.available;
+      if (modalHealthy) {
+        modalEndpointStatus.textContent = '✓ Configured';
+        modalEndpointStatus.style.color = '#4CAF50';
+      } else {
+        modalEndpointStatus.textContent = 'Not configured';
+        modalEndpointStatus.style.color = '#888';
+      }
+    }
+
+    // Update OpenAI key status in LLM section
+    const openaiKeyStatus = document.getElementById('openaiKeyStatus');
+    if (openaiKeyStatus) {
+      // Check if we have an API key in the input or localStorage
+      const apiKeyInput = document.getElementById('apiKey');
+      const hasApiKey = apiKeyInput?.value || localStorage.getItem('openaiApiKey');
+      if (hasApiKey) {
+        openaiKeyStatus.textContent = '✓ Set';
+        openaiKeyStatus.style.color = '#4CAF50';
+      } else {
+        openaiKeyStatus.textContent = 'Not set';
+        openaiKeyStatus.style.color = '#888';
+      }
+    }
+
+    console.log('[UI] Updated sidebar API status');
+  } catch (error) {
+    console.error('[UI] Error updating sidebar API status:', error);
+  }
 }
 
 /**
@@ -225,6 +355,470 @@ function loadBFLSettings() {
   if (document.getElementById('bflSeed')) document.getElementById('bflSeed').value = seed;
 
   updateBFLModelSettings();
+}
+
+/**
+ * Save local Flux settings to localStorage
+ * Persists scheduler, steps, guidance, dimensions, and fluxLoras
+ */
+function saveFluxSettings() {
+  const scheduler = document.getElementById('fluxScheduler')?.value;
+  const steps = document.getElementById('fluxSteps')?.value;
+  const guidance = document.getElementById('fluxGuidance')?.value;
+  const width = document.getElementById('fluxWidth')?.value;
+  const height = document.getElementById('fluxHeight')?.value;
+
+  if (scheduler !== undefined) localStorage.setItem('fluxScheduler', scheduler);
+  if (steps) localStorage.setItem('fluxSteps', steps);
+  if (guidance) localStorage.setItem('fluxGuidance', guidance);
+  if (width) localStorage.setItem('fluxWidth', width);
+  if (height) localStorage.setItem('fluxHeight', height);
+
+  // Save multiple LoRAs (fluxLoras array is saved by saveFluxLoras)
+  saveFluxLoras();
+}
+
+/**
+ * Load local Flux settings from localStorage
+ * Restores previous Flux configuration including fluxLoras
+ */
+function loadFluxSettings() {
+  const scheduler = localStorage.getItem('fluxScheduler') || '';
+  const steps = localStorage.getItem('fluxSteps') || '25';
+  const guidance = localStorage.getItem('fluxGuidance') || '3.5';
+  const width = localStorage.getItem('fluxWidth') || '1024';
+  const height = localStorage.getItem('fluxHeight') || '1024';
+
+  if (document.getElementById('fluxScheduler')) {
+    document.getElementById('fluxScheduler').value = scheduler;
+  }
+  if (document.getElementById('fluxSteps')) {
+    document.getElementById('fluxSteps').value = steps;
+    const valueDisplay = document.getElementById('fluxStepsValue');
+    if (valueDisplay) valueDisplay.textContent = steps;
+  }
+  if (document.getElementById('fluxGuidance')) {
+    document.getElementById('fluxGuidance').value = guidance;
+    const valueDisplay = document.getElementById('fluxGuidanceValue');
+    if (valueDisplay) valueDisplay.textContent = guidance;
+  }
+  if (document.getElementById('fluxWidth')) {
+    document.getElementById('fluxWidth').value = width;
+  }
+  if (document.getElementById('fluxHeight')) {
+    document.getElementById('fluxHeight').value = height;
+  }
+
+  // Load LoRAs from localStorage
+  loadFluxLoras();
+}
+
+// ============================================================================
+// Flux Multiple LoRA Support
+// ============================================================================
+
+/** Maximum number of LoRAs allowed */
+const MAX_LORAS = 4;
+
+/** Current configured LoRAs: [{ path: string, scale: number }, ...] */
+let fluxLoras = [];
+
+/** Available LoRAs from discovery API */
+let availableLoras = [];
+
+/**
+ * Save Flux LoRAs to localStorage as JSON
+ */
+function saveFluxLoras() {
+  localStorage.setItem('fluxLoras', JSON.stringify(fluxLoras));
+}
+
+/**
+ * Load Flux LoRAs from localStorage
+ */
+function loadFluxLoras() {
+  try {
+    const storedFluxLoras = localStorage.getItem('fluxLoras');
+    if (storedFluxLoras) {
+      fluxLoras = JSON.parse(storedFluxLoras);
+      if (!Array.isArray(fluxLoras)) {
+        fluxLoras = [];
+      }
+    }
+  } catch (err) {
+    console.warn('[Flux LoRAs] Error loading from localStorage:', err);
+    fluxLoras = [];
+  }
+  renderFluxLoraList();
+}
+
+/**
+ * Add a new LoRA entry (max 4)
+ */
+function addFluxLora() {
+  if (fluxLoras.length >= MAX_LORAS) {
+    console.warn(`[Flux LoRAs] Maximum ${MAX_LORAS} LoRAs already configured`);
+    return;
+  }
+
+  // Add new LoRA with default values
+  fluxLoras.push({
+    path: '',
+    scale: 1.0
+  });
+
+  saveFluxLoras();
+  saveFluxSettings();
+  renderFluxLoraList();
+}
+
+/**
+ * Remove a LoRA entry by index
+ * @param {number} index - Index of LoRA to remove
+ */
+function removeFluxLora(index) {
+  if (index >= 0 && index < fluxLoras.length) {
+    fluxLoras.splice(index, 1);
+    saveFluxLoras();
+    saveFluxSettings();
+    renderFluxLoraList();
+  }
+}
+
+/**
+ * Update a LoRA entry
+ * @param {number} index - Index of LoRA to update
+ * @param {string} field - 'path' or 'scale'
+ * @param {string|number} value - New value
+ */
+function updateFluxLora(index, field, value) {
+  if (index >= 0 && index < fluxLoras.length) {
+    if (field === 'scale') {
+      // Clamp scale to valid range (0.0 - 2.0)
+      value = Math.min(2.0, Math.max(0.0, parseFloat(value) || 0));
+    }
+    fluxLoras[index][field] = value;
+    saveFluxLoras();
+    saveFluxSettings();
+  }
+}
+
+/**
+ * Render the LoRA list UI
+ * Clears fluxLoraList innerHTML and rebuilds it from fluxLoras array
+ */
+function renderFluxLoraList() {
+  const fluxLoraList = document.getElementById('fluxLoraList');
+  if (!fluxLoraList) return;
+
+  // Clear and rebuild the LoRA list
+  if (fluxLoras.length === 0) {
+    fluxLoraList.innerHTML = '<div style="color: #999; font-size: 11px; font-style: italic;">No LoRAs configured</div>';
+    return;
+  }
+
+  let html = '';
+  for (let i = 0; i < fluxLoras.length; i++) {
+    const lora = fluxLoras[i];
+    const loraScaleValue = lora.scale !== undefined ? lora.scale : 1.0;
+
+    html += `
+      <div class="lora-entry" style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 8px; background: #f5f5f5; border-radius: 4px;">
+        <select
+          id="loraPath_${i}"
+          onchange="updateFluxLora(${i}, 'path', this.value)"
+          style="flex: 1; padding: 4px; font-size: 11px; border-radius: 3px;"
+        >
+          <option value="">-- Select LoRA --</option>
+          ${renderLoraOptions(lora.path)}
+        </select>
+        <div style="display: flex; align-items: center; gap: 4px;">
+          <label style="font-size: 10px; color: #666;">Scale:</label>
+          <input
+            type="range"
+            id="loraScale_${i}"
+            min="0"
+            max="2"
+            step="0.1"
+            value="${loraScaleValue}"
+            onchange="updateFluxLora(${i}, 'scale', this.value); document.getElementById('loraScaleValue_${i}').textContent = this.value"
+            oninput="document.getElementById('loraScaleValue_${i}').textContent = this.value"
+            style="width: 60px;"
+          >
+          <span id="loraScaleValue_${i}" style="font-size: 10px; min-width: 24px;">${loraScaleValue}</span>
+        </div>
+        <button
+          onclick="removeFluxLora(${i})"
+          style="padding: 2px 6px; font-size: 11px; cursor: pointer; color: #d32f2f;"
+          title="Remove LoRA"
+        >✕</button>
+      </div>
+    `;
+  }
+
+  fluxLoraList.innerHTML = html;
+}
+
+/**
+ * Render LoRA dropdown options from discovered files
+ * @param {string} selectedPath - Currently selected path
+ * @returns {string} HTML options
+ */
+function renderLoraOptions(selectedPath) {
+  if (!availableLoras || availableLoras.length === 0) {
+    // No discovery data, allow manual entry
+    if (selectedPath) {
+      return `<option value="${selectedPath}" selected>${selectedPath}</option>`;
+    }
+    return '';
+  }
+
+  return availableLoras.map(lora => {
+    const selected = lora.path === selectedPath ? 'selected' : '';
+    return `<option value="${lora.path}" ${selected}>${lora.name || lora.path}</option>`;
+  }).join('');
+}
+
+/**
+ * Fetch available LoRAs from discovery API
+ */
+async function fetchAvailableLoras() {
+  try {
+    const response = await fetch('/api/providers/flux/discovery');
+    const data = await response.json();
+    if (data.success && data.loras) {
+      availableLoras = data.loras;
+      renderFluxLoraList(); // Re-render with new options
+    }
+  } catch (err) {
+    console.warn('[Flux LoRAs] Error fetching discovery:', err);
+  }
+}
+
+/**
+ * Get configured LoRAs for beam search request
+ * @returns {Array|undefined} LoRAs array or undefined if empty
+ */
+function getFluxLoras() {
+  // Filter out entries with empty paths and return undefined if no valid loras
+  const validLoras = fluxLoras.filter(lora => lora.path && lora.path.length > 0);
+  return validLoras.length > 0 ? validLoras : undefined;
+}
+
+/**
+ * Save Modal settings to localStorage
+ * Persists model choice, dimensions, steps, guidance, GPU, and seed
+ */
+function saveModalSettings() {
+  const model = document.getElementById('modalModel')?.value;
+  const width = document.getElementById('modalWidth')?.value;
+  const height = document.getElementById('modalHeight')?.value;
+  const steps = document.getElementById('modalSteps')?.value;
+  const guidance = document.getElementById('modalGuidance')?.value;
+  const seed = document.getElementById('modalSeed')?.value;
+  const gpu = document.getElementById('modalGpu')?.value;
+
+  if (model) localStorage.setItem('modalModel', model);
+  if (width) localStorage.setItem('modalWidth', width);
+  if (height) localStorage.setItem('modalHeight', height);
+  if (steps) localStorage.setItem('modalSteps', steps);
+  if (guidance) localStorage.setItem('modalGuidance', guidance);
+  if (seed) localStorage.setItem('modalSeed', seed);
+  if (gpu) localStorage.setItem('modalGpu', gpu);
+}
+
+/**
+ * Model-specific optimal settings
+ * Maps each model to its recommended steps and guidance values
+ */
+const MODAL_MODEL_DEFAULTS = {
+  'flux-dev': { steps: 25, guidance: 3.5 },
+  'flux-schnell': { steps: 4, guidance: 0.0 },
+  'sdxl-turbo': { steps: 4, guidance: 0.0 },
+  'sdxl-base': { steps: 30, guidance: 7.5 },
+  'sd3-medium': { steps: 28, guidance: 7.0 }
+};
+
+/**
+ * Update steps and guidance when Modal model changes
+ * Automatically sets optimal values for the selected model
+ */
+function updateModalModelDefaults() {
+  const modelSelect = document.getElementById('modalModel');
+  if (!modelSelect) return;
+
+  const selectedModel = modelSelect.value;
+  const defaults = MODAL_MODEL_DEFAULTS[selectedModel] || { steps: 25, guidance: 3.5 };
+
+  // Update steps slider and display
+  const stepsSlider = document.getElementById('modalSteps');
+  const stepsValue = document.getElementById('modalStepsValue');
+  if (stepsSlider && stepsValue) {
+    stepsSlider.value = defaults.steps;
+    stepsValue.textContent = defaults.steps;
+  }
+
+  // Update guidance slider and display
+  const guidanceSlider = document.getElementById('modalGuidance');
+  const guidanceValue = document.getElementById('modalGuidanceValue');
+  if (guidanceSlider && guidanceValue) {
+    guidanceSlider.value = defaults.guidance;
+    guidanceValue.textContent = defaults.guidance;
+  }
+
+  // Save updated settings
+  saveModalSettings();
+}
+
+/**
+ * Load Modal settings from localStorage
+ * Restores previous Modal configuration when user switches back to Modal provider
+ */
+function loadModalSettings() {
+  const model = localStorage.getItem('modalModel') || 'flux-dev';
+  const width = localStorage.getItem('modalWidth') || '1024';
+  const height = localStorage.getItem('modalHeight') || '1024';
+  const steps = localStorage.getItem('modalSteps') || '25';
+  const guidance = localStorage.getItem('modalGuidance') || '3.5';
+  const seed = localStorage.getItem('modalSeed') || '';
+  const gpu = localStorage.getItem('modalGpu') || 'A10G';
+
+  if (document.getElementById('modalModel')) document.getElementById('modalModel').value = model;
+  if (document.getElementById('modalWidth')) document.getElementById('modalWidth').value = width;
+  if (document.getElementById('modalHeight')) document.getElementById('modalHeight').value = height;
+  if (document.getElementById('modalSteps')) {
+    document.getElementById('modalSteps').value = steps;
+    const valueDisplay = document.getElementById('modalStepsValue');
+    if (valueDisplay) valueDisplay.textContent = steps;
+  }
+  if (document.getElementById('modalGuidance')) {
+    document.getElementById('modalGuidance').value = guidance;
+    const valueDisplay = document.getElementById('modalGuidanceValue');
+    if (valueDisplay) valueDisplay.textContent = guidance;
+  }
+  if (document.getElementById('modalSeed')) document.getElementById('modalSeed').value = seed;
+  if (document.getElementById('modalGpu')) document.getElementById('modalGpu').value = gpu;
+}
+
+/**
+ * Fetch and populate available Modal models from the Modal service
+ * Queries the /api/providers/modal/models endpoint and updates the dropdown dynamically
+ */
+async function loadModalModels() {
+  const modalSelect = document.getElementById('modalModel');
+  if (!modalSelect) return;
+
+  try {
+    console.log('[Modal Models] Fetching available models...');
+
+    const response = await fetch('/api/providers/modal/models');
+
+    if (!response.ok) {
+      console.warn(`[Modal Models] Failed to fetch models (${response.status}), using hardcoded list`);
+      return;
+    }
+
+    const data = await response.json();
+    const models = data.models || [];
+
+    if (models.length === 0) {
+      console.warn('[Modal Models] No models returned, using hardcoded list');
+      return;
+    }
+
+    // Group models by type
+    const builtinModels = models.filter(m => m.type === 'builtin');
+    const customModels = models.filter(m => m.type === 'custom');
+
+    // Save current selection
+    const currentValue = modalSelect.value;
+
+    // Clear existing options
+    modalSelect.innerHTML = '';
+
+    // Add built-in models grouped by pipeline
+    const fluxBuiltin = builtinModels.filter(m => m.pipeline === 'flux');
+    const sdxlBuiltin = builtinModels.filter(m => m.pipeline === 'sdxl');
+    const sd3Builtin = builtinModels.filter(m => m.pipeline === 'sd3');
+
+    if (fluxBuiltin.length > 0) {
+      const fluxGroup = document.createElement('optgroup');
+      fluxGroup.label = 'Flux Models';
+      fluxBuiltin.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = formatModelName(model.name);
+        fluxGroup.appendChild(option);
+      });
+      modalSelect.appendChild(fluxGroup);
+    }
+
+    if (sdxlBuiltin.length > 0) {
+      const sdxlGroup = document.createElement('optgroup');
+      sdxlGroup.label = 'SDXL Models';
+      sdxlBuiltin.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = formatModelName(model.name);
+        sdxlGroup.appendChild(option);
+      });
+      modalSelect.appendChild(sdxlGroup);
+    }
+
+    if (sd3Builtin.length > 0) {
+      const sd3Group = document.createElement('optgroup');
+      sd3Group.label = 'SD3 Models';
+      sd3Builtin.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = formatModelName(model.name);
+        sd3Group.appendChild(option);
+      });
+      modalSelect.appendChild(sd3Group);
+    }
+
+    // Add custom models
+    if (customModels.length > 0) {
+      const customGroup = document.createElement('optgroup');
+      customGroup.label = 'Custom Models';
+      customModels.forEach(model => {
+        const option = document.createElement('option');
+        option.value = model.name;
+        option.textContent = `${model.name} (${model.pipeline.toUpperCase()})`;
+        customGroup.appendChild(option);
+      });
+      modalSelect.appendChild(customGroup);
+    }
+
+    // Restore previous selection if it still exists
+    if (currentValue && Array.from(modalSelect.options).some(opt => opt.value === currentValue)) {
+      modalSelect.value = currentValue;
+    }
+
+    console.log(`[Modal Models] Loaded ${models.length} models (${builtinModels.length} built-in, ${customModels.length} custom)`);
+
+  } catch (error) {
+    console.warn('[Modal Models] Error fetching models:', error.message);
+    console.log('[Modal Models] Using hardcoded model list as fallback');
+  }
+}
+
+/**
+ * Format model name for display
+ * Converts 'flux-dev' to 'Flux Dev', 'sdxl-turbo' to 'SDXL Turbo', etc.
+ */
+function formatModelName(name) {
+  const modelInfo = {
+    'flux-dev': 'Flux Dev - High quality (25 steps)',
+    'flux-schnell': 'Flux Schnell - Fast (4 steps)',
+    'sdxl-turbo': 'SDXL Turbo - Fast (4 steps)',
+    'sdxl-base': 'SDXL Base - Standard (30 steps)',
+    'sd3-medium': 'SD3 Medium - Latest (28 steps)'
+  };
+
+  return modelInfo[name] || name.split('-').map(word =>
+    word.charAt(0).toUpperCase() + word.slice(1)
+  ).join(' ');
 }
 
 /**
@@ -786,8 +1380,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Flux model dropdown
   // initializeFluxModelDropdown(); // Function not defined
 
-  // Initialize BFL settings on page load
+  // Initialize BFL, Modal, and Flux settings on page load
   loadBFLSettings();
+  loadModalModels().then(() => loadModalSettings()); // Load models first, then restore settings
+  loadFluxSettings();
+  fetchAvailableLoras(); // Fetch LoRAs from discovery API for dropdown
   updateImageProviderSettings();
   updateServiceVisibility();
 
@@ -798,6 +1395,58 @@ document.addEventListener('DOMContentLoaded', () => {
       localStorage.setItem('imageProvider', this.value);
       updateImageProviderSettings();
       loadBFLSettings();
+
+      // Reload Modal models and settings when switching to Modal
+      if (this.value === 'modal') {
+        loadModalModels().then(() => loadModalSettings());
+      } else {
+        loadModalSettings();
+      }
+
+      loadFluxSettings();
+
+      // Update main form to show/hide API key requirement based on new provider selection
+      const llmProvider = document.getElementById('llmProvider')?.value || 'local-llm';
+      const imageProvider = this.value;
+      const visionProvider = document.getElementById('visionProvider')?.value || 'local';
+
+      updateMainFormForProviders({
+        llm: llmProvider,
+        image: imageProvider,
+        vision: visionProvider
+      });
+    });
+  }
+
+  // Wire up LLM provider changes
+  const llmProviderSelect = document.getElementById('llmProvider');
+  if (llmProviderSelect) {
+    llmProviderSelect.addEventListener('change', function() {
+      const llmProvider = this.value;
+      const imageProvider = document.getElementById('imageProvider')?.value || 'flux';
+      const visionProvider = document.getElementById('visionProvider')?.value || 'local';
+
+      updateMainFormForProviders({
+        llm: llmProvider,
+        image: imageProvider,
+        vision: visionProvider
+      });
+    });
+  }
+
+  // Wire up Vision provider changes
+  const visionProviderSelect = document.getElementById('visionProvider');
+  if (visionProviderSelect) {
+    visionProviderSelect.addEventListener('change', function() {
+      const llmProvider = document.getElementById('llmProvider')?.value || 'local-llm';
+      const imageProvider = document.getElementById('imageProvider')?.value || 'flux';
+      const visionProvider = this.value;
+
+      updateMainFormForProviders({
+        llm: llmProvider,
+        image: imageProvider,
+        vision: visionProvider
+      });
     });
   }
 
@@ -1609,16 +2258,6 @@ async function startBeamSearch() {
       rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
     };
 
-    // Add Flux generation options (steps and guidance)
-    const steps = document.getElementById('steps')?.value;
-    const guidance = document.getElementById('guidance')?.value;
-    if (steps || guidance) {
-      params.fluxOptions = {
-        ...(steps && { steps: parseInt(steps) }),
-        ...(guidance && { guidance: parseFloat(guidance) })
-      };
-    }
-
     // Add selected models (if user selected non-default options)
     const llmModelValue = document.getElementById('llmModel').value;
     const imageModelValue = document.getElementById('imageModel').value;
@@ -1630,6 +2269,84 @@ async function startBeamSearch() {
         ...(imageModelValue && { imageGen: imageModelValue }),
         ...(visionModelValue && { vision: visionModelValue })
       };
+    }
+
+    // Add BFL options if using BFL provider
+    const imageProvider = document.getElementById('imageProvider')?.value;
+    if (imageProvider === 'bfl') {
+      const bflSafetyTolerance = localStorage.getItem('bflSafetyTolerance');
+      const bflWidth = localStorage.getItem('bflWidth');
+      const bflHeight = localStorage.getItem('bflHeight');
+      const bflModel = localStorage.getItem('bflModel');
+      const bflSteps = localStorage.getItem('bflSteps');
+      const bflGuidance = localStorage.getItem('bflGuidance');
+      const bflSeed = localStorage.getItem('bflSeed');
+      const bflOutputFormat = localStorage.getItem('bflOutputFormat');
+
+      params.bflOptions = {
+        ...(bflSafetyTolerance !== null && { safety_tolerance: parseInt(bflSafetyTolerance, 10) }),
+        ...(bflWidth && { width: parseInt(bflWidth, 10) }),
+        ...(bflHeight && { height: parseInt(bflHeight, 10) }),
+        ...(bflModel && { model: bflModel }),
+        ...(bflSteps && { steps: parseInt(bflSteps, 10) }),
+        ...(bflGuidance && { guidance: parseFloat(bflGuidance) }),
+        ...(bflSeed && { seed: parseInt(bflSeed, 10) }),
+        ...(bflOutputFormat && { output_format: bflOutputFormat })
+      };
+    }
+
+    // Add Modal options if using Modal provider
+    if (imageProvider === 'modal') {
+      const modalModel = localStorage.getItem('modalModel');
+      const modalWidth = localStorage.getItem('modalWidth');
+      const modalHeight = localStorage.getItem('modalHeight');
+      const modalSteps = localStorage.getItem('modalSteps');
+      const modalGuidance = localStorage.getItem('modalGuidance');
+      const modalSeed = localStorage.getItem('modalSeed');
+      const modalGpu = localStorage.getItem('modalGpu');
+
+      params.modalOptions = {
+        ...(modalModel && { model: modalModel }),
+        ...(modalWidth && { width: parseInt(modalWidth, 10) }),
+        ...(modalHeight && { height: parseInt(modalHeight, 10) }),
+        ...(modalSteps && { steps: parseInt(modalSteps, 10) }),
+        ...(modalGuidance && { guidance: parseFloat(modalGuidance) }),
+        ...(modalSeed && { seed: parseInt(modalSeed, 10) }),
+        ...(modalGpu && { gpu: modalGpu })
+      };
+    }
+
+    // Add Flux options if using local Flux provider
+    if (imageProvider === 'flux' || imageProvider === 'local') {
+      const fluxScheduler = localStorage.getItem('fluxScheduler');
+      const fluxSteps = localStorage.getItem('fluxSteps');
+      const fluxGuidance = localStorage.getItem('fluxGuidance');
+      const fluxWidth = localStorage.getItem('fluxWidth');
+      const fluxHeight = localStorage.getItem('fluxHeight');
+      const loraPath = localStorage.getItem('loraPath');
+      const loraScale = localStorage.getItem('loraScale');
+
+      // Get configured LoRAs (multiple LoRA support)
+      const configuredLoras = getFluxLoras();
+
+      params.fluxOptions = {
+        ...(fluxScheduler && { scheduler: fluxScheduler }),
+        ...(fluxSteps && { steps: parseInt(fluxSteps, 10) }),
+        ...(fluxGuidance && { guidance: parseFloat(fluxGuidance) }),
+        ...(fluxWidth && { width: parseInt(fluxWidth, 10) }),
+        ...(fluxHeight && { height: parseInt(fluxHeight, 10) }),
+        ...(loraPath && { loraPath: loraPath }),
+        ...(loraScale && { loraScale: parseFloat(loraScale) }),
+        ...(configuredLoras && { loras: configuredLoras })
+      };
+
+      // Legacy LoRA options (for backwards compatibility with single LoRA)
+      if (loraPath) {
+        params.loraOptions = {
+          path: loraPath,
+          scale: loraScale ? parseFloat(loraScale) : 0.8
+        };
+      }
     }
 
     // Reset all tracking for new job
@@ -1656,16 +2373,44 @@ async function startBeamSearch() {
 
     addMessage(`Starting beam search with: N=${params.n}, M=${params.m}, Iterations=${params.iterations}`, 'event');
 
-    // Check and display LoRA status if using local Flux
+    // Check and display Flux settings if using local Flux
     if (document.getElementById('imageProvider')?.value === 'flux' || document.getElementById('imageProvider')?.value === 'local') {
+      const fluxScheduler = localStorage.getItem('fluxScheduler') || 'default';
+      const fluxSteps = localStorage.getItem('fluxSteps') || '25';
+      const fluxGuidance = localStorage.getItem('fluxGuidance') || '3.5';
       const loraPath = localStorage.getItem('loraPath');
       const loraScale = localStorage.getItem('loraScale') || '0.8';
-      if (loraPath) {
+
+      let fluxMsg = `🖥️ Local Flux (scheduler: ${fluxScheduler || 'DPMSolver'}, steps: ${fluxSteps}, guidance: ${fluxGuidance})`;
+
+      // Show multiple LoRAs if configured
+      const configuredLoras = getFluxLoras();
+      if (configuredLoras && configuredLoras.length > 0) {
+        const loraInfo = configuredLoras.map(l => {
+          const filename = l.path.split('/').pop();
+          return `${filename}(${l.scale})`;
+        }).join(', ');
+        fluxMsg += ` + LoRAs: ${loraInfo}`;
+      } else if (loraPath) {
+        // Fallback to legacy single LoRA
         const filename = loraPath.split('/').pop();
-        addMessage(`🔄 Using Flux with LoRA: ${filename} (scale: ${loraScale})`, 'event');
-      } else {
-        addMessage('🔄 Using Flux without LoRA', 'event');
+        fluxMsg += ` + LoRA: ${filename} (scale: ${loraScale})`;
       }
+      addMessage(fluxMsg, 'event');
+    }
+
+    // Display BFL settings if using BFL provider
+    if (imageProvider === 'bfl') {
+      const safetyLevel = params.bflOptions?.safety_tolerance ?? 2;
+      const safetyLabels = ['Most Strict', 'Strict', 'Moderate', 'Relaxed', 'Permissive', 'Very Permissive', 'Most Permissive'];
+      addMessage(`☁️ Using BFL Cloud Flux (safety: ${safetyLabels[safetyLevel] || safetyLevel})`, 'event');
+    }
+
+    // Display Modal settings if using Modal provider
+    if (imageProvider === 'modal') {
+      const modalModel = params.modalOptions?.model || 'flux-dev';
+      const modalGpu = params.modalOptions?.gpu || 'A10G';
+      addMessage(`🚀 Using Modal Cloud GPU (${modalModel} on ${modalGpu})`, 'event');
     }
 
     setStatus('running');
@@ -3129,6 +3874,12 @@ async function updateModelSourceAndRefresh(source) {
     // Update .env
     await updateEnvConfig({ FLUX_MODEL_SOURCE: source });
 
+    // Show/hide local path section based on source
+    const localPathSection = document.getElementById('fluxLocalPathSection');
+    if (localPathSection) {
+      localPathSection.style.display = source === 'local' ? 'block' : 'none';
+    }
+
     // Refresh configuration preview (will show/hide relevant fields)
     await renderConfigPreview();
 
@@ -3443,9 +4194,9 @@ async function loadProviderStatus() {
     updateMainFormForProviders(data.active);
 
     // Update health indicators
-    updateHealthIndicator('llmHealth', data.active.llm === 'local-llm' ? data.health.localLLM : { available: true, status: 'healthy' });
-    updateHealthIndicator('imageHealth', data.active.image === 'flux' ? data.health.flux : { available: true, status: 'healthy' });
-    updateHealthIndicator('visionHealth', data.active.vision === 'local' ? data.health.localVision : { available: true, status: 'healthy' });
+    updateHealthIndicator('llmHealthSidebar', data.active.llm === 'local-llm' ? data.health.localLLM : { available: true, status: 'healthy' });
+    updateHealthIndicator('imageHealthSidebar', data.active.image === 'flux' ? data.health.flux : { available: true, status: 'healthy' });
+    updateHealthIndicator('visionHealthSidebar', data.active.vision === 'local' ? data.health.localVision : { available: true, status: 'healthy' });
 
     // Update service health section (old duplicate section - now removed)
     // Service controls are now in the local config section
@@ -3478,6 +4229,10 @@ async function loadProviderStatus() {
  */
 function updateHealthIndicator(elementId, health) {
   const element = document.getElementById(elementId);
+  if (!element) {
+    return;
+  }
+
   if (!health) {
     element.textContent = 'Unknown';
     element.style.background = '#ddd';
@@ -3563,14 +4318,10 @@ function updateMainFormForProviders(activeProviders) {
     iterationWarning.style.display = isFullyLocal ? 'none' : 'block';
   }
 
-  // Update model selection section
-  const modelSection = document.getElementById('modelSelectionSection');
-  if (modelSection) {
-    if (isFullyLocal) {
-      modelSection.style.display = 'none';
-    } else {
-      modelSection.style.display = 'block';
-    }
+  // Update cost summary section (shown when using OpenAI providers)
+  const costSummarySection = document.getElementById('costSummarySection');
+  if (costSummarySection) {
+    costSummarySection.style.display = isFullyLocal ? 'none' : 'block';
   }
 }
 
@@ -3700,6 +4451,13 @@ function selectMode(mode) {
 
     // Stop all local services when switching to OpenAI mode
     stopAllLocalServices();
+
+    // Update main form to show API key requirement
+    updateMainFormForProviders({
+      llm: 'openai',
+      image: 'openai',
+      vision: 'openai'
+    });
   } else if (mode === 'local') {
     // Highlight Local card
     localCard.style.border = '3px solid #388e3c';
@@ -3723,6 +4481,13 @@ function selectMode(mode) {
 
     // Update service status indicators
     updateServiceStatuses();
+
+    // Update main form to hide API key requirement for fully local mode
+    updateMainFormForProviders({
+      llm: 'local-llm',
+      image: 'flux',
+      vision: 'local'
+    });
   }
 
   // Don't auto-apply - let user review config and click Apply when ready
@@ -3770,7 +4535,6 @@ async function updateServiceStatuses() {
 function updateRankingMode() {
   const rankingMode = document.querySelector('input[name="rankingMode"]:checked')?.value;
   if (rankingMode) {
-    document.getElementById('rankingMode').value = rankingMode;
     console.log('[UI] Ranking mode updated to:', rankingMode);
   }
 }
@@ -4527,10 +5291,10 @@ async function quickStartLocalServices() {
 
     results.forEach((result, idx) => {
       const serviceName = services[idx];
-      if (result.status === 'started') {
+      if (result.success) {
         started++;
         addMessage(`✅ ${serviceName} service started (PID: ${result.pid})`, 'event');
-      } else if (result.status === 'already-running') {
+      } else if (result.error === 'Service already running') {
         alreadyRunning++;
         addMessage(`ℹ️ ${serviceName} is already running`, 'info');
       } else {
@@ -4549,11 +5313,9 @@ async function quickStartLocalServices() {
     if (total > 0) {
       addMessage(`✅ Quick start complete: ${total}/${services.length} services running`, 'event');
 
-      // Auto-switch to local mode UI since we just started local services
-      // This sets dropdowns and highlights the Local Mode card
-      selectMode('local');
-
-      addMessage('ℹ️ Switched to Local Mode - click "Apply Changes" to confirm', 'info');
+      // Auto-switch to local providers on the backend (not just UI)
+      await switchToLocalProviders();
+      addMessage('✅ Switched to Local Mode - no OpenAI API key needed', 'event');
     }
 
   } catch (error) {
@@ -4563,42 +5325,65 @@ async function quickStartLocalServices() {
 }
 
 /**
- * Switch to local providers after quick-start
+ * Switch to local/non-OpenAI providers after quick-start
+ * Uses current dropdown selections instead of hardcoding flux
+ * Retries with backoff since services may still be initializing
  */
 async function switchToLocalProviders() {
-  try {
-    const response = await fetch('/api/providers/switch', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        llm: 'local-llm',
-        image: 'flux',
-        vision: 'local'
-      })
-    });
+  // Read current dropdown values (user may have selected BFL instead of Flux)
+  const llmSelect = document.getElementById('llmProvider');
+  const imageSelect = document.getElementById('imageProvider');
+  const visionSelect = document.getElementById('visionProvider');
 
-    if (response.ok) {
-      // Update dropdowns in modal
-      const llmSelect = document.getElementById('llmProvider');
-      const imageSelect = document.getElementById('imageProvider');
-      const visionSelect = document.getElementById('visionProvider');
+  const llm = llmSelect?.value || 'local-llm';
+  const image = imageSelect?.value || 'flux';
+  const vision = visionSelect?.value || 'local';
 
-      if (llmSelect) llmSelect.value = 'local-llm';
-      if (imageSelect) imageSelect.value = 'flux';
-      if (visionSelect) visionSelect.value = 'local';
+  console.log('[Provider Switch] Switching to:', { llm, image, vision });
 
-      // Update main form (hides API key requirement)
-      updateMainFormForProviders({
-        llm: 'local-llm',
-        image: 'flux',
-        vision: 'local'
+  const maxRetries = 10;
+  const baseDelay = 2000; // 2 seconds
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await fetch('/api/providers/switch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ llm, image, vision })
       });
 
-      addMessage('✓ Switched to local providers', 'event');
+      if (response.ok) {
+        // Update main form (hides API key requirement if all local)
+        updateMainFormForProviders({ llm, image, vision });
+
+        addMessage(`✓ Switched to providers: LLM=${llm}, Image=${image}, Vision=${vision}`, 'event');
+        return; // Success!
+      }
+
+      // Check if it's a 503 (service not ready) - retry
+      if (response.status === 503 && attempt < maxRetries) {
+        const data = await response.json().catch(() => ({}));
+        console.log(`[Provider Switch] Attempt ${attempt}/${maxRetries} - waiting for services: ${data.message || 'service not ready'}`);
+        addMessage(`⏳ Waiting for services to initialize (${attempt}/${maxRetries})...`, 'info');
+        await new Promise(resolve => setTimeout(resolve, baseDelay));
+        continue;
+      }
+
+      // Other error - log and give up
+      const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+      console.warn('[Provider Switch] Failed:', errorData);
+      addMessage(`⚠️ Could not switch providers: ${errorData.message || errorData.error}`, 'warning');
+      return;
+
+    } catch (error) {
+      console.warn(`[Provider Switch] Attempt ${attempt} error:`, error);
+      if (attempt < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, baseDelay));
+      }
     }
-  } catch (error) {
-    console.warn('[Quick Start] Failed to switch providers:', error);
   }
+
+  addMessage('⚠️ Services started but provider switch timed out - try clicking "Apply Changes"', 'warning');
 }
 
 /**
@@ -4725,6 +5510,11 @@ function initializeSidebarLayout() {
   // Load provider status to initialize the sidebar
   loadProviderStatus().catch(err => {
     console.warn('[Sidebar] Failed to load initial provider status:', err);
+  });
+
+  // Update sidebar API status (BFL key, Modal endpoint, etc.)
+  updateSidebarApiStatus().catch(err => {
+    console.warn('[Sidebar] Failed to update sidebar API status:', err);
   });
 
   console.log('[Sidebar] Sidebar layout initialized');

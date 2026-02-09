@@ -389,6 +389,24 @@ async function rankAndSelectComparative(candidates, keepTop, imageRanker, userPr
     rankingMetadata.errors.forEach((err, idx) => {
       console.warn(`  ${idx + 1}. ${err.type}: ${err.message}`);
     });
+
+    // Circuit breaker: If too many comparisons failed, stop the beam search
+    // Default: Fail if >50% of comparisons failed (services are truly broken)
+    const failureThreshold = parseFloat(process.env.RANKING_FAILURE_THRESHOLD || '0.5');
+    const totalComparisons = images.length * (images.length - 1) / 2; // n choose 2
+    const failureRate = rankingMetadata.errors.length / totalComparisons;
+
+    if (failureRate > failureThreshold) {
+      const errorSummary = rankingMetadata.errors
+        .slice(0, 3)
+        .map(e => e.message)
+        .join('; ');
+      throw new Error(
+        `Ranking failure rate too high: ${Math.round(failureRate * 100)}% ` +
+        `(${rankingMetadata.errors.length}/${totalComparisons} comparisons failed). ` +
+        `Services appear to be broken. First errors: ${errorSummary}`
+      );
+    }
   }
 
   // Record vision tokens if tokenTracker is provided
@@ -537,6 +555,19 @@ async function processCandidateStream(
   }
 
   // Stage 2: Generate image with automatic safety retry
+  // Log BFL options if present
+  if (options.bflOptions) {
+    console.log(`[Beam Search] Passing bflOptions to image generator: model=${options.bflOptions.model || 'default'}, safety_tolerance=${options.bflOptions.safety_tolerance}, steps=${options.bflOptions.steps || 'default'}, guidance=${options.bflOptions.guidance || 'default'}`);
+  }
+  // Log Modal options if present
+  if (options.modalOptions) {
+    console.log(`[Beam Search] Passing modalOptions to image generator: model=${options.modalOptions.model || 'default'}, steps=${options.modalOptions.steps || 'default'}, guidance=${options.modalOptions.guidance || 'default'}, gpu=${options.modalOptions.gpu || 'default'}`);
+  }
+  // Log LoRA options if present
+  if (options.loraOptions) {
+    console.log(`[Beam Search] Passing loraOptions to Flux: path=${options.loraOptions.path}, scale=${options.loraOptions.scale}`);
+  }
+
   const image = await generateImageWithSafetyRetry(
     combined,
     imageGenProvider,
@@ -546,7 +577,37 @@ async function processCandidateStream(
       // Flatten fluxOptions so they're available as top-level properties for the image generator
       ...(options.fluxOptions && {
         steps: options.fluxOptions.steps,
-        guidance: options.fluxOptions.guidance
+        guidance: options.fluxOptions.guidance,
+        scheduler: options.fluxOptions.scheduler,
+        width: options.fluxOptions.width,
+        height: options.fluxOptions.height,
+        loraScale: options.fluxOptions.loraScale
+      }),
+      // Flatten bflOptions so they're available as top-level properties for BFL provider
+      ...(options.bflOptions && {
+        safety_tolerance: options.bflOptions.safety_tolerance,
+        width: options.bflOptions.width,
+        height: options.bflOptions.height,
+        model: options.bflOptions.model,
+        steps: options.bflOptions.steps,
+        guidance: options.bflOptions.guidance,
+        seed: options.bflOptions.seed,
+        output_format: options.bflOptions.output_format
+      }),
+      // Flatten modalOptions so they're available as top-level properties for Modal provider
+      ...(options.modalOptions && {
+        model: options.modalOptions.model,
+        width: options.modalOptions.width,
+        height: options.modalOptions.height,
+        steps: options.modalOptions.steps,
+        guidance: options.modalOptions.guidance,
+        seed: options.modalOptions.seed,
+        gpu: options.modalOptions.gpu
+      }),
+      // Flatten loraOptions so they're available for the Flux provider
+      ...(options.loraOptions && {
+        loras: [options.loraOptions.path],
+        loraScale: options.loraOptions.scale
       }),
       onStepProgress,
       // Don't override candidateId with string - keep numeric for image saving
@@ -883,7 +944,25 @@ async function initialExpansion(
             // Flatten fluxOptions so they're available for the image generator
             ...(config.fluxOptions && {
               steps: config.fluxOptions.steps,
-              guidance: config.fluxOptions.guidance
+              guidance: config.fluxOptions.guidance,
+              scheduler: config.fluxOptions.scheduler,
+              width: config.fluxOptions.width,
+              height: config.fluxOptions.height,
+              loraScale: config.fluxOptions.loraScale
+            }),
+            // Flatten bflOptions so they're available for BFL provider
+            ...(config.bflOptions && {
+              safety_tolerance: config.bflOptions.safety_tolerance,
+              width: config.bflOptions.width,
+              height: config.bflOptions.height
+            }),
+            // Flatten modalOptions so they're available for Modal provider
+            ...(config.modalOptions && {
+              model: config.modalOptions.model,
+              width: config.modalOptions.width,
+              height: config.modalOptions.height,
+              steps: config.modalOptions.steps,
+              guidance: config.modalOptions.guidance
             }),
             onStepProgress,
             candidateIdStr: candidateId_str
@@ -1053,6 +1132,20 @@ async function initialExpansion(
     throw new Error('All candidates failed during initial expansion. Check service logs for details.');
   }
 
+  // Circuit breaker: If too many candidates failed, services are likely broken
+  // Default: Fail if >50% of candidates failed
+  const failureThreshold = parseFloat(process.env.CANDIDATE_FAILURE_THRESHOLD || '0.5');
+  const failedCount = N - successfulCandidates.length;
+  const failureRate = failedCount / N;
+
+  if (failureRate > failureThreshold) {
+    throw new Error(
+      `Candidate failure rate too high during initial expansion: ${Math.round(failureRate * 100)}% ` +
+      `(${failedCount}/${N} candidates failed). ` +
+      `Services appear to be broken. Stopping beam search to prevent wasting resources.`
+    );
+  }
+
   console.log(`[initialExpansion] ${successfulCandidates.length}/${N} candidates succeeded`);
   return successfulCandidates;
 }
@@ -1199,7 +1292,13 @@ async function refinementIteration(
               tokenTracker,
               skipVisionAnalysis,
               onStepProgress,
-              sessionId: config.sessionId
+              sessionId: config.sessionId,
+              // Pass Flux generation options so they're available in processCandidateStream
+              ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
+              // Pass BFL generation options so they're available in processCandidateStream
+              ...(config.bflOptions && { bflOptions: config.bflOptions }),
+              // Pass Modal generation options so they're available in processCandidateStream
+              ...(config.modalOptions && { modalOptions: config.modalOptions })
             }
           );
 
@@ -1242,6 +1341,20 @@ async function refinementIteration(
   // Check if we have enough candidates to continue
   if (successfulChildren.length === 0) {
     throw new Error(`All candidates failed during refinement iteration ${iteration}. Check service logs for details.`);
+  }
+
+  // Circuit breaker: If too many candidates failed, services are likely broken
+  // Default: Fail if >50% of candidates failed
+  const failureThreshold = parseFloat(process.env.CANDIDATE_FAILURE_THRESHOLD || '0.5');
+  const failedCount = allChildren.length - successfulChildren.length;
+  const failureRate = failedCount / allChildren.length;
+
+  if (failureRate > failureThreshold) {
+    throw new Error(
+      `Candidate failure rate too high in iteration ${iteration}: ${Math.round(failureRate * 100)}% ` +
+      `(${failedCount}/${allChildren.length} candidates failed). ` +
+      `Services appear to be broken. Stopping beam search to prevent wasting resources.`
+    );
   }
 
   console.log(`[refinementIteration] Iteration ${iteration}: ${successfulChildren.length}/${allChildren.length} candidates succeeded`);
@@ -1357,22 +1470,40 @@ async function beamSearch(userPrompt, providers, config) {
   }
 
   // Iterations 1+: Refinement
+  // Track early termination reason if we need to stop gracefully
+  let earlyTerminationReason = null;
+
   for (let iteration = 1; iteration < maxIterations; iteration++) {
     // Unload VLM (from previous ranking) before LLM operations
     await modelCoordinator.prepareForLLM();
 
     // Generate N children from M parents
     // Note: onCandidateProcessed is called inside refinementIteration as each candidate completes
-    candidates = await refinementIteration(
-      topCandidates,
-      llm,
-      imageGen,
-      vision,
-      critiqueGen,
-      pipelineConfig,
-      iteration,
-      userPrompt
-    );
+    try {
+      candidates = await refinementIteration(
+        topCandidates,
+        llm,
+        imageGen,
+        vision,
+        critiqueGen,
+        pipelineConfig,
+        iteration,
+        userPrompt
+      );
+    } catch (error) {
+      // Check if this is a failure-related error we should handle gracefully
+      const isHighFailureRate = error.message && error.message.includes('failure rate too high');
+      const isAllCandidatesFailed = error.message && error.message.includes('All candidates failed');
+
+      if (isHighFailureRate || isAllCandidatesFailed) {
+        console.log(`[beamSearch] ⚠️ Early termination: ${error.message}`);
+        console.log(`[beamSearch] Returning best results from iteration ${iteration - 1}`);
+        earlyTerminationReason = error.message;
+        break; // Exit loop gracefully with current topCandidates
+      }
+      // Re-throw other errors
+      throw error;
+    }
 
     // Rank and select top M for next iteration
     // Include both parents and children to ensure best from ANY iteration survives
@@ -1462,6 +1593,15 @@ async function beamSearch(userPrompt, providers, config) {
   // Attach finalists to winner for backward compatibility
   winner.finalists = topCandidates;
   winner.allGlobalRanked = allGlobalRanked;
+
+  // Include early termination info if we stopped due to high failure rate
+  if (earlyTerminationReason) {
+    winner.earlyTermination = {
+      reason: earlyTerminationReason,
+      stoppedAtIteration: winner.metadata.iteration
+    };
+  }
+
   return winner;
 }
 

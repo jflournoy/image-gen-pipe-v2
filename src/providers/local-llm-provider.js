@@ -6,6 +6,11 @@
 
 const axios = require('axios');
 
+// Retry configuration for service recovery
+const MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES || '3', 10);
+const INITIAL_RETRY_DELAY_MS = parseInt(process.env.LLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
+const MAX_RETRY_DELAY_MS = parseInt(process.env.LLM_MAX_RETRY_DELAY_MS || '30000', 10);
+
 /**
  * Local LLM Provider
  * Uses local Python LLM service for prompt expansion, refinement, and combination
@@ -16,10 +21,94 @@ class LocalLLMProvider {
    * @param {Object} options - Configuration options
    * @param {string} options.apiUrl - Base URL of the local LLM service
    * @param {string} options.model - Model identifier
+   * @param {Function} options.serviceRestarter - Service restart callback (dependency injection)
    */
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || 'http://localhost:8003';
     this.model = options.model || 'mistralai/Mistral-7B-Instruct-v0.2';
+    // Service restart callback (can be injected for dependency injection)
+    this._serviceRestarter = options.serviceRestarter || null;
+    // Retry configuration
+    this.maxRetries = options.maxRetries ?? MAX_RETRIES;
+    this.initialRetryDelay = options.initialRetryDelay ?? INITIAL_RETRY_DELAY_MS;
+    this.maxRetryDelay = options.maxRetryDelay ?? MAX_RETRY_DELAY_MS;
+  }
+
+  /**
+   * Set service restarter callback (dependency injection)
+   * @param {Function} restarter - Async function() => { success, error? }
+   */
+  setServiceRestarter(restarter) {
+    this._serviceRestarter = restarter;
+  }
+
+  /**
+   * Retry an operation with exponential backoff and optional service restart
+   * @param {Function} operation - Async function to retry
+   * @param {Object} options - Retry options
+   * @param {string} options.operationName - Name for logging
+   * @param {boolean} options.attemptRestart - Whether to attempt service restart on failure
+   * @returns {Promise<*>} Result of the operation
+   * @private
+   */
+  async _retryWithBackoff(operation, options = {}) {
+    const { operationName = 'LLM operation', attemptRestart = true } = options;
+    let lastError;
+    let delay = this.initialRetryDelay;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+
+        // Check if this is a connection error
+        const isConnectionError =
+          error.code === 'ECONNREFUSED' ||
+          error.message.includes('ECONNREFUSED') ||
+          error.message.includes('Cannot reach local LLM service');
+
+        if (!isConnectionError) {
+          // Non-connection error - fail immediately
+          throw error;
+        }
+
+        // Connection error - attempt restart and retry
+        if (attempt < this.maxRetries) {
+          console.warn(
+            `[LocalLLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
+          );
+
+          // Attempt service restart on first failure
+          if (attempt === 0 && attemptRestart && this._serviceRestarter) {
+            console.log(`[LocalLLMProvider] Attempting to restart LLM service...`);
+            try {
+              const restartResult = await this._serviceRestarter();
+              if (restartResult.success) {
+                console.log(`[LocalLLMProvider] Service restart successful`);
+                // Wait a bit for service to stabilize before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              } else {
+                console.warn(`[LocalLLMProvider] Service restart failed: ${restartResult.error || 'unknown error'}`);
+              }
+            } catch (restartError) {
+              console.warn(`[LocalLLMProvider] Service restart threw error: ${restartError.message}`);
+            }
+          }
+
+          // Wait before retry with exponential backoff
+          console.log(`[LocalLLMProvider] Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay = Math.min(delay * 2, this.maxRetryDelay);
+        } else {
+          // Final attempt failed
+          console.error(`[LocalLLMProvider] ${operationName} failed after ${this.maxRetries + 1} attempts`);
+          throw new Error(`LLM service unavailable after ${this.maxRetries + 1} attempts: ${lastError.message}`);
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   /**
@@ -159,47 +248,55 @@ Combined SDXL prompt:`;
    * @returns {Promise<{text: string, usage: Object}>} Text and usage metadata
    */
   async _generate(prompt, options = {}) {
-    try {
-      const payload = {
-        model: this.model,
-        prompt: prompt,
-        max_tokens: options.max_tokens || 500,
-        temperature: options.temperature || 0.7,
-        top_p: options.top_p || 0.9,
-        stream: false
-      };
+    return this._retryWithBackoff(
+      async () => {
+        try {
+          const payload = {
+            model: this.model,
+            prompt: prompt,
+            max_tokens: options.max_tokens || 500,
+            temperature: options.temperature || 0.7,
+            top_p: options.top_p || 0.9,
+            stream: false
+          };
 
-      const response = await axios.post(
-        `${this.apiUrl}/v1/completions`,
-        payload,
-        {
-          // 3 minute timeout: local LLM processes requests sequentially on single GPU,
-          // so with 4 parallel beam search candidates, later requests may wait 60-90+ seconds
-          timeout: 180000,
-          headers: {
-            'Content-Type': 'application/json'
+          const response = await axios.post(
+            `${this.apiUrl}/v1/completions`,
+            payload,
+            {
+              // 3 minute timeout: local LLM processes requests sequentially on single GPU,
+              // so with 4 parallel beam search candidates, later requests may wait 60-90+ seconds
+              timeout: 180000,
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          // Extract text and usage from OpenAI-compatible response
+          const text = response.data.choices[0]?.text || '';
+          const usage = response.data.usage || {};
+
+          return { text, usage };
+        } catch (error) {
+          if (error.response) {
+            throw new Error(
+              `HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}`
+            );
+          } else if (error.request) {
+            throw new Error(
+              `Cannot reach local LLM service at ${this.apiUrl}. Is it running?`
+            );
+          } else {
+            throw error;
           }
         }
-      );
-
-      // Extract text and usage from OpenAI-compatible response
-      const text = response.data.choices[0]?.text || '';
-      const usage = response.data.usage || {};
-
-      return { text, usage };
-    } catch (error) {
-      if (error.response) {
-        throw new Error(
-          `HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}`
-        );
-      } else if (error.request) {
-        throw new Error(
-          `Cannot reach local LLM service at ${this.apiUrl}. Is it running?`
-        );
-      } else {
-        throw error;
+      },
+      {
+        operationName: 'LLM generation',
+        attemptRestart: true
       }
-    }
+    );
   }
 
   /**
