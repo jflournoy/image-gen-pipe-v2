@@ -140,9 +140,9 @@ describe('🔴 RED: Always-Visible Provider Settings Layout', () => {
 
       if (imageProviderIndex > 0 && modalSettingsIndex > 0) {
         const distance = modalSettingsIndex - imageProviderIndex;
-        // Modal settings come after Flux (with LoRA) and BFL, so allow larger distance
+        // Modal settings come after Flux (with LoRA) and BFL, and LLM documentation, so allow larger distance
         assert.ok(
-          distance > 0 && distance < 12000,
+          distance > 0 && distance < 13000,
           `Modal settings should be inline with Image Provider (distance: ${distance})`
         );
       }
@@ -368,10 +368,10 @@ describe('🔴 RED: LLM Settings Include Alpha/Temperature', () => {
     const tempIndex = content.indexOf('id="temperature"');
 
     if (llmProviderIndex > 0 && tempIndex > 0) {
-      // Allow 4500 chars since temp comes after alpha
+      // Allow 6000 chars - includes space for alpha slider documentation
       const distance = Math.abs(tempIndex - llmProviderIndex);
       assert.ok(
-        distance < 4500,
+        distance < 6000,
         `Temperature should be in LLM provider section (distance: ${distance})`
       );
     }
