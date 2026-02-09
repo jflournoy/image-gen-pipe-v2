@@ -487,7 +487,7 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
-  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness } = options;
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness, varyDescriptivenessRandomly } = options;
   const candidateId_str = `i${iteration}c${candidateId}`;
 
   // Progress: Combine start
@@ -500,9 +500,17 @@ async function processCandidateStream(
     });
   }
 
+  // Get effective descriptiveness (random 1-3 or fixed value)
+  const effectiveDescriptiveness = varyDescriptivenessRandomly
+    ? Math.floor(Math.random() * 3) + 1
+    : descriptiveness;
+
   // Stage 1: Combine prompts with descriptiveness level
-  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness });
+  const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
+  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness });
   const combined = combineResult.combinedPrompt;
+
+  console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
 
   // Track combine operation tokens using actual metadata
   if (tokenTracker && combineResult.metadata) {
@@ -757,7 +765,15 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, varyDescriptivenessRandomly = false, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
+
+  // Helper to get effective descriptiveness (random 1-3 or fixed value)
+  const getEffectiveDescriptiveness = () => {
+    if (varyDescriptivenessRandomly) {
+      return Math.floor(Math.random() * 3) + 1; // 1, 2, or 3
+    }
+    return descriptiveness;
+  };
 
   // Rate limiters are initialized at module load time
   // They are reused across all jobs to maintain consistent metrics
@@ -878,8 +894,12 @@ async function initialExpansion(
         }
 
         // Combine prompts (no rate limiting needed) with descriptiveness level
-        const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness });
+        const effectiveDescriptiveness = getEffectiveDescriptiveness();
+        const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
+        const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
         const combined = combineResult.combinedPrompt;
+
+        console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
 
         // Track combine operation tokens using actual metadata
         if (tokenTracker && combineResult.metadata) {
@@ -1293,6 +1313,7 @@ async function refinementIteration(
               skipVisionAnalysis,
               onStepProgress,
               descriptiveness: config.descriptiveness,
+              varyDescriptivenessRandomly: config.varyDescriptivenessRandomly,
               sessionId: config.sessionId,
               // Pass Flux generation options so they're available in processCandidateStream
               ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
