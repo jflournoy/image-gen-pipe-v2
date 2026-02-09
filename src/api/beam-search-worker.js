@@ -51,6 +51,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     alpha = 0.7,
     temperature = 0.7,
     descriptiveness = 2,  // 1=concise, 2=balanced (default), 3=descriptive
+    varyDescriptivenessRandomly = false, // Random selection of 1/2/3 per prompt
     models,
     fluxOptions,
     bflOptions,
@@ -150,6 +151,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
         provider: runtimeProviders.image,
         apiKey: userApiKey,
         llmProvider: llmProvider,  // Pass LLM for content moderation rephrasing (BFL)
+        outputDir: OUTPUT_DIR,     // Required for VLM access - must be absolute path (Issue #33)
         ...(models?.imageGen && { model: models.imageGen })
       }),
       vision: createVisionProvider({
@@ -223,6 +225,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       alpha,
       temperature,
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
+      varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
       ...(fluxOptions && { fluxOptions }), // Pass Flux generation options (steps, guidance)
       ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
