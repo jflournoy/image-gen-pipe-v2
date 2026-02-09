@@ -1371,38 +1371,8 @@
             </div>
           </div>
 
-          <!-- Alpha & Temperature (LLM options) -->
+          <!-- Temperature (LLM options) -->
           <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
-            <div style="margin-bottom: 12px;">
-              <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
-                Alpha: <span id="alphaValue">0.6</span>
-                <small style="color: #888;">(prompt alignment vs quality)</small>
-              </label>
-              <div style="display: flex; gap: 8px;">
-                <input type="range" id="alpha" min="0" max="1" step="0.1" value="0.6" style="flex: 1;">
-                <input type="number" id="alphaNumber" min="0" max="1" step="0.1" value="0.6" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
-              </div>
-              <!-- Alpha Documentation -->
-              <div style="margin-top: 8px; padding: 8px 10px; background: #f8fbff; border-radius: 4px; border-left: 3px solid #42a5f5;">
-                <small style="display: block; color: #555; line-height: 1.5; margin-bottom: 6px; font-weight: 600; font-size: 11px;">
-                  Weights prompt alignment vs visual quality:
-                </small>
-                <div style="display: grid; gap: 5px; font-size: 10px; color: #555; line-height: 1.3;">
-                  <div style="display: grid; gap: 2px;">
-                    <strong style="color: #1976d2;">Low (0.0–0.3)</strong>
-                    <span style="color: #666;">Prioritize beauty over exact prompt matching</span>
-                  </div>
-                  <div style="display: grid; gap: 2px;">
-                    <strong style="color: #f57c00;">Medium (0.4–0.6)</strong>
-                    <span style="color: #666;">Balance both equally</span>
-                  </div>
-                  <div style="display: grid; gap: 2px;">
-                    <strong style="color: #388e3c;">High (0.7–1.0)</strong>
-                    <span style="color: #666;">Ensure images match your prompt exactly</span>
-                  </div>
-                </div>
-              </div>
-            </div>
             <div>
               <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
                 Temperature: <span id="temperatureValue">1.0</span>
@@ -1673,6 +1643,30 @@
                   </label>
                 </div>
               </div>
+
+              <!-- Ranking Weight (Alpha) -->
+              <div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid #eee;">
+                <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
+                  Ranking Weight: <span id="alphaValue">0.6</span>
+                  <small style="color: #888;">(alignment vs quality)</small>
+                </label>
+                <div style="display: flex; gap: 8px;">
+                  <input type="range" id="alpha" min="0" max="1" step="0.1" value="0.6" style="flex: 1;">
+                  <input type="number" id="alphaNumber" min="0" max="1" step="0.1" value="0.6" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+                </div>
+                <!-- Alpha Documentation -->
+                <div style="margin-top: 6px; padding: 6px 8px; background: #f8fbff; border-radius: 3px; border-left: 3px solid #42a5f5;">
+                  <small style="display: block; color: #555; line-height: 1.4; margin-bottom: 4px; font-weight: 600; font-size: 10px;">
+                    Controls how results are ranked:
+                  </small>
+                  <div style="display: grid; gap: 3px; font-size: 9px; color: #666; line-height: 1.2;">
+                    <div><strong style="color: #1976d2;">Low (0.0–0.3):</strong> Prioritize beauty</div>
+                    <div><strong style="color: #f57c00;">Medium (0.4–0.6):</strong> Balance both</div>
+                    <div><strong style="color: #388e3c;">High (0.7–1.0):</strong> Ensure prompt match</div>
+                  </div>
+                </div>
+              </div>
+
               <!-- VLM Service (for tournament mode) -->
               <div id="vlmServiceSection" style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #eee;">
                 <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
