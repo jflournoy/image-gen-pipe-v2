@@ -373,7 +373,7 @@ async function checkBFLHealth() {
     const provider = new BFLImageProvider({
       apiKey: providerConfig.bfl?.apiKey,
       baseUrl: providerConfig.bfl?.baseUrl || 'https://api.bfl.ai',
-      model: providerConfig.bfl?.model || 'flux-pro-1.1'
+      model: providerConfig.bfl?.model || 'flux-2-pro'
     });
 
     const health = await provider.healthCheck();
