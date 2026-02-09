@@ -375,21 +375,11 @@ class LocalVLMProvider {
       lastImprovementSuggestion = result.improvementSuggestion || lastImprovementSuggestion;
     }
 
-    // Determine winner by majority
-    let winner;
-    if (votes.A > votes.B) {
-      winner = 'A';
-    } else if (votes.B > votes.A) {
-      winner = 'B';
-    } else {
-      winner = 'TIE';
-    }
-
-    // Calculate confidence as majority votes / total
+    // Calculate confidence as majority votes / total (for metadata, but not used for final decision)
     const majorityVotes = Math.max(votes.A, votes.B);
     const confidence = ensembleSize > 0 ? majorityVotes / ensembleSize : 0;
 
-    // Average ranks and calculate combined scores
+    // Average ranks and calculate combined scores (weighted by alpha parameter)
     const avgAlignmentA = ensembleSize > 0 ? rankAccumulators.A.alignment / ensembleSize : 0;
     const avgAestheticsA = ensembleSize > 0 ? rankAccumulators.A.aesthetics / ensembleSize : 0;
     const avgAlignmentB = ensembleSize > 0 ? rankAccumulators.B.alignment / ensembleSize : 0;
@@ -407,6 +397,17 @@ class LocalVLMProvider {
         combined: this._calculateCombinedRank({ alignment: avgAlignmentB, aesthetics: avgAestheticsB })
       }
     };
+
+    // Determine winner based on combined scores (weighted by alignmentWeight/alpha parameter)
+    // Lower combined score is better (ranks are 1=better, 2=worse, so lower average is better)
+    let winner;
+    if (aggregatedRanks.A.combined < aggregatedRanks.B.combined) {
+      winner = 'A';
+    } else if (aggregatedRanks.B.combined < aggregatedRanks.A.combined) {
+      winner = 'B';
+    } else {
+      winner = 'TIE';
+    }
 
     return {
       winner,
