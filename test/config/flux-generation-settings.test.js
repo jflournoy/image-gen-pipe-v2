@@ -83,6 +83,51 @@ describe('🔴 Flux Generation Settings', () => {
         assert.ok(gen.loraScale >= 0.0 && gen.loraScale <= 2.0, 'loraScale should be 0.0-2.0');
       }
     });
+
+    test('should have scheduler setting for fine-tune support', () => {
+      const providerConfig = require('../../src/config/provider-config.js');
+      const gen = providerConfig.flux.generation;
+
+      // scheduler should exist (can be null for default)
+      assert.ok('scheduler' in gen, 'should have scheduler property');
+
+      // If set, should be a valid scheduler name
+      if (gen.scheduler !== null && gen.scheduler !== undefined) {
+        const validSchedulers = ['euler', 'dpmsolver', 'ddim', 'pndm'];
+        assert.ok(validSchedulers.includes(gen.scheduler), `scheduler should be one of: ${validSchedulers.join(', ')}`);
+      }
+    });
+
+    test('should have supportedSchedulers list', () => {
+      const providerConfig = require('../../src/config/provider-config.js');
+
+      // Should list supported schedulers
+      assert.ok(providerConfig.flux.supportedSchedulers, 'should have supportedSchedulers');
+      assert.ok(Array.isArray(providerConfig.flux.supportedSchedulers), 'supportedSchedulers should be an array');
+      assert.ok(providerConfig.flux.supportedSchedulers.includes('euler'), 'should support euler scheduler');
+      assert.ok(providerConfig.flux.supportedSchedulers.includes('dpmsolver'), 'should support dpmsolver scheduler');
+    });
+
+    test('should support FLUX_SCHEDULER environment variable override', () => {
+      const originalScheduler = process.env.FLUX_SCHEDULER;
+
+      try {
+        process.env.FLUX_SCHEDULER = 'euler';
+
+        // Clear require cache to pick up new env vars
+        delete require.cache[require.resolve('../../src/config/provider-config.js')];
+        const freshConfig = require('../../src/config/provider-config.js');
+
+        assert.strictEqual(freshConfig.flux.generation.scheduler, 'euler', 'scheduler should be overridden by env');
+      } finally {
+        if (originalScheduler !== undefined) {
+          process.env.FLUX_SCHEDULER = originalScheduler;
+        } else {
+          delete process.env.FLUX_SCHEDULER;
+        }
+        delete require.cache[require.resolve('../../src/config/provider-config.js')];
+      }
+    });
   });
 
   describe('FluxImageProvider - Generation Options', () => {
@@ -119,6 +164,21 @@ describe('🔴 Flux Generation Settings', () => {
       assert.ok(provider.generation, 'Provider should have generation settings from config');
       assert.strictEqual(provider.generation.steps, providerConfig.flux.generation.steps);
       assert.strictEqual(provider.generation.guidance, providerConfig.flux.generation.guidance);
+    });
+
+    test('should accept scheduler option in constructor', () => {
+      const FluxImageProvider = require('../../src/providers/flux-image-provider.js');
+
+      const provider = new FluxImageProvider({
+        apiUrl: 'http://localhost:8001',
+        generation: {
+          steps: 25,
+          guidance: 3.5,
+          scheduler: 'euler'
+        }
+      });
+
+      assert.strictEqual(provider.generation.scheduler, 'euler', 'Provider should store scheduler');
     });
 
     test('should merge per-request options with defaults in generateImage', async () => {
@@ -162,6 +222,45 @@ describe('🔴 Flux Generation Settings', () => {
         assert.strictEqual(capturedPayload.steps, 40, 'steps should be overridden');
         assert.strictEqual(capturedPayload.guidance, 3.5, 'guidance should use default');
         assert.strictEqual(capturedPayload.seed, 42, 'seed should be passed');
+      } finally {
+        axios.post = originalPost;
+        axios.get = originalGet;
+      }
+    });
+
+    test('should pass scheduler in per-request options', async () => {
+      const FluxImageProvider = require('../../src/providers/flux-image-provider.js');
+
+      const provider = new FluxImageProvider({
+        apiUrl: 'http://localhost:8001',
+        generation: { steps: 25, guidance: 3.5 }
+      });
+
+      // Mock axios to capture the request payload
+      let capturedPayload = null;
+      const axios = require('axios');
+      const originalPost = axios.post;
+      const originalGet = axios.get;
+
+      axios.post = async (url, payload) => {
+        capturedPayload = payload;
+        return {
+          data: {
+            localPath: '/tmp/test.png',
+            metadata: { seed: 12345, scheduler: 'euler' }
+          }
+        };
+      };
+      axios.get = async () => ({ data: { status: 'cached' } });
+
+      try {
+        // Call with scheduler override
+        await provider.generateImage('test prompt', {
+          scheduler: 'euler'
+        });
+
+        // Should have scheduler in payload
+        assert.strictEqual(capturedPayload.scheduler, 'euler', 'scheduler should be passed to service');
       } finally {
         axios.post = originalPost;
         axios.get = originalGet;

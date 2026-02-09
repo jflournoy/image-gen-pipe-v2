@@ -5,7 +5,8 @@
  * Uses TZ environment variable to determine timezone (defaults to America/Los_Angeles).
  */
 
-require('dotenv').config({ override: true });
+// Load .env but don't override CLI environment variables
+require('dotenv').config();
 
 /**
  * Get the configured timezone from environment or default to Pacific

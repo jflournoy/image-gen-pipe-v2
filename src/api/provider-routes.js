@@ -42,7 +42,9 @@ router.get('/status', async (req, res) => {
       localLLM: await checkLocalLLMHealth(),
       flux: await checkFluxHealth(),
       localVision: await checkLocalVisionHealth(),
-      vlm: await checkVLMHealth()
+      vlm: await checkVLMHealth(),
+      bfl: await checkBFLHealth(),
+      modal: await checkModalHealth()
     };
 
     // Determine environment
@@ -54,7 +56,7 @@ router.get('/status', async (req, res) => {
       active,
       available: {
         llm: ['openai', 'local-llm'],
-        image: ['openai', 'flux'],
+        image: ['openai', 'flux', 'bfl', 'modal'],
         vision: ['openai', 'local']
       },
       health,
@@ -90,10 +92,12 @@ router.get('/status', async (req, res) => {
 router.post('/switch', async (req, res) => {
   try {
     const { llm, image, vision } = req.body;
+    console.log('[Provider Switch] Request received:', { llm, image, vision });
+    console.log('[Provider Switch] Current state:', { ...runtimeProviders });
 
     // Validate provider names
     const validLLM = ['openai', 'local-llm'];
-    const validImage = ['openai', 'flux'];
+    const validImage = ['openai', 'flux', 'bfl', 'modal'];
     const validVision = ['openai', 'local'];
 
     if (llm && !validLLM.includes(llm)) {
@@ -121,6 +125,7 @@ router.post('/switch', async (req, res) => {
     if (llm === 'local-llm') {
       const health = await checkLocalLLMHealth();
       if (!health.available) {
+        console.log('[Provider Switch] BLOCKED: Local LLM not available');
         return res.status(503).json({
           error: 'Local LLM service not available',
           message: 'Start Local LLM service before switching to local LLM'
@@ -131,6 +136,7 @@ router.post('/switch', async (req, res) => {
     if (image === 'flux') {
       const health = await checkFluxHealth();
       if (!health.available) {
+        console.log('[Provider Switch] BLOCKED: Flux not available');
         return res.status(503).json({
           error: 'Flux service not available',
           message: 'Start Flux service before switching to local image generation'
@@ -141,6 +147,7 @@ router.post('/switch', async (req, res) => {
     if (vision === 'local') {
       const health = await checkLocalVisionHealth();
       if (!health.available) {
+        console.log('[Provider Switch] BLOCKED: Local vision not available');
         return res.status(503).json({
           error: 'Local vision service not available',
           message: 'Start local vision service before switching'
@@ -148,10 +155,59 @@ router.post('/switch', async (req, res) => {
       }
     }
 
+    if (image === 'bfl') {
+      // Check if API key is configured
+      if (!providerConfig.bfl?.apiKey) {
+        return res.status(400).json({
+          error: 'BFL API key not configured',
+          message: 'Set BFL_API_KEY environment variable before switching to BFL'
+        });
+      }
+
+      // Check BFL API health
+      const health = await checkBFLHealth();
+      if (!health.available) {
+        return res.status(503).json({
+          error: 'BFL API not available',
+          message: health.error || 'Could not connect to BFL API'
+        });
+      }
+    }
+
+    if (image === 'modal') {
+      console.log('[Provider Switch] Checking Modal configuration...');
+      // Check if Modal credentials are configured
+      if (!providerConfig.modal?.apiUrl) {
+        console.log('[Provider Switch] BLOCKED: Modal endpoint URL not configured');
+        return res.status(400).json({
+          error: 'Modal endpoint URL not configured',
+          message: 'Set MODAL_ENDPOINT_URL environment variable before switching to Modal'
+        });
+      }
+      if (!providerConfig.modal?.tokenId || !providerConfig.modal?.tokenSecret) {
+        console.log('[Provider Switch] BLOCKED: Modal authentication not configured');
+        return res.status(400).json({
+          error: 'Modal authentication not configured',
+          message: 'Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET environment variables before switching to Modal'
+        });
+      }
+
+      // Check Modal API health (non-blocking - Modal has cold starts of 60-120s)
+      console.log('[Provider Switch] Checking Modal health...');
+      const health = await checkModalHealth();
+      if (!health.available) {
+        console.log('[Provider Switch] WARNING: Modal health check failed:', health.error);
+        console.log('[Provider Switch] Allowing switch anyway - Modal may have cold start delay');
+        // Don't block - Modal cold starts can take 60-120s, service may become available
+      }
+      console.log('[Provider Switch] Modal provider switch allowed');
+    }
+
     // Update runtime providers
     if (llm) runtimeProviders.llm = llm;
     if (image) runtimeProviders.image = image;
     if (vision) runtimeProviders.vision = vision;
+    console.log('[Provider Switch] SUCCESS - New state:', { ...runtimeProviders });
 
     // Return updated status
     res.json({
@@ -304,6 +360,122 @@ async function checkVLMHealth() {
       status: 'unavailable',
       error: error.message,
       url: 'http://localhost:8004'
+    };
+  }
+}
+
+/**
+ * Helper: Check BFL API health
+ */
+async function checkBFLHealth() {
+  try {
+    const BFLImageProvider = require('../providers/bfl-image-provider.js');
+    const provider = new BFLImageProvider({
+      apiKey: providerConfig.bfl?.apiKey,
+      baseUrl: providerConfig.bfl?.baseUrl || 'https://api.bfl.ai',
+      model: providerConfig.bfl?.model || 'flux-pro-1.1'
+    });
+
+    const health = await provider.healthCheck();
+    return {
+      available: true,
+      status: 'healthy',
+      model: health.model || providerConfig.bfl?.model,
+      url: providerConfig.bfl?.baseUrl || 'https://api.bfl.ai'
+    };
+  } catch (error) {
+    return {
+      available: false,
+      status: 'unavailable',
+      error: error.message,
+      url: providerConfig.bfl?.baseUrl || 'https://api.bfl.ai'
+    };
+  }
+}
+
+/**
+ * Helper: Check Modal API health
+ */
+async function checkModalHealth() {
+  try {
+    console.log('[Modal Health] Checking with config:', {
+      apiUrl: providerConfig.modal?.apiUrl ? '(set)' : '(not set)',
+      tokenId: providerConfig.modal?.tokenId ? '(set)' : '(not set)',
+      tokenSecret: providerConfig.modal?.tokenSecret ? '(set)' : '(not set)'
+    });
+
+    const ModalImageProvider = require('../providers/modal-image-provider.js');
+    const provider = new ModalImageProvider({
+      apiUrl: providerConfig.modal?.apiUrl,
+      tokenId: providerConfig.modal?.tokenId,
+      tokenSecret: providerConfig.modal?.tokenSecret,
+      model: providerConfig.modal?.model || 'flux-dev'
+    });
+
+    const health = await provider.healthCheck();
+    console.log('[Modal Health] Health check result:', health);
+    return {
+      available: health.available,
+      status: health.status || 'healthy',
+      model: health.model || providerConfig.modal?.model,
+      gpu: health.gpu,
+      url: providerConfig.modal?.apiUrl
+    };
+  } catch (error) {
+    console.log('[Modal Health] Error:', error.message);
+    return {
+      available: false,
+      status: 'unavailable',
+      error: error.message,
+      url: providerConfig.modal?.apiUrl
+    };
+  }
+}
+
+/**
+ * Fetch available models from Modal service
+ * @returns {Promise<Object>} Models list or error
+ */
+async function fetchModalModels() {
+  try {
+    if (!providerConfig.modal?.apiUrl) {
+      return { error: 'Modal endpoint not configured' };
+    }
+
+    // Derive models endpoint URL from generate endpoint
+    // Generate endpoint: https://user--app-class-method-HASH.modal.run/
+    // Models endpoint (with label="models"): https://user--models.modal.run/
+    // Extract user prefix from generate URL
+    const generateUrl = providerConfig.modal.apiUrl;
+    const userMatch = generateUrl.match(/^https?:\/\/([^-]+)--/);
+
+    if (!userMatch) {
+      return { error: 'Could not parse Modal endpoint URL' };
+    }
+
+    const user = userMatch[1];
+    const modelsUrl = `https://${user}--models.modal.run/`;
+
+    console.log('[Modal Models] Fetching from:', modelsUrl);
+
+    const response = await axios.get(modelsUrl, {
+      headers: {
+        'Modal-Key': providerConfig.modal?.tokenId || '',
+        'Modal-Secret': providerConfig.modal?.tokenSecret || ''
+      },
+      timeout: 5000
+    });
+
+    console.log('[Modal Models] Received:', response.data);
+    return {
+      models: response.data.models || [],
+      endpoint: modelsUrl
+    };
+  } catch (error) {
+    console.log('[Modal Models] Error:', error.message);
+    return {
+      error: error.message,
+      models: []
     };
   }
 }
@@ -1377,6 +1549,35 @@ router.get('/services/status', async (req, res) => {
 });
 
 /**
+ * GET /api/providers/modal/models
+ * Fetch available models from Modal service
+ */
+router.get('/modal/models', async (_req, res) => {
+  try {
+    const result = await fetchModalModels();
+
+    if (result.error) {
+      return res.status(503).json({
+        error: result.error,
+        models: []
+      });
+    }
+
+    res.json({
+      models: result.models,
+      endpoint: result.endpoint
+    });
+  } catch (error) {
+    console.error('[Modal Models API] Error:', error);
+    res.status(500).json({
+      error: 'Failed to fetch Modal models',
+      message: error.message,
+      models: []
+    });
+  }
+});
+
+/**
  * GET /api/providers/config
  * Get current provider configuration (runtime or default)
  */
@@ -1408,7 +1609,7 @@ router.post('/configure', (req, res) => {
     }
 
     if (image) {
-      const validImageProviders = ['openai', 'flux'];
+      const validImageProviders = ['openai', 'flux', 'bfl', 'modal'];
       if (validImageProviders.includes(image)) {
         runtimeProviders.image = image;
       } else {
@@ -1717,12 +1918,14 @@ function generatePresets(models, _encodersDir) {
  * Get the current runtime providers (for use by other modules)
  */
 export function getRuntimeProviders() {
-  return {
+  const result = {
     llm: runtimeProviders.llm || providerConfig.llm.provider,
     image: runtimeProviders.image || providerConfig.image.provider,
     vision: runtimeProviders.vision || (providerConfig.vision?.provider || 'openai'),
     ranking: runtimeProviders.ranking || 'vlm'
   };
+  console.log('[getRuntimeProviders] Returning:', result, '(raw state:', { ...runtimeProviders }, ')');
+  return result;
 }
 
 export default router;

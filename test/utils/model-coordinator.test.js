@@ -307,6 +307,143 @@ describe('ModelCoordinator', () => {
     });
   });
 
+  describe('🟢 Service Health Tracking and Auto-Restart', () => {
+    test('should track service "shouldBeRunning" intent', async () => {
+      // When we mark a service as "should be running", it should be tracked
+      modelCoordinator.markServiceIntent('vlm', true);
+
+      const intent = modelCoordinator.getServiceIntent('vlm');
+      assert.strictEqual(intent.shouldBeRunning, true, 'VLM should be marked as intended to run');
+    });
+
+    test('should track when service was last seen healthy', async () => {
+      // Mock successful health check
+      nock('http://localhost:8004')
+        .get('/health')
+        .reply(200, { status: 'ok' });
+
+      modelCoordinator.markServiceIntent('vlm', true);
+      await modelCoordinator.checkServiceHealth('vlm');
+
+      const intent = modelCoordinator.getServiceIntent('vlm');
+      assert.ok(intent.lastHealthy instanceof Date || typeof intent.lastHealthy === 'number',
+        'Should record last healthy timestamp');
+    });
+
+    test('should detect crashed service via failed health check', async () => {
+      // Mock failed health check (service crashed)
+      nock('http://localhost:8004')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      modelCoordinator.markServiceIntent('vlm', true);
+      const health = await modelCoordinator.checkServiceHealth('vlm');
+
+      assert.strictEqual(health.healthy, false, 'Should detect unhealthy service');
+      assert.strictEqual(health.shouldBeRunning, true, 'Should know service should be running');
+      assert.strictEqual(health.needsRestart, true, 'Should flag service needs restart');
+    });
+
+    test('should NOT flag restart for service that should not be running', async () => {
+      // Service is down, but that's expected (shouldBeRunning = false)
+      nock('http://localhost:8004')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      modelCoordinator.markServiceIntent('vlm', false);
+      const health = await modelCoordinator.checkServiceHealth('vlm');
+
+      assert.strictEqual(health.healthy, false, 'Should detect service is down');
+      assert.strictEqual(health.needsRestart, false, 'Should NOT flag restart since it should not be running');
+    });
+
+    test('should attempt restart for crashed service that should be running', async () => {
+      // Track restart attempts
+      const restartAttempts = [];
+
+      // Mock failed health check
+      nock('http://localhost:8004')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      // Inject mock restarter
+      modelCoordinator.setServiceRestarter(async (serviceName) => {
+        restartAttempts.push(serviceName);
+        return { success: true };
+      });
+
+      modelCoordinator.markServiceIntent('vlm', true);
+      await modelCoordinator.ensureServiceHealth('vlm');
+
+      assert.deepStrictEqual(restartAttempts, ['vlm'], 'Should have attempted to restart VLM');
+    });
+
+    test('should check and restart all services that need it', async () => {
+      const restartAttempts = [];
+
+      // VLM: should be running but crashed
+      nock('http://localhost:8004')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      // Flux: should be running and is healthy
+      nock('http://localhost:8001')
+        .get('/health')
+        .reply(200, { status: 'ok' });
+
+      // LLM: should NOT be running (intentionally off)
+      nock('http://localhost:8003')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      // Vision: should be running but crashed
+      nock('http://localhost:8002')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      modelCoordinator.setServiceRestarter(async (serviceName) => {
+        restartAttempts.push(serviceName);
+        return { success: true };
+      });
+
+      // Set intents
+      modelCoordinator.markServiceIntent('vlm', true);
+      modelCoordinator.markServiceIntent('flux', true);
+      modelCoordinator.markServiceIntent('llm', false);  // Intentionally off
+      modelCoordinator.markServiceIntent('vision', true);
+
+      await modelCoordinator.ensureAllServicesHealthy();
+
+      // Should restart VLM and Vision (crashed but should be running)
+      // Should NOT restart Flux (healthy) or LLM (intentionally off)
+      assert.ok(restartAttempts.includes('vlm'), 'Should restart crashed VLM');
+      assert.ok(restartAttempts.includes('vision'), 'Should restart crashed Vision');
+      assert.ok(!restartAttempts.includes('flux'), 'Should NOT restart healthy Flux');
+      assert.ok(!restartAttempts.includes('llm'), 'Should NOT restart intentionally-off LLM');
+    });
+
+    test('should have getServiceHealthReport for debugging', async () => {
+      nock('http://localhost:8004')
+        .get('/health')
+        .reply(200, { status: 'ok' });
+
+      nock('http://localhost:8001')
+        .get('/health')
+        .replyWithError('ECONNREFUSED');
+
+      modelCoordinator.markServiceIntent('vlm', true);
+      modelCoordinator.markServiceIntent('flux', true);
+
+      const report = await modelCoordinator.getServiceHealthReport();
+
+      assert.ok(typeof report === 'object', 'Should return object');
+      assert.ok(Object.hasOwn(report, 'vlm'), 'Should have VLM status');
+      assert.ok(Object.hasOwn(report, 'flux'), 'Should have Flux status');
+      assert.strictEqual(report.vlm.healthy, true, 'VLM should be healthy');
+      assert.strictEqual(report.flux.healthy, false, 'Flux should be unhealthy');
+    });
+  });
+
   describe('🟢 GPU Lock (serialize model operations)', () => {
     test('should serialize concurrent prepareForLLM and prepareForVLM calls', async () => {
       // Track the order of operations

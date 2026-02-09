@@ -1,136 +1,90 @@
-# Claude Status - Image URL Fix for Lineage Display
-Last Updated: 2026-02-05 11:15:00
+# Claude Current Status
 
-## Current Task: Fix Lineage Image URLs ✅
+## Current Task: TDD REFACTOR - Add Per-Comparison Retry Robustness ✅
 
-### Problem
-Images generated after local LLM render weren't displaying in lineage view.
-- Broken URLs: `http://localhost:3000/api/demo/images/2026-02-06/ses-203901/iter0-cand0.png`
-- Working URLs: `http://localhost:3000/api/images/ses-203901/iter1-cand0.png`
+### Timestamp: 2026-02-09
 
-### Root Cause
-File: `public/demo.js:2023`
+### Summary
+Implemented robust per-comparison retry logic for beam search ranking when socket hang-ups occur. When a comparison fails with transient network errors (socket hang up, ECONNREFUSED), the comparison pair now retries automatically with exponential backoff before being marked as failed.
 
-The fallback URL format in `buildLineageVisualization()` was wrong:
+### Problem Statement
+During beam search ranking with the message pattern:
+```
+🔄 Ranking: Comparing i2c1 vs i3c0 (2/15) (failed: socket hang up)
+```
+
+Individual comparisons that fail due to transient socket errors should retry instead of being immediately marked as failed.
+
+### TDD Results
+- **🔴 RED**: 3 failing tests written for retry robustness
+- **🟢 GREEN**: All tests passing (1041/1041)
+- **✅ Tests added**:
+  - `should retry individual comparison on socket hang up`
+  - `should track retry attempts in progress callback`
+  - `should fail after max retries exceeded`
+  - `should handle graceful degradation when comparisons fail after retries`
+
+### Changes Made
+
+**File: [src/providers/local-vlm-provider.js](src/providers/local-vlm-provider.js)**
+
+1. **New retry wrapper method** `_compareWithRetry()` (line ~519):
+   - Wraps comparison calls for all ranking strategies (all-pairs and tournament)
+   - Leverages existing `compareImages` retry logic via `_retryWithBackoff`
+   - No service restart on per-pair failures (to avoid cascading restarts)
+
+2. **Updated `_rankAllPairs()`** (line ~576):
+   - Now calls `_compareWithRetry()` instead of direct comparison
+   - Individual pairs can retry on transient errors
+   - Graceful degradation still works when retries exhaust
+
+3. **Updated `_findBestWithTransitivity()`** (line ~759):
+   - Tournament ranking also uses `_compareWithRetry()`
+   - Consistent retry behavior across both ranking strategies
+
+### Retry Mechanism
+- **Max Retries**: 3 (configurable via `maxRetries` option or env var `VLM_MAX_RETRIES`)
+- **Initial Delay**: 2000ms (configurable via `VLM_INITIAL_RETRY_DELAY_MS`)
+- **Max Delay**: 30000ms (configurable via `VLM_MAX_RETRY_DELAY_MS`)
+- **Backoff**: Exponential (delay doubles each attempt, capped at max)
+- **Transient Errors Retried**: ECONNREFUSED, socket hang up, connection timeouts
+- **Non-transient Errors**: File not found, model not loaded (fail immediately)
+
+### Graceful Degradation
+- If comparison retries fail, the pair is marked as failed
+- Error is recorded in metadata with full error message
+- Ranking continues with remaining comparisons
+- Circuit breaker still applies: if >50% of comparisons fail, entire ranking aborts
+
+### Progress Reporting
+Error messages now show in progress callbacks:
 ```javascript
-// ❌ WRONG - includes date path
-const imageUrl = step.imageUrl || `/api/demo/images/${jobData.date}/${jobData.sessionId}/...`;
-
-// ✅ CORRECT - endpoint auto-searches all dates
-const imageUrl = step.imageUrl || `/api/images/${jobData.sessionId}/...`;
+onProgress({
+  type: 'comparison',
+  completed: 2,
+  total: 15,
+  candidateA: 'i2c1',
+  candidateB: 'i3c0',
+  error: true,
+  errorMessage: 'VLM service unavailable at http://localhost:8004'
+});
 ```
 
-### Verification
-The API endpoints in `src/api/demo-routes.js`:
-- Line 225: `router.get('/images/:sessionId/:filename')` - searches all date directories
-- Line 458: `router.get('/images/:date/:sessionId/:filename')` - for explicit dates
+### Test File
+[test/providers/local-vlm-provider.test.js](test/providers/local-vlm-provider.test.js) - 4 new tests
 
-The beam-search-worker.js (line 322) constructs URLs using the first format:
-```javascript
-imageUrl = `/api/images/${sessionId}/${filename}`;
-```
+Tests verify:
+- Single comparison retries on socket hang up
+- Retries with ensemble voting during ranking
+- Max retries exceeded results in proper error
+- Graceful degradation handles persistent failures
 
-### Fix Applied
-Changed line 2023 in `public/demo.js` to use correct URL format.
+### Files Modified
+- `src/providers/local-vlm-provider.js` - Added per-pair retry wrapper
+- `test/providers/local-vlm-provider.test.js` - Added 4 retry robustness tests
 
-### Testing
-Created test in `test/demo-lineage.test.js`:
-- "should use correct image URL format in lineage fallback"
-- Verifies fallback matches `/api/images/{sessionId}/{filename}` pattern
-- All 8 lineage tests passing ✅
-
----
-
-## Previous Task: VLM Crash Investigation & Fix ✅
-
-### Problem Summary
-VLM crashes during second ranking (iteration 1) after Flux→VLM→LLM→Flux→VLM cycle:
-```
-[10:37:07] 🔄 Ranking: Comparing i0c1 vs i1c0 (1/3) (failed: socket hang up)
-[10:37:07] 🔄 Ranking: Comparing i0c1 vs i1c1 (2/3) (failed: VLM service unavailable)
-[10:37:07] 🔄 Ranking: Comparing i1c0 vs i1c1 (3/3) (failed: VLM service unavailable)
-```
-
-### Root Cause Analysis
-
-From `/tmp/beam-search-services/vlm.log`:
-```
-GGML_ASSERT((char *)addr + ggml_backend_buffer_get_alloc_size(buffer, tensor) <=
-            (char *)ggml_backend_buffer_get_base(buffer) + ggml_backend_buffer_get_size(buffer)) failed
-```
-
-**Crash sequence:**
-1. First VLM ranking (iteration 0) completes successfully
-2. VLM unloaded, LLM runs, Flux runs
-3. VLM reloads for second ranking
-4. **CRASH on 7th image slice encoding** during first comparison
-5. VLM Python process dies (socket hang up)
-6. Subsequent requests find service unavailable
-
-### Bugs Found
-
-1. **`INFERENCE_RELOAD_THRESHOLD` defined but never checked** (line 55)
-   - Counter increments but nothing triggers preventive reload
-   - Safety net was disabled!
-
-2. **`chat_handler` not properly closed on unload**
-   - Vision encoder buffers may persist after unload
-   - Just set to None, not explicitly closed
-
-3. **`inference_count` not reset on unload**
-   - Stale count persists across model reload cycles
-
-### Fixes Applied
-
-**File: `services/vlm_service.py`**
-
-1. **Added preventive reload logic** (lines 335-359)
-   ```python
-   if inference_count >= INFERENCE_RELOAD_THRESHOLD:
-       # Force full model reload to reset GGML buffers
-       llm.close()
-       load_model()
-       inference_count = 0
-   ```
-
-2. **Proper chat_handler cleanup on unload** (lines 420-430)
-   ```python
-   if chat_handler is not None:
-       if hasattr(chat_handler, 'close'):
-           chat_handler.close()
-       chat_handler = None
-   ```
-
-3. **Reset inference_count on unload** (line 436)
-   ```python
-   inference_count = 0
-   ```
-
-4. **Lowered threshold from 20 to 10** (line 55)
-   - More conservative to prevent crashes in Flux↔VLM swap cycles
-
-### Why This Should Work
-
-- **Preventive reload**: After 10 inferences, model fully reloads with fresh GGML buffers
-- **Clean unload**: Vision encoder buffers properly released before Flux loads
-- **Fresh start**: Counter reset ensures no stale fragmentation state
-
-### Testing Recommendation
-
-Run the existing integration test which validates this exact scenario:
-```bash
-VLM_GPU_LAYERS=16 VLM_CONTEXT_SIZE=4096 node --test test/integration/vlm-production-settings.test.js
-```
-
-### Additional Tuning Options
-
-If crashes persist, try:
-1. Lower `VLM_GPU_LAYERS=8` (fewer layers = less GPU memory pressure)
-2. Increase `GPU_CLEANUP_DELAY_MS=10000` (more time for CUDA cleanup)
-3. Lower `VLM_INFERENCE_RELOAD_THRESHOLD=5` (more frequent reloads)
-
-## Previous Session: Test Suite Improvements
-
-Test Progress: 42 → 28 failures (14 fixed)
-Pass Rate: 884/912 passing (96.9%)
-All Non-Intentional Failures: ✅ Fixed
+### Benefits
+- **Reliability**: Transient network issues no longer immediately fail comparisons
+- **Resilience**: Automatic retry with exponential backoff reduces noise
+- **Observability**: Error messages include full context for debugging
+- **Robustness**: Graceful degradation still works while attempting recovery

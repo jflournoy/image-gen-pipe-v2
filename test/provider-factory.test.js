@@ -18,6 +18,7 @@ const OpenAIVisionProvider = require('../src/providers/openai-vision-provider');
 const LocalLLMProvider = require('../src/providers/local-llm-provider');
 const FluxImageProvider = require('../src/providers/flux-image-provider');
 const LocalVisionProvider = require('../src/providers/local-vision-provider');
+const BFLImageProvider = require('../src/providers/bfl-image-provider');
 
 describe('Provider Factory', () => {
   describe('createCritiqueGenerator', () => {
@@ -321,6 +322,54 @@ describe('Provider Factory', () => {
       } finally {
         if (originalKey) {
           process.env.OPENAI_API_KEY = originalKey;
+        }
+      }
+    });
+  });
+
+  describe('createImageProvider (bfl)', () => {
+    it('should create BFLImageProvider when provider is bfl', () => {
+      // Skip if BFL_API_KEY not available
+      const originalKey = process.env.BFL_API_KEY;
+      process.env.BFL_API_KEY = 'test-bfl-key';
+
+      try {
+        const image = createImageProvider({ mode: 'real', provider: 'bfl' });
+
+        assert(image instanceof BFLImageProvider, 'Should return BFLImageProvider instance');
+        assert.strictEqual(typeof image.generateImage, 'function', 'Should have generateImage method');
+      } finally {
+        if (originalKey) {
+          process.env.BFL_API_KEY = originalKey;
+        } else {
+          delete process.env.BFL_API_KEY;
+        }
+      }
+    });
+
+    it('should pass llmProvider to BFLImageProvider for content moderation rephrasing', () => {
+      const originalKey = process.env.BFL_API_KEY;
+      process.env.BFL_API_KEY = 'test-bfl-key';
+
+      try {
+        // Create a mock LLM provider
+        const mockLlmProvider = {
+          generateText: async () => ({ text: 'rephrased prompt' })
+        };
+
+        const image = createImageProvider({
+          mode: 'real',
+          provider: 'bfl',
+          llmProvider: mockLlmProvider
+        });
+
+        assert(image instanceof BFLImageProvider, 'Should return BFLImageProvider instance');
+        assert.strictEqual(image.llmProvider, mockLlmProvider, 'Should pass llmProvider to BFLImageProvider');
+      } finally {
+        if (originalKey) {
+          process.env.BFL_API_KEY = originalKey;
+        } else {
+          delete process.env.BFL_API_KEY;
         }
       }
     });

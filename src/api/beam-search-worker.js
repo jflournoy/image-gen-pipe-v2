@@ -52,8 +52,26 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     temperature = 0.7,
     models,
     fluxOptions,
+    bflOptions,
+    modalOptions,
+    loraOptions,
     rankingMode = 'vlm'  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
   } = params;
+
+  // Log BFL options if provided
+  if (bflOptions) {
+    console.log(`[Beam Search Worker] Received bflOptions: model=${bflOptions.model || 'default'}, safety_tolerance=${bflOptions.safety_tolerance}, width=${bflOptions.width}, height=${bflOptions.height}, steps=${bflOptions.steps || 'default'}, guidance=${bflOptions.guidance || 'default'}`);
+  }
+
+  // Log Modal options if provided
+  if (modalOptions) {
+    console.log(`[Beam Search Worker] Received modalOptions: model=${modalOptions.model || 'default'}, steps=${modalOptions.steps || 'default'}, guidance=${modalOptions.guidance || 'default'}, gpu=${modalOptions.gpu || 'default'}`);
+  }
+
+  // Log LoRA options if provided
+  if (loraOptions) {
+    console.log(`[Beam Search Worker] Received loraOptions: path=${loraOptions.path}, scale=${loraOptions.scale}`);
+  }
 
   // Get runtime provider selections early to check if OpenAI is needed
   const runtimeProviders = getRuntimeProviders();
@@ -116,17 +134,21 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       createVLMProvider
     } = require('../factory/provider-factory.js');
 
+    // Create LLM provider first so it can be passed to image provider for rephrasing
+    const llmProvider = createLLMProvider({
+      mode: 'real',
+      provider: runtimeProviders.llm,
+      apiKey: userApiKey,
+      ...(models?.llm && { model: models.llm })
+    });
+
     const providers = {
-      llm: createLLMProvider({
-        mode: 'real',
-        provider: runtimeProviders.llm,
-        apiKey: userApiKey,
-        ...(models?.llm && { model: models.llm })
-      }),
+      llm: llmProvider,
       imageGen: createImageProvider({
         mode: 'real',
         provider: runtimeProviders.image,
         apiKey: userApiKey,
+        llmProvider: llmProvider,  // Pass LLM for content moderation rephrasing (BFL)
         ...(models?.imageGen && { model: models.imageGen })
       }),
       vision: createVisionProvider({
@@ -198,6 +220,9 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       alpha,
       temperature,
       ...(fluxOptions && { fluxOptions }), // Pass Flux generation options (steps, guidance)
+      ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
+      ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
+      ...(loraOptions && { loraOptions }), // Pass LoRA options (path, scale) for Flux provider
       sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking

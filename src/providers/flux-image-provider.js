@@ -21,7 +21,7 @@ class FluxImageProvider {
    * @param {string} options.model - Model identifier/path
    * @param {string} options.sessionId - Session ID for output organization
    * @param {string} options.outputDir - Base output directory
-   * @param {Object} options.generation - Generation settings (steps, guidance, width, height, loraScale)
+   * @param {Object} options.generation - Generation settings (steps, guidance, width, height, loraScale, scheduler)
    */
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || 'http://localhost:8001';
@@ -36,7 +36,8 @@ class FluxImageProvider {
       guidance: options.generation?.guidance ?? configDefaults.guidance ?? 3.5,
       width: options.generation?.width ?? configDefaults.width ?? 1024,
       height: options.generation?.height ?? configDefaults.height ?? 1024,
-      loraScale: options.generation?.loraScale ?? configDefaults.loraScale ?? null
+      loraScale: options.generation?.loraScale ?? configDefaults.loraScale ?? null,
+      scheduler: options.generation?.scheduler ?? configDefaults.scheduler ?? null
     };
   }
 
@@ -66,6 +67,7 @@ class FluxImageProvider {
    * @param {number} options.seed - Random seed for reproducibility
    * @param {string} options.negativePrompt - Negative prompt (things to avoid)
    * @param {Array} options.loras - LoRA configurations [{path, trigger, weight}]
+   * @param {string} options.scheduler - Scheduler: euler, dpmsolver, ddim, pndm (for fine-tunes)
    * @returns {Promise<Object>} Generation result with localPath and metadata
    */
   async generateImage(prompt, options = {}) {
@@ -85,13 +87,14 @@ class FluxImageProvider {
         seed: options.seed !== undefined ? options.seed : null, // null = random
         negativePrompt: options.negativePrompt || '',
         loras: options.loras || [],
-        lora_scale: options.loraScale ?? this.generation.loraScale
+        lora_scale: options.loraScale ?? this.generation.loraScale,
+        scheduler: options.scheduler ?? this.generation.scheduler  // euler, dpmsolver, ddim, pndm
       };
 
-      // Timeouts include model load time (Flux reload after GPU swap takes ~7 min)
-      // Normal generation (model may need reloading): 10 minutes
+      // Timeouts include model load time (Flux reload after GPU swap takes ~7-10 min)
+      // Normal generation (model may need reloading): 15 minutes
       // First-time download (~12GB): 45 minutes
-      const timeout = isFirstTimeDownload ? 2700000 : 600000;
+      const timeout = isFirstTimeDownload ? 2700000 : 900000;
 
       if (isFirstTimeDownload) {
         console.log('[Flux Provider] Model not cached - using extended timeout for first-time download');

@@ -10,9 +10,17 @@ const axios = require('axios');
 const DEFAULT_API_URL = process.env.LOCAL_VLM_URL || 'http://localhost:8004';
 const DEFAULT_MODEL = 'llava-v1.6-mistral-7b.Q4_K_M.gguf';
 
+// Debug logging for debiasing analysis (enabled by default, set DEBUG_VLM_DEBIASING=0 to disable)
+const DEBUG_DEBIASING = process.env.DEBUG_VLM_DEBIASING !== '0';
+
 // Multi-factor ranking weights (matching ImageRanker)
 // Default: 70% alignment (prompt match), 30% aesthetics
 const DEFAULT_ALIGNMENT_WEIGHT = 0.7;
+
+// Retry configuration for service recovery
+const MAX_RETRIES = parseInt(process.env.VLM_MAX_RETRIES || '3', 10);
+const INITIAL_RETRY_DELAY_MS = parseInt(process.env.VLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
+const MAX_RETRY_DELAY_MS = parseInt(process.env.VLM_MAX_RETRY_DELAY_MS || '30000', 10);
 
 /**
  * Comparison Graph for transitive inference
@@ -83,6 +91,20 @@ class LocalVLMProvider {
     this.alignmentWeight = options.alignmentWeight ?? DEFAULT_ALIGNMENT_WEIGHT;
     // Ensemble voting for reliability (matching ImageRanker default of 3)
     this.defaultEnsembleSize = options.defaultEnsembleSize ?? parseInt(process.env.VLM_ENSEMBLE_SIZE || '3', 10);
+    // Service restart callback (can be injected for dependency injection)
+    this._serviceRestarter = options.serviceRestarter || null;
+    // Retry configuration
+    this.maxRetries = options.maxRetries ?? MAX_RETRIES;
+    this.initialRetryDelay = options.initialRetryDelay ?? INITIAL_RETRY_DELAY_MS;
+    this.maxRetryDelay = options.maxRetryDelay ?? MAX_RETRY_DELAY_MS;
+  }
+
+  /**
+   * Set service restarter callback (dependency injection)
+   * @param {Function} restarter - Async function() => { success, error? }
+   */
+  setServiceRestarter(restarter) {
+    this._serviceRestarter = restarter;
   }
 
   /**
@@ -94,6 +116,75 @@ class LocalVLMProvider {
     const alignWeight = this.alignmentWeight;
     const aestheticWeight = 1 - alignWeight;
     return (alignWeight * imageRanks.alignment) + (aestheticWeight * imageRanks.aesthetics);
+  }
+
+  /**
+   * Retry an operation with exponential backoff and optional service restart
+   * @param {Function} operation - Async function to retry
+   * @param {Object} options - Retry options
+   * @param {string} options.operationName - Name for logging
+   * @param {boolean} options.attemptRestart - Whether to attempt service restart on failure
+   * @returns {Promise<*>} Result of the operation
+   * @private
+   */
+  async _retryWithBackoff(operation, options = {}) {
+    const { operationName = 'VLM operation', attemptRestart = true } = options;
+    let lastError;
+    let delay = this.initialRetryDelay;
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error;
+
+        // Check if this is a connection error
+        const isConnectionError =
+          error.code === 'ECONNREFUSED' ||
+          error.message.includes('ECONNREFUSED') ||
+          error.message.includes('VLM service unavailable');
+
+        if (!isConnectionError) {
+          // Non-connection error (file not found, model not loaded, etc.) - fail immediately
+          throw error;
+        }
+
+        // Connection error - attempt restart and retry
+        if (attempt < this.maxRetries) {
+          console.warn(
+            `[LocalVLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
+          );
+
+          // Attempt service restart on first failure
+          if (attempt === 0 && attemptRestart && this._serviceRestarter) {
+            console.log(`[LocalVLMProvider] Attempting to restart VLM service...`);
+            try {
+              const restartResult = await this._serviceRestarter();
+              if (restartResult.success) {
+                console.log(`[LocalVLMProvider] Service restart successful`);
+                // Wait a bit for service to stabilize before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000));
+              } else {
+                console.warn(`[LocalVLMProvider] Service restart failed: ${restartResult.error || 'unknown error'}`);
+              }
+            } catch (restartError) {
+              console.warn(`[LocalVLMProvider] Service restart threw error: ${restartError.message}`);
+            }
+          }
+
+          // Wait before retry with exponential backoff
+          console.log(`[LocalVLMProvider] Waiting ${delay}ms before retry...`);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          delay = Math.min(delay * 2, this.maxRetryDelay);
+        } else {
+          // Final attempt failed
+          console.error(`[LocalVLMProvider] ${operationName} failed after ${this.maxRetries + 1} attempts`);
+          throw new Error(`VLM service unavailable after ${this.maxRetries + 1} attempts: ${lastError.message}`);
+        }
+      }
+    }
+
+    throw lastError;
   }
 
   /**
@@ -140,57 +231,65 @@ class LocalVLMProvider {
    * @returns {Promise<{choice: 'A'|'B'|'TIE', explanation: string, confidence: number, ranks: Object, winnerStrengths: string[], loserWeaknesses: string[], improvementSuggestion: string}>}
    */
   async compareImages(imageA, imageB, prompt) {
-    try {
-      const response = await this._axios.post(
-        `${this.apiUrl}/compare`,
-        {
-          image_a: imageA,
-          image_b: imageB,
-          prompt: prompt
-        },
-        { timeout: this.timeout }
-      );
+    return this._retryWithBackoff(
+      async () => {
+        try {
+          const response = await this._axios.post(
+            `${this.apiUrl}/compare`,
+            {
+              image_a: imageA,
+              image_b: imageB,
+              prompt: prompt
+            },
+            { timeout: this.timeout }
+          );
 
-      const data = response.data;
+          const data = response.data;
 
-      // Parse ranks and calculate combined scores
-      let ranks = data.ranks || {
-        A: { alignment: 1, aesthetics: 1 },
-        B: { alignment: 2, aesthetics: 2 }
-      };
+          // Parse ranks and calculate combined scores
+          let ranks = data.ranks || {
+            A: { alignment: 1, aesthetics: 1 },
+            B: { alignment: 2, aesthetics: 2 }
+          };
 
-      // Ensure ranks have alignment and aesthetics
-      for (const img of ['A', 'B']) {
-        if (ranks[img]) {
-          ranks[img].alignment = ranks[img].alignment || 1;
-          ranks[img].aesthetics = ranks[img].aesthetics || 1;
-          // Calculate combined rank score (lower is better)
-          ranks[img].combined = this._calculateCombinedRank(ranks[img]);
+          // Ensure ranks have alignment and aesthetics
+          for (const img of ['A', 'B']) {
+            if (ranks[img]) {
+              ranks[img].alignment = ranks[img].alignment || 1;
+              ranks[img].aesthetics = ranks[img].aesthetics || 1;
+              // Calculate combined rank score (lower is better)
+              ranks[img].combined = this._calculateCombinedRank(ranks[img]);
+            }
+          }
+
+          // Map snake_case from Python to camelCase for JS
+          return {
+            choice: data.choice,
+            explanation: data.explanation || '',
+            confidence: data.confidence || 0.5,
+            ranks: ranks,
+            winnerStrengths: data.winner_strengths || [],
+            loserWeaknesses: data.loser_weaknesses || [],
+            improvementSuggestion: data.improvement_suggestion || ''
+          };
+        } catch (error) {
+          if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+            throw new Error(`VLM service unavailable at ${this.apiUrl}`);
+          }
+          if (error.message.includes('not found') || error.message.includes('File not found')) {
+            throw new Error(`Image file not found: ${error.message}`);
+          }
+          if (error.response?.status === 503) {
+            throw new Error('VLM model not loaded (503)');
+          }
+          throw error;
         }
+      },
+      {
+        operationName: 'VLM comparison',
+        attemptRestart: true
       }
-
-      // Map snake_case from Python to camelCase for JS
-      return {
-        choice: data.choice,
-        explanation: data.explanation || '',
-        confidence: data.confidence || 0.5,
-        ranks: ranks,
-        winnerStrengths: data.winner_strengths || [],
-        loserWeaknesses: data.loser_weaknesses || [],
-        improvementSuggestion: data.improvement_suggestion || ''
-      };
-    } catch (error) {
-      if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-        throw new Error(`VLM service unavailable at ${this.apiUrl}`);
-      }
-      if (error.message.includes('not found') || error.message.includes('File not found')) {
-        throw new Error(`Image file not found: ${error.message}`);
-      }
-      if (error.response?.status === 503) {
-        throw new Error('VLM model not loaded (503)');
-      }
-      throw error;
-    }
+    );
   }
 
   /**
@@ -206,7 +305,18 @@ class LocalVLMProvider {
     const shouldSwap = Math.random() < 0.5;
     const [first, second] = shouldSwap ? [imageB, imageA] : [imageA, imageB];
     const result = await this.compareImages(first, second, prompt);
-    return this._mapResultBack(result, shouldSwap);
+    const mapped = this._mapResultBack(result, shouldSwap);
+
+    if (DEBUG_DEBIASING) {
+      // Extract candidate IDs from paths for logging
+      const idA = imageA.match(/i\d+c\d+|img\d+/)?.[0] || imageA.split('/').pop();
+      const idB = imageB.match(/i\d+c\d+|img\d+/)?.[0] || imageB.split('/').pop();
+      console.log(`[VLM Debiasing] ${idA} vs ${idB}: ` +
+        `swap=${shouldSwap}, vlmChoice=${result.choice}, mappedChoice=${mapped.choice}, ` +
+        `winner=${mapped.choice === 'A' ? idA : mapped.choice === 'B' ? idB : 'TIE'}`);
+    }
+
+    return mapped;
   }
 
   /**
@@ -403,6 +513,19 @@ class LocalVLMProvider {
   }
 
   /**
+   * Compare pair with debiasing and ensemble voting
+   * Retry logic is handled within compareImages via _retryWithBackoff
+   * @private
+   */
+  async _compareWithRetry(imageA, imageB, prompt, ensembleSize) {
+    // Retry logic already exists in compareImages (called by compareWithDebiasing and compareWithEnsemble)
+    // No need for additional wrapper - just call the comparison method directly
+    return ensembleSize > 1
+      ? await this.compareWithEnsemble(imageA, imageB, prompt, { ensembleSize })
+      : await this.compareWithDebiasing(imageA, imageB, prompt);
+  }
+
+  /**
    * All-pairs comparison strategy for small N
    * Tracks structured feedback for CritiqueGenerator
    * @private
@@ -446,9 +569,7 @@ class LocalVLMProvider {
       } else {
         // Need actual comparison (with ensemble voting for reliability)
         try {
-          const result = ensembleSize > 1
-            ? await this.compareWithEnsemble(this._getImagePath(a), this._getImagePath(b), prompt, { ensembleSize })
-            : await this.compareWithDebiasing(this._getImagePath(a), this._getImagePath(b), prompt);
+          const result = await this._compareWithRetry(this._getImagePath(a), this._getImagePath(b), prompt, ensembleSize);
           this._comparisonGraph.recordComparison(a.candidateId, b.candidateId, result.choice);
 
           // Track feedback for winner and loser
@@ -501,6 +622,10 @@ class LocalVLMProvider {
     const ranked = images
       .map(img => ({ ...img, wins: winCounts.get(img.candidateId) || 0 }))
       .sort((a, b) => b.wins - a.wins);
+
+    if (DEBUG_DEBIASING) {
+      console.log('[VLM Debiasing] Final win counts:', ranked.map(r => `${r.candidateId}:${r.wins}`).join(', '));
+    }
 
     return ranked.map((img, i) => {
       const feedback = candidateFeedback.get(img.candidateId);
@@ -605,9 +730,7 @@ class LocalVLMProvider {
         }
       } else {
         try {
-          const result = ensembleSize > 1
-            ? await this.compareWithEnsemble(this._getImagePath(champion), this._getImagePath(challenger), prompt, { ensembleSize })
-            : await this.compareWithDebiasing(this._getImagePath(champion), this._getImagePath(challenger), prompt);
+          const result = await this._compareWithRetry(this._getImagePath(champion), this._getImagePath(challenger), prompt, ensembleSize);
           this._comparisonGraph.recordComparison(champion.candidateId, challenger.candidateId, result.choice);
 
           if (result.choice === 'B') {
@@ -719,30 +842,71 @@ class LocalVLMProvider {
 
   /**
    * Check service health
+   * @param {Object} options - Health check options
+   * @param {boolean} options.withRetry - Whether to retry on connection failure (default: false)
    * @returns {Promise<{status: string, model_loaded: boolean, model: string}>}
    */
-  async healthCheck() {
-    try {
-      const response = await this._axios.get(`${this.apiUrl}/health`, {
-        timeout: 5000
+  async healthCheck(options = {}) {
+    const { withRetry = false } = options;
+
+    const checkHealth = async () => {
+      try {
+        const response = await this._axios.get(`${this.apiUrl}/health`, {
+          timeout: 5000
+        });
+        return response.data;
+      } catch (error) {
+        if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
+          throw new Error(`VLM service unavailable at ${this.apiUrl}`);
+        }
+        return {
+          status: 'unhealthy',
+          error: error.message
+        };
+      }
+    };
+
+    if (withRetry) {
+      return this._retryWithBackoff(checkHealth, {
+        operationName: 'VLM health check',
+        attemptRestart: true
       });
-      return response.data;
-    } catch (error) {
-      return {
-        status: 'unhealthy',
-        error: error.message
-      };
+    } else {
+      try {
+        return await checkHealth();
+      } catch (error) {
+        return {
+          status: 'unhealthy',
+          error: error.message
+        };
+      }
     }
   }
 
   /**
    * Load model explicitly (for GPU coordination)
+   * @param {Object} options - Load options
+   * @param {boolean} options.withRetry - Whether to retry on connection failure (default: true)
+   * @returns {Promise<Object>} Load result
    */
-  async loadModel() {
-    const response = await this._axios.post(`${this.apiUrl}/load`, {}, {
-      timeout: 120000 // 2 minutes for model loading
-    });
-    return response.data;
+  async loadModel(options = {}) {
+    const { withRetry = true } = options;
+
+    const performLoad = async () => {
+      const response = await this._axios.post(`${this.apiUrl}/load`, {}, {
+        timeout: 120000 // 2 minutes for model loading
+      });
+      return response.data;
+    };
+
+    if (withRetry) {
+      return this._retryWithBackoff(performLoad, {
+        operationName: 'VLM model load',
+        attemptRestart: true
+      });
+    } else {
+      return performLoad();
+    }
   }
 
   /**

@@ -378,6 +378,116 @@ describe('Evaluation Tracker', () => {
     });
   });
 
+  describe('Position Bias Prevention', () => {
+    it('should randomize presentation order to prevent position bias', async () => {
+      // Bug: i0c0 always appears on the left (candidateA) and wins due to position bias
+      // Fix: getNextComparison() should randomly swap A/B positions
+      //
+      // This test creates a larger dataset and verifies that:
+      // 1. Each candidate appears in both positions (A and B)
+      // 2. The presentationOrder field indicates if candidates were swapped
+      // 3. The original candidate IDs are preserved for correct winner mapping
+
+      // Create metadata with 5 candidates to have 10 pairs
+      const largeMetadata = {
+        sessionId: testSessionId,
+        userPrompt: 'Test prompt',
+        iterations: [
+          {
+            iteration: 0,
+            candidates: [
+              { candidateId: 'i0c0', image: { localPath: '/path/to/0.png' }, combined: 'A', whatPrompt: 'A', howPrompt: 'A', totalScore: 0.8 },
+              { candidateId: 'i0c1', image: { localPath: '/path/to/1.png' }, combined: 'B', whatPrompt: 'B', howPrompt: 'B', totalScore: 0.7 },
+              { candidateId: 'i0c2', image: { localPath: '/path/to/2.png' }, combined: 'C', whatPrompt: 'C', howPrompt: 'C', totalScore: 0.6 },
+              { candidateId: 'i0c3', image: { localPath: '/path/to/3.png' }, combined: 'D', whatPrompt: 'D', howPrompt: 'D', totalScore: 0.5 },
+              { candidateId: 'i0c4', image: { localPath: '/path/to/4.png' }, combined: 'E', whatPrompt: 'E', howPrompt: 'E', totalScore: 0.4 }
+            ]
+          }
+        ]
+      };
+
+      const tracker = new EvaluationTracker({
+        outputDir: testOutputDir,
+        evaluationId: testEvaluationId,
+        sessionId: testSessionId
+      });
+
+      await tracker.initialize(largeMetadata);
+
+      // Collect all comparisons
+      const comparisons = [];
+      let next = await tracker.getNextComparison();
+      while (next) {
+        comparisons.push(next);
+        await tracker.recordComparison({
+          comparisonId: next.comparisonId,
+          candidateA: next.candidateA.candidateId,
+          candidateB: next.candidateB.candidateId,
+          winner: 'A', // Always vote for position A to simulate bias
+          responseTimeMs: 100
+        });
+        next = await tracker.getNextComparison();
+      }
+
+      // Should have C(5,2) = 10 comparisons
+      assert.strictEqual(comparisons.length, 10, 'Should have 10 pairs for 5 candidates');
+
+      // Key assertion: Each comparison should have presentationOrder metadata
+      // to track if candidates were swapped for display
+      for (const comparison of comparisons) {
+        assert.ok(
+          comparison.presentationOrder !== undefined,
+          'Comparison should include presentationOrder field for bias tracking'
+        );
+        assert.ok(
+          ['original', 'swapped'].includes(comparison.presentationOrder),
+          'presentationOrder should be "original" or "swapped"'
+        );
+      }
+
+      // Track how often i0c0 appears in position A vs B
+      const i0c0AsA = comparisons.filter(c => c.candidateA.candidateId === 'i0c0').length;
+      const i0c0AsB = comparisons.filter(c => c.candidateB.candidateId === 'i0c0').length;
+
+      // i0c0 participates in 4 comparisons (paired with each of the other 4 candidates)
+      assert.strictEqual(i0c0AsA + i0c0AsB, 4, 'i0c0 should participate in 4 comparisons');
+
+      // With randomization, i0c0 should NOT always be in position A
+      // At least some comparisons should have i0c0 in position B
+      assert.ok(
+        i0c0AsB > 0,
+        `Position bias bug: i0c0 always appears in position A (${i0c0AsA} times as A, ${i0c0AsB} times as B). ` +
+        'Presentation order should be randomized.'
+      );
+    });
+
+    it('should include original pair info for correct winner mapping', async () => {
+      // When presentation is swapped, the UI votes for "A" or "B" based on position
+      // But the winner mapping must correctly identify the actual candidate
+      // This requires originalPair info to be preserved
+
+      const tracker = new EvaluationTracker({
+        outputDir: testOutputDir,
+        evaluationId: testEvaluationId,
+        sessionId: testSessionId
+      });
+
+      await tracker.initialize(mockBeamSearchMetadata);
+
+      const comparison = await tracker.getNextComparison();
+
+      // Comparison should include the original pair for correct mapping
+      assert.ok(
+        comparison.originalPair !== undefined,
+        'Comparison should include originalPair for winner mapping'
+      );
+      assert.ok(
+        comparison.originalPair.first !== undefined && comparison.originalPair.second !== undefined,
+        'originalPair should have first and second candidate IDs'
+      );
+    });
+  });
+
   describe('Progress Tracking', () => {
     it('should calculate correct number of pairs for 3 candidates', async () => {
       const tracker = new EvaluationTracker({

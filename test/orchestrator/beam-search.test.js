@@ -1564,4 +1564,292 @@ describe('Beam Search Orchestrator', () => {
       );
     });
   });
+
+  describe('BFL Options Passthrough', () => {
+    test('should pass bflOptions.safety_tolerance to image generator', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedOptions = null;
+
+      const mockLLM = {
+        combinePrompts: async (what, how) => ({
+          combinedPrompt: `${what} with ${how}`,
+          metadata: { model: 'mock', tokensUsed: 50 }
+        })
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          capturedOptions = options;
+          return {
+            url: 'https://example.com/image.png',
+            localPath: '/tmp/image.png',
+            revisedPrompt: prompt,
+            metadata: { model: 'bfl', size: '1024x1024' }
+          };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7.5,
+          analysis: 'Good image',
+          strengths: [],
+          weaknesses: [],
+          metadata: { tokensUsed: 100 }
+        })
+      };
+
+      const options = {
+        iteration: 0,
+        candidateId: 0,
+        dimension: 'what',
+        bflOptions: {
+          safety_tolerance: 4,
+          width: 1024,
+          height: 768
+        }
+      };
+
+      await processCandidateStream(
+        'test prompt',
+        'test style',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        options
+      );
+
+      assert.ok(capturedOptions, 'Image generator should have been called');
+      assert.strictEqual(capturedOptions.safety_tolerance, 4,
+        'safety_tolerance should be passed to image generator');
+      assert.strictEqual(capturedOptions.width, 1024,
+        'width should be passed to image generator');
+      assert.strictEqual(capturedOptions.height, 768,
+        'height should be passed to image generator');
+    });
+
+    test('should flatten bflOptions alongside fluxOptions', async () => {
+      const { processCandidateStream } = require('../../src/orchestrator/beam-search.js');
+
+      let capturedOptions = null;
+
+      const mockLLM = {
+        combinePrompts: async (what, how) => ({
+          combinedPrompt: `${what} with ${how}`,
+          metadata: { model: 'mock', tokensUsed: 50 }
+        })
+      };
+
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          capturedOptions = options;
+          return {
+            url: 'https://example.com/image.png',
+            localPath: '/tmp/image.png',
+            metadata: { model: 'test' }
+          };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 85,
+          aestheticScore: 7.5,
+          analysis: 'Good',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const options = {
+        iteration: 0,
+        candidateId: 0,
+        dimension: 'what',
+        fluxOptions: { steps: 30, guidance: 7.5 },
+        bflOptions: { safety_tolerance: 3 }
+      };
+
+      await processCandidateStream(
+        'test',
+        'style',
+        mockLLM,
+        mockImageGen,
+        mockVision,
+        options
+      );
+
+      assert.ok(capturedOptions, 'Image generator should have been called');
+      assert.strictEqual(capturedOptions.steps, 30, 'fluxOptions.steps should be flattened');
+      assert.strictEqual(capturedOptions.guidance, 7.5, 'fluxOptions.guidance should be flattened');
+      assert.strictEqual(capturedOptions.safety_tolerance, 3, 'bflOptions.safety_tolerance should be flattened');
+    });
+  });
+
+  describe('Graceful Early Termination', () => {
+    test('should return best results when failure rate too high mid-search (TDD RED)', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      // Track candidate count for failure simulation
+      let candidateCountInIteration = 0;
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined what', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      // Image generation: succeeds in iteration 0, mostly fails in iteration 1
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          const iteration = options.iteration;
+
+          if (iteration === 0) {
+            // Iteration 0: all succeed
+            return { url: `test-i0-c${options.candidateId}.png`, metadata: {} };
+          } else {
+            // Iteration 1+: 75% failure rate (3 out of 4 fail)
+            candidateCountInIteration++;
+            if (candidateCountInIteration % 4 !== 0) {
+              // Fail 3 out of every 4
+              throw new Error('Service unavailable - simulated failure');
+            }
+            return { url: `test-i${iteration}-c${options.candidateId}.png`, metadata: {} };
+          }
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 80,
+          aestheticScore: 7,
+          analysis: 'Good',
+          strengths: ['test'],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix contrast',
+          recommendation: 'Increase brightness',
+          reason: 'Better visibility',
+          dimension: 'how',
+          metadata: {}
+        })
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen
+      };
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        maxIterations: 3 // Would run 3 iterations, but should stop early at iteration 1
+      };
+
+      // This should NOT throw, but should return gracefully with best results
+      const result = await beamSearch('test prompt', providers, config);
+
+      // Verify we got a result (not an error)
+      assert.ok(result, 'Should return a result instead of throwing');
+
+      // Verify it has the normal winner structure
+      assert.ok(result.totalScore > 0, 'Winner should have a positive score');
+      assert.ok(result.metadata, 'Winner should have metadata');
+      assert.ok(result.finalists, 'Should have finalists attached');
+      assert.ok(Array.isArray(result.finalists), 'Finalists should be an array');
+      assert.ok(result.finalists.length > 0, 'Should have at least one finalist');
+
+      // Winner should be from iteration 0 (since iteration 1 failed)
+      assert.strictEqual(result.metadata.iteration, 0,
+        'Winner should be from iteration 0 (before high failure rate)');
+
+      // Should have early termination indicator
+      assert.ok(result.earlyTermination, 'Should indicate early termination');
+      assert.ok(result.earlyTermination.reason.includes('failure rate'),
+        'Should explain termination reason');
+    });
+
+    test('should include allGlobalRanked even on early termination', async () => {
+      const { beamSearch } = require('../../src/orchestrator/beam-search.js');
+
+      const mockLLM = {
+        refinePrompt: async () => ({ refinedPrompt: 'refined', metadata: {} }),
+        combinePrompts: async (w, h) => `${w} + ${h}`
+      };
+
+      // All fail in iteration 1
+      const mockImageGen = {
+        generateImage: async (prompt, options) => {
+          if (options.iteration > 0) {
+            throw new Error('All services broken');
+          }
+          return { url: 'test.png', metadata: {} };
+        }
+      };
+
+      const mockVision = {
+        analyzeImage: async () => ({
+          alignmentScore: 75,
+          aestheticScore: 6,
+          analysis: '',
+          strengths: [],
+          weaknesses: [],
+          metadata: {}
+        })
+      };
+
+      const mockCritiqueGen = {
+        generateCritique: async () => ({
+          critique: 'Fix', recommendation: 'Do', reason: 'Because',
+          dimension: 'what', metadata: {}
+        })
+      };
+
+      // Mock image ranker for comparative ranking (needed to populate allGlobalRanked)
+      let rankCallCount = 0;
+      const mockImageRanker = {
+        rankImages: async (images) => {
+          rankCallCount++;
+          // Return rankings in order they were passed
+          return images.map((img, idx) => ({
+            ...img,
+            ranking: { rank: idx + 1, reason: 'Test ranking' }
+          }));
+        }
+      };
+
+      const providers = {
+        llm: mockLLM,
+        imageGen: mockImageGen,
+        vision: mockVision,
+        critiqueGen: mockCritiqueGen,
+        imageRanker: mockImageRanker
+      };
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        maxIterations: 2
+      };
+
+      const result = await beamSearch('test', providers, config);
+
+      // Should still have global ranking data from iteration 0
+      assert.ok(result.allGlobalRanked, 'Should have allGlobalRanked');
+      assert.ok(Array.isArray(result.allGlobalRanked), 'allGlobalRanked should be an array');
+      assert.ok(result.allGlobalRanked.length >= 2,
+        'Should have ranked candidates from successful iterations');
+
+      // Verify early termination was recorded
+      assert.ok(result.earlyTermination, 'Should have early termination info');
+    });
+  });
 });

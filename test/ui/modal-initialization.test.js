@@ -120,31 +120,31 @@ describe('🔴 RED: Modal Initialization', () => {
     });
   });
 
-  describe('Advanced Configuration Section', () => {
-    it('should have advancedConfigSection element in HTML', () => {
+  describe('Provider Settings Sidebar', () => {
+    it('should have provider sections in sidebar', () => {
       const htmlContent = fs.readFileSync(demoHtmlPath, 'utf8');
 
+      // New sidebar structure has provider sections always visible
       assert.ok(
-        htmlContent.includes('id="advancedConfigSection"') ||
-        htmlContent.includes('id="advancedProvidersSection"'),
-        'Should have advanced config section in HTML'
+        htmlContent.includes('id="llmProviderSection"') &&
+        htmlContent.includes('id="imageProviderSection"') &&
+        htmlContent.includes('id="visionProviderSection"'),
+        'Should have provider sections in sidebar'
       );
     });
 
-    it('should be hidden by default or controlled by JavaScript', () => {
-      const htmlContent = fs.readFileSync(demoHtmlPath, 'utf8');
+    it('should have provider settings visibility controlled by JavaScript', () => {
       const jsContent = fs.readFileSync(demoJsPath, 'utf8');
 
-      // Either hidden in HTML or controlled by JS
-      const hiddenInHTML = htmlContent.includes('advancedConfigSection') &&
-                          htmlContent.includes('display: none');
-
-      const controlledByJS = jsContent.includes('advancedConfigSection') &&
-                            jsContent.includes('.style.display');
+      // Provider-specific settings are toggled by updateImageProviderSettings, etc.
+      const hasSettingsControl =
+        jsContent.includes('updateImageProviderSettings') &&
+        jsContent.includes('updateLLMProviderSettings') &&
+        jsContent.includes('.style.display');
 
       assert.ok(
-        hiddenInHTML || controlledByJS,
-        'Advanced config should be hidden by default or controlled by JS'
+        hasSettingsControl,
+        'Provider settings visibility should be controlled by JS'
       );
     });
   });

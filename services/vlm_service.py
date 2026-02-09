@@ -7,6 +7,7 @@ Supports pairwise image comparison for beam search ranking.
 
 import os
 import gc
+import io
 import time
 import base64
 import asyncio
@@ -14,9 +15,10 @@ from pathlib import Path
 from typing import Optional
 from contextlib import asynccontextmanager
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from PIL import Image
 
 # Service configuration
 PORT = int(os.getenv('VLM_PORT', '8004'))
@@ -33,10 +35,14 @@ MODEL_PATH = os.getenv('VLM_MODEL_PATH', None)  # Override for local file
 # For 12GB GPU with frequent model swaps: Use 16 layers to prevent fragmentation crashes
 # More conservative than 24 to handle Flux↔VLM swap cycles without GGML allocation failures
 N_GPU_LAYERS = int(os.getenv('VLM_GPU_LAYERS', '16'))
-# Context size: 4096 needed for dual-image comparisons with high-res images
-# Each image can use ~1400 tokens (37x37 patches), so 2 images + prompt ~3000 tokens
+# Context size: 4096 needed for dual-image comparisons
+# With 512x512 images: ~1400 tokens per image (37x37 patches), 2 images + prompt ~3000 tokens
 # Using 4096 provides headroom and prevents "failed to find memory slot" errors
 N_CTX = int(os.getenv('VLM_CONTEXT_SIZE', '4096'))
+# Max image dimension for VLM comparison (larger images are resized to fit context window)
+# 512x512 = ~1400 tokens, 1024x1024 = ~5300 tokens (exceeds 4096 context with 2 images!)
+# Set to 512 for reliable dual-image comparison within 4096 context
+VLM_MAX_IMAGE_SIZE = int(os.getenv('VLM_MAX_IMAGE_SIZE', '512'))
 
 # Global model reference
 llm = None
@@ -50,9 +56,12 @@ inference_lock = asyncio.Lock()
 # Track sequential inference count for preventive model reload
 # After many sequential inferences (ensemble voting), GGML memory
 # fragmentation can cause crashes. Reload threshold is a safety valve.
-# Lower threshold (20) prevents memory accumulation during intensive testing
+# Higher threshold (50) prevents mid-batch reloads during ensemble voting.
+# With ensemble_size=3 and 15 comparisons, we need ~45 inferences per batch.
+# Reload between batches, not mid-batch, to avoid socket hang up errors.
+# (Previous threshold of 10 caused crashes on comparison 5 of 15)
 inference_count = 0
-INFERENCE_RELOAD_THRESHOLD = int(os.getenv('VLM_INFERENCE_RELOAD_THRESHOLD', '20'))
+INFERENCE_RELOAD_THRESHOLD = int(os.getenv('VLM_INFERENCE_RELOAD_THRESHOLD', '50'))
 
 
 @asynccontextmanager
@@ -66,6 +75,7 @@ async def lifespan(app):
         print(f'[VLM Service] Model file: {MODEL_FILE}')
     print(f'[VLM Service] GPU layers: {N_GPU_LAYERS}')
     print(f'[VLM Service] Context size: {N_CTX}')
+    print(f'[VLM Service] Max image size: {VLM_MAX_IMAGE_SIZE}px')
     yield
     # Cleanup on shutdown
     global llm, chat_handler
@@ -116,26 +126,41 @@ class CompareResponse(BaseModel):
 
 
 def encode_image(image_path: str) -> str:
-    """Encode image to base64 data URI"""
+    """Encode image to base64 data URI, resizing if needed to fit context window.
+
+    VLM uses ~14x14 pixel patches. Token usage by image size:
+    - 512x512 = ~1369 tokens (fits 2 images in 4096 context)
+    - 1024x1024 = ~5329 tokens (EXCEEDS context with 2 images!)
+
+    Images larger than VLM_MAX_IMAGE_SIZE are resized to prevent context overflow.
+    """
     path = Path(image_path)
     if not path.exists():
         raise FileNotFoundError(f'Image not found: {image_path}')
 
-    with open(path, 'rb') as f:
-        data = f.read()
+    # Load and resize image if needed
+    img = Image.open(path)
+    original_size = img.size
 
-    # Determine mime type
-    suffix = path.suffix.lower()
-    mime_types = {
-        '.png': 'image/png',
-        '.jpg': 'image/jpeg',
-        '.jpeg': 'image/jpeg',
-        '.gif': 'image/gif',
-        '.webp': 'image/webp'
-    }
-    mime = mime_types.get(suffix, 'image/png')
+    # Resize if either dimension exceeds max size (maintains aspect ratio)
+    if img.width > VLM_MAX_IMAGE_SIZE or img.height > VLM_MAX_IMAGE_SIZE:
+        # Calculate new size maintaining aspect ratio
+        ratio = min(VLM_MAX_IMAGE_SIZE / img.width, VLM_MAX_IMAGE_SIZE / img.height)
+        new_size = (int(img.width * ratio), int(img.height * ratio))
+        img = img.resize(new_size, Image.Resampling.LANCZOS)
+        print(f'[VLM Service] Resized image {original_size} -> {new_size} for context fit')
 
-    return f'data:{mime};base64,{base64.b64encode(data).decode()}'
+    # Convert to RGB if needed (handles RGBA, palette, etc.)
+    if img.mode not in ('RGB', 'L'):
+        img = img.convert('RGB')
+
+    # Encode to bytes
+    buffer = io.BytesIO()
+    # Use JPEG for efficiency (smaller base64, faster encoding)
+    img.save(buffer, format='JPEG', quality=85)
+    data = buffer.getvalue()
+
+    return f'data:image/jpeg;base64,{base64.b64encode(data).decode()}'
 
 
 def load_model():
@@ -303,6 +328,8 @@ def run_inference_with_retry(model, messages, max_tokens, temperature, max_retri
 
     Post-inference cleanup prevents memory accumulation during sequential
     calls (ensemble voting: N sequential inferences without model unload).
+
+    Returns: (response, needs_reload) tuple - caller handles reload as background task
     """
     global llm, chat_handler, inference_count
 
@@ -330,7 +357,13 @@ def run_inference_with_retry(model, messages, max_tokens, temperature, max_retri
             except ImportError:
                 pass
 
-            return response
+            # Check if we should do a preventive reload to avoid memory fragmentation
+            # Return flag instead of blocking - caller will schedule as background task
+            needs_reload = inference_count >= INFERENCE_RELOAD_THRESHOLD
+            if needs_reload:
+                print(f'[VLM Service] Preventive reload needed: {inference_count} inferences reached threshold ({INFERENCE_RELOAD_THRESHOLD})')
+
+            return response, needs_reload
 
         except Exception as e:
             last_error = e
@@ -362,7 +395,7 @@ def run_inference_with_retry(model, messages, max_tokens, temperature, max_retri
                     except ImportError:
                         pass
 
-                    # Wait for memory to settle
+                    # Wait for memory to settle (sync, but only on error recovery path)
                     time.sleep(2.0)
 
                     # Reload model
@@ -378,19 +411,78 @@ def run_inference_with_retry(model, messages, max_tokens, temperature, max_retri
     raise last_error
 
 
+async def perform_preventive_reload():
+    """
+    Perform preventive model reload as an async background task.
+    Uses asyncio.to_thread for blocking operations to avoid blocking the event loop.
+    Acquires inference_lock to prevent concurrent model access.
+    """
+    global llm, chat_handler, inference_count
+
+    # Acquire lock to prevent concurrent inference during reload
+    async with inference_lock:
+        print('[VLM Service] Starting background preventive reload...')
+        try:
+            # Run blocking operations in thread pool
+            def blocking_reload():
+                global llm, chat_handler, inference_count
+                if llm is not None:
+                    llm.close()
+                    llm = None
+                    chat_handler = None
+                gc.collect()
+                try:
+                    import torch
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+                        torch.cuda.synchronize()
+                except ImportError:
+                    pass
+                return True
+
+            await asyncio.to_thread(blocking_reload)
+
+            # Brief async pause for memory cleanup
+            await asyncio.sleep(1.0)
+
+            # Reload model in thread pool
+            await asyncio.to_thread(load_model)
+            inference_count = 0
+            print('[VLM Service] Background preventive reload completed')
+
+        except Exception as reload_error:
+            print(f'[VLM Service] Background preventive reload failed: {reload_error}')
+            # Continue anyway - next comparison will try loading again
+
+
 def unload_model():
     """Unload the model to free GPU memory
 
     Aggressively cleans up GGML/CUDA resources to prevent fragmentation
     during repeated Flux↔VLM model swaps.
     """
-    global llm, chat_handler
+    global llm, chat_handler, inference_count
 
     if llm is not None:
         print('[VLM Service] Unloading model...')
+
+        # Close chat_handler first if it has a close method (vision encoder buffers)
+        if chat_handler is not None:
+            try:
+                if hasattr(chat_handler, 'close'):
+                    chat_handler.close()
+                elif hasattr(chat_handler, '__del__'):
+                    # Trigger destructor explicitly
+                    del chat_handler
+            except Exception as e:
+                print(f'[VLM Service] Warning: could not close chat_handler: {e}')
+            chat_handler = None
+
         llm.close()
         llm = None
-        chat_handler = None
+
+        # Reset inference counter to prevent stale count on reload
+        inference_count = 0
 
         # Aggressive cleanup for GGML/CUDA memory
         gc.collect()
@@ -420,6 +512,7 @@ async def health_check():
         'model_file': MODEL_FILE,
         'gpu_layers': N_GPU_LAYERS,
         'context_size': N_CTX,
+        'max_image_size': VLM_MAX_IMAGE_SIZE,
         'model_loaded': llm is not None
     }
 
@@ -458,12 +551,13 @@ async def unload_model_endpoint():
 
 
 @app.post('/compare', response_model=CompareResponse)
-async def compare_images(request: CompareRequest):
+async def compare_images(request: CompareRequest, background_tasks: BackgroundTasks):
     """
     Compare two images against a prompt.
     Returns which image (A or B) better matches the prompt.
 
     Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
+    Preventive model reloads are scheduled as background tasks to avoid blocking.
     """
     # Serialize all inference requests - llama_cpp crashes on concurrent access
     async with inference_lock:
@@ -524,13 +618,17 @@ Respond ONLY with a JSON object in this exact format:
             ]
 
             # Use retry helper for inference (handles GGML memory crashes)
-            response = run_inference_with_retry(
+            response, needs_reload = run_inference_with_retry(
                 model=model,
                 messages=messages,
                 max_tokens=500,  # Enough for full JSON response with arrays
                 temperature=0.1,  # Low temperature for consistent evaluations
                 max_retries=int(os.getenv('VLM_INFERENCE_RETRIES', '2'))
             )
+
+            # Schedule preventive reload as background task (non-blocking)
+            if needs_reload:
+                background_tasks.add_task(perform_preventive_reload)
 
             elapsed = time.time() - start_time
             print(f'[VLM Service] Comparison completed in {elapsed:.1f}s')
@@ -658,13 +756,14 @@ class CompareBatchRequest(BaseModel):
 
 
 @app.post('/compare-batch')
-async def compare_images_batch(request: CompareBatchRequest):
+async def compare_images_batch(request: CompareBatchRequest, background_tasks: BackgroundTasks):
     """
     Compare multiple image pairs in a single request.
 
     Designed for ensemble voting: instead of N HTTP round-trips,
     the client sends all comparisons at once. The service manages
     memory cleanup between sequential inferences to prevent crashes.
+    Preventive model reloads are scheduled as background tasks.
     """
     async with inference_lock:
         results = []
@@ -726,13 +825,18 @@ Respond ONLY with a JSON object in this exact format:
                 print(f'[VLM Service] Batch comparison {i+1}/{len(request.comparisons)}: {single_req.prompt[:50]}...')
                 start_time = time.time()
 
-                response = run_inference_with_retry(
+                response, needs_reload = run_inference_with_retry(
                     model=model,
                     messages=messages,
                     max_tokens=500,
                     temperature=0.1,
                     max_retries=int(os.getenv('VLM_INFERENCE_RETRIES', '2'))
                 )
+
+                # Schedule preventive reload as background task after batch completes
+                # Only schedule once per batch to avoid multiple reloads
+                if needs_reload and i == len(request.comparisons) - 1:
+                    background_tasks.add_task(perform_preventive_reload)
 
                 elapsed = time.time() - start_time
                 print(f'[VLM Service] Batch comparison {i+1} completed in {elapsed:.1f}s')

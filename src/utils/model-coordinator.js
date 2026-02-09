@@ -5,6 +5,7 @@
  */
 
 const axios = require('axios');
+const serviceManager = require('./service-manager');
 
 // Service endpoints
 const SERVICE_URLS = {
@@ -151,6 +152,216 @@ const modelState = {
   vision: false,
   vlm: false
 };
+
+// Track service intent - whether services SHOULD be running
+// This allows detecting crashed services that need restart
+const serviceIntent = {
+  llm: { shouldBeRunning: false, lastHealthy: null },
+  flux: { shouldBeRunning: false, lastHealthy: null },
+  vision: { shouldBeRunning: false, lastHealthy: null },
+  vlm: { shouldBeRunning: false, lastHealthy: null }
+};
+
+// Pluggable service restarter (defaults to no-op, can be injected)
+let serviceRestarter = async () => ({ success: false, error: 'No restarter configured' });
+
+/**
+ * Mark a service's intended running state
+ * @param {string} service - Service name
+ * @param {boolean} shouldBeRunning - Whether the service should be running
+ */
+function markServiceIntent(service, shouldBeRunning) {
+  if (serviceIntent[service]) {
+    serviceIntent[service].shouldBeRunning = shouldBeRunning;
+  }
+}
+
+/**
+ * Get a service's intent state
+ * @param {string} service - Service name
+ * @returns {Object} Intent object with shouldBeRunning and lastHealthy
+ */
+function getServiceIntent(service) {
+  return { ...serviceIntent[service] };
+}
+
+/**
+ * Set the service restarter function (dependency injection)
+ * @param {Function} restarter - Async function(serviceName) => { success, error? }
+ */
+function setServiceRestarter(restarter) {
+  serviceRestarter = restarter;
+}
+
+/**
+ * Check if a service is healthy via its /health endpoint
+ * @param {string} service - Service name
+ * @returns {Promise<Object>} Health status { healthy, shouldBeRunning, needsRestart }
+ */
+async function checkServiceHealth(service) {
+  const intent = serviceIntent[service];
+  const url = `${SERVICE_URLS[service]}/health`;
+
+  try {
+    await axios.get(url, { timeout: 5000 });
+    // Service is healthy - update lastHealthy timestamp
+    if (intent) {
+      intent.lastHealthy = Date.now();
+    }
+    return {
+      healthy: true,
+      shouldBeRunning: intent?.shouldBeRunning || false,
+      needsRestart: false
+    };
+  } catch {
+    // Service is not responding
+    return {
+      healthy: false,
+      shouldBeRunning: intent?.shouldBeRunning || false,
+      needsRestart: intent?.shouldBeRunning || false
+    };
+  }
+}
+
+/**
+ * Ensure a service is healthy, restarting if needed
+ * @param {string} service - Service name
+ * @returns {Promise<Object>} Result of health check or restart attempt
+ */
+async function ensureServiceHealth(service) {
+  const health = await checkServiceHealth(service);
+
+  if (health.needsRestart) {
+    console.log(`[ModelCoordinator] Service ${service} needs restart, attempting...`);
+    return await serviceRestarter(service);
+  }
+
+  return health;
+}
+
+/**
+ * Check and restart all services that need it
+ * @returns {Promise<Object>} Map of service names to their results
+ */
+async function ensureAllServicesHealthy() {
+  const results = {};
+
+  for (const service of Object.keys(serviceIntent)) {
+    results[service] = await ensureServiceHealth(service);
+  }
+
+  return results;
+}
+
+/**
+ * Get health report for all services
+ * @returns {Promise<Object>} Map of service names to health status
+ */
+async function getServiceHealthReport() {
+  const report = {};
+
+  for (const service of Object.keys(serviceIntent)) {
+    report[service] = await checkServiceHealth(service);
+  }
+
+  return report;
+}
+
+/**
+ * Create a VLM service restarter function for injection into VLM provider
+ * This function uses the service manager to restart the VLM service
+ * @returns {Function} Async restarter function that returns { success, error? }
+ */
+function createVLMServiceRestarter() {
+  return async () => {
+    console.log('[ModelCoordinator] Attempting to restart VLM service...');
+
+    try {
+      // Use service manager to restart VLM
+      const result = await serviceManager.restartService('vlm');
+
+      if (result.success) {
+        console.log(`[ModelCoordinator] VLM service restarted successfully (PID: ${result.pid})`);
+        markServiceIntent('vlm', true);
+
+        // Wait for service to be ready (health check with timeout)
+        const maxWaitTime = 60000; // 60 seconds
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitTime) {
+          try {
+            const health = await axios.get(`${SERVICE_URLS.vlm}/health`, { timeout: 5000 });
+            if (health.data.status === 'healthy') {
+              console.log('[ModelCoordinator] VLM service is healthy after restart');
+              return { success: true };
+            }
+          } catch {
+            // Service not ready yet, wait and retry
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        console.warn('[ModelCoordinator] VLM service started but health check timed out');
+        return { success: false, error: 'Service health check timeout' };
+      } else {
+        console.error(`[ModelCoordinator] Failed to restart VLM service: ${result.error}`);
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error(`[ModelCoordinator] Exception during VLM service restart: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  };
+}
+
+/**
+ * Create an LLM service restarter function for injection into LLM provider
+ * This function uses the service manager to restart the LLM service
+ * @returns {Function} Async restarter function that returns { success, error? }
+ */
+function createLLMServiceRestarter() {
+  return async () => {
+    console.log('[ModelCoordinator] Attempting to restart LLM service...');
+
+    try {
+      // Use service manager to restart LLM
+      const result = await serviceManager.restartService('llm');
+
+      if (result.success) {
+        console.log(`[ModelCoordinator] LLM service restarted successfully (PID: ${result.pid})`);
+        markServiceIntent('llm', true);
+
+        // Wait for service to be ready (health check with timeout)
+        const maxWaitTime = 60000; // 60 seconds
+        const startTime = Date.now();
+
+        while (Date.now() - startTime < maxWaitTime) {
+          try {
+            const health = await axios.get(`${SERVICE_URLS.llm}/health`, { timeout: 5000 });
+            if (health.data.status === 'ok' || health.data.status === 'healthy') {
+              console.log('[ModelCoordinator] LLM service is healthy after restart');
+              return { success: true };
+            }
+          } catch {
+            // Service not ready yet, wait and retry
+          }
+
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        console.warn('[ModelCoordinator] LLM service started but health check timed out');
+        return { success: false, error: 'Service health check timeout' };
+      } else {
+        console.error(`[ModelCoordinator] Failed to restart LLM service: ${result.error}`);
+        return { success: false, error: result.error };
+      }
+    } catch (error) {
+      console.error(`[ModelCoordinator] Exception during LLM service restart: ${error.message}`);
+      return { success: false, error: error.message };
+    }
+  };
+}
 
 /**
  * Unload a model from a service
@@ -302,5 +513,15 @@ module.exports = {
   withVLMOperation,
   withImageGenOperation,
   withLLMOperation,
-  SERVICE_URLS
+  SERVICE_URLS,
+  // Service health tracking and auto-restart
+  markServiceIntent,
+  getServiceIntent,
+  setServiceRestarter,
+  checkServiceHealth,
+  ensureServiceHealth,
+  ensureAllServicesHealthy,
+  getServiceHealthReport,
+  createVLMServiceRestarter,
+  createLLMServiceRestarter
 };

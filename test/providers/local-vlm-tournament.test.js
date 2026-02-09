@@ -353,4 +353,88 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
       assert.ok(Array.isArray(errors), 'Should track errors as array');
     });
   });
+
+  describe('Position Bias Mitigation', () => {
+    it('should mitigate VLM position bias via random swapping', async () => {
+      // Bug: VLMs have position bias - they tend to prefer the first image (A)
+      // Fix: compareWithDebiasing() randomly swaps images 50% of the time
+      //
+      // This test uses a mock that ALWAYS returns 'A' (100% position bias)
+      // If debiasing works, results should be approximately 50/50, not 100/0
+
+      assert.ok(LocalVLMProvider, 'Provider must be implemented');
+
+      // Track which image actually won (by original path, not position)
+      const winsByPath = new Map();
+
+      // Create biased mock that ALWAYS picks position A
+      provider._axios = {
+        post: async (_url, data) => {
+          return {
+            data: {
+              choice: 'A', // Always picks A - maximum position bias
+              explanation: 'A is better',
+              confidence: 0.9,
+              ranks: { A: { alignment: 1, aesthetics: 1 }, B: { alignment: 2, aesthetics: 2 } }
+            }
+          };
+        },
+        get: async () => ({ data: { status: 'healthy', model_loaded: true } })
+      };
+
+      // Run multiple ranking sessions to get statistical significance
+      const images = [
+        { localPath: '/imgX.png', candidateId: 'X' },
+        { localPath: '/imgY.png', candidateId: 'Y' }
+      ];
+
+      // Initialize win counts
+      winsByPath.set('X', 0);
+      winsByPath.set('Y', 0);
+
+      // Run 20 rankings - with proper debiasing, each should win ~50%
+      const iterations = 20;
+      for (let i = 0; i < iterations; i++) {
+        // Reset graph for each iteration to get independent results
+        provider.resetComparisonGraph();
+
+        const result = await provider.rankImagesWithTransitivity(images, 'test prompt', {
+          strategy: 'all-pairs',
+          ensembleSize: 1 // Single comparison per iteration
+        });
+
+        const winner = result.rankings[0].candidateId;
+        winsByPath.set(winner, winsByPath.get(winner) + 1);
+      }
+
+      const xWins = winsByPath.get('X');
+      const yWins = winsByPath.get('Y');
+
+      console.log(`Position bias test: X won ${xWins}/${iterations}, Y won ${yWins}/${iterations}`);
+
+      // Without debiasing: X would win 100% (always in position A first)
+      // With debiasing: ~50% each (statistical noise expected)
+      // Test: Neither should win more than 75% (allowing for randomness)
+      assert.ok(
+        xWins <= iterations * 0.75,
+        `Position bias bug: X (first in pair order) won ${xWins}/${iterations} times (>75%). ` +
+        'Debiasing should make this ~50%.'
+      );
+      assert.ok(
+        yWins <= iterations * 0.75,
+        `Position bias bug: Y won ${yWins}/${iterations} times (>75%). ` +
+        'Debiasing should make this ~50%.'
+      );
+
+      // Both should win at least some (>25%)
+      assert.ok(
+        xWins >= iterations * 0.25,
+        `X only won ${xWins}/${iterations} times (<25%). Expected ~50% with debiasing.`
+      );
+      assert.ok(
+        yWins >= iterations * 0.25,
+        `Y only won ${yWins}/${iterations} times (<25%). Expected ~50% with debiasing.`
+      );
+    });
+  });
 });
