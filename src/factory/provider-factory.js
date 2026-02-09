@@ -241,6 +241,7 @@ function createCritiqueGenerator(options = {}) {
 /**
  * Create an ImageRanker instance for comparative ranking
  * @param {Object} options - Override configuration options
+ * @param {number} [options.alignmentWeight] - Weight for prompt alignment vs aesthetics (0-1, default 0.7)
  * @returns {ImageRanker|null} Image ranker instance or null for mock mode
  */
 function createImageRanker(options = {}) {
@@ -262,6 +263,7 @@ function createImageRanker(options = {}) {
 
   const instance = new ImageRanker({
     apiKey,
+    alignmentWeight: options.alignmentWeight,
     defaultEnsembleSize: ensembleSize
   });
   // Store apiKey on instance for testing
@@ -272,6 +274,7 @@ function createImageRanker(options = {}) {
 /**
  * Create a VLM provider instance for pairwise image comparison
  * @param {Object} options - Override configuration options
+ * @param {number} [options.alignmentWeight] - Weight for prompt alignment vs aesthetics (0-1, default 0.7)
  * @returns {LocalVLMProvider|null} VLM provider instance or null for mock mode
  */
 function createVLMProvider(options = {}) {
@@ -290,6 +293,7 @@ function createVLMProvider(options = {}) {
       const vlmProvider = new LocalVLMProvider({
         apiUrl: options.apiUrl || config.vlm?.apiUrl || 'http://localhost:8004',
         model: options.model || config.vlm?.model || 'llava-v1.6-mistral-7b.Q4_K_M.gguf',
+        alignmentWeight: options.alignmentWeight,
         // Allow test injection of service restarter, otherwise use model coordinator
         serviceRestarter: options.serviceRestarter || modelCoordinator.createVLMServiceRestarter()
       });

@@ -397,4 +397,85 @@ describe('Provider Factory', () => {
       );
     });
   });
+
+  describe('🔴 Alpha Weight Propagation - ImageRanker', () => {
+    it('should accept alignmentWeight option and pass it to ImageRanker', () => {
+      const { createImageRanker } = require('../src/factory/provider-factory');
+
+      const ranker = createImageRanker({
+        mode: 'real',
+        apiKey: 'test-key-12345',
+        alignmentWeight: 0.5
+      });
+
+      assert(ranker, 'Should create ImageRanker instance');
+      assert.strictEqual(ranker.alignmentWeight, 0.5, 'Should pass alignmentWeight to ImageRanker');
+    });
+
+    it('should default alignmentWeight to 0.7 when not specified', () => {
+      const { createImageRanker } = require('../src/factory/provider-factory');
+
+      const ranker = createImageRanker({
+        mode: 'real',
+        apiKey: 'test-key-12345'
+      });
+
+      assert(ranker, 'Should create ImageRanker instance');
+      assert.strictEqual(ranker.alignmentWeight, 0.7, 'Should default alignmentWeight to 0.7');
+    });
+
+    it('should accept custom alignmentWeight values (0.0-1.0)', () => {
+      const { createImageRanker } = require('../src/factory/provider-factory');
+
+      const testValues = [0.0, 0.3, 0.5, 0.7, 1.0];
+
+      testValues.forEach(value => {
+        const ranker = createImageRanker({
+          mode: 'real',
+          apiKey: 'test-key-12345',
+          alignmentWeight: value
+        });
+        assert.strictEqual(ranker.alignmentWeight, value, `Should handle alignmentWeight=${value}`);
+      });
+    });
+  });
+
+  describe('🔴 Alpha Weight Propagation - VLMProvider', () => {
+    it('should accept alignmentWeight option and pass it to LocalVLMProvider', () => {
+      const { createVLMProvider } = require('../src/factory/provider-factory');
+
+      const vlm = createVLMProvider({
+        mode: 'real',
+        alignmentWeight: 0.4
+      });
+
+      assert(vlm, 'Should create LocalVLMProvider instance');
+      assert.strictEqual(vlm.alignmentWeight, 0.4, 'Should pass alignmentWeight to LocalVLMProvider');
+    });
+
+    it('should default alignmentWeight to 0.7 when not specified', () => {
+      const { createVLMProvider } = require('../src/factory/provider-factory');
+
+      const vlm = createVLMProvider({
+        mode: 'real'
+      });
+
+      assert(vlm, 'Should create LocalVLMProvider instance');
+      assert.strictEqual(vlm.alignmentWeight, 0.7, 'Should default alignmentWeight to 0.7');
+    });
+
+    it('should accept custom alignmentWeight values (0.0-1.0)', () => {
+      const { createVLMProvider } = require('../src/factory/provider-factory');
+
+      const testValues = [0.0, 0.3, 0.6, 0.8, 1.0];
+
+      testValues.forEach(value => {
+        const vlm = createVLMProvider({
+          mode: 'real',
+          alignmentWeight: value
+        });
+        assert.strictEqual(vlm.alignmentWeight, value, `Should handle alignmentWeight=${value}`);
+      });
+    });
+  });
 });

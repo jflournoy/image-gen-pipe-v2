@@ -170,10 +170,12 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       // - 'vlm': Use LocalVLMProvider for pairwise tournament ranking
       // - 'scoring': No pairwise ranking, fall back to CLIP/aesthetic scoring
       imageRanker: rankingMode === 'vlm' ? createVLMProvider({
-        mode: 'real'
+        mode: 'real',
+        alignmentWeight: alpha  // Pass user's alpha to control alignment vs aesthetics weighting
       }) : (rankingMode === 'scoring' ? null : (needsOpenAI ? createImageRanker({
         mode: 'real',
         apiKey: userApiKey,
+        alignmentWeight: alpha,  // Pass user's alpha to control alignment vs aesthetics weighting
         ...(models?.vision && { model: models.vision })
       }) : null))
     };
