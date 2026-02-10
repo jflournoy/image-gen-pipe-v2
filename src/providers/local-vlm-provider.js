@@ -97,6 +97,11 @@ class LocalVLMProvider {
     this.maxRetries = options.maxRetries ?? MAX_RETRIES;
     this.initialRetryDelay = options.initialRetryDelay ?? INITIAL_RETRY_DELAY_MS;
     this.maxRetryDelay = options.maxRetryDelay ?? MAX_RETRY_DELAY_MS;
+    // Separate evaluations mode (opt-in for using /compare-alignment and /compare-aesthetics endpoints)
+    // When enabled, ensemble voting makes 2N calls (N alignment + N aesthetics) vs N combined calls
+    // Benefits: More focused evaluations, independent assessment of alignment vs aesthetics
+    // Trade-off: ~2x inference time
+    this.useSeparateEvaluations = options.useSeparateEvaluations ?? false;
   }
 
   /**
@@ -223,6 +228,46 @@ class LocalVLMProvider {
   }
 
   /**
+   * Map Python snake_case response to JavaScript camelCase
+   * @param {Object} data - Response data from VLM service
+   * @returns {Object} Mapped response with camelCase keys
+   */
+  _mapResponseToCamelCase(data) {
+    // Parse ranks and calculate combined scores
+    let ranks = data.ranks || {
+      A: { alignment: 1, aesthetics: 1 },
+      B: { alignment: 2, aesthetics: 2 }
+    };
+
+    // Ensure ranks have alignment and/or aesthetics
+    for (const img of ['A', 'B']) {
+      if (ranks[img]) {
+        if (ranks[img].alignment !== undefined) {
+          ranks[img].alignment = ranks[img].alignment || 1;
+        }
+        if (ranks[img].aesthetics !== undefined) {
+          ranks[img].aesthetics = ranks[img].aesthetics || 1;
+        }
+        // Calculate combined rank score if both dimensions exist
+        if (ranks[img].alignment && ranks[img].aesthetics) {
+          ranks[img].combined = this._calculateCombinedRank(ranks[img]);
+        }
+      }
+    }
+
+    // Map snake_case from Python to camelCase for JS
+    return {
+      choice: data.choice,
+      explanation: data.explanation || '',
+      confidence: data.confidence || 0.5,
+      ranks: ranks,
+      winnerStrengths: data.winner_strengths || [],
+      loserWeaknesses: data.loser_weaknesses || [],
+      improvementSuggestion: data.improvement_suggestion || ''
+    };
+  }
+
+  /**
    * Compare two images against a prompt
    * Returns structured feedback matching OpenAI ImageRanker.compareTwo() interface
    * @param {string} imageA - Path to first image
@@ -304,19 +349,121 @@ class LocalVLMProvider {
   async compareWithDebiasing(imageA, imageB, prompt) {
     const shouldSwap = Math.random() < 0.5;
     const [first, second] = shouldSwap ? [imageB, imageA] : [imageA, imageB];
-    const result = await this.compareImages(first, second, prompt);
-    const mapped = this._mapResultBack(result, shouldSwap);
 
     if (DEBUG_DEBIASING) {
       // Extract candidate IDs from paths for logging
       const idA = imageA.match(/i\d+c\d+|img\d+/)?.[0] || imageA.split('/').pop();
       const idB = imageB.match(/i\d+c\d+|img\d+/)?.[0] || imageB.split('/').pop();
-      console.log(`[VLM Debiasing] ${idA} vs ${idB}: ` +
-        `swap=${shouldSwap}, vlmChoice=${result.choice}, mappedChoice=${mapped.choice}, ` +
-        `winner=${mapped.choice === 'A' ? idA : mapped.choice === 'B' ? idB : 'TIE'}`);
+
+      // STEP 1: Log what we're sending to VLM
+      console.log(`[VLM Step 1/4] ${idA} vs ${idB}: Sending to VLM` +
+        ` | Order: [${shouldSwap ? idB : idA}, ${shouldSwap ? idA : idB}]` +
+        ` | Swapped: ${shouldSwap}`);
+    }
+
+    const result = await this.compareImages(first, second, prompt);
+
+    if (DEBUG_DEBIASING) {
+      const idA = imageA.match(/i\d+c\d+|img\d+/)?.[0] || imageA.split('/').pop();
+      const idB = imageB.match(/i\d+c\d+|img\d+/)?.[0] || imageB.split('/').pop();
+
+      // STEP 2: Log what VLM returned (raw response)
+      console.log(`[VLM Step 2/4] ${idA} vs ${idB}: VLM raw response` +
+        ` | choice=${result.choice}` +
+        ` | ranks: A=[${result.ranks.A.alignment},${result.ranks.A.aesthetics}]` +
+        ` B=[${result.ranks.B.alignment},${result.ranks.B.aesthetics}]`);
+    }
+
+    const mapped = this._mapResultBack(result, shouldSwap);
+
+    if (DEBUG_DEBIASING) {
+      const idA = imageA.match(/i\d+c\d+|img\d+/)?.[0] || imageA.split('/').pop();
+      const idB = imageB.match(/i\d+c\d+|img\d+/)?.[0] || imageB.split('/').pop();
+
+      // STEP 3: Log after mapping back
+      console.log(`[VLM Step 3/4] ${idA} vs ${idB}: After mapping` +
+        ` | choice=${mapped.choice}` +
+        ` | ranks: A=[${mapped.ranks.A.alignment},${mapped.ranks.A.aesthetics}]` +
+        ` B=[${mapped.ranks.B.alignment},${mapped.ranks.B.aesthetics}]`);
+
+      // STEP 4: Validate expectations
+      const expectedFlip = shouldSwap && result.choice !== 'TIE';
+      const actuallyFlipped = result.choice !== mapped.choice;
+
+      if (expectedFlip !== actuallyFlipped) {
+        console.warn(`[VLM Step 4/4] ${idA} vs ${idB}: VALIDATION WARNING` +
+          ` | Expected flip: ${expectedFlip}, Actually flipped: ${actuallyFlipped}` +
+          ` | vlmChoice=${result.choice}, mappedChoice=${mapped.choice}`);
+      } else {
+        console.log(`[VLM Step 4/4] ${idA} vs ${idB}: Validation OK` +
+          ` | Winner: ${mapped.choice === 'A' ? idA : mapped.choice === 'B' ? idB : 'TIE'}`);
+      }
     }
 
     return mapped;
+  }
+
+  /**
+   * Compare images on ALIGNMENT only (prompt adherence)
+   * Ignores visual quality - focuses purely on how well images match prompt requirements
+   * @param {string} imageA - Path to first image
+   * @param {string} imageB - Path to second image
+   * @param {string} prompt - The prompt to evaluate against
+   * @returns {Promise<Object>} Comparison result with alignment ranks only
+   */
+  async compareImagesAlignment(imageA, imageB, prompt) {
+    const pathA = this._getImagePath(imageA);
+    const pathB = this._getImagePath(imageB);
+
+    return this._retryWithBackoff(
+      async () => {
+        const response = await this._axios.post(
+          `${this.apiUrl}/compare-alignment`,
+          {
+            image_a: pathA,
+            image_b: pathB,
+            prompt: prompt
+          },
+          { timeout: this.timeout }
+        );
+        return this._mapResponseToCamelCase(response.data);
+      },
+      {
+        operationName: 'VLM alignment comparison',
+        attemptRestart: true
+      }
+    );
+  }
+
+  /**
+   * Compare images on AESTHETICS only (visual quality)
+   * Ignores prompt adherence - focuses purely on composition, lighting, color, technical quality
+   * @param {string} imageA - Path to first image
+   * @param {string} imageB - Path to second image
+   * @returns {Promise<Object>} Comparison result with aesthetics ranks only
+   */
+  async compareImagesAesthetics(imageA, imageB) {
+    const pathA = this._getImagePath(imageA);
+    const pathB = this._getImagePath(imageB);
+
+    return this._retryWithBackoff(
+      async () => {
+        const response = await this._axios.post(
+          `${this.apiUrl}/compare-aesthetics`,
+          {
+            image_a: pathA,
+            image_b: pathB,
+            prompt: ''  // Not used for aesthetics
+          },
+          { timeout: this.timeout }
+        );
+        return this._mapResponseToCamelCase(response.data);
+      },
+      {
+        operationName: 'VLM aesthetics comparison',
+        attemptRestart: true
+      }
+    );
   }
 
   /**
@@ -331,6 +478,15 @@ class LocalVLMProvider {
    * @returns {Promise<{winner: string, votes: {A: number, B: number}, confidence: number, aggregatedRanks: Object}>}
    */
   async compareWithEnsemble(imageA, imageB, prompt, options = {}) {
+    // Check if using separate evaluations (opt-in via constructor option)
+    // Can also be overridden per-call via options.useSeparateEvaluations
+    const useSeparate = options.useSeparateEvaluations ?? this.useSeparateEvaluations;
+
+    if (useSeparate) {
+      return await this.compareWithEnsembleSeparate(imageA, imageB, prompt, options);
+    }
+
+    // Original combined evaluation logic
     const ensembleSize = options.ensembleSize || this.defaultEnsembleSize;
     const votes = { A: 0, B: 0 };
 
@@ -421,6 +577,123 @@ class LocalVLMProvider {
       loserWeaknesses: winner === 'A' ? [...weaknessesB] : [...weaknessesA],
       improvementSuggestion: lastImprovementSuggestion,
       ensembleSize
+    };
+  }
+
+  /**
+   * Compare with ensemble voting using SEPARATE alignment and aesthetics evaluations
+   * Makes 2N total comparisons (N per dimension) for independent evaluation
+   * This provides more focused evaluations than combined endpoint
+   * @param {string} imageA - Path to first image
+   * @param {string} imageB - Path to second image
+   * @param {string} prompt - The prompt to evaluate against
+   * @param {Object} [options] - Options
+   * @param {number} [options.ensembleSize] - Number of votes per dimension (default: this.defaultEnsembleSize)
+   * @returns {Promise<Object>} Aggregated result with separate dimension ranks
+   */
+  async compareWithEnsembleSeparate(imageA, imageB, prompt, options = {}) {
+    const ensembleSize = options.ensembleSize || this.defaultEnsembleSize;
+
+    const alignmentResults = [];
+    const aestheticsResults = [];
+
+    // Run all comparisons sequentially (VLM is single-threaded anyway)
+    for (let i = 0; i < ensembleSize; i++) {
+      // Random swap for debiasing
+      const shouldSwap = Math.random() < 0.5;
+      const [first, second] = shouldSwap ? [imageB, imageA] : [imageA, imageB];
+
+      // Alignment comparison
+      const alignmentResult = await this.compareImagesAlignment(first, second, prompt);
+      alignmentResults.push(this._mapResultBack(alignmentResult, shouldSwap));
+
+      // Aesthetics comparison
+      const aestheticsResult = await this.compareImagesAesthetics(first, second);
+      aestheticsResults.push(this._mapResultBack(aestheticsResult, shouldSwap));
+    }
+
+    // Aggregate results
+    return this._aggregateSeparateResults(alignmentResults, aestheticsResults);
+  }
+
+  /**
+   * Aggregate separate alignment and aesthetics results
+   * Averages ranks per dimension, then combines with alignment weight
+   * @private
+   * @param {Array} alignmentResults - Alignment-only comparison results
+   * @param {Array} aestheticsResults - Aesthetics-only comparison results
+   * @returns {Object} Aggregated comparison result with winner, confidence, ranks, votes
+   */
+  _aggregateSeparateResults(alignmentResults, aestheticsResults) {
+    // Count votes per dimension
+    const alignmentVotes = { A: 0, B: 0 };
+    const aestheticsVotes = { A: 0, B: 0 };
+
+    alignmentResults.forEach(r => {
+      if (r.choice === 'A') alignmentVotes.A++;
+      else if (r.choice === 'B') alignmentVotes.B++;
+    });
+
+    aestheticsResults.forEach(r => {
+      if (r.choice === 'A') aestheticsVotes.A++;
+      else if (r.choice === 'B') aestheticsVotes.B++;
+    });
+
+    // Average ranks per dimension
+    const avgAlignmentA = alignmentResults.reduce((sum, r) =>
+      sum + (r.ranks?.A?.alignment || 1), 0) / alignmentResults.length;
+    const avgAlignmentB = alignmentResults.reduce((sum, r) =>
+      sum + (r.ranks?.B?.alignment || 2), 0) / alignmentResults.length;
+    const avgAestheticsA = aestheticsResults.reduce((sum, r) =>
+      sum + (r.ranks?.A?.aesthetics || 1), 0) / aestheticsResults.length;
+    const avgAestheticsB = aestheticsResults.reduce((sum, r) =>
+      sum + (r.ranks?.B?.aesthetics || 2), 0) / aestheticsResults.length;
+
+    // Calculate combined ranks using alignment weight
+    const combinedA = this._calculateCombinedRank({
+      alignment: avgAlignmentA,
+      aesthetics: avgAestheticsA
+    });
+    const combinedB = this._calculateCombinedRank({
+      alignment: avgAlignmentB,
+      aesthetics: avgAestheticsB
+    });
+
+    const aggregatedRanks = {
+      A: { alignment: avgAlignmentA, aesthetics: avgAestheticsA, combined: combinedA },
+      B: { alignment: avgAlignmentB, aesthetics: avgAestheticsB, combined: combinedB }
+    };
+
+    // Determine winner based on combined rank (lower is better)
+    let winner;
+    if (combinedA < combinedB) {
+      winner = 'A';
+    } else if (combinedB < combinedA) {
+      winner = 'B';
+    } else {
+      winner = 'TIE';
+    }
+
+    // Calculate confidence from vote totals
+    const totalVotes = alignmentResults.length + aestheticsResults.length;
+    const winnerTotalVotes = alignmentVotes[winner] + aestheticsVotes[winner];
+    const loserOrTie = winner === 'A' ? 'B' : 'A';
+    const loserTotalVotes = alignmentVotes[loserOrTie] + aestheticsVotes[loserOrTie];
+    const majorityVotes = Math.max(winnerTotalVotes, loserTotalVotes);
+    const confidence = totalVotes > 0 ? majorityVotes / totalVotes : 0.5;
+
+    return {
+      winner,
+      choice: winner, // Alias for compatibility
+      confidence,
+      aggregatedRanks,
+      ranks: aggregatedRanks, // Alias for compatibility
+      votes: {
+        alignment: alignmentVotes,
+        aesthetics: aestheticsVotes
+      },
+      reason: `Winner based on combined rank: ${combinedA.toFixed(2)} vs ${combinedB.toFixed(2)}`,
+      ensembleSize: alignmentResults.length  // Per dimension
     };
   }
 

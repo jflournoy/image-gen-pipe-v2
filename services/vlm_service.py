@@ -53,6 +53,86 @@ chat_handler = None
 # Concurrent calls can crash or produce corrupted results
 inference_lock = asyncio.Lock()
 
+# Bias diagnostic counters (for debugging position bias)
+_bias_stats = {
+    'json_success': 0,
+    'json_failed_fallback': 0,
+    'choice_A': 0,
+    'choice_B': 0,
+    'choice_TIE': 0,
+    'rank_mismatch': 0  # choice doesn't match ranks
+}
+
+# Comparison prompt templates for focused evaluations
+# FIX D: Improved prompts to reduce position bias
+# - Removed "Compare these two images (A and B)" framing that primes A as baseline, B as alternative
+# - Emphasized that positions are randomized and don't indicate quality
+# - Made rank meaning explicit (1=better, NOT position)
+# - Strengthened JSON format requirement
+
+ALIGNMENT_PROMPT_TEMPLATE = """Image Comparison Task - Prompt Adherence Evaluation
+
+You are evaluating which of two images (labeled A and B) better matches a text prompt.
+IMAGE POSITIONS ARE RANDOMIZED - evaluate each image independently based on content, not label.
+
+TARGET PROMPT: "{prompt}"
+
+EVALUATION CRITERIA (ignore visual quality, focus ONLY on prompt match):
+- Does the image contain the requested content/subject?
+- Does it follow specific details mentioned in the prompt?
+- Does it match the described scene/setting?
+
+OUTPUT FORMAT - Respond with ONLY valid JSON (no markdown, no extra text):
+{{"choice": "A", "explanation": "brief reason why this image better matches the prompt", "confidence": 0.85, "ranks": {{"A": {{"alignment": 1}}, "B": {{"alignment": 2}}}}, "winner_strengths": ["specific strength", "another strength"], "loser_weaknesses": ["specific weakness"]}}
+
+CRITICAL RULES:
+- choice: "A", "B", or "TIE" (if both match equally)
+- confidence: 0.0 to 1.0 (how certain are you?)
+- ranks.alignment: 1 = better prompt match, 2 = worse prompt match (NOT position, but quality!)
+- If images match equally well, use "TIE" and rank both as 1
+- Output ONLY the JSON object, nothing else"""
+
+AESTHETICS_PROMPT_TEMPLATE = """Image Comparison Task - Visual Quality Evaluation
+
+You are evaluating which of two images (labeled A and B) has better visual/aesthetic quality.
+IMAGE POSITIONS ARE RANDOMIZED - evaluate each image independently based on quality, not label.
+
+EVALUATION CRITERIA (ignore prompt matching, focus ONLY on visual quality):
+- Composition and framing
+- Lighting and exposure quality
+- Color harmony and appeal
+- Technical clarity and sharpness
+- Overall artistic appeal
+
+OUTPUT FORMAT - Respond with ONLY valid JSON (no markdown, no extra text):
+{{"choice": "B", "explanation": "brief reason why this image has better quality", "confidence": 0.75, "ranks": {{"A": {{"aesthetics": 2}}, "B": {{"aesthetics": 1}}}}, "winner_strengths": ["better lighting", "sharper details"], "loser_weaknesses": ["dull colors", "soft focus"]}}
+
+CRITICAL RULES:
+- choice: "A", "B", or "TIE" (if both have equal quality)
+- confidence: 0.0 to 1.0 (how certain are you?)
+- ranks.aesthetics: 1 = better visual quality, 2 = worse visual quality (NOT position, but quality!)
+- If images have equal quality, use "TIE" and rank both as 1
+- Output ONLY the JSON object, nothing else"""
+
+# Combined prompt template (for backward compatibility)
+COMBINED_PROMPT_TEMPLATE = """You are an image evaluation expert. Compare these two images (A and B) against this prompt:
+
+PROMPT: "{prompt}"
+
+Evaluate both images on TWO dimensions:
+1. ALIGNMENT (prompt adherence): How well does each image match the content/subject described?
+2. AESTHETICS (visual quality): Composition, lighting, color harmony, technical quality
+
+For each dimension, rank the images 1 (better) or 2 (worse).
+
+Also identify:
+- Winner's STRENGTHS: What the better image does well (2-3 points)
+- Loser's WEAKNESSES: What the worse image could improve (2-3 points)
+- IMPROVEMENT: One specific, actionable suggestion to improve the prompt
+
+Respond ONLY with a JSON object in this exact format:
+{{"choice": "A" or "B" or "TIE", "explanation": "brief reason mentioning alignment and aesthetics", "confidence": 0.0-1.0, "ranks": {{"A": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}, "B": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}}}, "winner_strengths": ["strength1", "strength2"], "loser_weaknesses": ["weakness1", "weakness2"], "improvement_suggestion": "specific prompt improvement"}}"""
+
 # Track sequential inference count for preventive model reload
 # After many sequential inferences (ensemble voting), GGML memory
 # fragmentation can cause crashes. Reload threshold is a safety valve.
@@ -550,16 +630,30 @@ async def unload_model_endpoint():
         return {'status': 'not_loaded', 'message': 'Model was not loaded'}
 
 
-@app.post('/compare', response_model=CompareResponse)
-async def compare_images(request: CompareRequest, background_tasks: BackgroundTasks):
+async def _perform_comparison(
+    image_a_path: str,
+    image_b_path: str,
+    comparison_prompt: str,
+    background_tasks: BackgroundTasks,
+    prompt_desc: str = "comparison"
+) -> CompareResponse:
     """
-    Compare two images against a prompt.
-    Returns which image (A or B) better matches the prompt.
+    Shared comparison logic for all comparison endpoints.
 
-    Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
-    Preventive model reloads are scheduled as background tasks to avoid blocking.
+    Handles model loading, image encoding, inference, and response parsing.
+    Uses inference_lock to serialize requests (llama_cpp is not thread-safe).
+    Schedules preventive model reloads as background tasks.
+
+    Args:
+        image_a_path: Path to first image
+        image_b_path: Path to second image
+        comparison_prompt: Formatted prompt for VLM evaluation
+        background_tasks: FastAPI background tasks for async cleanup
+        prompt_desc: Description for logging (e.g., "alignment", "aesthetics", "combined")
+
+    Returns:
+        CompareResponse with choice, explanation, confidence, ranks, and feedback
     """
-    # Serialize all inference requests - llama_cpp crashes on concurrent access
     async with inference_lock:
         try:
             # Load model if not loaded
@@ -577,32 +671,12 @@ async def compare_images(request: CompareRequest, background_tasks: BackgroundTa
 
             # Encode images
             try:
-                image_a_uri = encode_image(request.image_a)
-                image_b_uri = encode_image(request.image_b)
+                image_a_uri = encode_image(image_a_path)
+                image_b_uri = encode_image(image_b_path)
             except FileNotFoundError as e:
                 raise HTTPException(status_code=400, detail=str(e))
 
-            # Create comparison prompt with multi-factor evaluation
-            # This format matches OpenAI ImageRanker for drop-in compatibility
-            comparison_prompt = f"""You are an image evaluation expert. Compare these two images (A and B) against this prompt:
-
-PROMPT: "{request.prompt}"
-
-Evaluate both images on TWO dimensions:
-1. ALIGNMENT (prompt adherence): How well does each image match the content/subject described?
-2. AESTHETICS (visual quality): Composition, lighting, color harmony, technical quality
-
-For each dimension, rank the images 1 (better) or 2 (worse).
-
-Also identify:
-- Winner's STRENGTHS: What the better image does well (2-3 points)
-- Loser's WEAKNESSES: What the worse image could improve (2-3 points)
-- IMPROVEMENT: One specific, actionable suggestion to improve the prompt
-
-Respond ONLY with a JSON object in this exact format:
-{{"choice": "A" or "B" or "TIE", "explanation": "brief reason mentioning alignment and aesthetics", "confidence": 0.0-1.0, "ranks": {{"A": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}, "B": {{"alignment": 1 or 2, "aesthetics": 1 or 2}}}}, "winner_strengths": ["strength1", "strength2"], "loser_weaknesses": ["weakness1", "weakness2"], "improvement_suggestion": "specific prompt improvement"}}"""
-
-            print(f'[VLM Service] Comparing images for: {request.prompt[:50]}...')
+            print(f'[VLM Service] Performing {prompt_desc} comparison...')
             start_time = time.time()
 
             # Create chat completion with images (with retry on memory errors)
@@ -631,7 +705,7 @@ Respond ONLY with a JSON object in this exact format:
                 background_tasks.add_task(perform_preventive_reload)
 
             elapsed = time.time() - start_time
-            print(f'[VLM Service] Comparison completed in {elapsed:.1f}s')
+            print(f'[VLM Service] {prompt_desc.capitalize()} comparison completed in {elapsed:.1f}s')
 
             # Parse response
             response_text = response['choices'][0]['message']['content']
@@ -684,10 +758,35 @@ Respond ONLY with a JSON object in this exact format:
                 if ranks:
                     for img in ['A', 'B']:
                         if img in ranks:
-                            # Ensure alignment and aesthetics are integers 1 or 2
+                            # Ensure ranks are integers 1 or 2 (handle both single and multi-dimension)
                             if isinstance(ranks[img], dict):
-                                ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
-                                ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+                                if 'alignment' in ranks[img]:
+                                    ranks[img]['alignment'] = int(ranks[img].get('alignment', 1))
+                                if 'aesthetics' in ranks[img]:
+                                    ranks[img]['aesthetics'] = int(ranks[img].get('aesthetics', 1))
+
+                # Track statistics
+                _bias_stats['json_success'] += 1
+                _bias_stats[f'choice_{choice}'] += 1
+
+                # Check for rank-choice mismatch (position bias indicator)
+                if choice in ['A', 'B'] and ranks:
+                    a_align = ranks.get('A', {}).get('alignment', 1)
+                    a_aesth = ranks.get('A', {}).get('aesthetics', 1)
+                    b_align = ranks.get('B', {}).get('alignment', 1)
+                    b_aesth = ranks.get('B', {}).get('aesthetics', 1)
+                    a_total = a_align + a_aesth
+                    b_total = b_align + b_aesth
+
+                    # Lower rank total = better (1+1=2 is better than 2+2=4)
+                    # FIX B: Validate and correct rank-choice mismatches
+                    if (choice == 'A' and b_total < a_total) or (choice == 'B' and a_total < b_total):
+                        _bias_stats['rank_mismatch'] += 1
+                        print(f'[VLM MISMATCH] choice={choice} but ranks: A_total={a_total}, B_total={b_total}')
+                        print(f'[VLM FIX B] Swapping ranks to match choice')
+                        # Swap ranks to match the choice
+                        ranks = {'A': ranks['B'], 'B': ranks['A']}
+                        print(f'[VLM FIX B] Corrected ranks: A={ranks["A"]}, B={ranks["B"]}')
 
                 print(f'[VLM Service] Parsed JSON - choice: {choice}, confidence: {result.get("confidence", 0.5)}, has_ranks: {ranks is not None}')
                 return CompareResponse(
@@ -702,11 +801,14 @@ Respond ONLY with a JSON object in this exact format:
 
             # Fallback: look for A or B in response - provide default ranks
             print(f'[VLM Service] No valid JSON found, using fallback parsing')
+            _bias_stats['json_failed_fallback'] += 1
+
             default_ranks_a_wins = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 2, 'aesthetics': 2}}
             default_ranks_b_wins = {'A': {'alignment': 2, 'aesthetics': 2}, 'B': {'alignment': 1, 'aesthetics': 1}}
 
             if 'image a' in response_text.lower() or response_text.strip().upper().startswith('A'):
                 print(f'[VLM Service] Fallback: chose A')
+                _bias_stats['choice_A'] += 1
                 return CompareResponse(
                     choice='A',
                     explanation=response_text,
@@ -718,6 +820,7 @@ Respond ONLY with a JSON object in this exact format:
                 )
             elif 'image b' in response_text.lower() or response_text.strip().upper().startswith('B'):
                 print(f'[VLM Service] Fallback: chose B')
+                _bias_stats['choice_B'] += 1
                 return CompareResponse(
                     choice='B',
                     explanation=response_text,
@@ -729,6 +832,7 @@ Respond ONLY with a JSON object in this exact format:
                 )
             else:
                 print(f'[VLM Service] Fallback: defaulting to TIE')
+                _bias_stats['choice_TIE'] += 1
                 tie_ranks = {'A': {'alignment': 1, 'aesthetics': 1}, 'B': {'alignment': 1, 'aesthetics': 1}}
                 return CompareResponse(
                     choice='TIE',
@@ -747,6 +851,113 @@ Respond ONLY with a JSON object in this exact format:
             import traceback
             traceback.print_exc()
             raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/compare', response_model=CompareResponse)
+async def compare_images(request: CompareRequest, background_tasks: BackgroundTasks):
+    """
+    Compare two images against a prompt using COMBINED evaluation (alignment + aesthetics).
+    Returns which image (A or B) better matches the prompt.
+
+    This endpoint evaluates both dimensions in a single LLM call for backward compatibility.
+    For separate evaluations, use /compare-alignment or /compare-aesthetics endpoints.
+
+    Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
+    Preventive model reloads are scheduled as background tasks to avoid blocking.
+    """
+    try:
+        # Create combined evaluation prompt
+        comparison_prompt = COMBINED_PROMPT_TEMPLATE.format(prompt=request.prompt)
+        print(f'[VLM Service] Combined comparison for: {request.prompt[:50]}...')
+
+        # Use shared comparison logic
+        return await _perform_comparison(
+            request.image_a,
+            request.image_b,
+            comparison_prompt,
+            background_tasks,
+            prompt_desc="combined"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'[VLM Service] Combined comparison error: {e}')
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/compare-alignment', response_model=CompareResponse)
+async def compare_alignment(request: CompareRequest, background_tasks: BackgroundTasks):
+    """
+    Compare two images ONLY on prompt adherence (alignment).
+    Ignores visual quality, composition, and aesthetics - focuses purely on
+    how well each image matches the prompt requirements.
+
+    Returns ranks with only 'alignment' dimension populated.
+    Use this for independent alignment evaluation in tournament comparisons.
+
+    Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
+    Preventive model reloads are scheduled as background tasks to avoid blocking.
+    """
+    try:
+        # Create alignment-only evaluation prompt
+        comparison_prompt = ALIGNMENT_PROMPT_TEMPLATE.format(prompt=request.prompt)
+        print(f'[VLM Service] Alignment comparison for: {request.prompt[:50]}...')
+
+        # Use shared comparison logic
+        return await _perform_comparison(
+            request.image_a,
+            request.image_b,
+            comparison_prompt,
+            background_tasks,
+            prompt_desc="alignment"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'[VLM Service] Alignment comparison error: {e}')
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/compare-aesthetics', response_model=CompareResponse)
+async def compare_aesthetics(request: CompareRequest, background_tasks: BackgroundTasks):
+    """
+    Compare two images ONLY on visual quality (aesthetics).
+    Ignores prompt adherence - focuses purely on composition, lighting,
+    color harmony, and technical quality.
+
+    Returns ranks with only 'aesthetics' dimension populated.
+    Use this for independent aesthetics evaluation in tournament comparisons.
+
+    Uses inference_lock to serialize requests - llama_cpp is not thread-safe.
+    Preventive model reloads are scheduled as background tasks to avoid blocking.
+    """
+    try:
+        # Create aesthetics-only evaluation prompt (no prompt substitution needed)
+        comparison_prompt = AESTHETICS_PROMPT_TEMPLATE
+        print(f'[VLM Service] Aesthetics comparison...')
+
+        # Use shared comparison logic
+        return await _perform_comparison(
+            request.image_a,
+            request.image_b,
+            comparison_prompt,
+            background_tasks,
+            prompt_desc="aesthetics"
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f'[VLM Service] Aesthetics comparison error: {e}')
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 class CompareBatchRequest(BaseModel):
@@ -944,6 +1155,30 @@ async def download_status():
             'status': 'error',
             'message': str(e)
         }
+
+
+@app.get('/bias_stats')
+async def get_bias_stats():
+    """Return bias diagnostic statistics for position bias detection"""
+    total_comparisons = _bias_stats['json_success'] + _bias_stats['json_failed_fallback']
+
+    return {
+        'total_comparisons': total_comparisons,
+        'json_parse_success_rate': _bias_stats['json_success'] / total_comparisons if total_comparisons > 0 else 0,
+        'fallback_rate': _bias_stats['json_failed_fallback'] / total_comparisons if total_comparisons > 0 else 0,
+        'choice_distribution': {
+            'A': _bias_stats['choice_A'],
+            'B': _bias_stats['choice_B'],
+            'TIE': _bias_stats['choice_TIE']
+        },
+        'choice_percentages': {
+            'A': (_bias_stats['choice_A'] / total_comparisons * 100) if total_comparisons > 0 else 0,
+            'B': (_bias_stats['choice_B'] / total_comparisons * 100) if total_comparisons > 0 else 0,
+            'TIE': (_bias_stats['choice_TIE'] / total_comparisons * 100) if total_comparisons > 0 else 0
+        },
+        'rank_mismatch_count': _bias_stats['rank_mismatch'],
+        'rank_mismatch_rate': _bias_stats['rank_mismatch'] / total_comparisons if total_comparisons > 0 else 0
+    }
 
 
 if __name__ == '__main__':
