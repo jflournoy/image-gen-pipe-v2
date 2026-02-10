@@ -2957,7 +2957,7 @@ function buildLineageVisualization(jobData) {
         ${lineageSteps}
       </div>
       <p style="font-size: 12px; color: #666; margin: 10px 0 0 0;">
-        Shows the winning candidate selected at each iteration, from root (iteration 0) to final winner
+        Shows the true ancestry of the final winner, tracing back through its parent at each iteration (not just top-ranked from each generation)
       </p>
     </div>
   `;
