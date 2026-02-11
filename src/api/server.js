@@ -82,7 +82,7 @@ export function createApp() {
 
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, models, fluxOptions, bflOptions, modalOptions } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
     // Check if OpenAI providers are being used
@@ -130,6 +130,7 @@ export function createApp() {
       temperature,
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
+      useSeparateEvaluations, // Use separate alignment/aesthetics evaluations in VLM
       models, // Pass user-selected models (if provided)
       fluxOptions, // Pass Flux generation options (steps, guidance)
       bflOptions,  // Pass BFL generation options (safety_tolerance, width, height)
@@ -142,7 +143,7 @@ export function createApp() {
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, models, fluxOptions, bflOptions, modalOptions }
+      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions }
     });
   });
 
@@ -397,7 +398,11 @@ export function createApp() {
     }
 
     try {
-      const outputDir = join(process.cwd(), 'output');
+      // Use same output directory configuration as beam-search-worker
+      // Allows using SESSION_HISTORY_DIR or IMAGES_DIR environment variables
+      const outputDir = process.env.SESSION_HISTORY_DIR ||
+                        process.env.IMAGES_DIR ||
+                        join(process.cwd(), 'session-history');
 
       // Search across all date directories to find the session
       // This allows serving images from sessions created on previous days

@@ -232,40 +232,48 @@ ${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays 
     // Build system prompt based on descriptiveness level
     let systemPrompt;
     if (descriptiveness === 1) {
-      // Concise: minimal instructions
-      systemPrompt = `You are an image prompt combiner. Merge the WHAT prompt (content) and HOW prompt (style) into a single prompt.
+      // Concise: FORCE brevity and minimalism
+      systemPrompt = `You are an image prompt combiner. Your output MUST be BRIEF and MINIMAL.
 
-Output only the combined prompt, no explanations.`;
+CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible.
+
+Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual.
+
+Output ONLY the combined prompt - NO explanations. Keep it SHORT.`;
     } else if (descriptiveness === 3) {
-      // Descriptive: extensive guidelines
-      systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style with maximum quality.
+      // Descriptive: FORCE comprehensiveness and detail
+      systemPrompt = `You are an image prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED.
 
-Critical guidelines:
-- Do NOT lose any important details from either prompt - preserve everything meaningful
-- Preserve ALL semantic content from both WHAT and HOW prompts
-- Create a natural, flowing description that integrates content and style seamlessly
-- Maintain specificity and avoid generalizations or abstractions of the details
-- Ensure the combined prompt would generate an image matching both the content and visual style requirements
-- Keep the prompt richly detailed and comprehensive while remaining coherent
-- Consider composition, lighting, mood, texture, and all artistic elements from HOW prompt
-- Incorporate all substantive objects, subjects, and scenarios from WHAT prompt
-- Use vivid, descriptive language that reinforces both dimensions
-- Apply industry-standard image generation prompt best practices
+CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout. Describe what is literally visible in the image.
 
-Output only the combined prompt, with no preamble, explanations, or commentary.`;
+Create an EXTENSIVE, DETAILED prompt combining WHAT (content) and HOW (style):
+- Describe physical appearances: shapes, colors, textures, materials, spatial relationships
+- Describe subjects: posture, expression, clothing, positioning
+- Describe environment: concrete spatial details, depth, scale
+- Describe style: lighting direction and quality, color palette, composition, visual techniques
+- Use specific visual descriptors rather than abstract concepts
+- If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy")
+- Avoid vague qualifiers like "beautiful," "amazing" - describe HOW things look
+- Write a description that a viewer could verify against the actual image
+- Make it LONG and DETAILED - comprehensive visual coverage is essential
+
+Output only the combined prompt with NO preamble or commentary.`;
     } else {
-      // Balanced (default): current balanced instructions
-      systemPrompt = `You are an image prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, unified prompt that captures both the content and the style.
+      // Balanced (default): moderate detail with focus
+      systemPrompt = `You are an image prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED.
+
+CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible in the image.
 
 Important guidelines:
-- Do NOT lose any important details from either prompt
-- Preserve ALL semantic content from both WHAT and HOW
-- Create a natural, flowing description that integrates content and style seamlessly
-- Maintain specificity - don't generalize or abstract the details
-- Ensure the combined prompt would generate an image matching both inputs
-- Keep the prompt richly detailed yet concise
+- Combine WHAT (content) and HOW (style) into a unified description
+- Describe physical appearances: shapes, colors, textures, spatial relationships
+- Use specific visual descriptors rather than abstract concepts
+- If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling")
+- Avoid vague qualifiers like "beautiful," "amazing" - describe HOW things look
+- Preserve ALL meaningful details from both dimensions
+- Write a description that a viewer could verify against the actual image
 
-Output only the combined prompt, with no preamble, explanations, or commentary.`;
+Output only the combined prompt with NO preamble or commentary.`;
     }
 
     const userPrompt = `WHAT prompt: ${whatPrompt}
@@ -472,19 +480,21 @@ Combined prompt:`;
 
 Your task: Take a terse prompt and expand it into a detailed description of WHAT is in the scene.
 
+CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible.
+
 Focus on:
-- Subjects and characters (who/what)
-- Objects and elements (physical things)
-- Actions and activities (what's happening)
-- Setting and environment (where)
-- Mood and atmosphere (emotional content)
+- Subjects and characters - their appearance, posture, expression, clothing
+- Objects and elements - shape, color, texture, material, condition
+- Actions and activities - visible motion, gestures, interactions
+- Setting and environment - concrete spatial details
+- Spatial relationships - where things are positioned relative to each other
 
 Important guidelines:
-- Use immersive, sensory-rich prose
-- Preserve the original intent while adding vivid detail
+- Describe physical appearances rather than abstract qualities
+- If evoking mood, anchor it to specific visual elements (lighting, color, composition)
+- Be specific about what things LOOK LIKE, not just what they ARE
 - When generating multiple expansions, introduce VARIETY in your interpretations
 - Explore different aspects, angles, or moments that honor the core concept
-- Be specific and concrete rather than generic
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       } else {
@@ -492,20 +502,23 @@ Output ONLY the expanded prompt, no preamble or commentary.`;
 
 Your task: Take a terse prompt and expand it into a detailed description of HOW the image should look.
 
+CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe the visual effects, not just name the techniques.
+
 Focus on:
-- Lighting (direction, quality, color temperature)
-- Composition (framing, perspective, rule of thirds)
-- Atmosphere (mood, depth, weather effects)
+- Lighting (direction, quality, color temperature, shadow characteristics)
+- Composition (framing, perspective, depth, visual flow)
+- Atmosphere (haze, weather effects, time of day)
 - Artistic style (photography, painting, digital art)
-- Color palette and saturation
-- Visual techniques (bokeh, HDR, long exposure)
+- Color palette (specific hues, saturation, contrast)
+- Visual techniques and their visible effects
 
 Important guidelines:
-- Use concrete, descriptive language referencing photographic or cinematic techniques
+- Describe what the visual effect LOOKS LIKE, not just the technique name
+  (e.g., "soft diffused shadows with gentle falloff" not just "soft lighting")
 - When generating multiple expansions, introduce VARIETY in your style choices
 - Explore different lighting scenarios, compositions, or artistic approaches
 - Be specific about technical choices rather than using vague terms
-- Consider how style choices interact with and enhance the content
+- Consider how style choices produce specific visual results
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       }

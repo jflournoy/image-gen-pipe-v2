@@ -31,7 +31,8 @@ requests>=2.31.0
 # xformers>=0.0.22  # Memory efficient attention
 
 # Face fixing dependencies (GFPGAN + Real-ESRGAN, CodeFormer optional)
-mediapipe>=0.10.0  # Face detection
-gfpgan>=0.3.0      # Face restoration (default)
-realesrgan>=0.3.0  # Real-ESRGAN upscaling
+mediapipe>=0.10.0      # Face detection
+gfpgan>=0.3.0          # Face restoration (default)
+basicsr-fixed>=1.4.2   # Fixes torchvision compatibility issues in basicsr
+realesrgan>=0.3.0      # Real-ESRGAN upscaling
 # Optional for higher quality: CodeFormer (requires manual setup - see docs/FACE_FIXING.md)

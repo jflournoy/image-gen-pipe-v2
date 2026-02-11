@@ -19,6 +19,10 @@ const SERVICE_URLS = {
 // 5000ms default provides buffer for VRAM deallocation when switching Flux (10GB) ↔ VLM (5GB)
 const GPU_CLEANUP_DELAY_MS = parseInt(process.env.GPU_CLEANUP_DELAY_MS || '5000', 10);
 
+// Health check timeout - be patient with model loading/busy services
+// 30s default allows services time to respond even when busy with other requests
+const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.MODEL_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
+
 /**
  * GPU Lock - ensures only one model operation runs at a time
  * Prevents race conditions where unload/load operations overlap
@@ -203,7 +207,7 @@ async function checkServiceHealth(service) {
   const url = `${SERVICE_URLS[service]}/health`;
 
   try {
-    await axios.get(url, { timeout: 5000 });
+    await axios.get(url, { timeout: HEALTH_CHECK_TIMEOUT_MS });
     // Service is healthy - update lastHealthy timestamp
     if (intent) {
       intent.lastHealthy = Date.now();
@@ -290,7 +294,7 @@ function createVLMServiceRestarter() {
 
         while (Date.now() - startTime < maxWaitTime) {
           try {
-            const health = await axios.get(`${SERVICE_URLS.vlm}/health`, { timeout: 5000 });
+            const health = await axios.get(`${SERVICE_URLS.vlm}/health`, { timeout: HEALTH_CHECK_TIMEOUT_MS });
             if (health.data.status === 'healthy') {
               console.log('[ModelCoordinator] VLM service is healthy after restart');
               return { success: true };
@@ -338,7 +342,7 @@ function createLLMServiceRestarter() {
 
         while (Date.now() - startTime < maxWaitTime) {
           try {
-            const health = await axios.get(`${SERVICE_URLS.llm}/health`, { timeout: 5000 });
+            const health = await axios.get(`${SERVICE_URLS.llm}/health`, { timeout: HEALTH_CHECK_TIMEOUT_MS });
             if (health.data.status === 'ok' || health.data.status === 'healthy') {
               console.log('[ModelCoordinator] LLM service is healthy after restart');
               return { success: true };

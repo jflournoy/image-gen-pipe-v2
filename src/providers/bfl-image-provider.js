@@ -45,6 +45,9 @@ class BFLImageProvider {
     this.sessionId = options.sessionId;
     this.outputDir = options.outputDir || 'output';
 
+    // Validate model on construction
+    this._validateModel(this.model);
+
     // Default generation settings
     const configDefaults = options.generation || {};
     this.generation = {
@@ -67,6 +70,52 @@ class BFLImageProvider {
     // Validate API key
     if (!this.apiKey) {
       throw new Error('BFL API key is required (set BFL_API_KEY environment variable or pass apiKey option)');
+    }
+  }
+
+  /**
+   * Validate model name against available BFL models
+   * @param {string} model - Model name to validate (e.g., 'flux-2-pro', 'flux.2-pro')
+   * @throws {Error} If model is not valid
+   * @private
+   */
+  _validateModel(model) {
+    const availableModels = BFLImageProvider.getAvailableModels();
+    // Flatten available models into list of endpoint names
+    const validFlux2 = Object.keys(availableModels['FLUX.2 (Latest)']);
+    const validFlux1 = Object.keys(availableModels['FLUX.1 (Legacy)']);
+    const validEndpoints = [...validFlux2, ...validFlux1];
+
+    // Check for invalid FLUX.2 variants BEFORE mapping
+    // This prevents flux.2-dev from being accepted (maps to flux-dev which is FLUX.1)
+    const modelLower = (model || '').toLowerCase();
+    if (modelLower.startsWith('flux.2-')) {
+      const variant = modelLower.replace('flux.2-', '');
+      // Only allow FLUX.2 variants that are explicitly listed in FLUX.2 section
+      const flux2Variants = new Set([
+        'pro',
+        'flex',
+        'max',
+        'klein-4b',
+        'klein-9b'
+      ]);
+
+      if (!flux2Variants.has(variant)) {
+        throw new Error(
+          `Invalid FLUX.2 variant: "flux.2-${variant}". ` +
+          `Valid FLUX.2 models: flux.2-pro, flux.2-flex, flux.2-max, flux.2-klein-4b, flux.2-klein-9b`
+        );
+      }
+    }
+
+    // Map the input model to its endpoint (handles both 'flux.2-pro' and 'flux-2-pro' formats)
+    const endpoint = this._getModelEndpoint(model);
+
+    if (!validEndpoints.includes(endpoint)) {
+      throw new Error(
+        `Invalid BFL model: "${model}" (mapped to "${endpoint}"). ` +
+        `Valid models: ${validEndpoints.join(', ')}`
+      );
     }
   }
 
@@ -119,6 +168,9 @@ class BFLImageProvider {
   async _generateWithModerationRetry(prompt, options, moderationState) {
     // Use model from options or instance default
     const model = options.model || this.model;
+
+    // Validate model before generation
+    this._validateModel(model);
 
     // Build request parameters
     const params = {
@@ -554,9 +606,18 @@ class BFLImageProvider {
         'klein-9b': 'flux-2-klein-9b',
         'max': 'flux-2-max'
       };
-      return mappings[variant] || `flux-${variant}`;
+      const mapped = mappings[variant];
+      if (!mapped) {
+        throw new Error(
+          `Unknown FLUX.2 variant: "${variant}". Valid variants: ${Object.keys(mappings).join(', ')}`
+        );
+      }
+      return mapped;
     }
-    return `flux-${model}`;
+    // For other model names that don't start with known prefixes, throw error
+    throw new Error(
+      `Unknown model format: "${model}". Supported formats: flux-2-pro, flux.2-pro, flux-dev, etc.`
+    );
   }
 
   /**

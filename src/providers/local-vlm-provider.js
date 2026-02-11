@@ -21,6 +21,10 @@ const DEFAULT_ALIGNMENT_WEIGHT = 0.7;
 const MAX_RETRIES = parseInt(process.env.VLM_MAX_RETRIES || '3', 10);
 const INITIAL_RETRY_DELAY_MS = parseInt(process.env.VLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
 const MAX_RETRY_DELAY_MS = parseInt(process.env.VLM_MAX_RETRY_DELAY_MS || '30000', 10);
+// Health check timeout - be patient with model loading/busy service
+const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.VLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
+// Only restart after this many consecutive connection failures (prevents restart on transient busy state)
+const RETRIES_BEFORE_RESTART = parseInt(process.env.VLM_RETRIES_BEFORE_RESTART || '2', 10);
 
 /**
  * Comparison Graph for transitive inference
@@ -160,9 +164,12 @@ class LocalVLMProvider {
             `[LocalVLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
           );
 
-          // Attempt service restart on first failure
-          if (attempt === 0 && attemptRestart && this._serviceRestarter) {
-            console.log(`[LocalVLMProvider] Attempting to restart VLM service...`);
+          // Only restart after multiple failures to avoid restarting a busy service
+          // This prevents unnecessary restarts when service is just slow/busy with other requests
+          const shouldAttemptRestart = attempt >= RETRIES_BEFORE_RESTART && attemptRestart && this._serviceRestarter;
+
+          if (shouldAttemptRestart) {
+            console.log(`[LocalVLMProvider] Service unreachable after ${attempt + 1} attempts, attempting restart...`);
             try {
               const restartResult = await this._serviceRestarter();
               if (restartResult.success) {
@@ -175,6 +182,8 @@ class LocalVLMProvider {
             } catch (restartError) {
               console.warn(`[LocalVLMProvider] Service restart threw error: ${restartError.message}`);
             }
+          } else if (attempt < RETRIES_BEFORE_RESTART) {
+            console.log(`[LocalVLMProvider] Retrying without restart (${attempt + 1}/${RETRIES_BEFORE_RESTART} attempts before restart)...`);
           }
 
           // Wait before retry with exponential backoff
@@ -1126,7 +1135,7 @@ class LocalVLMProvider {
     const checkHealth = async () => {
       try {
         const response = await this._axios.get(`${this.apiUrl}/health`, {
-          timeout: 5000
+          timeout: HEALTH_CHECK_TIMEOUT_MS
         });
         return response.data;
       } catch (error) {
