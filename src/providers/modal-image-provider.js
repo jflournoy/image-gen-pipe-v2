@@ -100,6 +100,17 @@ class ModalImageProvider {
         payload.loras = loras;
       }
 
+      // Add face fixing parameters if provided
+      if (options.fix_faces !== undefined) {
+        payload.fix_faces = options.fix_faces;
+      }
+      if (options.face_fidelity !== undefined) {
+        payload.face_fidelity = options.face_fidelity;
+      }
+      if (options.face_upscale !== undefined) {
+        payload.face_upscale = options.face_upscale;
+      }
+
       console.log(`[Modal Provider] Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
 
       // Make HTTP request to Modal endpoint with authentication headers
@@ -166,6 +177,7 @@ class ModalImageProvider {
           seed: result.metadata?.seed || payload.seed,
           inference_time: result.metadata?.inference_time,
           loras: result.metadata?.loras || payload.loras,
+          face_fixing: result.metadata?.face_fixing,
           modal: {
             endpoint: this.apiUrl
           }

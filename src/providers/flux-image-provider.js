@@ -91,6 +91,17 @@ class FluxImageProvider {
         scheduler: options.scheduler ?? this.generation.scheduler  // euler, dpmsolver, ddim, pndm
       };
 
+      // Add face fixing parameters if provided
+      if (options.fix_faces !== undefined) {
+        payload.fix_faces = options.fix_faces;
+      }
+      if (options.face_fidelity !== undefined) {
+        payload.face_fidelity = options.face_fidelity;
+      }
+      if (options.face_upscale !== undefined) {
+        payload.face_upscale = options.face_upscale;
+      }
+
       // Timeouts include model load time (Flux reload after GPU swap takes ~7-10 min)
       // Normal generation (model may need reloading): 15 minutes
       // First-time download (~12GB): 45 minutes
