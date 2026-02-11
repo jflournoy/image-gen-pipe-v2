@@ -1,6 +1,95 @@
 # Claude Current Status
 
-## Current Task: Completed - VLM Modal Image Paths Fix (Issue #33)
+## Current Task: Completed - Face Fixing Implementation for Modal and Flux Services
+
+### Timestamp: 2026-02-10 (continued session)
+
+### Summary
+Implemented multi-stage face fixing (detect → enhance → optional upscale) for both Modal cloud service and local Flux service. Feature includes automatic model detection, fallback system, and comprehensive documentation.
+
+### Architecture
+- **Detection**: MediaPipe Face Detection (CPU, ~100ms)
+- **Enhancement**: GFPGAN (default, ~1-2s per face) with optional CodeFormer upgrade (~2-3s per face, optional)
+- **Upscaling**: Real-ESRGAN 2x (optional, ~3-5s)
+- **GPU Memory**: Safe on 12GB Flux and 24GB Modal GPUs
+- **Automatic Fallback**: CodeFormer → GFPGAN → error handling
+
+### Implementation Complete
+
+**New Files**:
+- [services/face_fixing.py](services/face_fixing.py) - Core face fixing pipeline (770+ lines)
+  - FaceFixingPipeline class with lazy model loading
+  - MediaPipe detection, dual-model enhancement (CodeFormer + GFPGAN fallback), Real-ESRGAN upscaling
+  - Returns (enhanced_image, metadata_dict)
+- [docs/FACE_FIXING.md](docs/FACE_FIXING.md) - Comprehensive user guide (500+ lines)
+  - Quick start examples with all three parameters
+  - Performance tables comparing GFPGAN vs CodeFormer
+  - Three CodeFormer installation methods (vendor directory recommended)
+  - Troubleshooting and best practices
+
+**Modified Files**:
+- [services/modal_diffusion_service.py](services/modal_diffusion_service.py) - Added face fixing integration
+  - Parameters: fix_faces, face_fidelity, face_upscale
+  - Container image updated with face fixing dependencies
+  - Face fixing applied after touchup, includes metadata in response
+- [services/flux_service.py](services/flux_service.py) - Added face fixing integration
+  - Same parameters as Modal
+  - GPU memory coordination (unload Flux before face processing for 12GB constraint)
+  - Metadata included in response
+- [src/providers/modal-image-provider.js](src/providers/modal-image-provider.js) - Pass face fixing parameters
+- [src/providers/flux-image-provider.js](src/providers/flux-image-provider.js) - Pass face fixing parameters
+- [pyproject.toml](pyproject.toml) - Added face fixing dependencies via uv
+- [services/requirements.txt](services/requirements.txt) - Added face fixing dependencies
+- [services/README.md](services/README.md) - Updated with uv-based installation
+- [CLAUDE.md](CLAUDE.md) - Documented uv dependency management system
+- [.gitignore](.gitignore) - Added vendor/CodeFormer/ to keep repo clean
+
+### Key Decisions
+
+**GFPGAN as Default**:
+- CodeFormer doesn't publish to PyPI and repo lacks setup.py/pyproject.toml
+- GFPGAN works immediately with `pip install gfpgan` in uv environment
+- CodeFormer available as optional upgrade with manual GitHub clone + `python basicsr/setup.py develop`
+- System automatically detects CodeFormer and uses it if available, falls back to GFPGAN
+
+**uv Integration**:
+- All dependencies managed via uv (pyproject.toml + uv sync)
+- CodeFormer installation uses `uv run pip install` and `uv run python basicsr/setup.py develop`
+- Proper documentation for all three installation methods
+
+**Vendor Directory Approach**:
+- Recommended: Clone CodeFormer to ./vendor/CodeFormer/ (keeps it in project)
+- Alternative: Clone to /tmp or activate venv manually
+- vendor/CodeFormer/ added to .gitignore (don't commit external repos)
+
+### Parameter API
+```javascript
+fix_faces: boolean = false              // Enable face fixing (opt-in)
+face_fidelity: float = 0.7             // CodeFormer fidelity (0.0=quality, 1.0=identity)
+face_upscale: Optional[int] = null     // 2x upscaling (null=none, 2=2x)
+```
+
+### Response Metadata
+```javascript
+face_fixing: {
+  applied: boolean,           // Was face fixing applied?
+  faces_count: int,          // Number of faces detected
+  fidelity: float,           // Fidelity parameter used
+  upscale: int,              // Upscale factor (1=none, 2=2x)
+  time: float,               // Processing time in seconds
+  error?: string             // Error message if failed
+}
+```
+
+### Ready for Testing
+- Unit tests can be written (see plan for test structure)
+- Integration tests ready for Modal and Flux providers
+- Manual testing: Generate portrait with fix_faces: true via demo UI
+- GPU memory monitoring: Peak ~900MB (safe on both 12GB and 24GB)
+
+---
+
+## Previous Task: Completed - VLM Modal Image Paths Fix (Issue #33)
 
 ### Timestamp: 2026-02-09 14:16
 

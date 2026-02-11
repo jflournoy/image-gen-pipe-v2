@@ -20,7 +20,16 @@ Without this, you'll see: `401 Client Error... Cannot access gated repo`
 ### 1. Install Dependencies
 
 ```bash
-# Create a virtual environment (recommended)
+# Using uv (recommended - automatic venv setup)
+uv sync
+
+# For CodeFormer face fixing support (optional)
+uv run pip install git+https://github.com/sczhou/CodeFormer.git
+```
+
+**Alternative (manual venv)**:
+```bash
+# Create a virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
@@ -44,12 +53,20 @@ If you prefer to run services manually:
 
 **Flux Image Generation:**
 ```bash
+# Using uv
+uv run python services/flux_service.py
+
+# Or directly
 python3 services/flux_service.py
 # Runs on port 8001
 ```
 
 **Local Vision (CLIP + Aesthetics):**
 ```bash
+# Using uv
+uv run python services/vision_service.py
+
+# Or directly
 python3 services/vision_service.py
 # Runs on port 8002
 ```
