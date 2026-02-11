@@ -16,16 +16,16 @@ from PIL import Image
 import mediapipe as mp
 
 # Try to import face enhancement models, with graceful fallback
-try:
-    from codeformer import CodeFormer as CodeFormerModule
-    HAS_CODEFORMER = True
-except ImportError:
-    HAS_CODEFORMER = False
+# CodeFormer is complex to install and requires manual setup from GitHub
+# For now, we skip the import and rely on GFPGAN as the default
+HAS_CODEFORMER = False
 
 try:
     from gfpgan import GFPGANer
     HAS_GFPGAN = True
 except ImportError:
+    # GFPGAN has complex dependencies (basicsr/torchvision compatibility issues)
+    # Disabled for now - will revisit when dependencies stabilize
     HAS_GFPGAN = False
 
 try:
@@ -87,49 +87,11 @@ class FaceFixingPipeline:
             raise
 
     def _load_enhancer(self) -> None:
-        """Load face enhancement model (CodeFormer or GFPGAN)."""
+        """Load face enhancement model (GFPGAN only for now)."""
         if self.enhancer is not None:
             return
 
-        # Try CodeFormer if requested
-        if self.use_codeformer and HAS_CODEFORMER:
-            try:
-                print('[FaceFixing] Loading CodeFormer enhancement model...')
-                from codeformer import CodeFormer
-
-                self.enhancer = CodeFormer(
-                    dim_embd=512,
-                    codebook_size=1024,
-                    n_head=8,
-                    n_layers=9,
-                    connect_list=['32', '64', '128', '256'],
-                ).to(self.device)
-                self.enhancer = self.enhancer.eval()
-                self.enhancer_type = 'codeformer'
-
-                # Try to load pretrained weights
-                try:
-                    import huggingface_hub
-
-                    model_path = huggingface_hub.hf_hub_download(
-                        repo_id='sczhou/CodeFormer', filename='codeformer.pth'
-                    )
-                    checkpoint = torch.load(model_path, map_location=self.device)
-                    if 'params_ema' in checkpoint:
-                        self.enhancer.load_state_dict(checkpoint['params_ema'])
-                    elif 'params' in checkpoint:
-                        self.enhancer.load_state_dict(checkpoint['params'])
-                    else:
-                        self.enhancer.load_state_dict(checkpoint)
-                    print('[FaceFixing] CodeFormer weights loaded')
-                except Exception as e:
-                    print(f'[FaceFixing] Warning: Could not load CodeFormer weights: {e}')
-
-                return
-            except Exception as e:
-                print(f'[FaceFixing] Failed to load CodeFormer: {e}, falling back to GFPGAN')
-
-        # Fall back to GFPGAN
+        # Load GFPGAN (primary face enhancement model)
         if HAS_GFPGAN:
             try:
                 print('[FaceFixing] Loading GFPGAN enhancement model...')
@@ -146,13 +108,14 @@ class FaceFixingPipeline:
                 print('[FaceFixing] GFPGAN model loaded')
                 return
             except Exception as e:
-                print(f'[FaceFixing] Failed to load GFPGAN: {e}')
+                print(f'[FaceFixing] Warning: Failed to load GFPGAN: {e}')
+                print('[FaceFixing] Face enhancement unavailable - will return original image')
+                self.enhancer_type = 'none'
+                return
 
-        # No enhancement models available
-        raise ImportError(
-            'No face enhancement model available. Install GFPGAN with: pip install gfpgan\n'
-            'Or for higher quality, set up CodeFormer: https://github.com/sczhou/CodeFormer'
-        )
+        # No enhancement models available - this is not fatal, just skip enhancement
+        print('[FaceFixing] No face enhancement model available')
+        self.enhancer_type = 'none'
 
     def _load_upsampler(self, scale: int = 2) -> None:
         """Load Real-ESRGAN upsampler model."""
@@ -235,17 +198,21 @@ class FaceFixingPipeline:
 
     def _enhance_face(self, image: np.ndarray, face_box: tuple, fidelity: float = 0.7) -> np.ndarray:
         """
-        Enhance a single face using the loaded enhancer (CodeFormer or GFPGAN).
+        Enhance a single face using available model (GFPGAN).
 
         Args:
             image: BGR image as numpy array (HxWxC)
             face_box: Bounding box (x1, y1, x2, y2)
-            fidelity: Enhancement strength parameter (0.0=max quality, 1.0=max identity for CodeFormer)
+            fidelity: Enhancement strength parameter (ignored for GFPGAN, kept for API compatibility)
 
         Returns:
-            Enhanced image (full resolution, faces enhanced in-place)
+            Enhanced image (full resolution, or original if enhancement unavailable)
         """
         self._load_enhancer()
+
+        # If no enhancer available, return original image
+        if self.enhancer_type == 'none' or self.enhancer is None:
+            return image
 
         x1, y1, x2, y2 = face_box
 
@@ -258,13 +225,8 @@ class FaceFixingPipeline:
 
         face_region = image[y1_pad : y2_pad + 1, x1_pad : x2_pad + 1].copy()
 
-        # Enhance using appropriate model
-        if self.enhancer_type == 'codeformer':
-            restored_bgr = self._enhance_with_codeformer(face_region, fidelity)
-        elif self.enhancer_type == 'gfpgan':
-            restored_bgr = self._enhance_with_gfpgan(face_region)
-        else:
-            restored_bgr = face_region  # Fallback: return unchanged
+        # Enhance using GFPGAN
+        restored_bgr = self._enhance_with_gfpgan(face_region)
 
         # Paste back into full image
         enhanced_image = image.copy()
