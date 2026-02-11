@@ -145,6 +145,30 @@ current_lora = {
 # Multiple LoRA state tracking
 current_loras = []  # List of loaded LoRAs: [{'path': ..., 'scale': ..., 'adapter_name': ..., 'loaded': True/False}]
 
+# Global face fixer (lazy-loaded on first use)
+face_fixer = None
+
+
+def load_face_fixer():
+    """Load face fixing pipeline with GPU coordination"""
+    global face_fixer
+
+    if face_fixer is not None:
+        return face_fixer
+
+    try:
+        print('[Flux Service] Loading face fixing models...')
+        from face_fixing import FaceFixingPipeline
+        face_fixer = FaceFixingPipeline(device=DEVICE)
+        print('[Flux Service] Face fixing models loaded')
+        return face_fixer
+    except ImportError:
+        print('[Flux Service] Warning: Face fixing not available (face_fixing module not found)')
+        return None
+    except Exception as e:
+        print(f'[Flux Service] Warning: Failed to load face fixing: {e}')
+        return None
+
 
 class GenerationRequest(BaseModel):
     """Image generation request"""
@@ -159,6 +183,9 @@ class GenerationRequest(BaseModel):
     loras: List[dict] = []
     lora_scale: Optional[float] = None  # Per-request LoRA strength override
     scheduler: Optional[str] = None  # euler, dpmsolver, ddim, pndm (per-request override)
+    fix_faces: bool = False  # Enable face fixing via CodeFormer
+    face_fidelity: float = 0.7  # CodeFormer fidelity (0.0=max quality, 1.0=max identity)
+    face_upscale: Optional[int] = None  # Optional upscaling factor (1=none, 2=2x)
 
 
 class GenerationResponse(BaseModel):
@@ -747,6 +774,39 @@ async def generate_image(request: GenerationRequest):
         if original_scheduler is not None:
             pipe.scheduler = original_scheduler
 
+        # Apply face fixing if requested
+        face_fix_info = None
+        if request.fix_faces:
+            try:
+                print(f'[Flux Service] Applying face fixing (fidelity={request.face_fidelity}, upscale={request.face_upscale or 1})')
+                import time as time_module
+                face_fix_start = time_module.time()
+
+                # Load face fixer
+                fixer = load_face_fixer()
+                if fixer:
+                    fixed_image, face_fix_info = fixer.fix_faces(
+                        result.images[0],
+                        fidelity=request.face_fidelity,
+                        upscale=request.face_upscale or 1,
+                    )
+                    result.images[0] = fixed_image
+                    face_fix_time = time_module.time() - face_fix_start
+                    if face_fix_info:
+                        face_fix_info['time'] = face_fix_time
+                    print(f'[Flux Service] Face fixing completed in {face_fix_time:.1f}s')
+                else:
+                    face_fix_info = {
+                        'applied': False,
+                        'error': 'Face fixing module not available'
+                    }
+            except Exception as e:
+                print(f'[Flux Service] Face fixing failed: {e}')
+                face_fix_info = {
+                    'applied': False,
+                    'error': str(e)
+                }
+
         # Save image to temporary location
         output_dir = Path('output/temp')
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -773,6 +833,7 @@ async def generate_image(request: GenerationRequest):
                 'seed': request.seed,
                 'scheduler': scheduler_to_use,
                 'loras': lora_info if lora_info else current_loras if current_loras else None,
+                'face_fixing': face_fix_info,
             }
         )
 
