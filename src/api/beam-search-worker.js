@@ -53,6 +53,9 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     descriptiveness = 2,  // 1=concise, 2=balanced (default), 3=descriptive
     varyDescriptivenessRandomly = false, // Random selection of 1/2/3 per prompt
     useSeparateEvaluations = false, // Use separate alignment/aesthetics evaluations in VLM
+    autoGenerateNegativePrompts = true,  // Auto-generate negative prompts for SDXL/Modal
+    negativePrompt = null,  // Optional manual override
+    negativePromptFallback = 'blurry, low quality, distorted, deformed, artifacts',  // Fallback if generation fails
     models,
     fluxOptions,
     bflOptions,
