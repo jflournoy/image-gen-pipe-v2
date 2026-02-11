@@ -486,13 +486,13 @@ describe('LocalLLMProvider', () => {
       );
     });
 
-    test('should use 5 second timeout for health check', async () => {
+    test('should use 30 second timeout for health check', async () => {
       const provider = new LocalLLMProvider();
 
-      // Create a delayed response that exceeds timeout
+      // Create a delayed response that exceeds timeout (30s + buffer)
       nock('http://localhost:8003')
         .get('/health')
-        .delay(6000)
+        .delay(31000)
         .reply(200, { status: 'healthy' });
 
       await assert.rejects(

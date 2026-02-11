@@ -5,6 +5,8 @@
  * Handles switching between mock and real implementations.
  */
 
+const fs = require('fs').promises;
+const path = require('path');
 const config = require('../config/provider-config');
 
 // Mock providers
@@ -272,6 +274,27 @@ function createImageRanker(options = {}) {
 }
 
 /**
+ * Get the actual port for a service by reading the port file
+ * Falls back to the default port if file doesn't exist
+ * @param {string} serviceName - Name of the service (e.g., 'vlm')
+ * @param {number} defaultPort - Default port if file not found
+ * @returns {number} The actual port being used
+ */
+function getServicePort(serviceName, defaultPort) {
+  try {
+    const portFilePath = path.join('/tmp', `${serviceName}_service.port`);
+    const portContent = require('fs').readFileSync(portFilePath, 'utf8').trim();
+    const port = parseInt(portContent, 10);
+    if (!isNaN(port)) {
+      return port;
+    }
+  } catch {
+    // File doesn't exist or couldn't be read, use default
+  }
+  return defaultPort;
+}
+
+/**
  * Create a VLM provider instance for pairwise image comparison
  * @param {Object} options - Override configuration options
  * @param {number} [options.alignmentWeight] - Weight for prompt alignment vs aesthetics (0-1, default 0.7)
@@ -290,8 +313,13 @@ function createVLMProvider(options = {}) {
 
   switch (provider) {
     case 'local': {
+      // Read actual port from service port file (set by service manager when it finds available port)
+      const defaultPort = 8004;
+      const actualPort = getServicePort('vlm', defaultPort);
+      const apiUrl = options.apiUrl || config.vlm?.apiUrl || `http://localhost:${actualPort}`;
+
       const vlmProvider = new LocalVLMProvider({
-        apiUrl: options.apiUrl || config.vlm?.apiUrl || 'http://localhost:8004',
+        apiUrl,
         model: options.model || config.vlm?.model || 'llava-v1.6-mistral-7b.Q4_K_M.gguf',
         alignmentWeight: options.alignmentWeight,
         // Allow test injection of service restarter, otherwise use model coordinator

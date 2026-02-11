@@ -13,6 +13,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const providerConfig = require('../config/provider-config.js');
+const { getServicesToStart } = require('../config/requirements.js');
 const axios = require('axios');
 
 const router = express.Router();
@@ -121,87 +122,10 @@ router.post('/switch', async (req, res) => {
       });
     }
 
-    // Test that local providers are available before switching
-    if (llm === 'local-llm') {
-      const health = await checkLocalLLMHealth();
-      if (!health.available) {
-        console.log('[Provider Switch] BLOCKED: Local LLM not available');
-        return res.status(503).json({
-          error: 'Local LLM service not available',
-          message: 'Start Local LLM service before switching to local LLM'
-        });
-      }
-    }
-
-    if (image === 'flux') {
-      const health = await checkFluxHealth();
-      if (!health.available) {
-        console.log('[Provider Switch] BLOCKED: Flux not available');
-        return res.status(503).json({
-          error: 'Flux service not available',
-          message: 'Start Flux service before switching to local image generation'
-        });
-      }
-    }
-
-    if (vision === 'local') {
-      const health = await checkLocalVisionHealth();
-      if (!health.available) {
-        console.log('[Provider Switch] BLOCKED: Local vision not available');
-        return res.status(503).json({
-          error: 'Local vision service not available',
-          message: 'Start local vision service before switching'
-        });
-      }
-    }
-
-    if (image === 'bfl') {
-      // Check if API key is configured
-      if (!providerConfig.bfl?.apiKey) {
-        return res.status(400).json({
-          error: 'BFL API key not configured',
-          message: 'Set BFL_API_KEY environment variable before switching to BFL'
-        });
-      }
-
-      // Check BFL API health
-      const health = await checkBFLHealth();
-      if (!health.available) {
-        return res.status(503).json({
-          error: 'BFL API not available',
-          message: health.error || 'Could not connect to BFL API'
-        });
-      }
-    }
-
-    if (image === 'modal') {
-      console.log('[Provider Switch] Checking Modal configuration...');
-      // Check if Modal credentials are configured
-      if (!providerConfig.modal?.apiUrl) {
-        console.log('[Provider Switch] BLOCKED: Modal endpoint URL not configured');
-        return res.status(400).json({
-          error: 'Modal endpoint URL not configured',
-          message: 'Set MODAL_ENDPOINT_URL environment variable before switching to Modal'
-        });
-      }
-      if (!providerConfig.modal?.tokenId || !providerConfig.modal?.tokenSecret) {
-        console.log('[Provider Switch] BLOCKED: Modal authentication not configured');
-        return res.status(400).json({
-          error: 'Modal authentication not configured',
-          message: 'Set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET environment variables before switching to Modal'
-        });
-      }
-
-      // Check Modal API health (non-blocking - Modal has cold starts of 60-120s)
-      console.log('[Provider Switch] Checking Modal health...');
-      const health = await checkModalHealth();
-      if (!health.available) {
-        console.log('[Provider Switch] WARNING: Modal health check failed:', health.error);
-        console.log('[Provider Switch] Allowing switch anyway - Modal may have cold start delay');
-        // Don't block - Modal cold starts can take 60-120s, service may become available
-      }
-      console.log('[Provider Switch] Modal provider switch allowed');
-    }
+    // Provider switching is now permissive - no health checks required
+    // This allows users to configure desired state before starting services
+    // Validation happens at job submission time using requirements module
+    console.log('[Provider Switch] Setting desired provider configuration (validation at job start)');
 
     // Update runtime providers
     if (llm) runtimeProviders.llm = llm;
@@ -1198,8 +1122,22 @@ router.post('/services/quick-start', async (req, res) => {
     });
   }
 
-  // Default to all services if not specified (including VLM for pairwise ranking)
-  const servicesToStart = requestedServices || ['flux', 'vision', 'local-llm', 'vlm'];
+  // Get services to start based on current provider configuration
+  // Fall back to user-specified services if provided, otherwise use requirements module
+  let servicesToStart;
+  if (requestedServices) {
+    servicesToStart = requestedServices;
+  } else {
+    const currentProviders = getRuntimeProviders();
+    // Map 'ranking' to 'rankingMode' for requirements module
+    const settings = {
+      llm: currentProviders.llm,
+      image: currentProviders.image,
+      vision: currentProviders.vision,
+      rankingMode: currentProviders.ranking
+    };
+    servicesToStart = getServicesToStart(settings);
+  }
 
   console.log(`[Quick Start] Starting services: ${servicesToStart.join(', ')}`);
   if (hfToken) {
@@ -1674,7 +1612,9 @@ router.post('/quick-local', async (req, res) => {
     // Optionally start services
     if (startServices) {
       try {
-        const servicesToStart = ['flux', 'vision', 'local-llm', 'vlm'];
+        // For VLM tournament mode, only start: flux, local-llm, vlm (no vision needed)
+        // For scoring mode, would start: flux, vision, local-llm
+        const servicesToStart = ['flux', 'local-llm', 'vlm'];
         const startResults = {};
 
         for (const service of servicesToStart) {

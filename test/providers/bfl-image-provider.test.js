@@ -359,8 +359,8 @@ describe('BFLImageProvider', () => {
       const testCases = [
         { model: 'flux-pro-1.1', expected: 'flux-pro-1.1' },
         { model: 'flux-dev', expected: 'flux-dev' },
-        { model: 'flux-pro', expected: 'flux-pro' },
-        { model: 'flux-2-pro', expected: 'flux-2-pro' }
+        { model: 'flux-2-pro', expected: 'flux-2-pro' },
+        { model: 'flux-2-flex', expected: 'flux-2-flex' }
       ];
 
       testCases.forEach(({ model, expected }) => {
@@ -1065,8 +1065,7 @@ describe('BFLImageProvider', () => {
         { input: 'flux.2-flex', expected: 'flux-2-flex' },
         { input: 'flux.2-max', expected: 'flux-2-max' },
         { input: 'flux.2-klein-4b', expected: 'flux-2-klein-4b' },
-        { input: 'flux.2-klein-9b', expected: 'flux-2-klein-9b' },
-        { input: 'flux.2-dev', expected: 'flux-dev' }
+        { input: 'flux.2-klein-9b', expected: 'flux-2-klein-9b' }
       ];
 
       mappings.forEach(({ input, expected }) => {
@@ -1404,6 +1403,138 @@ describe('BFLImageProvider', () => {
       } catch (e) {
         // Expected
         assert.ok(true);
+      }
+    });
+  });
+
+  describe('Model Validation', () => {
+    test('should reject invalid model in constructor', () => {
+      assert.throws(
+        () => {
+          new BFLImageProvider({
+            apiKey: testApiKey,
+            model: 'flux-2-dev'
+          });
+        },
+        /Invalid BFL model/,
+        'Should throw error for invalid model flux-2-dev'
+      );
+    });
+
+    test('should reject invalid model in generateImage', async () => {
+      const provider = new BFLImageProvider({ apiKey: testApiKey });
+
+      try {
+        await provider.generateImage('test prompt', { model: 'flux-invalid' });
+        assert.fail('Should have thrown an error for invalid model');
+      } catch (error) {
+        assert.ok(error.message.includes('Invalid BFL model'));
+      }
+    });
+
+    test('should accept all valid FLUX.2 models', () => {
+      const validFlux2Models = [
+        'flux-2-max',
+        'flux-2-pro',
+        'flux-2-flex',
+        'flux-2-klein-4b',
+        'flux-2-klein-9b'
+      ];
+
+      validFlux2Models.forEach(model => {
+        assert.doesNotThrow(
+          () => {
+            new BFLImageProvider({ apiKey: testApiKey, model });
+          },
+          `Should accept valid FLUX.2 model: ${model}`
+        );
+      });
+    });
+
+    test('should accept all valid FLUX.1 models', () => {
+      const validFlux1Models = [
+        'flux-pro-1.1',
+        'flux-pro-1.1-ultra',
+        'flux-dev'
+      ];
+
+      validFlux1Models.forEach(model => {
+        assert.doesNotThrow(
+          () => {
+            new BFLImageProvider({ apiKey: testApiKey, model });
+          },
+          `Should accept valid FLUX.1 model: ${model}`
+        );
+      });
+    });
+
+    test('should accept UI notation (flux.2-pro) for FLUX.2 models', () => {
+      const uiFormatModels = [
+        'flux.2-max',
+        'flux.2-pro',
+        'flux.2-flex',
+        'flux.2-klein-4b',
+        'flux.2-klein-9b'
+      ];
+
+      uiFormatModels.forEach(model => {
+        assert.doesNotThrow(
+          () => {
+            new BFLImageProvider({ apiKey: testApiKey, model });
+          },
+          `Should accept UI notation: ${model}`
+        );
+      });
+    });
+
+    test('should throw error for unknown FLUX.2 variants', () => {
+      assert.throws(
+        () => {
+          new BFLImageProvider({
+            apiKey: testApiKey,
+            model: 'flux.2-unknown'
+          });
+        },
+        /Invalid FLUX.2 variant/,
+        'Should throw error for unknown FLUX.2 variant'
+      );
+    });
+
+    test('should throw error for invalid model format', () => {
+      assert.throws(
+        () => {
+          new BFLImageProvider({
+            apiKey: testApiKey,
+            model: 'invalid-format-xyz'
+          });
+        },
+        /Unknown model format/,
+        'Should throw error for invalid model format'
+      );
+    });
+
+    test('should include valid models list in error message', () => {
+      try {
+        new BFLImageProvider({
+          apiKey: testApiKey,
+          model: 'flux-invalid'
+        });
+        assert.fail('Should have thrown an error');
+      } catch (error) {
+        assert.ok(error.message.includes('Valid models:'));
+        assert.ok(error.message.includes('flux-2-pro'));
+        assert.ok(error.message.includes('flux-dev'));
+      }
+    });
+
+    test('should validate model on generation even if constructor used default', async () => {
+      const provider = new BFLImageProvider({ apiKey: testApiKey });
+
+      try {
+        await provider.generateImage('test prompt', { model: 'flux-bad-model' });
+        assert.fail('Should have thrown an error for invalid model');
+      } catch (error) {
+        assert.ok(error.message.includes('Invalid BFL model'));
       }
     });
   });

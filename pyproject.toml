@@ -30,6 +30,7 @@ dependencies = [
     # Face fixing dependencies (GFPGAN + Real-ESRGAN, CodeFormer optional)
     "mediapipe>=0.10.0",
     "gfpgan>=0.3.0",
+    "basicsr-fixed>=1.4.2",  # Fixes torchvision compatibility issues in basicsr
     "realesrgan>=0.3.0",
     # CodeFormer optional upgrade: requires manual setup from https://github.com/sczhou/CodeFormer
 ]

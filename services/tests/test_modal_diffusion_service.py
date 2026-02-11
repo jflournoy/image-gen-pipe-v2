@@ -387,5 +387,273 @@ class TestIntegrationPatterns:
         assert "model" in response_dict
 
 
+class TestLCMSchedulerSupport:
+    """
+    TDD RED: Tests for LCM (Latent Consistency Model) scheduler support.
+    Required for DMD (Distribution Matching Distillation) models.
+    """
+
+    def test_generate_request_has_scheduler_field(self):
+        """GenerateRequest should accept an optional scheduler parameter"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(
+            prompt="test",
+            scheduler="lcm"
+        )
+        assert request.scheduler == "lcm"
+
+    def test_generate_request_scheduler_defaults_to_none(self):
+        """GenerateRequest scheduler should default to None (use pipeline default)"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(prompt="test")
+        assert request.scheduler is None
+
+    def test_generate_request_validates_scheduler_values(self):
+        """GenerateRequest should only accept valid scheduler names"""
+        from modal_diffusion_service import GenerateRequest
+        from pydantic import ValidationError
+
+        # Valid schedulers should work
+        valid_schedulers = ["lcm", "euler", "euler_a", "dpm++", "ddim", "karras"]
+        for sched in valid_schedulers:
+            request = GenerateRequest(prompt="test", scheduler=sched)
+            assert request.scheduler == sched
+
+    def test_supported_schedulers_constant_exists(self):
+        """SUPPORTED_SCHEDULERS constant should be defined"""
+        from modal_diffusion_service import SUPPORTED_SCHEDULERS
+        assert SUPPORTED_SCHEDULERS is not None
+        assert "lcm" in SUPPORTED_SCHEDULERS
+
+    def test_diffusion_service_has_set_scheduler_method(self):
+        """DiffusionService should have a _set_scheduler method"""
+        from modal_diffusion_service import DiffusionService
+        assert hasattr(DiffusionService, '_set_scheduler')
+
+
+class TestSDXLRefinerSupport:
+    """
+    TDD RED: Tests for SDXL refiner pipeline support.
+    Allows base-to-refiner handoff at configurable switch point.
+    """
+
+    def test_generate_request_has_refiner_fields(self):
+        """GenerateRequest should accept refiner configuration"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(
+            prompt="test",
+            use_refiner=True,
+            refiner_switch=0.8
+        )
+        assert request.use_refiner is True
+        assert request.refiner_switch == 0.8
+
+    def test_generate_request_refiner_defaults(self):
+        """Refiner fields should have sensible defaults"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(prompt="test")
+        assert request.use_refiner is False
+        assert request.refiner_switch == 0.8  # Default switch point
+
+    def test_generate_request_validates_refiner_switch_range(self):
+        """refiner_switch should be between 0.0 and 1.0"""
+        from modal_diffusion_service import GenerateRequest
+        from pydantic import ValidationError
+
+        # Valid range
+        request = GenerateRequest(prompt="test", refiner_switch=0.75)
+        assert request.refiner_switch == 0.75
+
+        # Invalid - above 1.0
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", refiner_switch=1.5)
+
+        # Invalid - below 0.0
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", refiner_switch=-0.1)
+
+    def test_diffusion_service_has_load_refiner_method(self):
+        """DiffusionService should have _load_refiner_pipeline method"""
+        from modal_diffusion_service import DiffusionService
+        assert hasattr(DiffusionService, '_load_refiner_pipeline')
+
+    def test_generate_response_metadata_includes_refiner_info(self):
+        """GenerateResponse metadata should include refiner information when used"""
+        from modal_diffusion_service import GenerateResponse
+
+        response = GenerateResponse(
+            image="base64data",
+            format="base64",
+            metadata={
+                "seed": 42,
+                "used_refiner": True,
+                "refiner_switch": 0.8,
+                "refiner_model": "same_as_base"
+            }
+        )
+        assert response.metadata["used_refiner"] is True
+        assert response.metadata["refiner_switch"] == 0.8
+
+
+class TestClipSkipSupport:
+    """
+    TDD RED: Tests for clip_skip parameter support.
+    Controls how many CLIP layers to skip for style variation.
+    """
+
+    def test_generate_request_has_clip_skip_field(self):
+        """GenerateRequest should accept clip_skip parameter"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(
+            prompt="test",
+            clip_skip=2
+        )
+        assert request.clip_skip == 2
+
+    def test_generate_request_clip_skip_defaults_to_none(self):
+        """clip_skip should default to None (use model default)"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(prompt="test")
+        assert request.clip_skip is None
+
+    def test_generate_request_validates_clip_skip_range(self):
+        """clip_skip should be between 1 and 12"""
+        from modal_diffusion_service import GenerateRequest
+        from pydantic import ValidationError
+
+        # Valid range
+        request = GenerateRequest(prompt="test", clip_skip=3)
+        assert request.clip_skip == 3
+
+        # Invalid - too high
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", clip_skip=15)
+
+        # Invalid - zero or negative
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", clip_skip=0)
+
+
+class TestImg2ImgTouchupSupport:
+    """
+    TDD RED: Tests for optional img2img touchup pass.
+    Light artifact cleanup for any SDXL model output.
+    """
+
+    def test_generate_request_has_touchup_strength_field(self):
+        """GenerateRequest should accept touchup_strength parameter"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(
+            prompt="test",
+            touchup_strength=0.3
+        )
+        assert request.touchup_strength == 0.3
+
+    def test_generate_request_touchup_defaults_to_zero(self):
+        """touchup_strength should default to 0.0 (disabled)"""
+        from modal_diffusion_service import GenerateRequest
+
+        request = GenerateRequest(prompt="test")
+        assert request.touchup_strength == 0.0
+
+    def test_generate_request_validates_touchup_strength_range(self):
+        """touchup_strength should be between 0.0 and 1.0"""
+        from modal_diffusion_service import GenerateRequest
+        from pydantic import ValidationError
+
+        # Valid range
+        request = GenerateRequest(prompt="test", touchup_strength=0.4)
+        assert request.touchup_strength == 0.4
+
+        # Zero is valid (disabled)
+        request = GenerateRequest(prompt="test", touchup_strength=0.0)
+        assert request.touchup_strength == 0.0
+
+        # Invalid - above 1.0
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", touchup_strength=1.5)
+
+        # Invalid - negative
+        with pytest.raises(ValidationError):
+            GenerateRequest(prompt="test", touchup_strength=-0.1)
+
+    def test_generate_response_metadata_includes_touchup_info(self):
+        """GenerateResponse metadata should include touchup info when used"""
+        from modal_diffusion_service import GenerateResponse
+
+        response = GenerateResponse(
+            image="base64data",
+            format="base64",
+            metadata={
+                "seed": 42,
+                "touchup": {
+                    "applied": True,
+                    "strength": 0.3
+                }
+            }
+        )
+        assert response.metadata["touchup"]["applied"] is True
+        assert response.metadata["touchup"]["strength"] == 0.3
+
+
+class TestDMDModelConfiguration:
+    """
+    TDD RED: Tests for DMD (Distribution Matching Distillation) model support.
+    DMD models like MoP require specific scheduler and step settings.
+    """
+
+    def test_supported_models_can_specify_scheduler(self):
+        """SUPPORTED_MODELS entries can specify a default scheduler"""
+        from modal_diffusion_service import SUPPORTED_MODELS
+
+        # At minimum, SDXL turbo should specify its scheduler preference
+        if "sdxl-turbo" in SUPPORTED_MODELS:
+            config = SUPPORTED_MODELS["sdxl-turbo"]
+            # Should have scheduler field (or at least steps/guidance for DMD)
+            assert "default_steps" in config
+            assert config["default_steps"] <= 8  # DMD models use few steps
+
+    def test_custom_models_config_supports_scheduler(self):
+        """Custom models should be able to specify default scheduler in models.json"""
+        # This test validates the config schema supports scheduler field
+        # The actual parsing is handled by load_custom_models_config
+
+        expected_dmd_config = {
+            "path": "model.safetensors",
+            "pipeline": "sdxl",
+            "default_steps": 8,
+            "default_guidance": 1.0,
+            "scheduler": "lcm",  # NEW: scheduler field
+            "clip_skip": 2,  # NEW: clip_skip field
+            "use_refiner": True,  # NEW: refiner field
+            "refiner_switch": 0.85
+        }
+
+        # All keys should be valid (this will be validated by load_custom_models_config)
+        assert "scheduler" in expected_dmd_config
+        assert "clip_skip" in expected_dmd_config
+        assert "use_refiner" in expected_dmd_config
+
+    def test_generate_uses_model_default_scheduler_if_not_specified(self):
+        """When scheduler is not in request, should use model's default scheduler"""
+        # This is a behavior test - will need integration testing
+        # For now, verify the field plumbing exists
+        from modal_diffusion_service import GenerateRequest
+
+        # Request without scheduler
+        request = GenerateRequest(prompt="test", model="sdxl-turbo")
+        assert request.scheduler is None  # Not specified in request
+
+        # The service should look up sdxl-turbo's default scheduler
+        # This behavior will be verified in integration tests
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

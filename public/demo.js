@@ -93,6 +93,56 @@ function clearJobHistory() {
 }
 
 /**
+ * Sync provider selection to backend and localStorage
+ * When user changes a provider dropdown, sync it to the backend so services/status checks are aware
+ * @param {string} type - Provider type: 'llm', 'image', or 'vision'
+ * @param {string} value - New provider value
+ */
+async function syncProviderSelection(type, value) {
+  // Store in localStorage for persistence
+  if (type === 'llm') {
+    localStorage.setItem('llmProvider', value);
+  } else if (type === 'image') {
+    localStorage.setItem('imageProvider', value);
+  } else if (type === 'vision') {
+    localStorage.setItem('visionProvider', value);
+  }
+
+  // Build current provider state from UI
+  const providers = {
+    llm: type === 'llm' ? value : (document.getElementById('llmProvider')?.value || 'local-llm'),
+    image: type === 'image' ? value : (document.getElementById('imageProvider')?.value || 'flux'),
+    vision: type === 'vision' ? value : (document.getElementById('visionProvider')?.value || 'local')
+  };
+
+  // Sync to backend
+  try {
+    const response = await fetch('/api/providers/switch', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(providers)
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('[Provider Sync] Successfully synced to backend:', data.active);
+
+      // Update UI to reflect the synced state
+      updateMainFormForProviders(providers);
+    } else {
+      const error = await response.json();
+      console.error('[Provider Sync] Backend rejected:', error);
+      addMessage(`Failed to switch to ${value}: ${error.error}`, 'error');
+      // Reset dropdown to previous value (reload status)
+      await loadProviderStatus();
+    }
+  } catch (error) {
+    console.error('[Provider Sync] Error syncing to backend:', error);
+    addMessage(`Error syncing provider: ${error.message}`, 'error');
+  }
+}
+
+/**
  * Dynamic Service Management
  * Excludes Flux service when using cloud-based BFL provider
  */
@@ -104,7 +154,18 @@ function clearJobHistory() {
  */
 function getActiveServices() {
   const imageProvider = localStorage.getItem('imageProvider') || 'flux';
-  const baseServices = ['llm', 'vision', 'vlm'];
+  const rankingMode = localStorage.getItem('rankingMode') || 'vlm';
+
+  const baseServices = ['llm'];
+
+  // Only include vision service if using scoring mode (CLIP/aesthetic)
+  // VLM tournament mode doesn't need the vision service
+  if (rankingMode === 'scoring') {
+    baseServices.push('vision');
+  } else {
+    // Tournament mode uses VLM
+    baseServices.push('vlm');
+  }
 
   // Only include Flux if using local Flux, not BFL
   if (imageProvider === 'flux') {
@@ -628,7 +689,7 @@ function saveModalSettings() {
 }
 
 /**
- * Model-specific optimal settings
+ * Model-specific optimal settings (fallback if API doesn't provide defaults)
  * Maps each model to its recommended steps and guidance values
  */
 const MODAL_MODEL_DEFAULTS = {
@@ -640,15 +701,27 @@ const MODAL_MODEL_DEFAULTS = {
 };
 
 /**
+ * Dynamic model defaults loaded from API
+ * Populated by loadModalModels() and used by updateModalModelDefaults()
+ */
+let modalModelDefaultsFromAPI = {};
+
+/**
  * Update steps and guidance when Modal model changes
  * Automatically sets optimal values for the selected model
+ * Uses API-provided defaults first, falls back to hardcoded defaults
  */
 function updateModalModelDefaults() {
   const modelSelect = document.getElementById('modalModel');
   if (!modelSelect) return;
 
   const selectedModel = modelSelect.value;
-  const defaults = MODAL_MODEL_DEFAULTS[selectedModel] || { steps: 25, guidance: 3.5 };
+  // Prefer API-provided defaults, fall back to hardcoded defaults
+  const defaults = modalModelDefaultsFromAPI[selectedModel]
+    || MODAL_MODEL_DEFAULTS[selectedModel]
+    || { steps: 25, guidance: 3.5 };
+
+  console.log(`[Modal Defaults] Applying defaults for ${selectedModel}:`, defaults);
 
   // Update steps slider and display
   const stepsSlider = document.getElementById('modalSteps');
@@ -725,6 +798,20 @@ async function loadModalModels() {
       console.warn('[Modal Models] No models returned, using hardcoded list');
       return;
     }
+
+    // Store model defaults from API for use by updateModalModelDefaults()
+    models.forEach(model => {
+      modalModelDefaultsFromAPI[model.name] = {
+        steps: model.default_steps || 25,
+        guidance: model.default_guidance || 3.5,
+        scheduler: model.scheduler || null,
+        clip_skip: model.clip_skip || null,
+        use_refiner: model.use_refiner || false,
+        refiner_switch: model.refiner_switch || 0.8,
+        touchup_strength: model.touchup_strength || 0.0,
+      };
+    });
+    console.log('[Modal Models] Loaded defaults for', Object.keys(modalModelDefaultsFromAPI).length, 'models');
 
     // Group models by type
     const builtinModels = models.filter(m => m.type === 'builtin');
@@ -1392,7 +1479,8 @@ document.addEventListener('DOMContentLoaded', () => {
   const imageProviderSelect = document.getElementById('imageProvider');
   if (imageProviderSelect) {
     imageProviderSelect.addEventListener('change', function() {
-      localStorage.setItem('imageProvider', this.value);
+      syncProviderSelection('image', this.value);
+
       updateImageProviderSettings();
       loadBFLSettings();
 
@@ -1404,17 +1492,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       loadFluxSettings();
-
-      // Update main form to show/hide API key requirement based on new provider selection
-      const llmProvider = document.getElementById('llmProvider')?.value || 'local-llm';
-      const imageProvider = this.value;
-      const visionProvider = document.getElementById('visionProvider')?.value || 'local';
-
-      updateMainFormForProviders({
-        llm: llmProvider,
-        image: imageProvider,
-        vision: visionProvider
-      });
     });
   }
 
@@ -1422,15 +1499,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const llmProviderSelect = document.getElementById('llmProvider');
   if (llmProviderSelect) {
     llmProviderSelect.addEventListener('change', function() {
-      const llmProvider = this.value;
-      const imageProvider = document.getElementById('imageProvider')?.value || 'flux';
-      const visionProvider = document.getElementById('visionProvider')?.value || 'local';
-
-      updateMainFormForProviders({
-        llm: llmProvider,
-        image: imageProvider,
-        vision: visionProvider
-      });
+      syncProviderSelection('llm', this.value);
     });
   }
 
@@ -1438,15 +1507,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const visionProviderSelect = document.getElementById('visionProvider');
   if (visionProviderSelect) {
     visionProviderSelect.addEventListener('change', function() {
-      const llmProvider = document.getElementById('llmProvider')?.value || 'local-llm';
-      const imageProvider = document.getElementById('imageProvider')?.value || 'flux';
-      const visionProvider = this.value;
-
-      updateMainFormForProviders({
-        llm: llmProvider,
-        image: imageProvider,
-        vision: visionProvider
-      });
+      syncProviderSelection('vision', this.value);
     });
   }
 
@@ -1948,6 +2009,15 @@ function formatMessage(msg) {
     const rank = msg.rank !== undefined ? msg.rank : '?';
     const reason = msg.reason ? ` — ${msg.reason}` : '';
 
+    // Add separated scores display if available
+    let scoresInfo = '';
+    if (msg.aggregatedRanks) {
+      const align = msg.aggregatedRanks.alignment?.toFixed(2) || '?';
+      const aesth = msg.aggregatedRanks.aesthetics?.toFixed(2) || '?';
+      const combined = msg.aggregatedRanks.combined?.toFixed(2) || '?';
+      scoresInfo = ` | align: ${align}, aesth: ${aesth}, combined: ${combined}`;
+    }
+
     // Clear previous rankings when we see rank #1 (start of new ranking round)
     // This ensures only the FINAL iteration's rankings are kept
     if (rank === 1) {
@@ -1968,7 +2038,8 @@ function formatMessage(msg) {
       globalRankNote: msg.globalRankNote,
       reason: msg.reason,
       strengths: msg.strengths || [],
-      weaknesses: msg.weaknesses || []
+      weaknesses: msg.weaknesses || [],
+      aggregatedRanks: msg.aggregatedRanks
     };
     rankings.set(globalId, rankingData);
     console.log(`[Demo] Stored ranking for ${globalId}:`, rankingData);
@@ -1985,7 +2056,7 @@ function formatMessage(msg) {
     const displayRank = msg.globalRank !== undefined ? msg.globalRank : rank;
     const tiedNote = msg.globalRankNote === 'tied_at_floor' ? ' (tied)' : '';
     return {
-      text: `🏆 ${globalId} ranked #${displayRank}${tiedNote}${reason}`,
+      text: `🏆 ${globalId} ranked #${displayRank}${tiedNote}${scoresInfo}${reason}`,
       type: 'info'
     };
   }
@@ -2257,7 +2328,8 @@ async function startBeamSearch() {
       temperature: parseFloat(document.getElementById('temperature').value),
       descriptiveness: parseInt(document.getElementById('combine-descriptiveness').value),
       varyDescriptivenessRandomly: document.getElementById('vary-descriptiveness-randomly')?.checked || false,
-      rankingMode: document.getElementById('rankingMode')?.value || 'vlm'
+      rankingMode: document.getElementById('rankingMode')?.value || 'vlm',
+      useSeparateEvaluations: document.getElementById('useSeparateEvaluations')?.checked || false
     };
 
     // Add selected models (if user selected non-default options)
@@ -4273,17 +4345,22 @@ function updateHealthIndicator(elementId, health) {
 function updateMainFormForProviders(activeProviders) {
   console.log('[UI] updateMainFormForProviders called with:', activeProviders);
 
+  // Get ranking mode from localStorage
+  const rankingMode = localStorage.getItem('rankingMode') || 'vlm';
+  console.log('[UI] Ranking mode:', rankingMode);
+
   // Check if all providers are local (no OpenAI needed)
+  // Vision provider only matters if using scoring mode (not VLM tournament)
   const isFullyLocal = activeProviders.llm === 'local-llm' &&
                        activeProviders.image === 'flux' &&
-                       activeProviders.vision === 'local';
+                       (rankingMode === 'vlm' || activeProviders.vision === 'local');
 
   // Check if any OpenAI providers are being used
   const needsOpenAI = activeProviders.llm === 'openai' ||
                       activeProviders.image === 'openai' ||
                       activeProviders.image === 'dalle' ||
-                      activeProviders.vision === 'openai' ||
-                      activeProviders.vision === 'gpt-vision';
+                      (rankingMode === 'scoring' && (activeProviders.vision === 'openai' || activeProviders.vision === 'gpt-vision')) ||
+                      (rankingMode !== 'vlm' && rankingMode !== 'scoring' && (activeProviders.vision === 'openai' || activeProviders.vision === 'gpt-vision'));
 
   console.log('[UI] isFullyLocal:', isFullyLocal, 'needsOpenAI:', needsOpenAI);
 

@@ -10,6 +10,10 @@ const axios = require('axios');
 const MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES || '3', 10);
 const INITIAL_RETRY_DELAY_MS = parseInt(process.env.LLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
 const MAX_RETRY_DELAY_MS = parseInt(process.env.LLM_MAX_RETRY_DELAY_MS || '30000', 10);
+// Health check timeout - be patient with model loading/busy service
+const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.LLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
+// Only restart after this many consecutive connection failures (prevents restart on transient busy state)
+const RETRIES_BEFORE_RESTART = parseInt(process.env.LLM_RETRIES_BEFORE_RESTART || '2', 10);
 
 /**
  * Local LLM Provider
@@ -79,9 +83,12 @@ class LocalLLMProvider {
             `[LocalLLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
           );
 
-          // Attempt service restart on first failure
-          if (attempt === 0 && attemptRestart && this._serviceRestarter) {
-            console.log(`[LocalLLMProvider] Attempting to restart LLM service...`);
+          // Only restart after multiple failures to avoid restarting a busy service
+          // This prevents unnecessary restarts when service is just slow/busy with other requests
+          const shouldAttemptRestart = attempt >= RETRIES_BEFORE_RESTART && attemptRestart && this._serviceRestarter;
+
+          if (shouldAttemptRestart) {
+            console.log(`[LocalLLMProvider] Service unreachable after ${attempt + 1} attempts, attempting restart...`);
             try {
               const restartResult = await this._serviceRestarter();
               if (restartResult.success) {
@@ -94,6 +101,8 @@ class LocalLLMProvider {
             } catch (restartError) {
               console.warn(`[LocalLLMProvider] Service restart threw error: ${restartError.message}`);
             }
+          } else if (attempt < RETRIES_BEFORE_RESTART) {
+            console.log(`[LocalLLMProvider] Retrying without restart (${attempt + 1}/${RETRIES_BEFORE_RESTART} attempts before restart)...`);
           }
 
           // Wait before retry with exponential backoff
@@ -164,10 +173,10 @@ Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignme
       } else {
         // Dimension-aware expansion/refinement
         if (dimension === 'what') {
-          systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Write a concise description (2-4 sentences) that vividly describes WHAT is in the scene: characters, objects, actions, setting, and mood. Use immersive, sensory-rich prose.';
+          systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Describe physical appearances rather than abstract qualities. If evoking mood, anchor it to specific visual elements.';
           userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
         } else {
-          systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Write a concise description (2-4 sentences) that vividly describes HOW the image appears: lighting, composition, color palette, texture, and atmosphere. Use concrete, descriptive language referencing photographic or cinematic techniques.';
+          systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE - describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Describe what effects LOOK LIKE, e.g., "soft diffused shadows with gentle falloff" not just "soft lighting".';
           userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
         }
       }
@@ -206,14 +215,14 @@ Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignme
       // Build system prompt based on descriptiveness level
       let systemPrompt;
       if (descriptiveness === 1) {
-        // Concise: minimal instructions
-        systemPrompt = 'You are an SDXL prompt combiner. Merge the WHAT (content) and HOW (style) prompts into a single SDXL prompt.';
+        // Concise: FORCE brevity and minimalism
+        systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be BRIEF and MINIMAL. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual. Output ONLY the combined prompt - NO explanations. Keep it SHORT.';
       } else if (descriptiveness === 3) {
-        // Descriptive: extensive guidelines
-        systemPrompt = 'You are an SDXL prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a comprehensive, richly detailed SDXL prompt that captures all elements from both. Preserve every important detail from both prompts. Use comma-separated style descriptors. Maximize quality and specificity while maintaining coherence.';
+        // Descriptive: FORCE comprehensiveness and detail
+        systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED. CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, materials, spatial relationships. Describe subjects: posture, expression, clothing, positioning. Describe environment: concrete spatial details, depth, scale. Describe style: lighting direction and quality, color palette, composition, visual techniques. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy"). Avoid vague qualifiers like "beautiful" or "amazing" - describe HOW things look. Write a description that a viewer could verify against the actual image. Make it LONG and DETAILED.';
       } else {
-        // Balanced (default): current balanced instructions
-        systemPrompt = 'You are an SDXL prompt combiner. Given a WHAT prompt (describing content) and a HOW prompt (describing visual style), combine them into a single, comma-separated SDXL prompt that captures both the content and the style. Do not lose any important details from either prompt. Maintain a richly detailed and concise prompt.';
+        // Balanced (default): moderate detail with focus
+        systemPrompt = 'You are an SDXL prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, spatial relationships. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling"). Avoid vague qualifiers like "beautiful" - describe HOW things look. Preserve ALL meaningful details from both WHAT and HOW dimensions. Write a description that a viewer could verify against the actual image.';
       }
 
       const userPrompt = `WHAT prompt: ${whatPrompt || '(none)'}
@@ -238,6 +247,111 @@ Combined SDXL prompt:`;
       };
     } catch (error) {
       throw new Error(`Failed to combine prompts: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generate negative prompt for SDXL image generation
+   * @param {string} positivePrompt - The positive prompt to generate negatives for
+   * @param {Object} options - Generation options
+   * @param {boolean} options.enabled - Whether auto-generation is enabled (default: true)
+   * @param {string} options.fallback - Fallback negative prompt if generation fails
+   * @returns {Promise<Object>} Object with negativePrompt and metadata
+   */
+  async generateNegativePrompt(positivePrompt, options = {}) {
+    const startTime = Date.now();
+    const enabled = options.enabled !== false;
+    const fallback = options.fallback || 'blurry, low quality, distorted, deformed, artifacts';
+
+    // If disabled, return empty negative
+    if (!enabled) {
+      return {
+        negativePrompt: '',
+        metadata: {
+          autoGenerated: false,
+          generationTime: 0,
+          model: null
+        }
+      };
+    }
+
+    // Handle empty prompt
+    if (!positivePrompt || positivePrompt.trim().length === 0) {
+      return {
+        negativePrompt: fallback,
+        metadata: {
+          autoGenerated: false,
+          generationTime: Date.now() - startTime,
+          model: null,
+          usedFallback: true
+        }
+      };
+    }
+
+    try {
+      const systemPrompt = `You are an expert at generating negative prompts for SDXL image generation.
+
+Your task: Given a positive prompt, generate a negative prompt that:
+1. Prevents common artifacts (blurry, low quality, distorted, deformed, etc.)
+2. Disambiguates ambiguous terms (e.g., "old" in "30 year old" should be negated as "elderly, aged")
+3. Prevents opposite characteristics from the desired result
+4. Reinforces desired elements by excluding their absence (e.g., "no mountains" if mountains are wanted)
+5. Does NOT negate the core subject or desired attributes
+
+Examples:
+
+Positive: "30 year old man"
+Negative: "elderly, aged, wrinkled, senior, young, child, teenager, blurry, low quality, distorted"
+
+Positive: "old wooden barn"
+Negative: "modern, new, metal, glass, blurry, low quality, distorted, people, cars"
+
+Positive: "beautiful sunset over mountains"
+Negative: "blurry, low quality, no mountains, flat, urban, city, text, watermark"
+
+Now generate a negative prompt for the following positive prompt. Output ONLY the negative prompt, nothing else.`;
+
+      const userPrompt = `Positive prompt: "${positivePrompt}"
+
+Negative prompt:`;
+
+      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
+
+      const { text, usage } = await this._generate(fullPrompt, {
+        temperature: 0.3,  // Lower temp for consistency
+        max_tokens: 150,
+        stop: ['\n\n', 'Positive:', 'Example:']
+      });
+
+      const negativePrompt = text.trim();
+      const generationTime = Date.now() - startTime;
+
+      return {
+        negativePrompt,
+        metadata: {
+          autoGenerated: true,
+          generationTime,
+          model: this.model,
+          usedFallback: false,
+          tokensUsed: usage?.total_tokens || 0,
+          promptTokens: usage?.prompt_tokens || 0,
+          completionTokens: usage?.completion_tokens || 0
+        }
+      };
+    } catch (error) {
+      // LLM failed, use fallback
+      const generationTime = Date.now() - startTime;
+
+      return {
+        negativePrompt: fallback,
+        metadata: {
+          autoGenerated: false,
+          generationTime,
+          model: null,
+          error: error.message,
+          usedFallback: true
+        }
+      };
     }
   }
 
@@ -273,6 +387,11 @@ Combined SDXL prompt:`;
             top_p: options.top_p || 0.9,
             stream: false
           };
+
+          // Add stop sequences if provided
+          if (options.stop) {
+            payload.stop = options.stop;
+          }
 
           const response = await axios.post(
             `${this.apiUrl}/v1/completions`,
@@ -320,7 +439,7 @@ Combined SDXL prompt:`;
   async healthCheck() {
     try {
       const response = await axios.get(`${this.apiUrl}/health`, {
-        timeout: 5000
+        timeout: HEALTH_CHECK_TIMEOUT_MS
       });
 
       if (response.status !== 200) {
