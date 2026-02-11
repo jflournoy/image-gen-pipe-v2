@@ -26,6 +26,12 @@ dependencies = [
     # Image processing
     "Pillow>=10.1.0",
     "requests>=2.31.0",
+
+    # Face fixing dependencies (GFPGAN + Real-ESRGAN, CodeFormer optional)
+    "mediapipe>=0.10.0",
+    "gfpgan>=0.3.0",
+    "realesrgan>=0.3.0",
+    # CodeFormer optional upgrade: requires manual setup from https://github.com/sczhou/CodeFormer
 ]
 
 [tool.uv.workspace]
