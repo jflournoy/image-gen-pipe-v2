@@ -11,8 +11,12 @@ import fs, { promises as fsPromises } from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 
+// Import health check functions for service validation
+import axios from 'axios';
+
 const require = createRequire(import.meta.url);
 const providerConfig = require('../config/provider-config.js');
+const { needsApiKey, getRequirementsByType } = require('../config/requirements.js');
 
 const router = express.Router();
 
@@ -30,23 +34,22 @@ router.post('/start', async (req, res) => {
       alpha = 0.7,
       temperature = 0.8,
       ensembleSize = 3,
-      rankingMode = 'vlm'  // 'vlm' (tournament pairwise) or 'scoring' (CLIP/aesthetic)
+      rankingMode = 'vlm',  // 'vlm' (tournament pairwise) or 'scoring' (CLIP/aesthetic)
+      autoGenerateNegativePrompts = true,  // Auto-generate negative prompts for SDXL/Modal
+      negativePrompt = null,  // Optional manual negative prompt override
+      negativePromptFallback = 'blurry, low quality, distorted, deformed, artifacts'  // Fallback if generation fails
     } = req.body;
 
     // Extract user API key from headers
     const userApiKey = req.headers['x-openai-api-key'];
 
-    // Check if OpenAI providers are being used
+    // Check if OpenAI API key is required using requirements module
     const runtimeProviders = getRuntimeProviders();
-    const needsOpenAI = runtimeProviders.llm === 'openai' ||
-                        runtimeProviders.image === 'openai' ||
-                        runtimeProviders.image === 'dalle' ||
-                        runtimeProviders.vision === 'openai' ||
-                        runtimeProviders.vision === 'gpt-vision';
+    const requiresOpenAI = needsApiKey(runtimeProviders, 'OPENAI_API_KEY');
 
     // Only validate API key if OpenAI providers are being used AND not in mock mode
     const isMockMode = providerConfig.mode === 'mock';
-    if (needsOpenAI && !isMockMode) {
+    if (requiresOpenAI && !isMockMode) {
       if (!userApiKey || !userApiKey.trim()) {
         return res.status(401).json({
           error: 'Missing API key',
@@ -61,6 +64,29 @@ router.post('/start', async (req, res) => {
           message: 'API key should start with sk-'
         });
       }
+    }
+
+    // Check that required services are running
+    const requirements = getRequirementsByType(runtimeProviders);
+    const missingServices = [];
+
+    for (const service of requirements.services) {
+      try {
+        const response = await axios.get(`http://localhost:${service.port}/health`, { timeout: 2000 });
+        if (response.status !== 200) {
+          missingServices.push(service.name);
+        }
+      } catch {
+        missingServices.push(service.name);
+      }
+    }
+
+    if (missingServices.length > 0) {
+      return res.status(503).json({
+        error: 'Required services not available',
+        message: `Start these services before running: ${missingServices.join(', ')}`,
+        missingServices
+      });
     }
 
     // Validate required parameter
@@ -119,7 +145,10 @@ router.post('/start', async (req, res) => {
       alpha: alphaValidated,
       temperature: tempValidated,
       ensembleSize: ensembleValidated,  // Pass ensemble size to beam search for custom voting
-      rankingMode: rankingModeValidated  // 'vlm' or 'scoring'
+      rankingMode: rankingModeValidated,  // 'vlm' or 'scoring'
+      autoGenerateNegativePrompts,  // Enable/disable negative prompt auto-generation
+      negativePrompt,  // Optional manual override
+      negativePromptFallback  // Fallback if generation fails
     }, userApiKey).catch(err => {
       console.error(`[Demo] Error running beam search for job ${jobId}:`, err);
     });

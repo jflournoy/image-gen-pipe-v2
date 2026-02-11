@@ -52,6 +52,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     temperature = 0.7,
     descriptiveness = 2,  // 1=concise, 2=balanced (default), 3=descriptive
     varyDescriptivenessRandomly = false, // Random selection of 1/2/3 per prompt
+    useSeparateEvaluations = false, // Use separate alignment/aesthetics evaluations in VLM
     models,
     fluxOptions,
     bflOptions,
@@ -173,7 +174,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       // - 'scoring': No pairwise ranking, fall back to CLIP/aesthetic scoring
       imageRanker: rankingMode === 'vlm' ? createVLMProvider({
         mode: 'real',
-        alignmentWeight: alpha  // Pass user's alpha to control alignment vs aesthetics weighting
+        alignmentWeight: alpha,  // Pass user's alpha to control alignment vs aesthetics weighting
+        useSeparateEvaluations  // Pass user's choice for separate/combined evaluation mode
       }) : (rankingMode === 'scoring' ? null : (needsOpenAI ? createImageRanker({
         mode: 'real',
         apiKey: userApiKey,
@@ -226,6 +228,9 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       temperature,
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
+      autoGenerateNegativePrompts, // Enable/disable negative prompt auto-generation
+      ...(negativePrompt && { negativePrompt }), // Optional manual override
+      ...(negativePromptFallback && { negativePromptFallback }), // Fallback if generation fails
       ...(fluxOptions && { fluxOptions }), // Pass Flux generation options (steps, guidance)
       ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
@@ -372,6 +377,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
           whatPrompt: candidate.whatPrompt,
           howPrompt: candidate.howPrompt,
           combined: candidate.combined,
+          negativePrompt: candidate.negativePrompt || null,
+          negativePromptMetadata: candidate.negativePromptMetadata || null,
           timestamp: new Date().toISOString()
         });
       },
@@ -391,6 +398,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
               reason: candidate.ranking.reason,
               strengths: candidate.ranking.strengths,
               weaknesses: candidate.ranking.weaknesses,
+              aggregatedRanks: candidate.ranking.ranks,  // Include separated alignment/aesthetics scores
               timestamp: new Date().toISOString()
             });
           }
@@ -525,6 +533,8 @@ Provide ONLY the rephrased prompt, nothing else.`;
           what: result.whatPrompt,
           how: result.howPrompt,
           combined: result.combined,
+          negativePrompt: result.negativePrompt || null,
+          negativePromptMetadata: result.negativePromptMetadata || null,
           totalScore: result.totalScore,
           imageUrl: result.image.url
         }
@@ -540,6 +550,8 @@ Provide ONLY the rephrased prompt, nothing else.`;
           candidateId: c.metadata.candidateId,
           globalRank: c.globalRank,
           globalRankNote: c.globalRankNote,
+          negativePrompt: c.negativePrompt || null,
+          negativePromptMetadata: c.negativePromptMetadata || null,
           imageUrl: c.image?.localPath
             ? `/api/images/${sessionId}/${c.image.localPath.split(/[\\/]/).pop()}`
             : c.image?.url
