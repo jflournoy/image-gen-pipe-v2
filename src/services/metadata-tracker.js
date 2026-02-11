@@ -140,6 +140,8 @@ class MetadataTracker {
       whatPrompt: candidate.whatPrompt,
       howPrompt: candidate.howPrompt,
       combined: candidate.combined,
+      negativePrompt: candidate.negativePrompt || null,
+      negativePromptMetadata: candidate.negativePromptMetadata || null,
       critique: candidate.critique || null,
       image: {
         url: candidate.image.url,
@@ -197,6 +199,8 @@ class MetadataTracker {
       critique: critique || null,
       status: 'attempted',
       combined: null,
+      negativePrompt: null,
+      negativePromptMetadata: null,
       image: null,
       evaluation: null,
       totalScore: null,
@@ -243,6 +247,8 @@ class MetadataTracker {
     // Update with results
     candidate.status = 'completed';
     candidate.combined = results.combined;
+    candidate.negativePrompt = results.negativePrompt || null;
+    candidate.negativePromptMetadata = results.negativePromptMetadata || null;
     candidate.image = {
       url: results.image.url,
       localPath: results.image.localPath
