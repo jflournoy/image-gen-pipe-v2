@@ -1,5 +1,7 @@
 # CLAUDE.md - Project AI Guidelines
 
+> **Note:** See `.local-examples.md` for documentation and example guidelines.
+
 ## 🚀 Project Status: ALPHA
 
 **This is alpha software in active development.**

@@ -111,6 +111,12 @@ services/models/
 *.bin
 *.gguf
 
+# Local development notes
+.local-*.md
+
+# Session history - keep local only
+session-history/
+
 # Vendor code (external repositories)
 # CodeFormer is installed as optional upgrade for face fixing
 vendor/
