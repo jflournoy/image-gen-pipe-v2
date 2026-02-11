@@ -2,7 +2,7 @@
 Face Fixing Module
 
 Multi-stage face enhancement: detection → restoration → optional upscaling
-Uses MediaPipe for detection, CodeFormer for enhancement, Real-ESRGAN for upscaling
+Uses OpenCV for detection, GFPGAN for enhancement (default), Real-ESRGAN for upscaling
 """
 
 import time
@@ -13,11 +13,10 @@ from pathlib import Path
 import numpy as np
 import torch
 from PIL import Image
-import mediapipe as mp
 
 # Try to import face enhancement models, with graceful fallback
-# CodeFormer is complex to install and requires manual setup from GitHub
 # GFPGAN works with basicsr-fixed which fixes torchvision compatibility
+# CodeFormer is optional - requires manual setup from GitHub repo
 HAS_CODEFORMER = False
 
 try:

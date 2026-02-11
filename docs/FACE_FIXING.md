@@ -4,7 +4,7 @@ Enhance portraits and close-ups with multi-stage face fixing: **detection → re
 
 Face fixing uses **GFPGAN** (by default) for fast, high-quality face enhancement.
 
-**⚠️ Current Status**: GFPGAN dependencies have compatibility issues with torchvision/basicsr. Face fixing is integrated but currently disabled. See [Troubleshooting - Dependencies](#troubleshooting---dependencies) below.
+**✅ Current Status**: GFPGAN is fully functional with `basicsr-fixed` (resolves torchvision compatibility). Face fixing is ready to use with `fix_faces: true` parameter.
 
 ## Quick Start
 
@@ -103,10 +103,10 @@ Face fixing is a multi-stage pipeline:
 
 ### 1. Detection
 
-**MediaPipe Face Detection** identifies all faces in the image.
+**OpenCV Cascade Classifier** identifies all faces in the image.
 
-- CPU-optimized, very fast (~100ms per image)
-- Handles faces at various distances and angles
+- CPU-optimized, very fast (~50-100ms per image)
+- Stable, proven library with decades of use
 - Returns bounding boxes for each detected face
 
 **What happens if no faces detected?**
@@ -290,24 +290,25 @@ const portraitSettings = {
 
 ## Troubleshooting
 
-### Dependencies - GFPGAN Not Available
+### Dependencies - Resolved with basicsr-fixed
 
-**Problem**: Face fixing is enabled but faces are not being enhanced
+**Previous Issue**: GFPGAN had a torchvision compatibility issue because basicsr (Aug 2022 release) used a deprecated API removed in torchvision 0.17 (May 2024).
 
-**Current Issue**: GFPGAN has a dependency conflict with torchvision/basicsr. The face fixing feature is architecturally complete but currently unable to load the enhancement models.
+**Solution**: Use `basicsr-fixed>=1.4.2`, a maintained fork that backports the torchvision compatibility fix.
 
-**Error**: `ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'`
+**Current Status**: ✅ Working
+- GFPGAN enhancement models load successfully
+- Real-ESRGAN upscaling available
+- All dependencies installed via `uv sync`
 
-**Workaround**: The system will gracefully degrade - when enhancement models aren't available, the original faces are returned unchanged. The API still works, it just skips the enhancement step.
+**Installation**:
+```bash
+uv sync  # Installs basicsr-fixed automatically
+```
 
-**Next Steps**:
-1. We can revisit this when the basicsr/GFPGAN/torchvision dependency ecosystem stabilizes
-2. Alternative approaches:
-   - Use a simpler enhancement method (PIL/OpenCV filters)
-   - Switch to a different face enhancement library
-   - Use conda instead of pip/uv for dependency management
+**Optional: CodeFormer Upgrade**
 
-If you'd like to prioritize fixing this, let us know!
+CodeFormer offers higher quality enhancement but requires manual setup (not on PyPI). If interested, see [Setup and Installation - Advanced](#advanced-codeformer-installation) section below. For now, GFPGAN provides excellent quality with zero additional setup.
 
 ### Faces Not Detected
 
@@ -423,86 +424,42 @@ Face fixing adds processing time but can improve final selection quality for por
 
 ## Setup and Installation
 
-### Dependencies
+### Dependencies - Ready to Use
 
 Face fixing dependencies are included in the project's `pyproject.toml`. Install with `uv`:
 
 ```bash
-# Install all dependencies (includes GFPGAN by default)
+# Install all dependencies (includes GFPGAN)
 uv sync
 ```
 
-**Default Dependencies** (installed automatically):
-- `mediapipe>=0.10.0` - Face detection
-- `gfpgan>=0.3.0` - Fast, high-quality face restoration (default)
+**Working Dependencies** (installed automatically):
+- `gfpgan>=0.3.0` - Fast, high-quality face restoration (default, tested working)
+- `basicsr-fixed>=1.4.2` - Fixes torchvision compatibility
 - `realesrgan>=0.3.0` - Real-ESRGAN upscaling
+- Other supporting libraries
 
-**Optional Upgrade to CodeFormer** (advanced, for highest quality):
+**No additional setup required** - Face fixing is ready to use immediately after `uv sync`.
 
-CodeFormer offers superior quality but requires manual setup from source. Since the project uses `uv`, there are two clean approaches:
+### Advanced: CodeFormer Optional Upgrade
 
-### Option 1: Install in Project Directory (Recommended)
+CodeFormer offers marginal quality improvements over GFPGAN but requires manual setup from source (not published on PyPI). **Currently deferred** - we'll revisit if GFPGAN quality isn't sufficient.
+
+If you want to experiment with CodeFormer:
 
 ```bash
-# Clone CodeFormer as a subdirectory
+# Clone to vendor directory
 git clone https://github.com/sczhou/CodeFormer ./vendor/CodeFormer
 
-# Install dependencies in the uv environment
-uv run pip install -r ./vendor/CodeFormer/requirements.txt
-uv run python ./vendor/CodeFormer/basicsr/setup.py develop
-
-# Verify
-uv run python -c "from codeformer import CodeFormer; print('✅ CodeFormer available')"
-```
-
-**Note**: Add `vendor/CodeFormer/` to `.gitignore` to keep git clean:
-
-```bash
-echo "vendor/CodeFormer/" >> .gitignore
-```
-
-### Option 2: Install in Temporary Directory
-
-```bash
-# Clone to /tmp
-cd /tmp
-git clone https://github.com/sczhou/CodeFormer
-cd CodeFormer
-
-# Install in the uv environment
-uv run pip install -r requirements.txt
-uv run python basicsr/setup.py develop
-
-# Back to project
-cd ~/code/image-gen-pipe-v2
-```
-
-### Option 3: Activate venv and Install Normally
-
-```bash
-# Activate the uv-managed virtual environment
-source .venv/bin/activate
-
-# Clone and install (works with either directory option)
-git clone https://github.com/sczhou/CodeFormer ./vendor/CodeFormer
+# Install (from project root)
 cd ./vendor/CodeFormer
-pip install -r requirements.txt
-python basicsr/setup.py develop
+uv run pip install -r requirements.txt
+cd ../..
 
-# Back to project
-cd ~/code/image-gen-pipe-v2
-deactivate
+# The system will auto-detect CodeFormer if available
 ```
 
-### Verification
-
-After installation (any method), verify CodeFormer is detected:
-
-```bash
-uv run python -c "from codeformer import CodeFormer; print('✅ CodeFormer available')"
-```
-
-**The system will automatically detect and use CodeFormer if it's installed, otherwise it falls back to GFPGAN.**
+**Note**: CodeFormer installation is complex due to setuptools/basicsr directory structure. It's optional - GFPGAN provides excellent results without it.
 
 ### Modal Deployment
 
