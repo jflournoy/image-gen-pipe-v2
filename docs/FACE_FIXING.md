@@ -2,7 +2,9 @@
 
 Enhance portraits and close-ups with multi-stage face fixing: **detection → restoration → optional upscaling**.
 
-Face fixing uses **GFPGAN** (by default) for fast, high-quality face enhancement. For superior results, optionally upgrade to **CodeFormer** (requires manual setup).
+Face fixing uses **GFPGAN** (by default) for fast, high-quality face enhancement.
+
+**⚠️ Current Status**: GFPGAN dependencies have compatibility issues with torchvision/basicsr. Face fixing is integrated but currently disabled. See [Troubleshooting - Dependencies](#troubleshooting---dependencies) below.
 
 ## Quick Start
 
@@ -287,6 +289,25 @@ const portraitSettings = {
 ```
 
 ## Troubleshooting
+
+### Dependencies - GFPGAN Not Available
+
+**Problem**: Face fixing is enabled but faces are not being enhanced
+
+**Current Issue**: GFPGAN has a dependency conflict with torchvision/basicsr. The face fixing feature is architecturally complete but currently unable to load the enhancement models.
+
+**Error**: `ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'`
+
+**Workaround**: The system will gracefully degrade - when enhancement models aren't available, the original faces are returned unchanged. The API still works, it just skips the enhancement step.
+
+**Next Steps**:
+1. We can revisit this when the basicsr/GFPGAN/torchvision dependency ecosystem stabilizes
+2. Alternative approaches:
+   - Use a simpler enhancement method (PIL/OpenCV filters)
+   - Switch to a different face enhancement library
+   - Use conda instead of pip/uv for dependency management
+
+If you'd like to prioritize fixing this, let us know!
 
 ### Faces Not Detected
 
