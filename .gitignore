@@ -111,6 +111,11 @@ services/models/
 *.bin
 *.gguf
 
+# Vendor code (external repositories)
+# CodeFormer is installed as optional upgrade for face fixing
+vendor/
+vendor/CodeFormer/
+
 # Note: We intentionally DO NOT ignore:
 # - .claude/commands/ (core product)
 # - .claude/agents/ (core product)

@@ -1,5 +1,17 @@
 # CLAUDE.md - Project AI Guidelines
 
+## 🚀 Project Status: ALPHA
+
+**This is alpha software in active development.**
+
+- ❌ **NO backward compatibility required** - Make breaking changes freely
+- ✅ **Prioritize code quality** over maintaining old APIs
+- ✅ **Refactor aggressively** when it improves architecture
+- ✅ **Remove unused code** without deprecation periods
+- 💡 **Focus on getting it right** rather than keeping it stable
+
+Since we're pre-1.0, every change is an opportunity to improve the foundation.
+
 ## State Tracking
 
 **Use two complementary systems for tracking work:**
@@ -15,7 +27,7 @@
    - Session continuity across conversations
    - Good for: debugging context, decision rationale, file locations
 
-**Workflow:** Start tasks with TodoWrite, always add detailed notes to `.claude-current-status`. When you add notes, re-assess and clean up old notes.
+**Workflow:** Start tasks with TodoWrite, always add detailed notes to `.claude-current-status`. When you add notes, re-assess and clean up old notes using /condense.
 
 
 ## Development Method: TDD
@@ -182,6 +194,67 @@ If each test loads a 10GB model, that's 200GB RAM spike → system OOM → deskt
   - Provides code patterns for Zone 1 & Zone 2 streaming
   - Must reference when building beam search orchestrator
 
+## Dependency Management
+
+**This project uses `uv` for fast, deterministic Python dependency management.**
+
+### Setup
+
+```bash
+# Install dependencies
+uv sync
+
+# Run a command in the virtual environment
+uv run python script.py
+
+# Add new dependency
+uv add package-name
+
+# Update dependencies
+uv lock
+```
+
+### Project Structure
+
+- **`pyproject.toml`** - Project metadata and dependencies
+- **`uv.lock`** - Lock file (commit to version control)
+- **`services/` workspace** - Services are part of the uv workspace
+
+### Key Commands
+
+```bash
+# Install all dependencies and create virtual environment
+uv sync
+
+# Activate virtual environment (optional, uv run handles this)
+source .venv/bin/activate  # Linux/Mac
+# or
+.venv\Scripts\activate  # Windows
+
+# Install development dependencies
+uv sync --dev
+
+# Run specific test
+uv run pytest tests/test_face_fixing.py
+
+# Run Flux service
+uv run python services/flux_service.py
+```
+
+### Adding New Dependencies
+
+When adding new dependencies (like face fixing models):
+
+```bash
+# Add to main dependencies
+uv add mediapipe>=0.10.0
+
+# Or edit pyproject.toml and sync
+uv sync
+```
+
+Dependencies are automatically added to `uv.lock` for reproducibility.
+
 ### Local Model Stack
 
 This project uses **llama-cpp-python** for running quantized GGUF models locally:
@@ -190,6 +263,13 @@ This project uses **llama-cpp-python** for running quantized GGUF models locally
 - **LLM Service**: Uses llama-cpp-python for prompt refinement (Mistral 7B Q4)
 - **Flux Service**: Uses diffusers with sequential CPU offload for 12GB GPUs
 - **Vision Service**: Uses CLIP for alignment scoring, aesthetic predictor for quality
+- **VLM Service**: Uses llama-cpp-python with multimodal GGUF (Qwen2.5-VL 7B Q4) for pairwise image comparison
+  - **Separate Evaluations Mode** (opt-in): Evaluates alignment (prompt match) and aesthetics (visual quality) independently
+  - Makes 2 focused API calls per comparison vs 1 combined call
+  - Benefits: More accurate, independent assessment of each dimension
+  - Trade-off: ~2x inference time (~10-12s vs ~5-6s per comparison)
+  - UI Control: "Use Separate Evaluations" checkbox in VLM settings
+  - Backend: `useSeparateEvaluations` parameter passed to `LocalVLMProvider`
 - **Model Coordinator**: `src/utils/model-coordinator.js` manages GPU memory by unloading models before loading others
 
 **Key constraints**:
