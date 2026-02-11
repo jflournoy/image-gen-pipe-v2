@@ -1,31 +1,38 @@
 # Claude Current Status
 
-## Current Task: Completed - Face Fixing Implementation for Modal and Flux Services
+## Current Task: Face Fixing Documentation & Dependency Resolution
 
-### Timestamp: 2026-02-10 (continued session)
+### Timestamp: 2026-02-10 (continued session 2)
 
 ### Summary
-Implemented multi-stage face fixing (detect → enhance → optional upscale) for both Modal cloud service and local Flux service. Feature includes automatic model detection, fallback system, and comprehensive documentation.
+Face fixing implementation is functionally complete with GFPGAN working via basicsr-fixed. Resolved all critical dependency issues. CodeFormer installation deferred (setuptools complexity) pending user evaluation of GFPGAN quality.
 
-### Architecture
-- **Detection**: MediaPipe Face Detection (CPU, ~100ms)
-- **Enhancement**: GFPGAN (default, ~1-2s per face) with optional CodeFormer upgrade (~2-3s per face, optional)
+### Architecture (Final)
+- **Detection**: OpenCV Cascade Classifiers (CPU, ~50-100ms, stable)
+- **Enhancement**: GFPGAN (default, ~1-2s per face, fully working)
 - **Upscaling**: Real-ESRGAN 2x (optional, ~3-5s)
 - **GPU Memory**: Safe on 12GB Flux and 24GB Modal GPUs
-- **Automatic Fallback**: CodeFormer → GFPGAN → error handling
+- **Graceful Fallback**: Returns original image if enhancement unavailable
 
-### Implementation Complete
+### Key Implementation Details
+- **basicsr-fixed**: Resolves torchvision compatibility issue (basicsr June 2022 vs torchvision 0.17 May 2024 API change)
+- **OpenCV**: Replaced MediaPipe due to API instability
+- **CodeFormer**: Optional, deferred pending GFPGAN quality assessment
+
+### Implementation Complete ✅
 
 **New Files**:
-- [services/face_fixing.py](services/face_fixing.py) - Core face fixing pipeline (770+ lines)
+- [services/face_fixing.py](services/face_fixing.py) - Core face fixing pipeline (~280 lines)
   - FaceFixingPipeline class with lazy model loading
-  - MediaPipe detection, dual-model enhancement (CodeFormer + GFPGAN fallback), Real-ESRGAN upscaling
-  - Returns (enhanced_image, metadata_dict)
-- [docs/FACE_FIXING.md](docs/FACE_FIXING.md) - Comprehensive user guide (500+ lines)
+  - OpenCV cascade detection, GFPGAN enhancement (default), Real-ESRGAN upscaling
+  - Returns (enhanced_image, metadata_dict) with timing and face count
+  - Graceful fallback if models unavailable
+- [docs/FACE_FIXING.md](docs/FACE_FIXING.md) - Comprehensive user guide (~400 lines)
   - Quick start examples with all three parameters
-  - Performance tables comparing GFPGAN vs CodeFormer
-  - Three CodeFormer installation methods (vendor directory recommended)
-  - Troubleshooting and best practices
+  - Performance characteristics (GFPGAN verified working)
+  - Installation via `uv sync` (fully automated)
+  - CodeFormer marked as optional/deferred
+  - Troubleshooting with dependencies resolved
 
 **Modified Files**:
 - [services/modal_diffusion_service.py](services/modal_diffusion_service.py) - Added face fixing integration
@@ -44,13 +51,25 @@ Implemented multi-stage face fixing (detect → enhance → optional upscale) fo
 - [CLAUDE.md](CLAUDE.md) - Documented uv dependency management system
 - [.gitignore](.gitignore) - Added vendor/CodeFormer/ to keep repo clean
 
+### Resolution of Dependency Issues
+
+**Problem**: BasicSR (Aug 2022) incompatible with modern torchvision (removed functional_tensor API May 2024)
+- Error: `ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'`
+- Root cause: Research software without active maintenance
+
+**Solution**: Switch to `basicsr-fixed>=1.4.2` fork that backports the torchvision fix
+- Now GFPGAN loads successfully
+- All dependencies installed via `uv sync` without issues
+- Models download and cache on first use
+
 ### Key Decisions
 
-**GFPGAN as Default**:
-- CodeFormer doesn't publish to PyPI and repo lacks setup.py/pyproject.toml
-- GFPGAN works immediately with `pip install gfpgan` in uv environment
-- CodeFormer available as optional upgrade with manual GitHub clone + `python basicsr/setup.py develop`
-- System automatically detects CodeFormer and uses it if available, falls back to GFPGAN
+**GFPGAN as Default + CodeFormer Deferred**:
+- GFPGAN fully working with basicsr-fixed, ready to ship
+- CodeFormer requires manual GitHub clone + setuptools complexity
+- User stated: "i don't know how much better codeformer actually is. i'll return to it if gfpgan doesn't seem to be cutting it"
+- Decision: Defer CodeFormer pending user evaluation of GFPGAN quality
+- Documentation updated to reflect optional/deferred status
 
 **uv Integration**:
 - All dependencies managed via uv (pyproject.toml + uv sync)
