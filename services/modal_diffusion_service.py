@@ -45,6 +45,16 @@ LORAS_DIR = f"{MODELS_DIR}/loras"
 # LoRA configuration
 MAX_LORAS = 4  # Maximum number of simultaneous LoRAs
 
+# Supported schedulers for DMD/LCM and other distilled models
+SUPPORTED_SCHEDULERS = [
+    "lcm",       # Latent Consistency Model - for DMD models (1-8 steps)
+    "euler",     # Euler - fast, general purpose
+    "euler_a",   # Euler Ancestral - more variation
+    "dpm++",     # DPM++ 2M - high quality
+    "ddim",      # DDIM - deterministic
+    "karras",    # Karras sigmas variant
+]
+
 # Supported models with their configurations
 SUPPORTED_MODELS: Dict[str, Dict[str, Any]] = {
     "flux-dev": {
@@ -106,6 +116,10 @@ diffusion_image = (
         "Pillow>=10.0.0",
         "huggingface_hub>=0.21.0",
         "requests>=2.31.0",
+        # Face fixing dependencies (GFPGAN default, CodeFormer optional)
+        "mediapipe>=0.10.0",
+        "gfpgan>=0.3.0",
+        "realesrgan>=0.3.0",
     )
 )
 
@@ -131,12 +145,35 @@ class GenerateRequest(BaseModel):
     guidance: float = Field(default=3.5, ge=0.0, le=20.0, description="Guidance scale")
     seed: Optional[int] = Field(default=None, description="Random seed for reproducibility")
     loras: Optional[List[LoraConfig]] = Field(default=None, max_length=4, description="LoRA adapters to apply (max 4)")
+    # DMD/LCM scheduler support
+    scheduler: Optional[str] = Field(default=None, description="Scheduler type (lcm, euler, euler_a, dpm++, ddim, karras)")
+    # SDXL refiner support
+    use_refiner: bool = Field(default=False, description="Enable SDXL refiner pass")
+    refiner_switch: float = Field(default=0.8, ge=0.0, le=1.0, description="Denoising point to switch to refiner (0.0-1.0)")
+    # Clip skip support
+    clip_skip: Optional[int] = Field(default=None, ge=1, le=12, description="Number of CLIP layers to skip (1-12)")
+    # Img2img touchup support (light artifact cleanup)
+    touchup_strength: float = Field(default=0.0, ge=0.0, le=1.0, description="Img2img touchup strength (0=disabled, 0.1-0.5=light cleanup)")
+    # Negative prompt support (for SDXL and other models)
+    negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (things to avoid in generation)")
+    # Face fixing support (CodeFormer enhancement)
+    fix_faces: bool = Field(default=False, description="Enable face fixing via CodeFormer enhancement")
+    face_fidelity: float = Field(default=0.7, ge=0.0, le=1.0, description="CodeFormer fidelity (0.0=max quality, 1.0=max identity)")
+    face_upscale: Optional[int] = Field(default=None, ge=1, le=2, description="Optional face upscaling factor (1=none, 2=2x via Real-ESRGAN)")
 
     @field_validator('prompt')
     @classmethod
     def validate_prompt(cls, v: str) -> str:
         if not v or not v.strip():
             raise ValueError("Prompt cannot be empty")
+        return v.strip()
+
+    @field_validator('negative_prompt')
+    @classmethod
+    def validate_negative_prompt(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        # Strip whitespace but allow empty string
         return v.strip()
 
     @field_validator('loras')
@@ -217,7 +254,9 @@ class DiffusionService:
 
     # Class-level state (initialized in @modal.enter)
     pipeline: Any = None
+    refiner_pipeline: Any = None  # For SDXL refiner pass (DMD models)
     compel: Any = None  # For long prompt handling in SDXL
+    face_fixer: Any = None  # For face fixing via CodeFormer (lazy-loaded)
     current_model: str = None
     device: str = "cuda"
     custom_models: Dict[str, Dict[str, Any]] = {}
@@ -246,6 +285,16 @@ class DiffusionService:
         self.custom_models = load_custom_models_config()
         if self.custom_models:
             print(f"[Modal Diffusion] Found {len(self.custom_models)} custom models: {list(self.custom_models.keys())}")
+
+        # Initialize face fixing pipeline (lazy-loaded on first use)
+        try:
+            from face_fixing import get_face_fixer
+            # Don't load yet - just prepare for lazy loading
+            self.face_fixer = get_face_fixer
+            print("[Modal Diffusion] Face fixing pipeline ready (lazy-loaded)")
+        except ImportError:
+            print("[Modal Diffusion] Warning: Face fixing not available (face_fixing module not found)")
+            self.face_fixer = None
 
         # Pre-load default model for faster first inference
         self._load_pipeline("flux-dev")
@@ -277,6 +326,22 @@ class DiffusionService:
             returned_embeddings_type=ReturnedEmbeddingsType.PENULTIMATE_HIDDEN_STATES_NON_NORMALIZED,
             requires_pooled=[False, True]
         )
+
+    def _process_negative_prompt_with_compel(self, negative_prompt: Optional[str]):
+        """
+        Process negative prompt with Compel for SDXL long prompt support
+
+        Args:
+            negative_prompt: Optional negative prompt string
+
+        Returns:
+            Tuple of (negative_conditioning, negative_pooled) or (None, None)
+        """
+        if not negative_prompt or self.compel is None:
+            return None, None
+
+        print(f"[Modal Diffusion] Using Compel for negative prompt ({len(negative_prompt.split())} words)")
+        return self.compel(negative_prompt)
 
     def _load_pipeline(self, model_name: str):
         """Load a diffusion pipeline for the specified model"""
@@ -404,6 +469,102 @@ class DiffusionService:
             # Initialize Compel for long prompt support
             self._init_compel_for_sdxl()
 
+    def _set_scheduler(self, scheduler_name: Optional[str]):
+        """
+        Set the pipeline scheduler for DMD/LCM models.
+
+        Args:
+            scheduler_name: One of SUPPORTED_SCHEDULERS or None to keep default
+        """
+        if scheduler_name is None or self.pipeline is None:
+            return
+
+        if scheduler_name not in SUPPORTED_SCHEDULERS:
+            print(f"[Modal Diffusion] Warning: Unknown scheduler '{scheduler_name}', using default")
+            return
+
+        print(f"[Modal Diffusion] Setting scheduler to: {scheduler_name}")
+
+        if scheduler_name == "lcm":
+            from diffusers import LCMScheduler
+            self.pipeline.scheduler = LCMScheduler.from_config(self.pipeline.scheduler.config)
+        elif scheduler_name == "euler":
+            from diffusers import EulerDiscreteScheduler
+            self.pipeline.scheduler = EulerDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+        elif scheduler_name == "euler_a":
+            from diffusers import EulerAncestralDiscreteScheduler
+            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+        elif scheduler_name == "dpm++":
+            from diffusers import DPMSolverMultistepScheduler
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config)
+        elif scheduler_name == "ddim":
+            from diffusers import DDIMScheduler
+            self.pipeline.scheduler = DDIMScheduler.from_config(self.pipeline.scheduler.config)
+        elif scheduler_name == "karras":
+            from diffusers import DPMSolverMultistepScheduler
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                self.pipeline.scheduler.config,
+                use_karras_sigmas=True
+            )
+
+        print(f"[Modal Diffusion] Scheduler set: {type(self.pipeline.scheduler).__name__}")
+
+    def _load_refiner_pipeline(self, model_config: Dict[str, Any]):
+        """
+        Load the refiner pipeline for SDXL base-to-refiner workflow.
+
+        For DMD models, uses same model as refiner.
+        For standard SDXL, loads the official refiner model.
+
+        Args:
+            model_config: Model configuration dict
+        """
+        import torch
+        from diffusers import StableDiffusionXLImg2ImgPipeline
+
+        if self.refiner_pipeline is not None:
+            print("[Modal Diffusion] Refiner already loaded")
+            return
+
+        pipeline_type = model_config.get("pipeline", "flux")
+        if pipeline_type != "sdxl":
+            print("[Modal Diffusion] Refiner only supported for SDXL models")
+            return
+
+        is_custom = model_config.get("custom", False)
+        use_same_model = model_config.get("refiner_same_as_base", True)  # DMD models use same model
+
+        if is_custom and use_same_model:
+            # For custom DMD models, use the same model for refining
+            # Load as img2img pipeline from same checkpoint
+            model_path = Path(CUSTOM_MODELS_DIR) / model_config["path"]
+            print(f"[Modal Diffusion] Loading refiner from same model: {model_path}")
+
+            if model_path.suffix == ".safetensors":
+                self.refiner_pipeline = StableDiffusionXLImg2ImgPipeline.from_single_file(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+            else:
+                self.refiner_pipeline = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+        else:
+            # Load official SDXL refiner
+            print("[Modal Diffusion] Loading official SDXL refiner model")
+            self.refiner_pipeline = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+                "stabilityai/stable-diffusion-xl-refiner-1.0",
+                torch_dtype=torch.float16,
+                variant="fp16",
+                cache_dir=CACHE_DIR,
+            )
+
+        self.refiner_pipeline.to(self.device)
+        print("[Modal Diffusion] Refiner pipeline loaded")
+
     def _load_loras(self, loras: Optional[List[LoraConfig]]) -> List[Dict[str, Any]]:
         """
         Load multiple LoRA weights into the pipeline with weighted blending.
@@ -506,6 +667,15 @@ class DiffusionService:
         guidance: Optional[float] = None,
         seed: Optional[int] = None,
         loras: Optional[List[LoraConfig]] = None,
+        scheduler: Optional[str] = None,
+        use_refiner: bool = False,
+        refiner_switch: float = 0.8,
+        clip_skip: Optional[int] = None,
+        touchup_strength: float = 0.0,
+        negative_prompt: Optional[str] = None,
+        fix_faces: bool = False,
+        face_fidelity: float = 0.7,
+        face_upscale: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Generate an image from a text prompt"""
         import torch
@@ -524,6 +694,18 @@ class DiffusionService:
         if guidance is None:
             guidance = model_config.get("default_guidance", 3.5)
 
+        # Apply scheduler (from request or model config)
+        effective_scheduler = scheduler or model_config.get("scheduler")
+        if effective_scheduler:
+            self._set_scheduler(effective_scheduler)
+
+        # Apply clip_skip if specified
+        effective_clip_skip = clip_skip or model_config.get("clip_skip")
+        if effective_clip_skip and hasattr(self.pipeline, 'text_encoder'):
+            # CLIP skip works by using hidden states from earlier layers
+            # This is typically handled via the pipeline's clip_skip parameter
+            print(f"[Modal Diffusion] Using clip_skip={effective_clip_skip}")
+
         # Set up generator for reproducibility
         generator = None
         if seed is not None:
@@ -532,40 +714,170 @@ class DiffusionService:
             seed = torch.randint(0, 2**32, (1,)).item()
             generator = torch.Generator(device="cuda").manual_seed(seed)
 
-        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}")
+        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}, scheduler={effective_scheduler}")
         start_time = time.time()
+
+        # Determine if we should use refiner (from request or model config)
+        effective_use_refiner = use_refiner or model_config.get("use_refiner", False)
+        effective_refiner_switch = refiner_switch if use_refiner else model_config.get("refiner_switch", 0.8)
 
         # Generate image
         pipeline_type = model_config.get("pipeline", "flux")
-        if pipeline_type == "sdxl" and self.compel is not None:
-            # Use Compel for long prompt handling in SDXL
+        refiner_info = None
+
+        if pipeline_type == "sdxl" and effective_use_refiner:
+            # SDXL with refiner: use denoising_end for base-to-refiner handoff
+            print(f"[Modal Diffusion] Using refiner with switch at {effective_refiner_switch}")
+
+            # Load refiner if not already loaded
+            self._load_refiner_pipeline(model_config)
+
+            if self.compel is not None:
+                conditioning, pooled = self.compel(prompt)
+                # Process negative prompt with Compel if provided
+                negative_conditioning, negative_pooled = self._process_negative_prompt_with_compel(negative_prompt)
+                # Base pass - stops at refiner_switch point
+                base_result = self.pipeline(
+                    prompt_embeds=conditioning,
+                    pooled_prompt_embeds=pooled,
+                    negative_prompt_embeds=negative_conditioning,
+                    negative_pooled_prompt_embeds=negative_pooled,
+                    width=width,
+                    height=height,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                    denoising_end=effective_refiner_switch,
+                    output_type="latent",
+                )
+            else:
+                base_result = self.pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    width=width,
+                    height=height,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                    denoising_end=effective_refiner_switch,
+                    output_type="latent",
+                )
+
+            # Refiner pass - continues from refiner_switch point
+            result = self.refiner_pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                image=base_result.images,
+                num_inference_steps=steps,
+                guidance_scale=guidance,
+                generator=generator,
+                denoising_start=effective_refiner_switch,
+            )
+            refiner_info = {
+                "used": True,
+                "switch_point": effective_refiner_switch,
+                "model": "same_as_base" if model_config.get("custom") else "sdxl-refiner-1.0"
+            }
+
+        elif pipeline_type == "sdxl" and self.compel is not None:
+            # Use Compel for long prompt handling in SDXL (no refiner)
             print(f"[Modal Diffusion] Using Compel for long prompt support ({len(prompt.split())} words)")
             conditioning, pooled = self.compel(prompt)
+            # Process negative prompt with Compel if provided
+            negative_conditioning, negative_pooled = self._process_negative_prompt_with_compel(negative_prompt)
             result = self.pipeline(
                 prompt_embeds=conditioning,
                 pooled_prompt_embeds=pooled,
+                negative_prompt_embeds=negative_conditioning,
+                negative_pooled_prompt_embeds=negative_pooled,
                 width=width,
                 height=height,
                 num_inference_steps=steps,
                 guidance_scale=guidance,
                 generator=generator,
+                clip_skip=effective_clip_skip,
             )
         else:
             # Standard generation for non-SDXL models or if Compel not available
-            result = self.pipeline(
-                prompt=prompt,
-                width=width,
-                height=height,
-                num_inference_steps=steps,
-                guidance_scale=guidance,
-                generator=generator,
-            )
+            # Include negative_prompt if provided (works for SDXL, ignored by Flux)
+            pipeline_kwargs = {
+                "prompt": prompt,
+                "width": width,
+                "height": height,
+                "num_inference_steps": steps,
+                "guidance_scale": guidance,
+                "generator": generator,
+            }
+            if negative_prompt and pipeline_type == "sdxl":
+                pipeline_kwargs["negative_prompt"] = negative_prompt
+            result = self.pipeline(**pipeline_kwargs)
 
         inference_time = time.time() - start_time
         print(f"[Modal Diffusion] Generated in {inference_time:.1f}s")
 
-        # Convert to base64
+        # Get the generated image
         image = result.images[0]
+
+        # Apply img2img touchup if requested (for artifact cleanup)
+        touchup_info = None
+        effective_touchup = touchup_strength or model_config.get("touchup_strength", 0.0)
+        if effective_touchup > 0 and pipeline_type == "sdxl":
+            print(f"[Modal Diffusion] Applying img2img touchup with strength {effective_touchup}")
+            touchup_start = time.time()
+
+            # Load img2img pipeline if not already loaded (reuse refiner pipeline)
+            self._load_refiner_pipeline(model_config)
+
+            if self.refiner_pipeline is not None:
+                # Run light img2img pass for artifact cleanup
+                # strength = 1 - effective_touchup means lower touchup_strength = less change
+                touchup_result = self.refiner_pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    image=image,
+                    strength=effective_touchup,
+                    num_inference_steps=max(4, int(steps * effective_touchup)),  # Fewer steps for light touchup
+                    guidance_scale=guidance,
+                    generator=generator,
+                )
+                image = touchup_result.images[0]
+                touchup_time = time.time() - touchup_start
+                print(f"[Modal Diffusion] Touchup completed in {touchup_time:.1f}s")
+                touchup_info = {
+                    "applied": True,
+                    "strength": effective_touchup,
+                    "time": touchup_time
+                }
+                inference_time += touchup_time
+
+        # Apply face fixing if requested
+        face_fix_info = None
+        if fix_faces and self.face_fixer:
+            try:
+                print(f"[Modal Diffusion] Applying face fixing (fidelity={face_fidelity}, upscale={face_upscale or 1})")
+                face_fix_start = time.time()
+
+                # Get or initialize face fixer instance
+                fixer = self.face_fixer(device=self.device)
+                image, face_fix_info = fixer.fix_faces(
+                    image,
+                    fidelity=face_fidelity,
+                    upscale=face_upscale or 1,
+                )
+
+                face_fix_time = time.time() - face_fix_start
+                if face_fix_info:
+                    face_fix_info['time'] = face_fix_time
+                print(f"[Modal Diffusion] Face fixing completed in {face_fix_time:.1f}s")
+                inference_time += face_fix_time
+            except Exception as e:
+                print(f"[Modal Diffusion] Face fixing failed: {e}")
+                face_fix_info = {
+                    'applied': False,
+                    'error': str(e)
+                }
+
+        # Convert to base64
         image_base64 = image_to_base64(image)
 
         # Clear GPU cache to prevent memory buildup
@@ -582,24 +894,38 @@ class DiffusionService:
                 "guidance": guidance,
                 "width": width,
                 "height": height,
+                "negative_prompt": negative_prompt,
                 "loras": lora_info if lora_info else None,
+                "scheduler": effective_scheduler,
+                "clip_skip": effective_clip_skip,
+                "refiner": refiner_info,
+                "touchup": touchup_info,
+                "face_fixing": face_fix_info,
             }
         }
 
     def _get_models_list(self) -> List[Dict[str, Any]]:
-        """Internal helper to get list of available models"""
+        """Internal helper to get list of available models with their defaults"""
         models = []
 
-        # Add built-in models
+        # Add built-in models with their defaults
         for name, config in SUPPORTED_MODELS.items():
             models.append({
                 "name": name,
                 "type": "builtin",
                 "pipeline": config["pipeline"],
                 "repo": config.get("repo"),
+                # Include model defaults for UI syncing
+                "default_steps": config.get("default_steps", 25),
+                "default_guidance": config.get("default_guidance", 3.5),
+                "scheduler": config.get("scheduler"),
+                "clip_skip": config.get("clip_skip"),
+                "use_refiner": config.get("use_refiner", False),
+                "refiner_switch": config.get("refiner_switch", 0.8),
+                "touchup_strength": config.get("touchup_strength", 0.0),
             })
 
-        # Add custom models
+        # Add custom models with their defaults
         self.custom_models = load_custom_models_config()
         for name, config in self.custom_models.items():
             models.append({
@@ -607,6 +933,14 @@ class DiffusionService:
                 "type": "custom",
                 "pipeline": config.get("pipeline", "flux"),
                 "path": config.get("path"),
+                # Include model defaults for UI syncing
+                "default_steps": config.get("default_steps", 25),
+                "default_guidance": config.get("default_guidance", 3.5),
+                "scheduler": config.get("scheduler"),
+                "clip_skip": config.get("clip_skip"),
+                "use_refiner": config.get("use_refiner", False),
+                "refiner_switch": config.get("refiner_switch", 0.8),
+                "touchup_strength": config.get("touchup_strength", 0.0),
             })
 
         return models
@@ -628,6 +962,15 @@ class DiffusionService:
             guidance=request.guidance,
             seed=request.seed,
             loras=request.loras,
+            scheduler=request.scheduler,
+            use_refiner=request.use_refiner,
+            refiner_switch=request.refiner_switch,
+            clip_skip=request.clip_skip,
+            touchup_strength=request.touchup_strength,
+            negative_prompt=request.negative_prompt,
+            fix_faces=request.fix_faces,
+            face_fidelity=request.face_fidelity,
+            face_upscale=request.face_upscale,
         )
 
         return GenerateResponse(
