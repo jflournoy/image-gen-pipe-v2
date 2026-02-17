@@ -284,10 +284,13 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         if (rank === 1) {
           const allPairsRanked = await this._rankAllPairsOptimal(remaining, prompt, graph, options);
           const winner = allPairsRanked[0];
+          const aggregateStats = graph.getAggregateStats(winner.candidateId);
           ranked.push({
             candidateId: winner.candidateId,
             rank,
-            reason: `Best candidate (${winner.wins} wins in all-pairs comparison)`
+            reason: `Best candidate (${winner.wins} wins in all-pairs comparison)`,
+            ranks: aggregateStats,  // Include aggregate stats
+            aggregateStats  // Full aggregate data
           });
           const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
           remaining.splice(winnerIdx, 1);
@@ -295,10 +298,13 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
           // For subsequent ranks, use transitivity from complete graph
           const allPairsRanked = await this._rankAllPairsOptimal(remaining, prompt, graph, options);
           const winner = allPairsRanked[0];
+          const aggregateStats = graph.getAggregateStats(winner.candidateId);
           ranked.push({
             candidateId: winner.candidateId,
             rank,
-            reason: `Best remaining candidate (${winner.wins} wins)`
+            reason: `Best remaining candidate (${winner.wins} wins)`,
+            ranks: aggregateStats,  // Include aggregate stats
+            aggregateStats  // Full aggregate data
           });
           const winnerIdx = remaining.findIndex(img => img.candidateId === winner.candidateId);
           remaining.splice(winnerIdx, 1);
@@ -326,11 +332,15 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
 
         const { winner, reason, ranks, strengths, weaknesses } = await this._findBestWithTransitivity(remaining, prompt, graph, options);
 
+        // Get aggregate statistics across ALL comparisons for this candidate
+        const aggregateStats = graph.getAggregateStats(winner.candidateId);
+
         ranked.push({
           candidateId: winner.candidateId,
           rank,
           reason,
-          ranks,
+          ranks: aggregateStats || ranks,  // Use aggregate stats if available, fallback to final comparison
+          aggregateStats,  // Include full aggregate data
           strengths,
           weaknesses
         });
@@ -386,8 +396,14 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         try {
           const comparison = await this.compareWithEnsemble(champion, challenger, prompt, options);
 
-          // Record comparison in graph
-          graph.recordComparison(champion.candidateId, challenger.candidateId, comparison.winner);
+          // Record comparison in graph (with scores for aggregate statistics)
+          graph.recordComparison(
+            champion.candidateId,
+            challenger.candidateId,
+            comparison.winner,
+            comparison.aggregatedRanks?.A,
+            comparison.aggregatedRanks?.B
+          );
 
           if (comparison.winner === 'A') {
             championReason = comparison.reason;
@@ -481,7 +497,14 @@ The images are labeled in order: ${labels.join(', ')}. Please rank all ${images.
         // New comparison needed - handle errors gracefully
         try {
           const comparison = await this.compareWithEnsemble(a, b, prompt, options);
-          graph.recordComparison(a.candidateId, b.candidateId, comparison.winner);
+          // Record comparison with scores for aggregate statistics
+          graph.recordComparison(
+            a.candidateId,
+            b.candidateId,
+            comparison.winner,
+            comparison.aggregatedRanks?.A,
+            comparison.aggregatedRanks?.B
+          );
 
           if (comparison.winner === 'A') {
             winCounts.set(a.candidateId, (winCounts.get(a.candidateId) || 0) + 1);
@@ -949,6 +972,8 @@ class ComparisonGraph {
     this.beats = new Map();
     // Map: candidateId → Set of candidateIds it loses to
     this.losesTo = new Map();
+    // Map: candidateId → Array of { alignment, aesthetics, combined } scores across all comparisons
+    this.candidateScores = new Map();
   }
 
   /**
@@ -956,8 +981,10 @@ class ComparisonGraph {
    * @param {number} idA - First candidate ID
    * @param {number} idB - Second candidate ID
    * @param {string} winner - 'A' or 'B'
+   * @param {Object} [ranksA] - Optional ranks for candidate A: { alignment, aesthetics, combined }
+   * @param {Object} [ranksB] - Optional ranks for candidate B: { alignment, aesthetics, combined }
    */
-  recordComparison(idA, idB, winner) {
+  recordComparison(idA, idB, winner, ranksA = null, ranksB = null) {
     const winnerId = winner === 'A' ? idA : idB;
     const loserId = winner === 'A' ? idB : idA;
 
@@ -967,6 +994,16 @@ class ComparisonGraph {
 
     this.beats.get(winnerId).add(loserId);
     this.losesTo.get(loserId).add(winnerId);
+
+    // Store scores if provided (for aggregate statistics)
+    if (ranksA) {
+      if (!this.candidateScores.has(idA)) this.candidateScores.set(idA, []);
+      this.candidateScores.get(idA).push(ranksA);
+    }
+    if (ranksB) {
+      if (!this.candidateScores.has(idB)) this.candidateScores.set(idB, []);
+      this.candidateScores.get(idB).push(ranksB);
+    }
 
     // Transitive closure: if A > B and B > C, then A > C
     this._propagateTransitivity(winnerId, loserId);
@@ -1020,6 +1057,28 @@ class ComparisonGraph {
     // Cannot infer
     return null;
   }
+
+  /**
+   * Get aggregate statistics for a candidate across all comparisons
+   * @param {number|string} candidateId - Candidate ID
+   * @returns {{avgAlignment: number, avgAesthetics: number, avgCombined: number, totalComparisons: number, wins: number, losses: number} | null}
+   */
+  getAggregateStats(candidateId) {
+    const scores = this.candidateScores.get(candidateId);
+    if (!scores || scores.length === 0) return null;
+
+    const avg = (arr) => arr.reduce((sum, val) => sum + val, 0) / arr.length;
+
+    return {
+      avgAlignment: avg(scores.map(s => s.alignment)),
+      avgAesthetics: avg(scores.map(s => s.aesthetics)),
+      avgCombined: avg(scores.map(s => s.combined)),
+      totalComparisons: scores.length,
+      wins: this.beats.get(candidateId)?.size || 0,
+      losses: this.losesTo.get(candidateId)?.size || 0
+    };
+  }
 }
 
 module.exports = ImageRanker;
+module.exports.ComparisonGraph = ComparisonGraph;
