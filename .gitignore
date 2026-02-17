@@ -42,6 +42,9 @@ test/fixtures/images/
 .claude/designs/
 .claude-current-status
 
+# Local audit command (not for public repository)
+.claude/commands/portfolio-audit.md
+
 # Monitoring status and runtime data
 .monitor-status.json
 .monitor-status-*.json
