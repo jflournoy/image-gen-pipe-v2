@@ -41,6 +41,7 @@ MODELS_DIR = "/models"
 CACHE_DIR = f"{MODELS_DIR}/huggingface"
 CUSTOM_MODELS_DIR = f"{MODELS_DIR}/custom"
 LORAS_DIR = f"{MODELS_DIR}/loras"
+FACE_FIXING_DIR = f"{MODELS_DIR}/face_fixing"
 
 # LoRA configuration
 MAX_LORAS = 4  # Maximum number of simultaneous LoRAs
@@ -294,6 +295,7 @@ class DiffusionService:
         Path(CACHE_DIR).mkdir(parents=True, exist_ok=True)
         Path(CUSTOM_MODELS_DIR).mkdir(parents=True, exist_ok=True)
         Path(LORAS_DIR).mkdir(parents=True, exist_ok=True)
+        Path(FACE_FIXING_DIR).mkdir(parents=True, exist_ok=True)
 
         # Load custom models configuration
         self.custom_models = load_custom_models_config()
@@ -301,19 +303,23 @@ class DiffusionService:
             print(f"[Modal Diffusion] Found {len(self.custom_models)} custom models: {list(self.custom_models.keys())}")
 
         # Initialize face fixing pipeline (lazy-loaded on first use)
+        # Models cached on persistent volume at FACE_FIXING_DIR
         try:
             from face_fixing import get_face_fixer
             # Don't load yet - just prepare for lazy loading
             self.face_fixer = get_face_fixer
-            print("[Modal Diffusion] Face fixing pipeline ready (lazy-loaded)")
+            self._face_fixing_models_dir = FACE_FIXING_DIR
+            print(f"[Modal Diffusion] Face fixing pipeline ready (models_dir={FACE_FIXING_DIR})")
         except ImportError as e:
             print(f"[Modal Diffusion] Warning: Face fixing not available (ImportError: {e})")
             self.face_fixer = None
+            self._face_fixing_models_dir = None
         except Exception as e:
             print(f"[Modal Diffusion] ERROR: Face fixing initialization failed: {type(e).__name__}: {e}")
             import traceback
             traceback.print_exc()
             self.face_fixer = None
+            self._face_fixing_models_dir = None
 
         # Pre-load default model for faster first inference
         self._load_pipeline("flux-dev")
@@ -877,8 +883,8 @@ class DiffusionService:
                 print(f"[Modal Diffusion] Applying face fixing (fidelity={face_fidelity}, upscale={face_upscale or 1})")
                 face_fix_start = time.time()
 
-                # Get or initialize face fixer instance
-                fixer = self.face_fixer(device=self.device)
+                # Get or initialize face fixer instance (models cached on volume)
+                fixer = self.face_fixer(device=self.device, models_dir=self._face_fixing_models_dir)
                 image, face_fix_info = fixer.fix_faces(
                     image,
                     fidelity=face_fidelity,
@@ -890,6 +896,8 @@ class DiffusionService:
                     face_fix_info['time'] = face_fix_time
                 print(f"[Modal Diffusion] Face fixing completed in {face_fix_time:.1f}s")
                 inference_time += face_fix_time
+                # Commit volume so downloaded models persist across container restarts
+                model_volume.commit()
             except Exception as e:
                 print(f"[Modal Diffusion] Face fixing failed: {e}")
                 face_fix_info = {
