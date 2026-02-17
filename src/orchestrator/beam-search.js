@@ -967,352 +967,348 @@ async function initialExpansion(
     throw new Error('Job cancelled');
   }
 
-  // Stream all N candidates through the pipeline with rate limiting
-  const candidates = await Promise.all(
-    whatHowPairs.map(async ({ what, how }, i) => {
-      // Create wrapper that applies rate limiting for image gen and vision
-      const limitedProcessCandidateStream = async () => {
-        // Check if aborted before starting
-        if (abortSignal?.aborted) {
-          throw new Error('Job cancelled');
-        }
+  // Determine if batch image generation is available (duck-type check)
+  const useBatch = typeof imageGenProvider.generateImages === 'function';
 
+  let candidates;
+
+  if (useBatch) {
+    // === BATCH PATH: Phased execution for batch-capable providers ===
+    // Phase 1: Combine all prompts in parallel
+    // Phase 2: Batch generate all images in a single request
+    // Phase 3: Evaluate all images in parallel
+    console.log(`[initialExpansion] Using BATCH image generation for ${N} candidates`);
+
+    // Phase 1: Combine all prompts and generate negative prompts (parallel)
+    const combineResults = await Promise.all(
+      whatHowPairs.map(async ({ what, how }, i) => {
         const candidateId_str = `i0c${i}`;
 
-        // Progress: Combine start
-        if (onStepProgress) {
-          onStepProgress({
-            stage: 'combine',
-            status: 'starting',
-            candidateId: candidateId_str,
-            message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...`
-          });
-        }
+        try {
+          if (abortSignal?.aborted) throw new Error('Job cancelled');
 
-        // Combine prompts (no rate limiting needed) with descriptiveness level
-        const effectiveDescriptiveness = getEffectiveDescriptiveness();
-        const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-        const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
-        const combined = combineResult.combinedPrompt;
+          if (onStepProgress) {
+            onStepProgress({ stage: 'combine', status: 'starting', candidateId: candidateId_str,
+              message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...` });
+          }
 
-        console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
+          const effectiveDescriptiveness = getEffectiveDescriptiveness();
+          const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
+          const combined = combineResult.combinedPrompt;
 
-        // Track combine operation tokens using actual metadata
-        if (tokenTracker && combineResult.metadata) {
-          tokenTracker.recordUsage({
-            provider: 'llm',
-            operation: 'combine',
-            tokens: combineResult.metadata.tokensUsed,
-            metadata: {
-              model: combineResult.metadata.model,
-              iteration: 0,
-              candidateId: i,
-              operation: 'combine'
+          console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
+
+          if (tokenTracker && combineResult.metadata) {
+            tokenTracker.recordUsage({ provider: 'llm', operation: 'combine', tokens: combineResult.metadata.tokensUsed,
+              metadata: { model: combineResult.metadata.model, iteration: 0, candidateId: i, operation: 'combine' } });
+          }
+
+          if (onStepProgress) {
+            onStepProgress({ stage: 'combine', status: 'complete', candidateId: candidateId_str,
+              message: `✓ ${candidateId_str}: Prompts combined` });
+          }
+
+          // Generate negative prompt if needed
+          let negativePrompt = config.negativePrompt || null;
+          if (!negativePrompt && config.autoGenerateNegativePrompts) {
+            const modelType = imageGenProvider.modelType || 'unknown';
+            const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+            if (isSDXL) {
+              try {
+                const generator = config.negativePromptGenerator || llmProvider;
+                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                negativePrompt = negativeResult.negativePrompt;
+              } catch {
+                negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
+              }
             }
-          });
+          }
+
+          // Record attempt before image gen
+          if (metadataTracker) {
+            await metadataTracker.recordAttempt({ whatPrompt: what, howPrompt: how,
+              metadata: { iteration: 0, candidateId: i, dimension: 'what', parentId: null } });
+          }
+
+          return { what, how, combined, negativePrompt, candidateId: i, failed: false };
+        } catch (error) {
+          console.error(`[initialExpansion] Candidate ${candidateId_str} combine failed: ${error.message}`);
+          if (onStepProgress) {
+            onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+              message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
+          }
+          return { candidateId: i, failed: true };
         }
+      })
+    );
 
-        // Progress: Combine complete, image generation starting
-        if (onStepProgress) {
-          onStepProgress({
-            stage: 'combine',
-            status: 'complete',
-            candidateId: candidateId_str,
-            message: `✓ ${candidateId_str}: Prompts combined, submitting to image generation...`
-          });
-        }
+    if (abortSignal?.aborted) throw new Error('Job cancelled');
 
-        // Generate negative prompt for SDXL models (if enabled)
-        let negativePrompt = config.negativePrompt || null;
+    // Filter to successful combines only
+    const successfulCombines = combineResults.filter(r => !r.failed);
+    if (successfulCombines.length === 0) {
+      throw new Error('All candidates failed during prompt combination.');
+    }
 
-        if (!negativePrompt && config.autoGenerateNegativePrompts) {
-          const modelType = imageGenProvider.modelType || 'unknown';
-          const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+    // Phase 2: Batch generate all images in a single request
+    // Build gen options shared across all requests
+    const sharedGenOptions = {
+      sessionId: config.sessionId,
+      ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
+      ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
+      ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
+    };
 
-          if (isSDXL) {
+    const batchRequests = successfulCombines.map(r => ({
+      prompt: r.combined,
+      options: { ...sharedGenOptions, iteration: 0, candidateId: r.candidateId, negativePrompt: r.negativePrompt }
+    }));
+
+    // Emit progress: batch image generation starting
+    for (const r of successfulCombines) {
+      if (onStepProgress) {
+        onStepProgress({ stage: 'imageGen', status: 'starting', candidateId: `i0c${r.candidateId}`,
+          message: `⬆️  i0c${r.candidateId}: Generating image (batch)...` });
+      }
+    }
+
+    // Unload LLM before image generation to free GPU memory
+    await modelCoordinator.prepareForImageGen();
+
+    const batchImages = await imageGenProvider.generateImages(batchRequests);
+
+    // Phase 3: Evaluate all images and build candidates (parallel)
+    candidates = await Promise.all(
+      successfulCombines.map(async (r, batchIdx) => {
+        const candidateId_str = `i0c${r.candidateId}`;
+        const image = batchImages[batchIdx];
+
+        try {
+          // Track image generation
+          if (tokenTracker && image.metadata) {
+            tokenTracker.recordUsage({ provider: 'image', operation: 'generate', tokens: 1,
+              metadata: { model: image.metadata.model, iteration: 0, candidateId: r.candidateId, dimension: 'what', operation: 'generate' } });
+          }
+
+          // Progress: Image generation complete
+          if (onStepProgress) {
+            const imageUrl = image.localPath
+              ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
+              : image.url;
+            onStepProgress({ stage: 'imageGen', status: 'complete', candidateId: candidateId_str, imageUrl,
+              message: `✓ ${candidateId_str}: Image generated (ready for evaluation)` });
+          }
+
+          // Evaluate image
+          let evaluation = null;
+          let totalScore = null;
+
+          if (!config.skipVisionAnalysis && visionProvider) {
             if (onStepProgress) {
-              onStepProgress({
-                stage: 'negativePrompt',
-                status: 'starting',
-                candidateId: candidateId_str,
-                message: `🔍 ${candidateId_str}: Generating negative prompt...`
-              });
+              onStepProgress({ stage: 'vision', status: 'starting', candidateId: candidateId_str,
+                message: `🔍 ${candidateId_str}: Analyzing image with vision model...` });
             }
 
-            try {
-              const generator = config.negativePromptGenerator || llmProvider;
-              const negativeResult = await generator.generateNegativePrompt(combined, {
-                enabled: true,
-                fallback: config.negativePromptFallback
-              });
+            const imageReference = image.url || image.localPath;
+            evaluation = await visionLimiter.execute(() => visionProvider.analyzeImage(imageReference, r.combined));
 
-              negativePrompt = negativeResult.negativePrompt;
-              const truncated = negativePrompt && negativePrompt.length > 80 ? negativePrompt.substring(0, 80) + '...' : negativePrompt;
-              console.log(`[${candidateId_str}] Generated negative prompt: ${truncated}`);
+            if (tokenTracker && evaluation.metadata?.tokensUsed) {
+              tokenTracker.recordUsage({ provider: 'vision', operation: 'analyze', tokens: evaluation.metadata.tokensUsed,
+                metadata: { model: evaluation.metadata.model, iteration: 0, candidateId: r.candidateId, operation: 'analyze' } });
+            }
 
-              if (tokenTracker && negativeResult.metadata?.tokensUsed) {
-                tokenTracker.recordUsage({
-                  provider: 'llm',
-                  operation: 'negativePrompt',
-                  tokens: negativeResult.metadata.tokensUsed,
-                  metadata: {
-                    model: negativeResult.metadata.model,
-                    iteration: 0,
-                    candidateId: i,
-                    operation: 'negativePrompt'
-                  }
-                });
-              }
+            totalScore = calculateTotalScore(evaluation.alignmentScore, evaluation.aestheticScore, alpha);
 
-              if (onStepProgress) {
-                onStepProgress({
-                  stage: 'negativePrompt',
-                  status: 'complete',
-                  candidateId: candidateId_str,
-                  negativePrompt: negativePrompt && negativePrompt.length > 80 ? negativePrompt.substring(0, 80) + '...' : negativePrompt,
-                  message: `✓ ${candidateId_str}: Negative prompt generated`
-                });
-              }
-            } catch (error) {
-              console.warn(`[${candidateId_str}] Failed to generate negative prompt: ${error.message}, using fallback`);
-              negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
-
-              if (onStepProgress) {
-                onStepProgress({
-                  stage: 'negativePrompt',
-                  status: 'fallback',
-                  candidateId: candidateId_str,
-                  message: `⚠️ ${candidateId_str}: Using fallback negative prompt`
-                });
-              }
+            if (onStepProgress) {
+              onStepProgress({ stage: 'vision', status: 'complete', candidateId: candidateId_str,
+                alignment: evaluation.alignmentScore, aesthetic: evaluation.aestheticScore, totalScore,
+                message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10` });
             }
           }
-        }
 
-        // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
-        if (metadataTracker) {
-          await metadataTracker.recordAttempt({
-            whatPrompt: what,
-            howPrompt: how,
-            metadata: {
-              iteration: 0,
-              candidateId: i,
-              dimension: 'what',
-              parentId: null
-            }
-          });
-        }
-
-        // Progress: Image generation starting
-        if (onStepProgress) {
-          onStepProgress({
-            stage: 'imageGen',
-            status: 'starting',
-            candidateId: candidateId_str,
-            message: `⬆️  ${candidateId_str}: Generating image...`
-          });
-        }
-
-        // Generate image with automatic safety retry
-        const image = await generateImageWithSafetyRetry(
-          combined,
-          imageGenProvider,
-          llmProvider,
-          {
-            iteration: 0,
-            candidateId: i,
-            dimension: 'what',
-            alpha,
-            sessionId: config.sessionId,
-            negativePrompt,  // Pass negative prompt to image generation
-            // Face fixing parameters
-            ...(config.fixFaces && {
-              fix_faces: true,
-              face_fidelity: config.faceFidelity ?? 0.7,
-              face_upscale: config.faceUpscale ?? 1
-            }),
-            // Flatten fluxOptions so they're available for the image generator
-            ...(config.fluxOptions && {
-              steps: config.fluxOptions.steps,
-              guidance: config.fluxOptions.guidance,
-              scheduler: config.fluxOptions.scheduler,
-              width: config.fluxOptions.width,
-              height: config.fluxOptions.height,
-              loraScale: config.fluxOptions.loraScale
-            }),
-            // Flatten bflOptions so they're available for BFL provider
-            ...(config.bflOptions && {
-              safety_tolerance: config.bflOptions.safety_tolerance,
-              width: config.bflOptions.width,
-              height: config.bflOptions.height
-            }),
-            // Flatten modalOptions so they're available for Modal provider
-            ...(config.modalOptions && {
-              model: config.modalOptions.model,
-              width: config.modalOptions.width,
-              height: config.modalOptions.height,
-              steps: config.modalOptions.steps,
-              guidance: config.modalOptions.guidance
-            }),
-            onStepProgress,
-            candidateIdStr: candidateId_str
+          if (metadataTracker) {
+            await metadataTracker.updateAttemptWithResults(0, r.candidateId, { combined: r.combined, image, evaluation, totalScore });
           }
-        );
 
-        // Track image generation
-        if (tokenTracker && image.metadata) {
-          tokenTracker.recordUsage({
-            provider: 'image',
-            operation: 'generate',
-            tokens: 1, // Image gen doesn't use tokens, count as 1 generation
-            metadata: {
-              model: image.metadata.model,
-              size: image.metadata.size,
-              quality: image.metadata.quality,
-              iteration: 0,
-              candidateId: i,
-              dimension: 'what',
-              operation: 'generate'
-            }
-          });
-        }
+          const candidate = {
+            whatPrompt: r.what, howPrompt: r.how, combined: r.combined,
+            image, evaluation, totalScore,
+            metadata: { iteration: 0, candidateId: r.candidateId, dimension: 'what' }
+          };
 
-        // Progress: Image generation complete
-        if (onStepProgress) {
-          // Prefer local API URL (persistent, no CORS issues) over temporary OpenAI URL (1hr expiration)
-          const imageUrl = image.localPath
-            ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
-            : image.url; // Fallback to OpenAI URL if local save failed
-
-          const filename = image.localPath ? image.localPath.split(/[\\/]/).pop() : 'unknown';
-          console.log(`[InitialExpansion] Generated image for ${candidateId_str}: localPath=${image.localPath}, filename=${filename}, imageUrl=${imageUrl}`);
-
-          onStepProgress({
-            stage: 'imageGen',
-            status: 'complete',
-            candidateId: candidateId_str,
-            imageUrl,
-            message: `✓ ${candidateId_str}: Image generated (ready for evaluation)`
-          });
-        }
-
-        // Evaluate image with rate limiting (skip if using comparative ranking)
-        let evaluation = null;
-        let totalScore = null;
-
-        if (!config.skipVisionAnalysis && visionProvider) {
-          // Progress: Vision analysis starting
+          if (onCandidateProcessed) onCandidateProcessed(candidate);
+          return candidate;
+        } catch (error) {
+          console.error(`[initialExpansion] Candidate ${candidateId_str} evaluation failed: ${error.message}`);
           if (onStepProgress) {
-            onStepProgress({
-              stage: 'vision',
-              status: 'starting',
-              candidateId: candidateId_str,
-              message: `🔍 ${candidateId_str}: Analyzing image with vision model...`
-            });
+            onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+              message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
           }
+          return null;
+        }
+      })
+    );
 
-          // Use url for cloud providers, localPath for local providers (Flux, etc.)
-          const imageReference = image.url || image.localPath;
-          evaluation = await visionLimiter.execute(() =>
-            visionProvider.analyzeImage(imageReference, combined)
-          );
+  } else {
+    // === STREAMING PATH: Individual calls for non-batch providers ===
+    console.log(`[initialExpansion] Using STREAMING image generation for ${N} candidates`);
 
-          // Track vision tokens
-          if (tokenTracker && evaluation.metadata?.tokensUsed) {
-            tokenTracker.recordUsage({
-              provider: 'vision',
-              operation: 'analyze',
-              tokens: evaluation.metadata.tokensUsed,
-              metadata: {
-                model: evaluation.metadata.model,
-                iteration: 0,
-                candidateId: i,
-                operation: 'analyze'
-              }
-            });
-          }
+    candidates = await Promise.all(
+      whatHowPairs.map(async ({ what, how }, i) => {
+        const limitedProcessCandidateStream = async () => {
+          if (abortSignal?.aborted) throw new Error('Job cancelled');
 
-          // Calculate total score
-          totalScore = calculateTotalScore(
-            evaluation.alignmentScore,
-            evaluation.aestheticScore,
-            alpha
-          );
+          const candidateId_str = `i0c${i}`;
 
-          // Progress: Vision analysis complete
           if (onStepProgress) {
-            onStepProgress({
-              stage: 'vision',
-              status: 'complete',
-              candidateId: candidateId_str,
-              alignment: evaluation.alignmentScore,
-              aesthetic: evaluation.aestheticScore,
-              totalScore,
-              message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10`
-            });
+            onStepProgress({ stage: 'combine', status: 'starting', candidateId: candidateId_str,
+              message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...` });
           }
-        }
 
-        // DEFENSIVE PATTERN: Update attempt with results AFTER success
-        if (metadataTracker) {
-          await metadataTracker.updateAttemptWithResults(0, i, {
-            combined,
-            image,
-            evaluation,
-            totalScore
+          const effectiveDescriptiveness = getEffectiveDescriptiveness();
+          const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
+          const combined = combineResult.combinedPrompt;
+
+          console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
+
+          if (tokenTracker && combineResult.metadata) {
+            tokenTracker.recordUsage({ provider: 'llm', operation: 'combine', tokens: combineResult.metadata.tokensUsed,
+              metadata: { model: combineResult.metadata.model, iteration: 0, candidateId: i, operation: 'combine' } });
+          }
+
+          if (onStepProgress) {
+            onStepProgress({ stage: 'combine', status: 'complete', candidateId: candidateId_str,
+              message: `✓ ${candidateId_str}: Prompts combined, submitting to image generation...` });
+          }
+
+          // Generate negative prompt for SDXL models (if enabled)
+          let negativePrompt = config.negativePrompt || null;
+          if (!negativePrompt && config.autoGenerateNegativePrompts) {
+            const modelType = imageGenProvider.modelType || 'unknown';
+            const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+            if (isSDXL) {
+              if (onStepProgress) {
+                onStepProgress({ stage: 'negativePrompt', status: 'starting', candidateId: candidateId_str,
+                  message: `🔍 ${candidateId_str}: Generating negative prompt...` });
+              }
+              try {
+                const generator = config.negativePromptGenerator || llmProvider;
+                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                negativePrompt = negativeResult.negativePrompt;
+                if (tokenTracker && negativeResult.metadata?.tokensUsed) {
+                  tokenTracker.recordUsage({ provider: 'llm', operation: 'negativePrompt', tokens: negativeResult.metadata.tokensUsed,
+                    metadata: { model: negativeResult.metadata.model, iteration: 0, candidateId: i, operation: 'negativePrompt' } });
+                }
+                if (onStepProgress) {
+                  onStepProgress({ stage: 'negativePrompt', status: 'complete', candidateId: candidateId_str,
+                    negativePrompt: negativePrompt && negativePrompt.length > 80 ? negativePrompt.substring(0, 80) + '...' : negativePrompt,
+                    message: `✓ ${candidateId_str}: Negative prompt generated` });
+                }
+              } catch (error) {
+                console.warn(`[${candidateId_str}] Failed to generate negative prompt: ${error.message}, using fallback`);
+                negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
+                if (onStepProgress) {
+                  onStepProgress({ stage: 'negativePrompt', status: 'fallback', candidateId: candidateId_str,
+                    message: `⚠️ ${candidateId_str}: Using fallback negative prompt` });
+                }
+              }
+            }
+          }
+
+          if (metadataTracker) {
+            await metadataTracker.recordAttempt({ whatPrompt: what, howPrompt: how,
+              metadata: { iteration: 0, candidateId: i, dimension: 'what', parentId: null } });
+          }
+
+          if (onStepProgress) {
+            onStepProgress({ stage: 'imageGen', status: 'starting', candidateId: candidateId_str,
+              message: `⬆️  ${candidateId_str}: Generating image...` });
+          }
+
+          const image = await generateImageWithSafetyRetry(combined, imageGenProvider, llmProvider, {
+            iteration: 0, candidateId: i, dimension: 'what', alpha, sessionId: config.sessionId, negativePrompt,
+            ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+            ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
+            ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
+            ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance }),
+            onStepProgress, candidateIdStr: candidateId_str
           });
-        }
 
-        // Create complete candidate object
-        const candidate = {
-          whatPrompt: what,
-          howPrompt: how,
-          combined,
-          image,
-          evaluation,
-          totalScore,
-          metadata: {
-            iteration: 0,
-            candidateId: i,
-            dimension: 'what'
+          if (tokenTracker && image.metadata) {
+            tokenTracker.recordUsage({ provider: 'image', operation: 'generate', tokens: 1,
+              metadata: { model: image.metadata.model, size: image.metadata.size, quality: image.metadata.quality, iteration: 0, candidateId: i, dimension: 'what', operation: 'generate' } });
           }
+
+          if (onStepProgress) {
+            const imageUrl = image.localPath ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}` : image.url;
+            const filename = image.localPath ? image.localPath.split(/[\\/]/).pop() : 'unknown';
+            console.log(`[InitialExpansion] Generated image for ${candidateId_str}: localPath=${image.localPath}, filename=${filename}, imageUrl=${imageUrl}`);
+            onStepProgress({ stage: 'imageGen', status: 'complete', candidateId: candidateId_str, imageUrl,
+              message: `✓ ${candidateId_str}: Image generated (ready for evaluation)` });
+          }
+
+          let evaluation = null;
+          let totalScore = null;
+
+          if (!config.skipVisionAnalysis && visionProvider) {
+            if (onStepProgress) {
+              onStepProgress({ stage: 'vision', status: 'starting', candidateId: candidateId_str,
+                message: `🔍 ${candidateId_str}: Analyzing image with vision model...` });
+            }
+
+            const imageReference = image.url || image.localPath;
+            evaluation = await visionLimiter.execute(() => visionProvider.analyzeImage(imageReference, combined));
+
+            if (tokenTracker && evaluation.metadata?.tokensUsed) {
+              tokenTracker.recordUsage({ provider: 'vision', operation: 'analyze', tokens: evaluation.metadata.tokensUsed,
+                metadata: { model: evaluation.metadata.model, iteration: 0, candidateId: i, operation: 'analyze' } });
+            }
+
+            totalScore = calculateTotalScore(evaluation.alignmentScore, evaluation.aestheticScore, alpha);
+
+            if (onStepProgress) {
+              onStepProgress({ stage: 'vision', status: 'complete', candidateId: candidateId_str,
+                alignment: evaluation.alignmentScore, aesthetic: evaluation.aestheticScore, totalScore,
+                message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10` });
+            }
+          }
+
+          if (metadataTracker) {
+            await metadataTracker.updateAttemptWithResults(0, i, { combined, image, evaluation, totalScore });
+          }
+
+          const candidate = {
+            whatPrompt: what, howPrompt: how, combined, image, evaluation, totalScore,
+            metadata: { iteration: 0, candidateId: i, dimension: 'what' }
+          };
+
+          if (onCandidateProcessed) {
+            console.log(`[initialExpansion] Invoking callback for candidate ${i}`);
+            onCandidateProcessed(candidate);
+          } else {
+            console.log(`[initialExpansion] No callback for candidate ${i}`);
+          }
+
+          return candidate;
         };
 
-        // Invoke callback immediately as candidate completes
-        // This enables real-time progress updates instead of waiting for all candidates
-        if (onCandidateProcessed) {
-          console.log(`[initialExpansion] Invoking callback for candidate ${i}`);
-          onCandidateProcessed(candidate);
-        } else {
-          console.log(`[initialExpansion] No callback for candidate ${i}`);
+        try {
+          return await limitedProcessCandidateStream();
+        } catch (error) {
+          const candidateId_str = `i0c${i}`;
+          console.error(`[initialExpansion] Candidate ${candidateId_str} failed: ${error.message}`);
+          if (onStepProgress) {
+            onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+              message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
+          }
+          return null;
         }
-
-        return candidate;
-      };
-
-      // Wrap in try-catch for graceful error recovery
-      try {
-        return await limitedProcessCandidateStream();
-      } catch (error) {
-        // Log the error but don't crash the entire job
-        const candidateId_str = `i0c${i}`;
-        console.error(`[initialExpansion] Candidate ${candidateId_str} failed: ${error.message}`);
-
-        // Emit error message so user sees what happened
-        if (onStepProgress) {
-          onStepProgress({
-            stage: 'error',
-            status: 'failed',
-            candidateId: candidateId_str,
-            message: `⚠️ ${candidateId_str}: Failed - ${error.message}`
-          });
-        }
-
-        // Return null to indicate this candidate failed (will be filtered out)
-        return null;
-      }
-    })
-  );
+      })
+    );
+  }
 
   // Filter out failed candidates (nulls)
   const successfulCandidates = candidates.filter(c => c !== null);
