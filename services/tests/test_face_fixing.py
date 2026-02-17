@@ -38,6 +38,13 @@ class TestFaceFixingPipelineContract:
         assert get_face_fixer is not None
         assert callable(get_face_fixer)
 
+    def test_pipeline_has_enhance_faces_method(self):
+        """Pipeline should have _enhance_faces method (GFPGAN with RetinaFace)"""
+        from face_fixing import FaceFixingPipeline
+
+        assert hasattr(FaceFixingPipeline, '_enhance_faces')
+        assert callable(getattr(FaceFixingPipeline, '_enhance_faces'))
+
     def test_pipeline_initialization(self):
         """Pipeline should initialize without errors"""
         from face_fixing import FaceFixingPipeline
@@ -48,112 +55,95 @@ class TestFaceFixingPipelineContract:
         assert hasattr(pipeline, 'enhancer_type')
 
 
-class TestFaceDetection:
-    """
-    TDD RED: Tests for OpenCV cascade face detection
-    Mocks cv2.CascadeClassifier to avoid loading actual models
-    """
-
-    @patch('cv2.CascadeClassifier')
-    def test_detect_faces_returns_list(self, mock_cascade):
-        """_detect_faces should return a list of detected faces"""
-        from face_fixing import FaceFixingPipeline
-
-        # Setup mock to return test detections
-        mock_detector = MagicMock()
-        mock_cascade.return_value = mock_detector
-        mock_detector.empty.return_value = False
-        mock_detector.detectMultiScale.return_value = np.array([[10, 10, 100, 100]])
-
-        pipeline = FaceFixingPipeline(device='cpu')
-        img = np.zeros((512, 512, 3), dtype=np.uint8)
-
-        faces = pipeline._detect_faces(img)
-
-        assert isinstance(faces, list)
-        assert len(faces) > 0
-
-    @patch('cv2.CascadeClassifier')
-    def test_no_faces_returns_empty_list(self, mock_cascade):
-        """_detect_faces should return empty list when no faces detected"""
-        from face_fixing import FaceFixingPipeline
-
-        mock_detector = MagicMock()
-        mock_cascade.return_value = mock_detector
-        mock_detector.empty.return_value = False
-        mock_detector.detectMultiScale.return_value = np.array([])
-
-        pipeline = FaceFixingPipeline(device='cpu')
-        img = np.zeros((512, 512, 3), dtype=np.uint8)
-
-        faces = pipeline._detect_faces(img)
-
-        assert isinstance(faces, list)
-        assert len(faces) == 0
-
-    @patch('cv2.CascadeClassifier')
-    def test_multiple_faces_detected(self, mock_cascade):
-        """_detect_faces should detect multiple faces in image"""
-        from face_fixing import FaceFixingPipeline
-
-        mock_detector = MagicMock()
-        mock_cascade.return_value = mock_detector
-        mock_detector.empty.return_value = False
-        # Return 3 face detections
-        mock_detector.detectMultiScale.return_value = np.array([
-            [10, 10, 100, 100],
-            [200, 150, 120, 120],
-            [100, 300, 80, 80],
-        ])
-
-        pipeline = FaceFixingPipeline(device='cpu')
-        img = np.zeros((512, 512, 3), dtype=np.uint8)
-
-        faces = pipeline._detect_faces(img)
-
-        assert len(faces) == 3
-        for face in faces:
-            assert 'box' in face
-            assert 'score' in face
-
-    @patch('cv2.CascadeClassifier')
-    def test_detected_faces_have_correct_structure(self, mock_cascade):
-        """Detected faces should have box coordinates and score"""
-        from face_fixing import FaceFixingPipeline
-
-        mock_detector = MagicMock()
-        mock_cascade.return_value = mock_detector
-        mock_detector.empty.return_value = False
-        mock_detector.detectMultiScale.return_value = np.array([[10, 20, 100, 150]])
-
-        pipeline = FaceFixingPipeline(device='cpu')
-        img = np.zeros((512, 512, 3), dtype=np.uint8)
-
-        faces = pipeline._detect_faces(img)
-
-        assert len(faces) == 1
-        face = faces[0]
-        assert 'box' in face
-        assert 'score' in face
-        box = face['box']
-        assert len(box) == 4  # x1, y1, x2, y2
-
-
 class TestGFPGANEnhancement:
     """
-    TDD RED: Tests for GFPGAN face enhancement
-    Mocks GFPGANer class to avoid loading actual GFPGAN model
+    Tests for GFPGAN face enhancement (which uses RetinaFace for detection)
+    Mocks GFPGANer class to avoid loading actual models
     """
 
-    def test_enhancement_with_gfpgan_fallback(self):
-        """Should have graceful fallback for face enhancement"""
+    def test_enhance_faces_method_exists(self):
+        """Should have _enhance_faces method that handles detection + restoration"""
+        from face_fixing import FaceFixingPipeline
+
+        pipeline = FaceFixingPipeline(device='cpu')
+        assert hasattr(pipeline, '_enhance_faces')
+        assert callable(getattr(pipeline, '_enhance_faces'))
+
+    def test_enhance_faces_returns_tuple(self):
+        """_enhance_faces should return (image, faces_count) tuple"""
         from face_fixing import FaceFixingPipeline
 
         pipeline = FaceFixingPipeline(device='cpu')
 
-        # Test that enhance methods exist
-        assert hasattr(pipeline, '_enhance_with_gfpgan')
-        assert hasattr(pipeline, '_enhance_face')
+        # Mock GFPGAN enhancer
+        mock_enhancer = MagicMock()
+        input_img = np.zeros((512, 512, 3), dtype=np.uint8)
+        mock_enhancer.enhance.return_value = (
+            [np.zeros((256, 256, 3), dtype=np.uint8)],  # cropped_faces
+            [np.zeros((256, 256, 3), dtype=np.uint8)],  # restored_faces
+            np.zeros((512, 512, 3), dtype=np.uint8),    # restored_img
+        )
+        pipeline.enhancer = mock_enhancer
+        pipeline.enhancer_type = 'gfpgan'
+
+        result_img, faces_count = pipeline._enhance_faces(input_img)
+
+        assert isinstance(result_img, np.ndarray)
+        assert isinstance(faces_count, int)
+        assert faces_count == 1
+
+    def test_enhance_faces_reports_multiple_faces(self):
+        """_enhance_faces should report correct count for multiple faces"""
+        from face_fixing import FaceFixingPipeline
+
+        pipeline = FaceFixingPipeline(device='cpu')
+
+        mock_enhancer = MagicMock()
+        face = np.zeros((256, 256, 3), dtype=np.uint8)
+        mock_enhancer.enhance.return_value = (
+            [face, face, face],  # 3 cropped faces
+            [face, face, face],  # 3 restored faces
+            np.zeros((512, 512, 3), dtype=np.uint8),
+        )
+        pipeline.enhancer = mock_enhancer
+        pipeline.enhancer_type = 'gfpgan'
+
+        _, faces_count = pipeline._enhance_faces(np.zeros((512, 512, 3), dtype=np.uint8))
+        assert faces_count == 3
+
+    def test_enhance_faces_no_faces_returns_zero(self):
+        """_enhance_faces should return 0 count when no faces found"""
+        from face_fixing import FaceFixingPipeline
+
+        pipeline = FaceFixingPipeline(device='cpu')
+
+        mock_enhancer = MagicMock()
+        mock_enhancer.enhance.return_value = (
+            [],  # no cropped faces
+            [],  # no restored faces
+            np.zeros((512, 512, 3), dtype=np.uint8),
+        )
+        pipeline.enhancer = mock_enhancer
+        pipeline.enhancer_type = 'gfpgan'
+
+        _, faces_count = pipeline._enhance_faces(np.zeros((512, 512, 3), dtype=np.uint8))
+        assert faces_count == 0
+
+    def test_enhance_faces_passes_fidelity_as_weight(self):
+        """_enhance_faces should pass fidelity to GFPGAN as weight parameter"""
+        from face_fixing import FaceFixingPipeline
+
+        pipeline = FaceFixingPipeline(device='cpu')
+
+        mock_enhancer = MagicMock()
+        mock_enhancer.enhance.return_value = ([], [], np.zeros((64, 64, 3), dtype=np.uint8))
+        pipeline.enhancer = mock_enhancer
+        pipeline.enhancer_type = 'gfpgan'
+
+        pipeline._enhance_faces(np.zeros((64, 64, 3), dtype=np.uint8), fidelity=0.8)
+
+        call_kwargs = mock_enhancer.enhance.call_args
+        assert call_kwargs[1]['weight'] == 0.8
 
     @patch('face_fixing.HAS_GFPGAN', False)
     def test_graceful_fallback_when_gfpgan_unavailable(self):
@@ -165,6 +155,20 @@ class TestGFPGANEnhancement:
 
         # Should set enhancer_type to 'none' not crash
         assert pipeline.enhancer_type == 'none'
+
+    @patch('face_fixing.HAS_GFPGAN', False)
+    def test_enhance_faces_returns_original_when_no_enhancer(self):
+        """_enhance_faces should return original image when no enhancer available"""
+        from face_fixing import FaceFixingPipeline
+
+        pipeline = FaceFixingPipeline(device='cpu')
+        pipeline._load_enhancer()
+
+        input_img = np.ones((64, 64, 3), dtype=np.uint8) * 128
+        result_img, faces_count = pipeline._enhance_faces(input_img)
+
+        assert faces_count == 0
+        np.testing.assert_array_equal(result_img, input_img)
 
 
 class TestRealESRGANUpscaling:
