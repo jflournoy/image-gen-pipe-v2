@@ -7,13 +7,20 @@
 const axios = require('axios');
 const serviceManager = require('./service-manager');
 
-// Service endpoints
-const SERVICE_URLS = {
-  llm: process.env.LOCAL_LLM_URL || 'http://localhost:8003',
-  flux: process.env.FLUX_URL || 'http://localhost:8001',
-  vision: process.env.LOCAL_VISION_URL || 'http://localhost:8002',
-  vlm: process.env.LOCAL_VLM_URL || 'http://localhost:8004'
-};
+/**
+ * Get service URL dynamically from port file, falling back to env var / default.
+ * Uses serviceManager.getServiceUrl() as the single canonical source.
+ */
+function getServiceUrl(service) {
+  return serviceManager.getServiceUrl(service);
+}
+
+// Backward-compatible static accessor (reads dynamically on each access)
+const SERVICE_URLS = new Proxy({}, {
+  get(_, service) {
+    return getServiceUrl(service);
+  }
+});
 
 // Delay after unloads to allow GPU memory cleanup (CUDA memory release is async)
 // 5000ms default provides buffer for VRAM deallocation when switching Flux (10GB) ↔ VLM (5GB)
@@ -272,32 +279,33 @@ async function getServiceHealthReport() {
 }
 
 /**
- * Create a VLM service restarter function for injection into VLM provider
- * This function uses the service manager to restart the VLM service
- * @returns {Function} Async restarter function that returns { success, error? }
+ * Create a service restarter function for injection into providers.
+ * Uses the actual port from restart result for health polling (not hardcoded URLs).
+ * @param {string} serviceName - Service to restart ('llm', 'vlm', 'flux', 'vision')
+ * @returns {Function} Async restarter function that returns { success, port?, error? }
  */
-function createVLMServiceRestarter() {
+function createServiceRestarter(serviceName) {
   return async () => {
-    console.log('[ModelCoordinator] Attempting to restart VLM service...');
+    console.log(`[ModelCoordinator] Attempting to restart ${serviceName} service...`);
 
     try {
-      // Use service manager to restart VLM
-      const result = await serviceManager.restartService('vlm');
+      const result = await serviceManager.restartService(serviceName);
 
       if (result.success) {
-        console.log(`[ModelCoordinator] VLM service restarted successfully (PID: ${result.pid})`);
-        markServiceIntent('vlm', true);
+        console.log(`[ModelCoordinator] ${serviceName} service restarted successfully (PID: ${result.pid}, port: ${result.port})`);
+        markServiceIntent(serviceName, true);
 
-        // Wait for service to be ready (health check with timeout)
+        // Poll health using the ACTUAL port from restart (not hardcoded URL)
+        const healthUrl = `http://localhost:${result.port}/health`;
         const maxWaitTime = 60000; // 60 seconds
         const startTime = Date.now();
 
         while (Date.now() - startTime < maxWaitTime) {
           try {
-            const health = await axios.get(`${SERVICE_URLS.vlm}/health`, { timeout: HEALTH_CHECK_TIMEOUT_MS });
-            if (health.data.status === 'healthy') {
-              console.log('[ModelCoordinator] VLM service is healthy after restart');
-              return { success: true };
+            const health = await axios.get(healthUrl, { timeout: HEALTH_CHECK_TIMEOUT_MS });
+            if (health.data.status === 'ok' || health.data.status === 'healthy') {
+              console.log(`[ModelCoordinator] ${serviceName} service is healthy after restart`);
+              return { success: true, port: result.port };
             }
           } catch {
             // Service not ready yet, wait and retry
@@ -306,65 +314,26 @@ function createVLMServiceRestarter() {
           await new Promise(resolve => setTimeout(resolve, 2000));
         }
 
-        console.warn('[ModelCoordinator] VLM service started but health check timed out');
+        console.warn(`[ModelCoordinator] ${serviceName} service started but health check timed out`);
         return { success: false, error: 'Service health check timeout' };
       } else {
-        console.error(`[ModelCoordinator] Failed to restart VLM service: ${result.error}`);
+        console.error(`[ModelCoordinator] Failed to restart ${serviceName} service: ${result.error}`);
         return { success: false, error: result.error };
       }
     } catch (error) {
-      console.error(`[ModelCoordinator] Exception during VLM service restart: ${error.message}`);
+      console.error(`[ModelCoordinator] Exception during ${serviceName} service restart: ${error.message}`);
       return { success: false, error: error.message };
     }
   };
 }
 
-/**
- * Create an LLM service restarter function for injection into LLM provider
- * This function uses the service manager to restart the LLM service
- * @returns {Function} Async restarter function that returns { success, error? }
- */
+// Backward-compatible factory functions
 function createLLMServiceRestarter() {
-  return async () => {
-    console.log('[ModelCoordinator] Attempting to restart LLM service...');
+  return createServiceRestarter('llm');
+}
 
-    try {
-      // Use service manager to restart LLM
-      const result = await serviceManager.restartService('llm');
-
-      if (result.success) {
-        console.log(`[ModelCoordinator] LLM service restarted successfully (PID: ${result.pid})`);
-        markServiceIntent('llm', true);
-
-        // Wait for service to be ready (health check with timeout)
-        const maxWaitTime = 60000; // 60 seconds
-        const startTime = Date.now();
-
-        while (Date.now() - startTime < maxWaitTime) {
-          try {
-            const health = await axios.get(`${SERVICE_URLS.llm}/health`, { timeout: HEALTH_CHECK_TIMEOUT_MS });
-            if (health.data.status === 'ok' || health.data.status === 'healthy') {
-              console.log('[ModelCoordinator] LLM service is healthy after restart');
-              return { success: true };
-            }
-          } catch {
-            // Service not ready yet, wait and retry
-          }
-
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-
-        console.warn('[ModelCoordinator] LLM service started but health check timed out');
-        return { success: false, error: 'Service health check timeout' };
-      } else {
-        console.error(`[ModelCoordinator] Failed to restart LLM service: ${result.error}`);
-        return { success: false, error: result.error };
-      }
-    } catch (error) {
-      console.error(`[ModelCoordinator] Exception during LLM service restart: ${error.message}`);
-      return { success: false, error: error.message };
-    }
-  };
+function createVLMServiceRestarter() {
+  return createServiceRestarter('vlm');
 }
 
 /**
@@ -518,6 +487,7 @@ module.exports = {
   withImageGenOperation,
   withLLMOperation,
   SERVICE_URLS,
+  getServiceUrl,
   // Service health tracking and auto-restart
   markServiceIntent,
   getServiceIntent,
@@ -526,6 +496,7 @@ module.exports = {
   ensureServiceHealth,
   ensureAllServicesHealthy,
   getServiceHealthReport,
+  createServiceRestarter,
   createVLMServiceRestarter,
   createLLMServiceRestarter
 };
