@@ -18,7 +18,6 @@
  * - If choice varies with position but not content → position bias
  */
 
-const assert = require('node:assert');
 const test = require('node:test');
 const path = require('node:path');
 const LocalVLMProvider = require('../../src/providers/local-vlm-provider');

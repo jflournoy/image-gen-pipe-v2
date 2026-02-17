@@ -167,14 +167,14 @@ describe('🔴 RED: Flux Multiple LoRA List UI Component', () => {
     });
 
     it('should update localStorage when LoRA added', () => {
-      const addFunc = demoJsContent.match(/function\s+addFluxLora[\s\S]*?(?=\n\s*function|\n\s*const|\Z)/);
+      const addFunc = demoJsContent.match(/function\s+addFluxLora[\s\S]*?(?=\n\s*function|\n\s*const|Z)/);
       assert(addFunc, 'addFluxLora function should exist');
       assert.match(addFunc[0], /save|localStorage/i,
         'addFluxLora should save to localStorage');
     });
 
     it('should update localStorage when LoRA removed', () => {
-      const removeFunc = demoJsContent.match(/function\s+removeFluxLora[\s\S]*?(?=\n\s*function|\n\s*const|\Z)/);
+      const removeFunc = demoJsContent.match(/function\s+removeFluxLora[\s\S]*?(?=\n\s*function|\n\s*const|Z)/);
       assert(removeFunc, 'removeFluxLora function should exist');
       assert.match(removeFunc[0], /save|localStorage/i,
         'removeFluxLora should save to localStorage');

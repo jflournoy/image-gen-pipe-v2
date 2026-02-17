@@ -3,7 +3,7 @@
  * TDD RED phase - these tests should fail initially
  */
 
-const { describe, it, before, mock } = require('node:test');
+const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
 const beamSearch = require('../../src/orchestrator/beam-search');
 
@@ -14,13 +14,13 @@ describe('Beam Search - Negative Prompt Integration', () => {
   before(() => {
     // Mock LLM provider
     const mockLLMProvider = {
-      async refinePrompt(prompt, options) {
+      async refinePrompt(prompt, _options) {
         return {
           refinedPrompt: `refined: ${prompt}`,
           metadata: { model: 'mock-llm', tokens: 100 }
         };
       },
-      async combinePrompts(what, how, options) {
+      async combinePrompts(what, how, _options) {
         return {
           combinedPrompt: `${what}, ${how}`,
           metadata: { model: 'mock-llm', tokens: 150 }
@@ -47,7 +47,7 @@ describe('Beam Search - Negative Prompt Integration', () => {
 
     // Mock Vision provider
     const mockVisionProvider = {
-      async analyzeImage(imageReference, combinedPrompt) {
+      async analyzeImage(_imageReference, _combinedPrompt) {
         return {
           alignmentScore: 85,
           aestheticScore: 9.0,
@@ -61,7 +61,7 @@ describe('Beam Search - Negative Prompt Integration', () => {
 
     // Mock Negative Prompt Generator
     mockNegativePromptGenerator = {
-      async generateNegativePrompt(positivePrompt, options) {
+      async generateNegativePrompt(_positivePrompt, _options) {
         return {
           negativePrompt: 'blurry, low quality, distorted',
           metadata: {
