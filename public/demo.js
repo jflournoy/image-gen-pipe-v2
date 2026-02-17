@@ -221,6 +221,13 @@ function updateImageProviderSettings() {
     fluxSettings.style.display = provider === 'flux' ? 'block' : 'none';
   }
 
+  // Toggle Face Fixing settings visibility (supported by Modal and Flux)
+  const faceFixingSettings = document.getElementById('faceFixingSettings');
+  if (faceFixingSettings) {
+    const supportsFaceFixing = provider === 'modal' || provider === 'flux';
+    faceFixingSettings.style.display = supportsFaceFixing ? 'block' : 'none';
+  }
+
   // Update service visibility
   updateServiceVisibility();
 }
@@ -689,6 +696,67 @@ function saveModalSettings() {
 }
 
 /**
+ * Save face fixing settings to localStorage
+ * Persists fixFaces checkbox state, fidelity value, and upscale selection
+ */
+function saveFaceFixingSettings() {
+  const fixFaces = document.getElementById('fixFaces')?.checked;
+  const faceFidelity = document.getElementById('faceFidelity')?.value;
+  const faceUpscale = document.getElementById('faceUpscale')?.value;
+
+  console.log('[Face Fixing] Saving settings:', { fixFaces, faceFidelity, faceUpscale });
+
+  localStorage.setItem('fixFaces', fixFaces ? 'true' : 'false');
+  if (faceFidelity !== undefined) localStorage.setItem('faceFidelity', faceFidelity);
+  if (faceUpscale) localStorage.setItem('faceUpscale', faceUpscale);
+
+  console.log('[Face Fixing] Saved to localStorage:', {
+    fixFaces: localStorage.getItem('fixFaces'),
+    faceFidelity: localStorage.getItem('faceFidelity'),
+    faceUpscale: localStorage.getItem('faceUpscale')
+  });
+}
+
+/**
+ * Load face fixing settings from localStorage
+ * Restores previous state of face fixing controls
+ */
+function loadFaceFixingSettings() {
+  const fixFaces = localStorage.getItem('fixFaces') === 'true';
+  const faceFidelity = localStorage.getItem('faceFidelity') || '0.7';
+  const faceUpscale = localStorage.getItem('faceUpscale') || '1';
+
+  console.log('[Face Fixing] Loading settings from localStorage:', {
+    fixFaces: localStorage.getItem('fixFaces'),
+    faceFidelity: localStorage.getItem('faceFidelity'),
+    faceUpscale: localStorage.getItem('faceUpscale'),
+    parsedFixFaces: fixFaces
+  });
+
+  if (document.getElementById('fixFaces')) {
+    document.getElementById('fixFaces').checked = fixFaces;
+  }
+  if (document.getElementById('faceFidelity')) {
+    document.getElementById('faceFidelity').value = faceFidelity;
+    updateFaceFidelityDisplay(faceFidelity);
+  }
+  if (document.getElementById('faceUpscale')) {
+    document.getElementById('faceUpscale').value = faceUpscale;
+  }
+}
+
+/**
+ * Update the displayed fidelity value as the slider changes
+ * @param {string} value - The current fidelity value (0.0-1.0)
+ */
+function updateFaceFidelityDisplay(value) {
+  const display = document.getElementById('faceFidelityValue');
+  if (display) {
+    display.textContent = parseFloat(value).toFixed(1);
+  }
+}
+
+/**
  * Model-specific optimal settings (fallback if API doesn't provide defaults)
  * Maps each model to its recommended steps and guidance values
  */
@@ -1097,7 +1165,20 @@ window.showPromptsForCurrentImage = function() {
     html += `<strong>Score:</strong> ${candidate.score.toFixed(4)}<br>`;
   }
   if (candidate.parentId) {
-    html += `<strong>Parent:</strong> ${candidate.parentId}`;
+    html += `<strong>Parent:</strong> ${candidate.parentId}<br>`;
+  }
+  if (candidate.face_fixing) {
+    const ff = candidate.face_fixing;
+    html += '<strong>Face Fixing:</strong> ';
+    if (ff.applied) {
+      html += `${ff.faces_count || 0} face${ff.faces_count !== 1 ? 's' : ''} detected, `;
+      html += `fidelity: ${ff.fidelity?.toFixed(1) || '?'}, `;
+      html += `upscale: ${ff.upscale || 1}x, `;
+      html += `time: ${ff.time?.toFixed(2) || '?'}s`;
+    } else {
+      html += ff.reason || 'not applied';
+    }
+    html += '<br>';
   }
   html += '</div>';
 
@@ -1338,12 +1419,12 @@ function updateCostEstimate() {
 
 /**
  * Update the iteration warning display based on parameter combination costs
- * @param {number} n - Beam width (candidates at iteration 0)
- * @param {number} m - Keep top (candidates at subsequent iterations)
- * @param {number} maxIterations - Total iterations
- * @param {Object} costData - Cost estimation result with breakdown
+ * @param {number} _n - Beam width (candidates at iteration 0)
+ * @param {number} _m - Keep top (candidates at subsequent iterations)
+ * @param {number} _maxIterations - Total iterations
+ * @param {Object} _costData - Cost estimation result with breakdown
  */
-function updateIterationWarning(n, m, maxIterations, costData) {
+function updateIterationWarning(_n, _m, _maxIterations, _costData) {
   const warningBox = document.getElementById('iterationWarning');
 
   if (!warningBox) return;
@@ -1471,6 +1552,7 @@ document.addEventListener('DOMContentLoaded', () => {
   loadBFLSettings();
   loadModalModels().then(() => loadModalSettings()); // Load models first, then restore settings
   loadFluxSettings();
+  loadFaceFixingSettings();
   fetchAvailableLoras(); // Fetch LoRAs from discovery API for dropdown
   updateImageProviderSettings();
   updateServiceVisibility();
@@ -1492,6 +1574,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       loadFluxSettings();
+      loadFaceFixingSettings();
     });
   }
 
@@ -1965,7 +2048,8 @@ function formatMessage(msg) {
         whatPrompt: msg.whatPrompt ?? existing.whatPrompt,
         howPrompt: msg.howPrompt ?? existing.howPrompt,
         combined: msg.combined ?? existing.combined,
-        score: msg.score ?? existing.score
+        score: msg.score ?? existing.score,
+        face_fixing: msg.face_fixing ?? existing.face_fixing
       };
       candidates.set(globalId, candidateData);
       console.log(`[Demo] Stored candidate ${globalId}:`, {
@@ -2009,13 +2093,19 @@ function formatMessage(msg) {
     const rank = msg.rank !== undefined ? msg.rank : '?';
     const reason = msg.reason ? ` — ${msg.reason}` : '';
 
-    // Add separated scores display if available
+    // Add separated scores display if available (now showing AGGREGATE across all comparisons)
     let scoresInfo = '';
     if (msg.aggregatedRanks) {
-      const align = msg.aggregatedRanks.alignment?.toFixed(2) || '?';
-      const aesth = msg.aggregatedRanks.aesthetics?.toFixed(2) || '?';
-      const combined = msg.aggregatedRanks.combined?.toFixed(2) || '?';
-      scoresInfo = ` | align: ${align}, aesth: ${aesth}, combined: ${combined}`;
+      const align = (msg.aggregatedRanks.avgAlignment || msg.aggregatedRanks.alignment)?.toFixed(2) || '?';
+      const aesth = (msg.aggregatedRanks.avgAesthetics || msg.aggregatedRanks.aesthetics)?.toFixed(2) || '?';
+      const combined = (msg.aggregatedRanks.avgCombined || msg.aggregatedRanks.combined)?.toFixed(2) || '?';
+
+      // Include win/total comparison count if available
+      const wins = msg.aggregatedRanks.wins;
+      const total = msg.aggregatedRanks.totalComparisons;
+      const winRate = (wins !== undefined && total) ? ` (${wins}/${total})` : '';
+
+      scoresInfo = ` | avg align: ${align}, avg aesth: ${aesth}, avg combined: ${combined}${winRate}`;
     }
 
     // Clear previous rankings when we see rank #1 (start of new ranking round)
@@ -2298,6 +2388,7 @@ function setStatus(status) {
 
 // Start beam search
 async function startBeamSearch() {
+  console.log('[DEBUG] startBeamSearch() called');
   try {
     // Validate API key only if OpenAI providers are being used
     const apiKey = document.getElementById('apiKey').value?.trim();
@@ -2423,6 +2514,44 @@ async function startBeamSearch() {
       }
     }
 
+    console.log('[DEBUG] About to check face fixing. imageProvider =', imageProvider);
+
+    // Add face fixing options if enabled (supported by Modal and Flux)
+    console.log('[Face Fixing] Checking if should add to config:', {
+      imageProvider,
+      supportsFeature: imageProvider === 'modal' || imageProvider === 'flux' || imageProvider === 'local'
+    });
+
+    if (imageProvider === 'modal' || imageProvider === 'flux' || imageProvider === 'local') {
+      const fixFacesRaw = localStorage.getItem('fixFaces');
+      const fixFaces = fixFacesRaw === 'true';
+      console.log('[Face Fixing] Reading from localStorage:', {
+        fixFacesRaw,
+        fixFaces,
+        faceFidelity: localStorage.getItem('faceFidelity'),
+        faceUpscale: localStorage.getItem('faceUpscale')
+      });
+
+      if (fixFaces) {
+        const faceFidelity = localStorage.getItem('faceFidelity');
+        const faceUpscale = localStorage.getItem('faceUpscale');
+
+        params.fixFaces = true;
+        if (faceFidelity) params.faceFidelity = parseFloat(faceFidelity);
+        if (faceUpscale) params.faceUpscale = parseInt(faceUpscale, 10);
+
+        console.log('[Face Fixing] Added to params:', {
+          fixFaces: params.fixFaces,
+          faceFidelity: params.faceFidelity,
+          faceUpscale: params.faceUpscale
+        });
+      } else {
+        console.log('[Face Fixing] NOT adding to params (fixFaces is false or not set)');
+      }
+    } else {
+      console.log('[Face Fixing] Provider does not support face fixing, skipping');
+    }
+
     // Reset all tracking for new job
     seenImages.clear();
     candidates.clear();
@@ -2491,6 +2620,9 @@ async function startBeamSearch() {
 
     // Save API key to sessionStorage for this session
     sessionStorage.setItem('openaiApiKey', apiKey);
+
+    // DEBUG: Log full params before sending
+    console.log('[DEBUG] Full params object before sending:', JSON.stringify(params, null, 2));
 
     // Start the job via API
     const response = await fetch('/api/beam-search', {
