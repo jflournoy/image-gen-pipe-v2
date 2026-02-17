@@ -870,11 +870,14 @@ describe('LocalVLMProvider', () => {
   describe('Error Handling', () => {
     it('🔴 should retry individual comparison on socket hang up (ECONNREFUSED)', async () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      // Provide mock serviceManager so ServiceConnection can check process status
+      const mockServiceManager = {
+        isServiceRunning: async () => true,  // Process appears alive
+        getServiceUrl: () => 'http://localhost:8004',
+      };
       const provider = new LocalVLMProvider({
         apiUrl: 'http://localhost:8004',
-        maxRetries: 3,
-        initialRetryDelay: 100,
-        maxRetryDelay: 500
+        serviceManager: mockServiceManager,
       });
 
       let attemptCount = 0;
@@ -894,10 +897,10 @@ describe('LocalVLMProvider', () => {
         }
       };
 
-      // Should succeed after 3 attempts
+      // Should succeed after retries (ServiceConnection does quick retries when process is alive)
       const result = await provider.compareImages('/a.png', '/b.png', 'test');
       assert.strictEqual(result.choice, 'A', 'Should succeed after retries');
-      assert.strictEqual(attemptCount, 3, 'Should have retried twice before succeeding');
+      assert.ok(attemptCount >= 2, `Should have retried at least once, got ${attemptCount} attempts`);
     });
 
     it('🔴 should track retry attempts in progress callback during rankAllPairs', async () => {
@@ -948,11 +951,14 @@ describe('LocalVLMProvider', () => {
 
     it('🔴 should fail after max retries exceeded on persistent socket errors', async () => {
       assert.ok(LocalVLMProvider, 'Provider must be implemented');
+      // Provide mock serviceManager: process not running, no restarter → immediate failure
+      const mockServiceManager = {
+        isServiceRunning: async () => false,
+        getServiceUrl: () => 'http://localhost:8004',
+      };
       const provider = new LocalVLMProvider({
         apiUrl: 'http://localhost:8004',
-        maxRetries: 2,
-        initialRetryDelay: 50,
-        maxRetryDelay: 200
+        serviceManager: mockServiceManager,
       });
 
       provider._axios = {
@@ -963,8 +969,8 @@ describe('LocalVLMProvider', () => {
 
       await assert.rejects(
         () => provider.compareImages('/a.png', '/b.png', 'test'),
-        /unavailable after \d+ attempts/,
-        'Should indicate service unavailable after max retries'
+        /not running/,
+        'Should indicate service is not running'
       );
     });
 
@@ -1015,7 +1021,7 @@ describe('LocalVLMProvider', () => {
 
       await assert.rejects(
         () => provider.compareImages('/a.png', '/b.png', 'test'),
-        /unavailable|ECONNREFUSED|connection/i,
+        /unavailable|ECONNREFUSED|connection|not running/i,
         'Should indicate service unavailable'
       );
     });

@@ -6,6 +6,8 @@
  */
 
 const axios = require('axios');
+const ServiceConnection = require('../utils/service-connection');
+const serviceManager = require('../utils/service-manager');
 
 const DEFAULT_API_URL = process.env.LOCAL_VLM_URL || 'http://localhost:8004';
 const DEFAULT_MODEL = 'llava-v1.6-mistral-7b.Q4_K_M.gguf';
@@ -17,14 +19,8 @@ const DEBUG_DEBIASING = process.env.DEBUG_VLM_DEBIASING !== '0';
 // Default: 70% alignment (prompt match), 30% aesthetics
 const DEFAULT_ALIGNMENT_WEIGHT = 0.7;
 
-// Retry configuration for service recovery
-const MAX_RETRIES = parseInt(process.env.VLM_MAX_RETRIES || '3', 10);
-const INITIAL_RETRY_DELAY_MS = parseInt(process.env.VLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
-const MAX_RETRY_DELAY_MS = parseInt(process.env.VLM_MAX_RETRY_DELAY_MS || '30000', 10);
 // Health check timeout - be patient with model loading/busy service
 const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.VLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
-// Only restart after this many consecutive connection failures (prevents restart on transient busy state)
-const RETRIES_BEFORE_RESTART = parseInt(process.env.VLM_RETRIES_BEFORE_RESTART || '2', 10);
 
 /**
  * Comparison Graph for transitive inference
@@ -95,17 +91,19 @@ class LocalVLMProvider {
     this.alignmentWeight = options.alignmentWeight ?? DEFAULT_ALIGNMENT_WEIGHT;
     // Ensemble voting for reliability (matching ImageRanker default of 3)
     this.defaultEnsembleSize = options.defaultEnsembleSize ?? parseInt(process.env.VLM_ENSEMBLE_SIZE || '3', 10);
-    // Service restart callback (can be injected for dependency injection)
-    this._serviceRestarter = options.serviceRestarter || null;
-    // Retry configuration
-    this.maxRetries = options.maxRetries ?? MAX_RETRIES;
-    this.initialRetryDelay = options.initialRetryDelay ?? INITIAL_RETRY_DELAY_MS;
-    this.maxRetryDelay = options.maxRetryDelay ?? MAX_RETRY_DELAY_MS;
     // Separate evaluations mode (opt-in for using /compare-alignment and /compare-aesthetics endpoints)
     // When enabled, ensemble voting makes 2N calls (N alignment + N aesthetics) vs N combined calls
     // Benefits: More focused evaluations, independent assessment of alignment vs aesthetics
     // Trade-off: ~2x inference time
     this.useSeparateEvaluations = options.useSeparateEvaluations ?? false;
+
+    // Use injected ServiceConnection or create one
+    this._serviceConnection = options.serviceConnection || new ServiceConnection({
+      serviceName: 'vlm',
+      serviceManager: options.serviceManager || serviceManager,
+      serviceRestarter: options.serviceRestarter || null,
+      onUrlChanged: (newUrl) => { this.apiUrl = newUrl; },
+    });
   }
 
   /**
@@ -113,7 +111,7 @@ class LocalVLMProvider {
    * @param {Function} restarter - Async function() => { success, error? }
    */
   setServiceRestarter(restarter) {
-    this._serviceRestarter = restarter;
+    this._serviceConnection.setServiceRestarter(restarter);
   }
 
   /**
@@ -125,80 +123,6 @@ class LocalVLMProvider {
     const alignWeight = this.alignmentWeight;
     const aestheticWeight = 1 - alignWeight;
     return (alignWeight * imageRanks.alignment) + (aestheticWeight * imageRanks.aesthetics);
-  }
-
-  /**
-   * Retry an operation with exponential backoff and optional service restart
-   * @param {Function} operation - Async function to retry
-   * @param {Object} options - Retry options
-   * @param {string} options.operationName - Name for logging
-   * @param {boolean} options.attemptRestart - Whether to attempt service restart on failure
-   * @returns {Promise<*>} Result of the operation
-   * @private
-   */
-  async _retryWithBackoff(operation, options = {}) {
-    const { operationName = 'VLM operation', attemptRestart = true } = options;
-    let lastError;
-    let delay = this.initialRetryDelay;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error;
-
-        // Check if this is a connection error
-        const isConnectionError =
-          error.code === 'ECONNREFUSED' ||
-          error.message.includes('ECONNREFUSED') ||
-          error.message.includes('VLM service unavailable');
-
-        if (!isConnectionError) {
-          // Non-connection error (file not found, model not loaded, etc.) - fail immediately
-          throw error;
-        }
-
-        // Connection error - attempt restart and retry
-        if (attempt < this.maxRetries) {
-          console.warn(
-            `[LocalVLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
-          );
-
-          // Only restart after multiple failures to avoid restarting a busy service
-          // This prevents unnecessary restarts when service is just slow/busy with other requests
-          const shouldAttemptRestart = attempt >= RETRIES_BEFORE_RESTART && attemptRestart && this._serviceRestarter;
-
-          if (shouldAttemptRestart) {
-            console.log(`[LocalVLMProvider] Service unreachable after ${attempt + 1} attempts, attempting restart...`);
-            try {
-              const restartResult = await this._serviceRestarter();
-              if (restartResult.success) {
-                console.log('[LocalVLMProvider] Service restart successful');
-                // Wait a bit for service to stabilize before retrying
-                await new Promise(resolve => setTimeout(resolve, 2000));
-              } else {
-                console.warn(`[LocalVLMProvider] Service restart failed: ${restartResult.error || 'unknown error'}`);
-              }
-            } catch (restartError) {
-              console.warn(`[LocalVLMProvider] Service restart threw error: ${restartError.message}`);
-            }
-          } else if (attempt < RETRIES_BEFORE_RESTART) {
-            console.log(`[LocalVLMProvider] Retrying without restart (${attempt + 1}/${RETRIES_BEFORE_RESTART} attempts before restart)...`);
-          }
-
-          // Wait before retry with exponential backoff
-          console.log(`[LocalVLMProvider] Waiting ${delay}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay = Math.min(delay * 2, this.maxRetryDelay);
-        } else {
-          // Final attempt failed
-          console.error(`[LocalVLMProvider] ${operationName} failed after ${this.maxRetries + 1} attempts`);
-          throw new Error(`VLM service unavailable after ${this.maxRetries + 1} attempts: ${lastError.message}`);
-        }
-      }
-    }
-
-    throw lastError;
   }
 
   /**
@@ -285,7 +209,7 @@ class LocalVLMProvider {
    * @returns {Promise<{choice: 'A'|'B'|'TIE', explanation: string, confidence: number, ranks: Object, winnerStrengths: string[], loserWeaknesses: string[], improvementSuggestion: string}>}
    */
   async compareImages(imageA, imageB, prompt) {
-    return this._retryWithBackoff(
+    return this._serviceConnection.withRetry(
       async () => {
         try {
           const response = await this._axios.post(
@@ -327,8 +251,9 @@ class LocalVLMProvider {
             improvementSuggestion: data.improvement_suggestion || ''
           };
         } catch (error) {
+          // Let connection errors pass through to ServiceConnection for retry/restart
           if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-            throw new Error(`VLM service unavailable at ${this.apiUrl}`);
+            throw error;
           }
           if (error.message.includes('not found') || error.message.includes('File not found')) {
             throw new Error(`Image file not found: ${error.message}`);
@@ -424,7 +349,7 @@ class LocalVLMProvider {
     const pathA = this._getImagePath(imageA);
     const pathB = this._getImagePath(imageB);
 
-    return this._retryWithBackoff(
+    return this._serviceConnection.withRetry(
       async () => {
         const response = await this._axios.post(
           `${this.apiUrl}/compare-alignment`,
@@ -455,7 +380,7 @@ class LocalVLMProvider {
     const pathA = this._getImagePath(imageA);
     const pathB = this._getImagePath(imageB);
 
-    return this._retryWithBackoff(
+    return this._serviceConnection.withRetry(
       async () => {
         const response = await this._axios.post(
           `${this.apiUrl}/compare-aesthetics`,
@@ -797,7 +722,7 @@ class LocalVLMProvider {
 
   /**
    * Compare pair with debiasing and ensemble voting
-   * Retry logic is handled within compareImages via _retryWithBackoff
+   * Retry logic is handled within compareImages via ServiceConnection.withRetry
    * @private
    */
   async _compareWithRetry(imageA, imageB, prompt, ensembleSize) {
@@ -1168,8 +1093,9 @@ class LocalVLMProvider {
         });
         return response.data;
       } catch (error) {
+        // Let connection errors pass through to ServiceConnection for retry/restart
         if (error.code === 'ECONNREFUSED' || error.message.includes('ECONNREFUSED')) {
-          throw new Error(`VLM service unavailable at ${this.apiUrl}`);
+          throw error;
         }
         return {
           status: 'unhealthy',
@@ -1179,7 +1105,7 @@ class LocalVLMProvider {
     };
 
     if (withRetry) {
-      return this._retryWithBackoff(checkHealth, {
+      return this._serviceConnection.withRetry(checkHealth, {
         operationName: 'VLM health check',
         attemptRestart: true
       });
@@ -1212,7 +1138,7 @@ class LocalVLMProvider {
     };
 
     if (withRetry) {
-      return this._retryWithBackoff(performLoad, {
+      return this._serviceConnection.withRetry(performLoad, {
         operationName: 'VLM model load',
         attemptRestart: true
       });

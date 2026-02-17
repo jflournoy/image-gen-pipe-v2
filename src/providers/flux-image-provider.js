@@ -9,6 +9,8 @@ const fs = require('fs').promises;
 const path = require('path');
 const OutputPathManager = require('../utils/output-path-manager.js');
 const providerConfig = require('../config/provider-config.js');
+const ServiceConnection = require('../utils/service-connection');
+const serviceManager = require('../utils/service-manager');
 
 /**
  * Flux Image Provider
@@ -22,12 +24,23 @@ class FluxImageProvider {
    * @param {string} options.sessionId - Session ID for output organization
    * @param {string} options.outputDir - Base output directory
    * @param {Object} options.generation - Generation settings (steps, guidance, width, height, loraScale, scheduler)
+   * @param {Function} options.serviceRestarter - Service restart callback
+   * @param {Object} options.serviceConnection - Pre-built ServiceConnection (for testing)
+   * @param {Object} options.serviceManager - ServiceManager override (for testing)
    */
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || 'http://localhost:8001';
     this.model = options.model || 'flux-dev'; // Default to FLUX.1-dev (quality + LoRA, auto fp8)
     this.sessionId = options.sessionId;
     this.outputDir = options.outputDir || 'output';
+
+    // ServiceConnection for smart retry/restart on connection errors
+    this._serviceConnection = options.serviceConnection || new ServiceConnection({
+      serviceName: 'flux',
+      serviceManager: options.serviceManager || serviceManager,
+      serviceRestarter: options.serviceRestarter || null,
+      onUrlChanged: (newUrl) => { this.apiUrl = newUrl; },
+    });
 
     // Merge generation settings: options > config defaults
     const configDefaults = providerConfig.flux?.generation || {};
@@ -71,121 +84,129 @@ class FluxImageProvider {
    * @returns {Promise<Object>} Generation result with localPath and metadata
    */
   async generateImage(prompt, options = {}) {
-    try {
-      // Check if model needs downloading (first-time use)
-      const modelStatus = await this.checkModelStatus();
-      const isFirstTimeDownload = modelStatus.status === 'not_downloaded';
+    return this._serviceConnection.withRetry(
+      async () => {
+        try {
+          // Check if model needs downloading (first-time use)
+          const modelStatus = await this.checkModelStatus();
+          const isFirstTimeDownload = modelStatus.status === 'not_downloaded';
 
-      // Build request payload - merge per-request options with instance defaults
-      const payload = {
-        model: this.model,
-        prompt: prompt,
-        height: options.height ?? this.generation.height,
-        width: options.width ?? this.generation.width,
-        steps: options.steps ?? this.generation.steps,
-        guidance: options.guidance ?? this.generation.guidance,
-        seed: options.seed !== undefined ? options.seed : null, // null = random
-        negativePrompt: options.negativePrompt || '',
-        loras: options.loras || [],
-        lora_scale: options.loraScale ?? this.generation.loraScale,
-        scheduler: options.scheduler ?? this.generation.scheduler  // euler, dpmsolver, ddim, pndm
-      };
+          // Build request payload - merge per-request options with instance defaults
+          const payload = {
+            model: this.model,
+            prompt: prompt,
+            height: options.height ?? this.generation.height,
+            width: options.width ?? this.generation.width,
+            steps: options.steps ?? this.generation.steps,
+            guidance: options.guidance ?? this.generation.guidance,
+            seed: options.seed !== undefined ? options.seed : null, // null = random
+            negativePrompt: options.negativePrompt || '',
+            loras: options.loras || [],
+            lora_scale: options.loraScale ?? this.generation.loraScale,
+            scheduler: options.scheduler ?? this.generation.scheduler  // euler, dpmsolver, ddim, pndm
+          };
 
-      // Add face fixing parameters if provided
-      if (options.fix_faces !== undefined) {
-        payload.fix_faces = options.fix_faces;
-      }
-      if (options.face_fidelity !== undefined) {
-        payload.face_fidelity = options.face_fidelity;
-      }
-      if (options.face_upscale !== undefined) {
-        payload.face_upscale = options.face_upscale;
-      }
+          // Add face fixing parameters if provided
+          if (options.fix_faces !== undefined) {
+            payload.fix_faces = options.fix_faces;
+          }
+          if (options.face_fidelity !== undefined) {
+            payload.face_fidelity = options.face_fidelity;
+          }
+          if (options.face_upscale !== undefined) {
+            payload.face_upscale = options.face_upscale;
+          }
 
-      // Timeouts include model load time (Flux reload after GPU swap takes ~7-10 min)
-      // Normal generation (model may need reloading): 15 minutes
-      // First-time download (~12GB): 45 minutes
-      const timeout = isFirstTimeDownload ? 2700000 : 900000;
+          // Timeouts include model load time (Flux reload after GPU swap takes ~7-10 min)
+          // Normal generation (model may need reloading): 15 minutes
+          // First-time download (~12GB): 45 minutes
+          const timeout = isFirstTimeDownload ? 2700000 : 900000;
 
-      if (isFirstTimeDownload) {
-        console.log('[Flux Provider] Model not cached - using extended timeout for first-time download');
-      }
+          if (isFirstTimeDownload) {
+            console.log('[Flux Provider] Model not cached - using extended timeout for first-time download');
+          }
 
-      // Make HTTP request to Flux service
-      const response = await axios.post(
-        `${this.apiUrl}/generate`,
-        payload,
-        {
-          timeout,
-          headers: {
-            'Content-Type': 'application/json'
+          // Make HTTP request to Flux service
+          const response = await axios.post(
+            `${this.apiUrl}/generate`,
+            payload,
+            {
+              timeout,
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          // Validate response
+          const result = response.data;
+
+          if (!result.localPath) {
+            throw new Error('Response missing localPath - image generation may have failed');
+          }
+
+          // Copy temp file to proper location if we have session info
+          // Check both constructor sessionId and options.sessionId for flexibility
+          const sessionId = options.sessionId || this.sessionId;
+          let finalPath = result.localPath;
+          if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
+            try {
+              finalPath = await this._saveToSessionDir(result.localPath, options.iteration, options.candidateId, sessionId);
+              console.log(`[Flux Provider] Saved image to: ${finalPath}`);
+            } catch (copyError) {
+              console.warn(`[Flux Provider] Could not copy to session dir, using temp path: ${copyError.message}`);
+            }
+          }
+
+          // Return result in provider interface format
+          return {
+            url: undefined, // Local provider doesn't use URLs
+            localPath: finalPath,
+            revisedPrompt: result.metadata?.revisedPrompt || undefined,
+            metadata: {
+              model: this.model,
+              prompt: prompt,
+              height: payload.height,
+              width: payload.width,
+              steps: payload.steps,
+              guidance: payload.guidance,
+              seed: result.metadata?.seed || payload.seed,
+              negativePrompt: payload.negativePrompt,
+              loras: payload.loras,
+              ...result.metadata
+            }
+          };
+        } catch (error) {
+          // Let connection errors pass through to ServiceConnection for retry/restart
+          if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
+            throw error;
+          }
+          if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+            // Timeout: service is alive but slow — don't retry/restart
+            const modelStatus = await this.checkModelStatus().catch(() => ({ status: 'unknown' }));
+            const downloadMsg = modelStatus.status === 'not_downloaded'
+              ? ' The Flux model (~12GB) may still be downloading. Check service logs for progress.'
+              : '';
+            throw new Error(
+              `Failed to generate image: Request timed out.${downloadMsg} Try again or check if the Flux service is responding.`
+            );
+          } else if (error.response) {
+            throw new Error(
+              `Failed to generate image: ${error.response.status} ${error.response.statusText} - ${JSON.stringify(error.response.data)}`
+            );
+          } else if (error.request) {
+            // Network error — let ServiceConnection handle
+            throw error;
+          } else {
+            throw new Error(`Failed to generate image: ${error.message}`);
           }
         }
-      );
-
-      // Validate response
-      const result = response.data;
-
-      if (!result.localPath) {
-        throw new Error('Response missing localPath - image generation may have failed');
+      },
+      {
+        operationName: 'Flux image generation',
+        attemptRestart: true
       }
-
-      // Copy temp file to proper location if we have session info
-      // Check both constructor sessionId and options.sessionId for flexibility
-      const sessionId = options.sessionId || this.sessionId;
-      let finalPath = result.localPath;
-      if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
-        try {
-          finalPath = await this._saveToSessionDir(result.localPath, options.iteration, options.candidateId, sessionId);
-          console.log(`[Flux Provider] Saved image to: ${finalPath}`);
-        } catch (copyError) {
-          console.warn(`[Flux Provider] Could not copy to session dir, using temp path: ${copyError.message}`);
-        }
-      }
-
-      // Return result in provider interface format
-      return {
-        url: undefined, // Local provider doesn't use URLs
-        localPath: finalPath,
-        revisedPrompt: result.metadata?.revisedPrompt || undefined,
-        metadata: {
-          model: this.model,
-          prompt: prompt,
-          height: payload.height,
-          width: payload.width,
-          steps: payload.steps,
-          guidance: payload.guidance,
-          seed: result.metadata?.seed || payload.seed,
-          negativePrompt: payload.negativePrompt,
-          loras: payload.loras,
-          ...result.metadata
-        }
-      };
-    } catch (error) {
-      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        // Check if this might be due to model download
-        const modelStatus = await this.checkModelStatus().catch(() => ({ status: 'unknown' }));
-        const downloadMsg = modelStatus.status === 'not_downloaded'
-          ? ' The Flux model (~12GB) may still be downloading. Check service logs for progress.'
-          : '';
-        throw new Error(
-          `Failed to generate image: Request timed out.${downloadMsg} Try again or check if the Flux service is responding.`
-        );
-      } else if (error.response) {
-        // HTTP error from the service
-        throw new Error(
-          `Failed to generate image: ${error.response.status} ${error.response.statusText} - ${JSON.stringify(error.response.data)}`
-        );
-      } else if (error.request) {
-        // Network error - service not reachable
-        throw new Error(
-          `Failed to generate image: Cannot reach Flux service at ${this.apiUrl}. Is the service running?`
-        );
-      } else {
-        // Other error (including validation errors)
-        throw new Error(`Failed to generate image: ${error.message}`);
-      }
-    }
+    );
   }
 
   /**
@@ -209,6 +230,14 @@ class FluxImageProvider {
     await fs.copyFile(tempPath, finalPath);
 
     return finalPath;
+  }
+
+  /**
+   * Set service restarter callback (dependency injection)
+   * @param {Function} restarter - Async function() => { success, error? }
+   */
+  setServiceRestarter(restarter) {
+    this._serviceConnection.setServiceRestarter(restarter);
   }
 
   /**
