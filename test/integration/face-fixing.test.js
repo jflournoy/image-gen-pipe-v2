@@ -9,12 +9,11 @@
  * ```
  */
 
-const { describe, test, before, after } = require('node:test');
+const { describe, test, after } = require('node:test');
 const assert = require('node:assert');
 const nock = require('nock');
 
 // Gate GPU-heavy tests with environment variable
-const ENABLE_GPU_TESTS = process.env.ENABLE_GPU_TESTS === '1';
 
 describe('Face Fixing Integration Tests', () => {
   // Clean up nock state
