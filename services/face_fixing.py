@@ -4,6 +4,7 @@ Face Fixing Module
 Face enhancement: GFPGAN (with built-in RetinaFace detection) + optional Real-ESRGAN upscaling
 """
 
+import os
 import time
 import traceback
 from typing import Optional, Tuple, Dict, Any
@@ -49,15 +50,30 @@ class FaceFixingPipeline:
     Uses GFPGAN (which includes RetinaFace detection) for face enhancement.
     """
 
-    def __init__(self, device: str = 'cuda', cache_dir: Optional[str] = None, **kwargs):
+    # Model URLs for downloading
+    GFPGAN_MODEL_URL = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth'
+    REALESRGAN_URLS = {
+        2: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
+        4: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
+    }
+    # facexlib detection/parsing model URLs (downloaded by GFPGAN internally)
+    FACEXLIB_URLS = {
+        'detection_Resnet50_Final.pth': 'https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth',
+        'parsing_parsenet.pth': 'https://github.com/xinntao/facexlib/releases/download/v0.2.2/parsing_parsenet.pth',
+    }
+
+    def __init__(self, device: str = 'cuda', models_dir: Optional[str] = None, cache_dir: Optional[str] = None, **kwargs):
         """
         Initialize face fixing pipeline.
 
         Args:
             device: 'cuda' or 'cpu' for inference
-            cache_dir: Directory for model cache (uses HF_HOME or default if None)
+            models_dir: Directory for persistent model cache (e.g. Modal volume path).
+                         If set, models are downloaded here once and reused across restarts.
+            cache_dir: Directory for HF model cache (uses HF_HOME or default if None)
         """
         self.device = device if torch.cuda.is_available() else 'cpu'
+        self.models_dir = models_dir
         self.cache_dir = cache_dir or str(Path.home() / '.cache' / 'huggingface' / 'hub')
 
         # Lazy-loaded models
@@ -65,13 +81,36 @@ class FaceFixingPipeline:
         self.upsampler = None
         self.enhancer_type = None  # Track which enhancer is loaded
 
-        print(f'[FaceFixing] Initialized (device={self.device})')
+        # Ensure models_dir exists
+        if self.models_dir:
+            Path(self.models_dir).mkdir(parents=True, exist_ok=True)
+
+        print(f'[FaceFixing] Initialized (device={self.device}, models_dir={self.models_dir})')
         print(f'[FaceFixing] Import status: HAS_GFPGAN={HAS_GFPGAN}, HAS_REALESRGAN={HAS_REALESRGAN}')
 
         if HAS_GFPGAN:
             print('[FaceFixing] Will use GFPGAN (RetinaFace detection + restoration)')
         else:
             print('[FaceFixing] Warning: GFPGAN not available!')
+
+    def _ensure_model_cached(self, url: str, filename: str) -> str:
+        """Download model to models_dir if not already cached. Returns local path."""
+        if not self.models_dir:
+            return url  # No cache dir — let libraries download to their defaults
+
+        local_path = Path(self.models_dir) / filename
+        if local_path.exists():
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f'[FaceFixing] Model cached: {filename} ({size_mb:.1f}MB)')
+            return str(local_path)
+
+        import urllib.request
+        print(f'[FaceFixing] Downloading {filename} to {local_path}...')
+        start = time.time()
+        urllib.request.urlretrieve(url, str(local_path))
+        size_mb = local_path.stat().st_size / (1024 * 1024)
+        print(f'[FaceFixing] Downloaded {filename} ({size_mb:.1f}MB) in {time.time() - start:.1f}s')
+        return str(local_path)
 
     def _load_enhancer(self) -> None:
         """Load face enhancement model (GFPGAN only for now)."""
@@ -82,9 +121,34 @@ class FaceFixingPipeline:
         if HAS_GFPGAN:
             try:
                 print('[FaceFixing] Loading GFPGAN enhancement model...')
+
+                # Cache GFPGAN model
+                gfpgan_path = self._ensure_model_cached(
+                    self.GFPGAN_MODEL_URL, 'GFPGANv1.3.pth'
+                )
+
+                # Cache facexlib detection/parsing models so GFPGAN doesn't re-download.
+                # GFPGANer hardcodes model_rootpath='gfpgan/weights' internally,
+                # so we symlink cached models there for it to find.
+                if self.models_dir:
+                    weights_dir = Path(self.models_dir) / 'weights'
+                    weights_dir.mkdir(parents=True, exist_ok=True)
+                    for fname, url in self.FACEXLIB_URLS.items():
+                        self._ensure_model_cached(url, f'weights/{fname}')
+
+                    # Symlink cached models to gfpgan/weights/ (GFPGANer's hardcoded path)
+                    gfpgan_weights = Path('gfpgan/weights')
+                    gfpgan_weights.mkdir(parents=True, exist_ok=True)
+                    for fname in self.FACEXLIB_URLS:
+                        src = weights_dir / fname
+                        dst = gfpgan_weights / fname
+                        if src.exists() and not dst.exists():
+                            os.symlink(str(src.resolve()), str(dst))
+                            print(f'[FaceFixing] Symlinked {fname} to gfpgan/weights/')
+
                 self.enhancer = GFPGANer(
-                    model_path='https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth',
-                    upscale=1,  # No upscaling in restoration phase (use Real-ESRGAN separately)
+                    model_path=gfpgan_path,
+                    upscale=1,
                     arch='clean',
                     channel_multiplier=2,
                     bg_upsampler=None,
@@ -117,15 +181,12 @@ class FaceFixingPipeline:
         try:
             print(f'[FaceFixing] Loading Real-ESRGAN {scale}x upsampler...')
 
-            # Use official Real-ESRGAN models from GitHub releases
-            if scale == 2:
-                model_name = 'RealESRGAN_x2plus'
-                model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth'
-            elif scale == 4:
-                model_name = 'RealESRGAN_x4plus'
-                model_url = 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth'
-            else:
-                raise ValueError(f'Unsupported scale: {scale}. Supported scales: 2, 4')
+            if scale not in self.REALESRGAN_URLS:
+                raise ValueError(f'Unsupported scale: {scale}. Supported scales: {list(self.REALESRGAN_URLS.keys())}')
+
+            model_url = self.REALESRGAN_URLS[scale]
+            model_filename = f'RealESRGAN_x{scale}plus.pth'
+            model_path = self._ensure_model_cached(model_url, model_filename)
 
             model = RRDBNet(
                 num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale
@@ -133,7 +194,7 @@ class FaceFixingPipeline:
 
             self.upsampler = RealESRGANer(
                 scale=scale,
-                model_path=model_url,
+                model_path=model_path,
                 model=model,
                 tile=512,  # Process in tiles to save VRAM
                 tile_pad=10,
@@ -163,12 +224,10 @@ class FaceFixingPipeline:
         if self.enhancer_type == 'none' or self.enhancer is None:
             return image_bgr, 0
 
-        import cv2
-        image_rgb = cv2.cvtColor(image_bgr, cv2.COLOR_BGR2RGB)
-
+        # GFPGAN expects BGR input (uses OpenCV/RetinaFace internally)
         with torch.no_grad():
-            cropped_faces, restored_faces, restored_rgb = self.enhancer.enhance(
-                image_rgb,
+            cropped_faces, restored_faces, restored_bgr = self.enhancer.enhance(
+                image_bgr,
                 has_aligned=False,
                 only_center_face=False,
                 paste_back=True,
@@ -176,7 +235,6 @@ class FaceFixingPipeline:
             )
 
         faces_count = len(cropped_faces)
-        restored_bgr = cv2.cvtColor(restored_rgb, cv2.COLOR_RGB2BGR)
 
         return restored_bgr, faces_count
 
@@ -294,9 +352,9 @@ class FaceFixingPipeline:
 _face_fixer_instance: Optional[FaceFixingPipeline] = None
 
 
-def get_face_fixer(device: str = 'cuda') -> FaceFixingPipeline:
+def get_face_fixer(device: str = 'cuda', models_dir: Optional[str] = None) -> FaceFixingPipeline:
     """Get or create face fixing pipeline instance (lazy singleton)."""
     global _face_fixer_instance
     if _face_fixer_instance is None:
-        _face_fixer_instance = FaceFixingPipeline(device=device)
+        _face_fixer_instance = FaceFixingPipeline(device=device, models_dir=models_dir)
     return _face_fixer_instance
