@@ -112,6 +112,9 @@ class ModalImageProvider {
       }
 
       console.log(`[Modal Provider] Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
+      if (payload.fix_faces) {
+        console.log(`[Modal Provider] Face fixing enabled: fidelity=${payload.face_fidelity}, upscale=${payload.face_upscale}`);
+      }
 
       // Make HTTP request to Modal endpoint with authentication headers
       // Modal endpoints are at the root of their URL, not at a /generate path
@@ -129,6 +132,14 @@ class ModalImageProvider {
       );
 
       const result = response.data;
+
+      // Log response metadata for debugging
+      console.log('[Modal Provider] Response metadata:', JSON.stringify(result.metadata || {}, null, 2));
+      if (result.metadata?.face_fixing) {
+        console.log('[Modal Provider] Face fixing metadata received:', result.metadata.face_fixing);
+      } else if (payload.fix_faces) {
+        console.log('[Modal Provider] WARNING: Face fixing was requested but no metadata received from Modal service');
+      }
 
       // Handle response - Modal can return base64 or URL
       let imageBuffer;
