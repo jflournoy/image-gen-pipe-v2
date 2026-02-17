@@ -173,7 +173,7 @@ class LocalVLMProvider {
             try {
               const restartResult = await this._serviceRestarter();
               if (restartResult.success) {
-                console.log(`[LocalVLMProvider] Service restart successful`);
+                console.log('[LocalVLMProvider] Service restart successful');
                 // Wait a bit for service to stabilize before retrying
                 await new Promise(resolve => setTimeout(resolve, 2000));
               } else {
@@ -996,25 +996,42 @@ class LocalVLMProvider {
     let championRanks = null;
     let championImprovementSuggestion = '';
 
+    // Track progress for tournament comparisons
+    const total = candidates.length - 1; // Total comparisons needed (first candidate vs all others)
+    let completed = 0;
+
     for (let i = 1; i < candidates.length; i++) {
       const challenger = candidates[i];
-      const inferred = this._comparisonGraph.canInferWinner(champion.candidateId, challenger.candidateId);
+
+      // Save original IDs before potentially updating champion
+      const championId = champion.candidateId;
+      const challengerId = challenger.candidateId;
+
+      const inferred = this._comparisonGraph.canInferWinner(championId, challengerId);
 
       if (inferred) {
-        if (inferred.winner !== champion.candidateId) {
+        if (inferred.winner !== championId) {
           champion = challenger;
           championReason = 'Better than previous champion (inferred via transitivity)';
           // Reset feedback when champion changes via inference
           championStrengths = [];
           championWeaknesses = [];
         }
+        completed++;
         if (onProgress) {
-          onProgress({ type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId, inferred: true });
+          onProgress({
+            type: 'comparison',
+            completed,
+            total,
+            candidateA: championId,
+            candidateB: challengerId,
+            inferred: true
+          });
         }
       } else {
         try {
           const result = await this._compareWithRetry(this._getImagePath(champion), this._getImagePath(challenger), prompt, ensembleSize);
-          this._comparisonGraph.recordComparison(champion.candidateId, challenger.candidateId, result.choice);
+          this._comparisonGraph.recordComparison(championId, challengerId, result.choice);
 
           if (result.choice === 'B') {
             champion = challenger;
@@ -1032,19 +1049,31 @@ class LocalVLMProvider {
           championWeaknesses = result.loserWeaknesses || [];
           championImprovementSuggestion = result.improvementSuggestion || '';
 
+          completed++;
           if (onProgress) {
             onProgress({
-              type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId,
-              winner: result.choice === 'A' ? champion.candidateId : challenger.candidateId, inferred: false
+              type: 'comparison',
+              completed,
+              total,
+              candidateA: championId,
+              candidateB: challengerId,
+              winner: result.choice === 'A' ? championId : challengerId,
+              inferred: false
             });
           }
         } catch (error) {
           this._errors.push({ message: error.message, type: 'comparison_failure' });
           if (!gracefulDegradation) throw error;
+          completed++;
           if (onProgress) {
             onProgress({
-              type: 'comparison', candidateA: champion.candidateId, candidateB: challenger.candidateId,
-              error: true, errorMessage: error.message
+              type: 'comparison',
+              completed,
+              total,
+              candidateA: championId,
+              candidateB: challengerId,
+              error: true,
+              errorMessage: error.message
             });
           }
         }
