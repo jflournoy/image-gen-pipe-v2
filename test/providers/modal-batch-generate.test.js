@@ -71,7 +71,7 @@ describe('ModalImageProvider - Batch Generation', () => {
         { prompt: 'a cat in a garden', options: { iteration: 0, candidateId: 1 } },
       ];
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', body => {
           // Verify batch request format
           assert.ok(Array.isArray(body.requests), 'Body should have requests array');
@@ -100,7 +100,7 @@ describe('ModalImageProvider - Batch Generation', () => {
         { prompt: 'prompt two', options: { seed: 99, guidance: 7.5 } },
       ];
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', body => {
           capturedBody = body;
           return true;
@@ -132,7 +132,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     test('should send auth headers on batch request', async () => {
       let capturedHeaders = null;
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', () => true)
         .reply(function () {
           capturedHeaders = this.req.headers;
@@ -154,7 +154,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     });
 
     test('should return results with localPath and metadata matching input order', async () => {
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', () => true)
         .reply(200, {
           results: [
@@ -202,7 +202,7 @@ describe('ModalImageProvider - Batch Generation', () => {
         outputDir: tmpDir
       });
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', () => true)
         .reply(200, {
           results: [
@@ -237,7 +237,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     test('should include face fixing params in batch request when provided', async () => {
       let capturedBody = null;
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', body => {
           capturedBody = body;
           return true;
@@ -267,7 +267,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     test('should include loras in batch request when provided', async () => {
       let capturedBody = null;
 
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', body => {
           capturedBody = body;
           return true;
@@ -307,9 +307,9 @@ describe('ModalImageProvider - Batch Generation', () => {
     });
 
     test('should handle batch endpoint network error with helpful message', async () => {
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/')
-        .replyWithError('connect ENOTFOUND batch-generate.modal.run');
+        .replyWithError('connect ENOTFOUND generate.modal.run');
 
       await assert.rejects(
         () => provider.generateImages([
@@ -320,7 +320,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     });
 
     test('should handle batch endpoint 401 auth error', async () => {
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/')
         .reply(401, { error: 'Unauthorized' });
 
@@ -335,7 +335,7 @@ describe('ModalImageProvider - Batch Generation', () => {
     test('should use extended timeout for batch requests based on request count', async () => {
       // Batch of 4 should have longer timeout than single request
       // The timeout should scale with the number of requests
-      nock(expectedBatchUrl)
+      nock(testApiUrl)
         .post('/', () => true)
         .reply(200, {
           results: [

@@ -970,12 +970,8 @@ class DiffusionService:
         """List all available models (Modal method for external calls)"""
         return self._get_models_list()
 
-    @modal.fastapi_endpoint(method="POST")
-    def generate_endpoint(self, request: GenerateRequest) -> GenerateResponse:
-        """HTTP endpoint for image generation"""
-        # Debug: Log face fixing parameters from request
-        print(f"[Modal Diffusion] Request fix_faces={request.fix_faces}, face_fidelity={request.face_fidelity}, face_upscale={request.face_upscale}")
-
+    def _generate_single(self, request: GenerateRequest) -> dict:
+        """Process a single generation request and return response dict"""
         result = self.generate(
             prompt=request.prompt,
             model=request.model,
@@ -995,65 +991,44 @@ class DiffusionService:
             face_fidelity=request.face_fidelity,
             face_upscale=request.face_upscale,
         )
+        return {
+            "image": result["image"],
+            "format": result["format"],
+            "metadata": result.get("metadata"),
+        }
 
-        return GenerateResponse(
-            image=result["image"],
-            format=result["format"],
-            metadata=result.get("metadata"),
-        )
+    @modal.fastapi_endpoint(method="POST")
+    def generate_endpoint(self, body: dict) -> dict:
+        """HTTP endpoint for image generation (single or batch).
 
-    @modal.fastapi_endpoint(method="POST", label="batch-generate")
-    def batch_generate_endpoint(self, request: BatchGenerateRequest) -> BatchGenerateResponse:
-        """Batch HTTP endpoint - generate multiple images in one call.
-
-        Processes each request sequentially on the same GPU, eliminating
-        N-1 HTTP round trips when generating N images.
+        Accepts either a single GenerateRequest or a BatchGenerateRequest
+        (with a 'requests' array). Both use the same endpoint URL.
         """
-        batch_start = time.time()
-        results = []
+        # Dispatch: batch if 'requests' key present, single otherwise
+        if "requests" in body:
+            batch_req = BatchGenerateRequest(**body)
+            batch_start = time.time()
+            results = []
 
-        print(f"[Modal Diffusion] Batch request: {len(request.requests)} images")
+            print(f"[Modal Diffusion] Batch request: {len(batch_req.requests)} images")
 
-        for i, req in enumerate(request.requests):
-            print(f"[Modal Diffusion] Batch item {i+1}/{len(request.requests)}: "
-                  f"model={req.model}, fix_faces={req.fix_faces}")
+            for i, req in enumerate(batch_req.requests):
+                print(f"[Modal Diffusion] Batch item {i+1}/{len(batch_req.requests)}: "
+                      f"model={req.model}, fix_faces={req.fix_faces}")
+                results.append(self._generate_single(req))
 
-            result = self.generate(
-                prompt=req.prompt,
-                model=req.model,
-                width=req.width,
-                height=req.height,
-                steps=req.steps,
-                guidance=req.guidance,
-                seed=req.seed,
-                loras=req.loras,
-                scheduler=req.scheduler,
-                use_refiner=req.use_refiner,
-                refiner_switch=req.refiner_switch,
-                clip_skip=req.clip_skip,
-                touchup_strength=req.touchup_strength,
-                negative_prompt=req.negative_prompt,
-                fix_faces=req.fix_faces,
-                face_fidelity=req.face_fidelity,
-                face_upscale=req.face_upscale,
-            )
+            batch_time = time.time() - batch_start
+            print(f"[Modal Diffusion] Batch complete: {len(results)} images in {batch_time:.1f}s")
 
-            results.append(GenerateResponse(
-                image=result["image"],
-                format=result["format"],
-                metadata=result.get("metadata"),
-            ))
-
-        batch_time = time.time() - batch_start
-        print(f"[Modal Diffusion] Batch complete: {len(results)} images in {batch_time:.1f}s")
-
-        return BatchGenerateResponse(
-            results=results,
-            metadata={
-                "total_time": batch_time,
-                "count": len(results),
+            return {
+                "results": results,
+                "metadata": {"total_time": batch_time, "count": len(results)},
             }
-        )
+        else:
+            request = GenerateRequest(**body)
+            print(f"[Modal Diffusion] Request fix_faces={request.fix_faces}, "
+                  f"face_fidelity={request.face_fidelity}, face_upscale={request.face_upscale}")
+            return self._generate_single(request)
 
     @modal.fastapi_endpoint(method="GET")
     def health(self) -> HealthResponse:
