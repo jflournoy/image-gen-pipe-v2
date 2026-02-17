@@ -141,7 +141,7 @@ describe('Modal Multiple LoRA Support - Structural Tests', () => {
       // Expected: loras in metadata dict returned from generate
       const hasLoraMetadata =
         serviceContent.includes('"loras"') ||
-        serviceContent.includes("'loras'") ||
+        serviceContent.includes(''loras'') ||
         serviceContent.match(/metadata.*lora|lora.*metadata/i);
       assert.ok(hasLoraMetadata, 'Generation metadata should include LoRA information');
     });

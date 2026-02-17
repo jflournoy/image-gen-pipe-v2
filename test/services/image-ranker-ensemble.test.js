@@ -31,7 +31,7 @@ describe('ImageRanker Ensemble', () => {
 
       // Mock compareTwo instead of _callVisionAPI to avoid randomization issues
       let callCount = 0;
-      ranker.compareTwo = async (imageA, imageB) => {
+      ranker.compareTwo = async (_imageA, _imageB) => {
         callCount++;
         // A wins twice, B wins once (B wins on call 2)
         if (callCount === 2) {
@@ -71,7 +71,7 @@ describe('ImageRanker Ensemble', () => {
 
       // Mock compareTwo to always make candidateId 0 win
       // compareWithEnsemble swaps order randomly, so we need to check candidateId
-      ranker.compareTwo = async (imageA, imageB) => {
+      ranker.compareTwo = async (_imageA, _imageB) => {
         // Return 'A' if first param is candidateId 0, else 'B'
         const winner = imageA.candidateId === 0 ? 'A' : 'B';
         return {
@@ -103,7 +103,7 @@ describe('ImageRanker Ensemble', () => {
       // Mock compareTwo to create exact 2-2 tie
       // Make first two calls favor candidateId 0, last two favor candidateId 1
       let callCount = 0;
-      ranker.compareTwo = async (imageA, imageB) => {
+      ranker.compareTwo = async (_imageA, _imageB) => {
         callCount++;
         // First 2 calls: candidateId 0 wins
         if (callCount <= 2) {

@@ -282,7 +282,7 @@ describe('ImageRanker Multi-Factor Comparison', () => {
 
       let callCount = 0;
       // Mock compareTwo to make candidateId 0 win 2 out of 3 times
-      ranker.compareTwo = async (imageA, imageB) => {
+      ranker.compareTwo = async (imageA, _imageB) => {
         callCount++;
         // A wins rounds 1 and 2, B wins round 3
         if (callCount <= 2) {

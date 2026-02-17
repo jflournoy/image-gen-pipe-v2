@@ -10,7 +10,7 @@
  * The fix: Pass absolute outputDir to image providers via createImageProvider.
  */
 
-const { describe, test, beforeEach, afterEach, mock } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const { createRequire } = require('node:module');
@@ -73,7 +73,7 @@ describe('VLM Modal Image Paths Integration', () => {
         const fs = require('fs').promises;
         try {
           await fs.rm(absoluteOutputDir, { recursive: true, force: true });
-        } catch (_e) { /* ignore */ }
+        } catch { /* ignore */ }
       }
     });
 

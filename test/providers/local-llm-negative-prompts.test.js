@@ -3,7 +3,7 @@
  * Tests the method integrated into LLM provider
  */
 
-const { describe, it, mock } = require('node:test');
+const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const LocalLLMProvider = require('../../src/providers/local-llm-provider');
 

@@ -13,7 +13,7 @@ describe('NegativePromptGenerator', () => {
   before(() => {
     // Create generator with mock LLM provider
     const mockLLMProvider = {
-      async generateCompletion(prompt, options) {
+      async generateCompletion(prompt, _options) {
         // Mock response simulating Mistral 7B output
         if (prompt.includes('30 year old man')) {
           return {

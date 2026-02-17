@@ -369,7 +369,7 @@ describe('LocalVLMProvider Tournament-Style Ranking', () => {
 
       // Create biased mock that ALWAYS picks position A
       provider._axios = {
-        post: async (_url, data) => {
+        post: async (_data) => {
           return {
             data: {
               choice: 'A', // Always picks A - maximum position bias

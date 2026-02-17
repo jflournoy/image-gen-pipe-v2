@@ -5,7 +5,6 @@
  * position bias affects aesthetic judgments.
  */
 
-const assert = require('node:assert');
 const test = require('node:test');
 const path = require('node:path');
 const LocalVLMProvider = require('../../src/providers/local-vlm-provider');

@@ -1046,7 +1046,7 @@ describe('BFLImageProvider', () => {
           candidateId: 0,
           sessionId: 'test-session'
         });
-      } catch (e) {
+      } catch {
         // Session dir save might fail, but we're testing model selection
         assert.ok(true, 'Model override should be passed through');
       }
@@ -1157,7 +1157,7 @@ describe('BFLImageProvider', () => {
           candidateId: 0,
           sessionId: 'test'
         });
-      } catch (e) {
+      } catch {
         // Session save might fail
       }
 
@@ -1219,7 +1219,7 @@ describe('BFLImageProvider', () => {
           candidateId: 0,
           sessionId: 'test'
         });
-      } catch (e) {
+      } catch {
         // Session save might fail
       }
 
@@ -1295,7 +1295,7 @@ describe('BFLImageProvider', () => {
           candidateId: 0,
           sessionId: 'test'
         });
-      } catch (e) {
+      } catch {
         // Session save might fail
       } finally {
         console.log = originalLog;
@@ -1355,7 +1355,7 @@ describe('BFLImageProvider', () => {
           'flux-2-pro',
           'Metadata should include the model used'
         );
-      } catch (e) {
+      } catch {
         // Session save might fail, but metadata should still be returned
         assert.ok(true, 'Model tracking in metadata is implemented');
       }
@@ -1400,7 +1400,7 @@ describe('BFLImageProvider', () => {
           'flux-2-flex',
           'Metadata should reflect the actual model used (override), not instance default'
         );
-      } catch (e) {
+      } catch {
         // Expected
         assert.ok(true);
       }
