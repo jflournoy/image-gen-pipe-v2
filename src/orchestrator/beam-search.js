@@ -1412,126 +1412,264 @@ async function refinementIteration(
     })
   );
 
-  // Generate N total children (each parent generates expansionRatio children)
-  const allChildren = await Promise.all(
-    parentsWithCritiques.flatMap((parent, parentIdx) =>
-      Array(expansionRatio).fill().map(async (_, childIdx) => {
-        const candidateId = parentIdx * expansionRatio + childIdx;
-        const candidateId_str = `i${iteration}c${candidateId}`;
+  // Determine if batch image generation is available (duck-type check)
+  const useBatch = typeof imageGenProvider.generateImages === 'function';
 
-        // Wrap in try-catch for graceful error recovery
-        try {
-          // Check if aborted before processing this child
-          if (abortSignal?.aborted) {
-            throw new Error('Job cancelled');
-          }
+  // Helper to get effective descriptiveness
+  const getEffectiveDescriptiveness = () => {
+    if (config.varyDescriptivenessRandomly) {
+      return Math.floor(Math.random() * 3) + 1;
+    }
+    return config.descriptiveness || 2;
+  };
 
-          // Refine the selected dimension using critique
-          const refinedResult = await llmProvider.refinePrompt(
-            dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-            {
-              operation: 'refine',
-              dimension,
-              critique: parent.critique,
-              userPrompt
+  let allChildren;
+
+  if (useBatch) {
+    // === BATCH PATH: Phased execution for batch-capable providers ===
+    console.log(`[refinementIteration] Using BATCH image generation for iteration ${iteration}`);
+
+    // Phase 1: Refine + combine all prompts (parallel)
+    const refineResults = await Promise.all(
+      parentsWithCritiques.flatMap((parent, parentIdx) =>
+        Array(expansionRatio).fill().map(async (_, childIdx) => {
+          const candidateId = parentIdx * expansionRatio + childIdx;
+          const candidateId_str = `i${iteration}c${candidateId}`;
+
+          try {
+            if (abortSignal?.aborted) throw new Error('Job cancelled');
+
+            // Refine the selected dimension using critique
+            const refinedResult = await llmProvider.refinePrompt(
+              dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt }
+            );
+
+            if (tokenTracker && refinedResult.metadata?.tokensUsed) {
+              tokenTracker.recordUsage({ provider: 'llm', operation: 'refine', tokens: refinedResult.metadata.tokensUsed,
+                metadata: { model: refinedResult.metadata.model, iteration, candidateId, dimension, operation: 'refine' } });
             }
-          );
 
-          // Track refine tokens
-          if (tokenTracker && refinedResult.metadata?.tokensUsed) {
-            tokenTracker.recordUsage({
-              provider: 'llm',
-              operation: 'refine',
-              tokens: refinedResult.metadata.tokensUsed,
-              metadata: {
-                model: refinedResult.metadata.model,
-                iteration,
-                candidateId,
-                dimension,
-                operation: 'refine'
+            const whatPrompt = dimension === 'what' ? refinedResult.refinedPrompt : parent.whatPrompt;
+            const howPrompt = dimension === 'how' ? refinedResult.refinedPrompt : parent.howPrompt;
+
+            // Combine prompts
+            if (onStepProgress) {
+              onStepProgress({ stage: 'combine', status: 'starting', candidateId: candidateId_str,
+                message: `🔄 ${candidateId_str}: Combining 'what' + 'how' prompts...` });
+            }
+
+            const effectiveDescriptiveness = getEffectiveDescriptiveness();
+            const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness });
+            const combined = combineResult.combinedPrompt;
+
+            if (tokenTracker && combineResult.metadata) {
+              tokenTracker.recordUsage({ provider: 'llm', operation: 'combine', tokens: combineResult.metadata.tokensUsed,
+                metadata: { model: combineResult.metadata.model, iteration, candidateId, operation: 'combine' } });
+            }
+
+            if (onStepProgress) {
+              onStepProgress({ stage: 'combine', status: 'complete', candidateId: candidateId_str,
+                message: `✓ ${candidateId_str}: Prompts combined` });
+            }
+
+            // Generate negative prompt if needed
+            let negativePrompt = config.negativePrompt || null;
+            if (!negativePrompt && config.autoGenerateNegativePrompts) {
+              const modelType = imageGenProvider.modelType || 'unknown';
+              const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+              if (isSDXL) {
+                try {
+                  const generator = config.negativePromptGenerator || llmProvider;
+                  const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                  negativePrompt = negativeResult.negativePrompt;
+                } catch {
+                  negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
+                }
               }
-            });
-          }
-
-          // Construct new prompts: refine selected dimension, inherit other
-          const whatPrompt = dimension === 'what'
-            ? refinedResult.refinedPrompt
-            : parent.whatPrompt;
-          const howPrompt = dimension === 'how'
-            ? refinedResult.refinedPrompt
-            : parent.howPrompt;
-
-          // Stream child through pipeline
-          const candidate = await processCandidateStream(
-            whatPrompt,
-            howPrompt,
-            llmProvider,
-            imageGenProvider,
-            visionProvider,
-            {
-              iteration,
-              candidateId,
-              dimension,
-              parentId: parent.metadata.candidateId,
-              alpha,
-              metadataTracker,
-              tokenTracker,
-              skipVisionAnalysis,
-              onStepProgress,
-              descriptiveness: config.descriptiveness,
-              varyDescriptivenessRandomly: config.varyDescriptivenessRandomly,
-              sessionId: config.sessionId,
-              // Pass negative prompt options for refinement iterations
-              autoGenerateNegativePrompts: config.autoGenerateNegativePrompts,
-              negativePrompt: config.negativePrompt,
-              negativePromptFallback: config.negativePromptFallback,
-              // Pass face fixing parameters for refinement iterations
-              ...(config.fixFaces && {
-                fixFaces: config.fixFaces,
-                faceFidelity: config.faceFidelity,
-                faceUpscale: config.faceUpscale
-              }),
-              // Pass Flux generation options so they're available in processCandidateStream
-              ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
-              // Pass BFL generation options so they're available in processCandidateStream
-              ...(config.bflOptions && { bflOptions: config.bflOptions }),
-              // Pass Modal generation options so they're available in processCandidateStream
-              ...(config.modalOptions && { modalOptions: config.modalOptions })
             }
-          );
 
-          // Invoke callback immediately as candidate completes
-          // This enables real-time progress updates instead of waiting for all candidates
-          if (onCandidateProcessed) {
-            onCandidateProcessed(candidate);
+            // Record attempt before image gen
+            if (metadataTracker) {
+              await metadataTracker.recordAttempt({ whatPrompt, howPrompt,
+                metadata: { iteration, candidateId, dimension, parentId: parent.metadata.candidateId } });
+            }
+
+            return { whatPrompt, howPrompt, combined, negativePrompt, candidateId, parentId: parent.metadata.candidateId, failed: false };
+          } catch (error) {
+            if (error.message === 'Job cancelled') throw error;
+            console.error(`[refinementIteration] Candidate ${candidateId_str} refine/combine failed: ${error.message}`);
+            if (onStepProgress) {
+              onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+                message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
+            }
+            return { candidateId, failed: true };
+          }
+        })
+      )
+    );
+
+    if (abortSignal?.aborted) throw new Error('Job cancelled');
+
+    const successfulRefines = refineResults.filter(r => !r.failed);
+    if (successfulRefines.length === 0) {
+      throw new Error(`All candidates failed during refinement iteration ${iteration} prompt phase.`);
+    }
+
+    // Phase 2: Batch generate all images
+    const sharedGenOptions = {
+      sessionId: config.sessionId,
+      ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
+      ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
+      ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
+    };
+
+    const batchRequests = successfulRefines.map(r => ({
+      prompt: r.combined,
+      options: { ...sharedGenOptions, iteration, candidateId: r.candidateId, negativePrompt: r.negativePrompt }
+    }));
+
+    for (const r of successfulRefines) {
+      if (onStepProgress) {
+        onStepProgress({ stage: 'imageGen', status: 'starting', candidateId: `i${iteration}c${r.candidateId}`,
+          message: `⬆️  i${iteration}c${r.candidateId}: Generating image (batch)...` });
+      }
+    }
+
+    await modelCoordinator.prepareForImageGen();
+    const batchImages = await imageGenProvider.generateImages(batchRequests);
+
+    // Phase 3: Evaluate all images and build candidates (parallel)
+    allChildren = await Promise.all(
+      successfulRefines.map(async (r, batchIdx) => {
+        const candidateId_str = `i${iteration}c${r.candidateId}`;
+        const image = batchImages[batchIdx];
+
+        try {
+          if (tokenTracker && image.metadata) {
+            tokenTracker.recordUsage({ provider: 'image', operation: 'generate', tokens: 1,
+              metadata: { model: image.metadata.model, iteration, candidateId: r.candidateId, dimension, operation: 'generate' } });
           }
 
+          if (onStepProgress) {
+            const imageUrl = image.localPath
+              ? `/api/images/${config.sessionId}/${image.localPath.split(/[\\/]/).pop()}`
+              : image.url;
+            onStepProgress({ stage: 'imageGen', status: 'complete', candidateId: candidateId_str, imageUrl,
+              message: `✓ ${candidateId_str}: Image generated (ready for evaluation)` });
+          }
+
+          let evaluation = null;
+          let totalScore = null;
+
+          if (!skipVisionAnalysis && visionProvider) {
+            if (onStepProgress) {
+              onStepProgress({ stage: 'vision', status: 'starting', candidateId: candidateId_str,
+                message: `🔍 ${candidateId_str}: Analyzing image with vision model...` });
+            }
+
+            const imageReference = image.url || image.localPath;
+            evaluation = await visionLimiter.execute(() => visionProvider.analyzeImage(imageReference, r.combined));
+
+            if (tokenTracker && evaluation.metadata?.tokensUsed) {
+              tokenTracker.recordUsage({ provider: 'vision', operation: 'analyze', tokens: evaluation.metadata.tokensUsed,
+                metadata: { model: evaluation.metadata.model, iteration, candidateId: r.candidateId, operation: 'analyze' } });
+            }
+
+            totalScore = calculateTotalScore(evaluation.alignmentScore, evaluation.aestheticScore, alpha);
+
+            if (onStepProgress) {
+              onStepProgress({ stage: 'vision', status: 'complete', candidateId: candidateId_str,
+                alignment: evaluation.alignmentScore, aesthetic: evaluation.aestheticScore, totalScore,
+                message: `✅ ${candidateId_str}: Evaluation complete - alignment: ${Math.round(evaluation.alignmentScore)}/100, aesthetic: ${evaluation.aestheticScore.toFixed(1)}/10` });
+            }
+          }
+
+          if (metadataTracker) {
+            await metadataTracker.updateAttemptWithResults(iteration, r.candidateId, { combined: r.combined, image, evaluation, totalScore });
+          }
+
+          const candidate = {
+            whatPrompt: r.whatPrompt, howPrompt: r.howPrompt, combined: r.combined,
+            image, evaluation, totalScore,
+            metadata: { iteration, candidateId: r.candidateId, dimension, parentId: r.parentId }
+          };
+
+          if (onCandidateProcessed) onCandidateProcessed(candidate);
           return candidate;
         } catch (error) {
-          // Don't catch cancellation errors - let them propagate
-          if (error.message === 'Job cancelled') {
-            throw error;
-          }
-
-          // Log the error but don't crash the entire job
-          console.error(`[refinementIteration] Candidate ${candidateId_str} failed: ${error.message}`);
-
-          // Emit error message so user sees what happened
+          if (error.message === 'Job cancelled') throw error;
+          console.error(`[refinementIteration] Candidate ${candidateId_str} evaluation failed: ${error.message}`);
           if (onStepProgress) {
-            onStepProgress({
-              stage: 'error',
-              status: 'failed',
-              candidateId: candidateId_str,
-              message: `⚠️ ${candidateId_str}: Failed - ${error.message}`
-            });
+            onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+              message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
           }
-
-          // Return null to indicate this candidate failed (will be filtered out)
           return null;
         }
       })
-    )
-  );
+    );
+
+  } else {
+    // === STREAMING PATH: Individual calls for non-batch providers ===
+    console.log(`[refinementIteration] Using STREAMING image generation for iteration ${iteration}`);
+
+    allChildren = await Promise.all(
+      parentsWithCritiques.flatMap((parent, parentIdx) =>
+        Array(expansionRatio).fill().map(async (_, childIdx) => {
+          const candidateId = parentIdx * expansionRatio + childIdx;
+          const candidateId_str = `i${iteration}c${candidateId}`;
+
+          try {
+            if (abortSignal?.aborted) throw new Error('Job cancelled');
+
+            const refinedResult = await llmProvider.refinePrompt(
+              dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt }
+            );
+
+            if (tokenTracker && refinedResult.metadata?.tokensUsed) {
+              tokenTracker.recordUsage({ provider: 'llm', operation: 'refine', tokens: refinedResult.metadata.tokensUsed,
+                metadata: { model: refinedResult.metadata.model, iteration, candidateId, dimension, operation: 'refine' } });
+            }
+
+            const whatPrompt = dimension === 'what' ? refinedResult.refinedPrompt : parent.whatPrompt;
+            const howPrompt = dimension === 'how' ? refinedResult.refinedPrompt : parent.howPrompt;
+
+            const candidate = await processCandidateStream(
+              whatPrompt, howPrompt, llmProvider, imageGenProvider, visionProvider,
+              {
+                iteration, candidateId, dimension,
+                parentId: parent.metadata.candidateId,
+                alpha, metadataTracker, tokenTracker, skipVisionAnalysis, onStepProgress,
+                descriptiveness: config.descriptiveness,
+                varyDescriptivenessRandomly: config.varyDescriptivenessRandomly,
+                sessionId: config.sessionId,
+                autoGenerateNegativePrompts: config.autoGenerateNegativePrompts,
+                negativePrompt: config.negativePrompt,
+                negativePromptFallback: config.negativePromptFallback,
+                ...(config.fixFaces && { fixFaces: config.fixFaces, faceFidelity: config.faceFidelity, faceUpscale: config.faceUpscale }),
+                ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
+                ...(config.bflOptions && { bflOptions: config.bflOptions }),
+                ...(config.modalOptions && { modalOptions: config.modalOptions })
+              }
+            );
+
+            if (onCandidateProcessed) onCandidateProcessed(candidate);
+            return candidate;
+          } catch (error) {
+            if (error.message === 'Job cancelled') throw error;
+            console.error(`[refinementIteration] Candidate ${candidateId_str} failed: ${error.message}`);
+            if (onStepProgress) {
+              onStepProgress({ stage: 'error', status: 'failed', candidateId: candidateId_str,
+                message: `⚠️ ${candidateId_str}: Failed - ${error.message}` });
+            }
+            return null;
+          }
+        })
+      )
+    );
+  }
 
   // Filter out failed candidates (nulls)
   const successfulChildren = allChildren.filter(c => c !== null);

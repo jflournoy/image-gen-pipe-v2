@@ -14,6 +14,7 @@ const assert = require('node:assert');
 
 const {
   initialExpansion,
+  refinementIteration,
   configureRateLimitsForProviders
 } = require('../../src/orchestrator/beam-search.js');
 
@@ -301,6 +302,107 @@ describe('Beam Search - Batch Image Generation', () => {
       const completeEvents = imageGenEvents.filter(e => e.status === 'complete');
       assert.ok(startingEvents.length >= 1, 'Should have imageGen starting events');
       assert.ok(completeEvents.length >= 2, 'Should have imageGen complete events for each candidate');
+    });
+  });
+
+  describe('refinementIteration with batch-capable provider', () => {
+    /**
+     * Create mock parent candidates (as returned by initialExpansion)
+     */
+    function createMockParents(count) {
+      return Array(count).fill(null).map((_, i) => ({
+        whatPrompt: `what-prompt-${i}`,
+        howPrompt: `how-prompt-${i}`,
+        combined: `combined-prompt-${i}`,
+        image: {
+          url: `https://example.com/image-${i}.png`,
+          localPath: `/tmp/test/iter0-cand${i}.png`
+        },
+        evaluation: { alignmentScore: 80, aestheticScore: 7.5 },
+        totalScore: 78.5,
+        metadata: { iteration: 0, candidateId: i, dimension: 'what' }
+      }));
+    }
+
+    /**
+     * Create a mock critique provider
+     */
+    function createMockCritiqueProvider() {
+      return {
+        generateCritique: async () => ({
+          critique: 'improve the lighting and composition',
+          metadata: { tokensUsed: 40, model: 'mock-critique' }
+        })
+      };
+    }
+
+    test('should call generateImages() instead of individual generateImage() calls', async () => {
+      const llm = createMockLLM();
+      const imageGen = createMockBatchImageProvider();
+      const vision = createMockVision();
+      const critique = createMockCritiqueProvider();
+      const parents = createMockParents(2);
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        alpha: 0.7,
+        descriptiveness: 2
+      };
+
+      await refinementIteration(parents, llm, imageGen, vision, critique, config, 1, 'test prompt');
+
+      assert.strictEqual(imageGen.batchCalls.length, 1, 'Should have made exactly 1 batch call');
+      assert.strictEqual(imageGen.batchCalls[0].length, 4, 'Batch should contain 4 requests (2 parents x 2 expansion)');
+      assert.strictEqual(imageGen.individualCalls.length, 0, 'Should NOT have made any individual calls');
+    });
+
+    test('should return valid candidates with correct iteration metadata', async () => {
+      const llm = createMockLLM();
+      const imageGen = createMockBatchImageProvider();
+      const vision = createMockVision();
+      const critique = createMockCritiqueProvider();
+      const parents = createMockParents(2);
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        alpha: 0.7,
+        descriptiveness: 2
+      };
+
+      const candidates = await refinementIteration(parents, llm, imageGen, vision, critique, config, 1, 'test prompt');
+
+      assert.strictEqual(candidates.length, 4, 'Should return 4 candidates');
+
+      for (let i = 0; i < candidates.length; i++) {
+        const c = candidates[i];
+        assert.ok(c.whatPrompt, `Candidate ${i} should have whatPrompt`);
+        assert.ok(c.howPrompt, `Candidate ${i} should have howPrompt`);
+        assert.ok(c.combined, `Candidate ${i} should have combined prompt`);
+        assert.ok(c.image, `Candidate ${i} should have image`);
+        assert.strictEqual(c.metadata.iteration, 1, `Candidate ${i} should have iteration 1`);
+      }
+    });
+
+    test('should fall back to individual calls when provider lacks generateImages()', async () => {
+      const llm = createMockLLM();
+      const imageGen = createMockImageProvider();
+      const vision = createMockVision();
+      const critique = createMockCritiqueProvider();
+      const parents = createMockParents(2);
+
+      const config = {
+        beamWidth: 4,
+        keepTop: 2,
+        alpha: 0.7,
+        descriptiveness: 2
+      };
+
+      const candidates = await refinementIteration(parents, llm, imageGen, vision, critique, config, 1, 'test prompt');
+
+      assert.strictEqual(imageGen.calls.length, 4, 'Should have made 4 individual calls');
+      assert.strictEqual(candidates.length, 4, 'Should return 4 candidates');
     });
   });
 });
