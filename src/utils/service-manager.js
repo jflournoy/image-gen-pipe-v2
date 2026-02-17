@@ -62,6 +62,10 @@ const FLUX_REQUIRED_ENCODERS = [
 
 const PID_DIR = '/tmp';
 
+// Per-service startup lock: prevents concurrent startService calls from
+// spawning multiple processes. Maps serviceName → Promise of start result.
+const _startLocks = new Map();
+
 /**
  * Get PID file path for a service
  */
@@ -287,6 +291,23 @@ function validateFluxEncoderPaths(options) {
  * @param {string} options.vaePath - VAE encoder path for local models
  */
 async function startService(serviceName, options = {}) {
+  // Serialize concurrent starts for the same service.
+  // If a start is already in progress, wait for it and return its result.
+  if (_startLocks.has(serviceName)) {
+    console.log(`[ServiceManager] Start already in progress for ${serviceName}, waiting...`);
+    return await _startLocks.get(serviceName);
+  }
+
+  const startPromise = _startServiceImpl(serviceName, options);
+  _startLocks.set(serviceName, startPromise);
+  try {
+    return await startPromise;
+  } finally {
+    _startLocks.delete(serviceName);
+  }
+}
+
+async function _startServiceImpl(serviceName, options = {}) {
   const serviceConfig = SERVICES[serviceName];
 
   if (!serviceConfig) {
@@ -335,6 +356,17 @@ async function startService(serviceName, options = {}) {
     return {
       success: false,
       error: `No available port in range ${primaryPort}-${primaryPort + 9}`,
+    };
+  }
+
+  // Defense in depth: verify port is still free right before spawn.
+  // Guards against race where another process grabbed the port after findAvailablePort.
+  const portStillFree = !(await isServiceRunningOnPort(actualPort));
+  if (!portStillFree) {
+    console.warn(`[ServiceManager] Port ${actualPort} became occupied before spawn, aborting`);
+    return {
+      success: false,
+      error: `Port ${actualPort} became occupied before spawn`,
     };
   }
 
