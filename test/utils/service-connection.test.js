@@ -244,6 +244,80 @@ describe('ServiceConnection', () => {
     });
   });
 
+  describe('concurrent restart deduplication', () => {
+    test('should only trigger ONE restart when multiple operations fail simultaneously', async () => {
+      mockServiceManager.isServiceRunning = mock.fn(async () => false);
+      const restarter = mock.fn(async () => {
+        // Simulate restart taking some time
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return { success: true, port: 8003 };
+      });
+
+      const makeFailThenSucceed = () => {
+        let called = false;
+        return async () => {
+          if (!called) {
+            called = true;
+            const err = new Error('connect ECONNREFUSED 127.0.0.1:8003');
+            err.code = 'ECONNREFUSED';
+            throw err;
+          }
+          return 'success';
+        };
+      };
+
+      const conn = createConnection({ serviceRestarter: restarter });
+
+      // Launch 4 concurrent operations that all fail with ECONNREFUSED
+      const results = await Promise.all([
+        conn.withRetry(makeFailThenSucceed(), { operationName: 'op1' }),
+        conn.withRetry(makeFailThenSucceed(), { operationName: 'op2' }),
+        conn.withRetry(makeFailThenSucceed(), { operationName: 'op3' }),
+        conn.withRetry(makeFailThenSucceed(), { operationName: 'op4' }),
+      ]);
+
+      // All should succeed
+      assert.deepStrictEqual(results, ['success', 'success', 'success', 'success']);
+      // But restarter should only be called ONCE (not 4 times)
+      assert.strictEqual(restarter.mock.callCount(), 1);
+    });
+
+    test('should propagate restart failure to all waiting callers', async () => {
+      mockServiceManager.isServiceRunning = mock.fn(async () => false);
+      const restarter = mock.fn(async () => {
+        await new Promise(resolve => setTimeout(resolve, 50));
+        return { success: false, error: 'port conflict' };
+      });
+
+      const makeFailingOp = () => {
+        return async () => {
+          const err = new Error('connect ECONNREFUSED 127.0.0.1:8003');
+          err.code = 'ECONNREFUSED';
+          throw err;
+        };
+      };
+
+      const conn = createConnection({ serviceRestarter: restarter });
+
+      // All 4 should fail with restart error
+      const results = await Promise.allSettled([
+        conn.withRetry(makeFailingOp(), { operationName: 'op1' }),
+        conn.withRetry(makeFailingOp(), { operationName: 'op2' }),
+        conn.withRetry(makeFailingOp(), { operationName: 'op3' }),
+        conn.withRetry(makeFailingOp(), { operationName: 'op4' }),
+      ]);
+
+      // All should be rejected
+      for (const result of results) {
+        assert.strictEqual(result.status, 'rejected');
+        assert.ok(result.reason.message.includes('restart failed') || result.reason.message.includes('port conflict'),
+          `Expected restart failure in: ${result.reason.message}`);
+      }
+      // Restarter called only once
+      assert.strictEqual(restarter.mock.callCount(), 1);
+    });
+  });
+
   describe('connection error detection', () => {
     test('should detect ECONNREFUSED by error code', async () => {
       mockServiceManager.isServiceRunning = mock.fn(async () => false);

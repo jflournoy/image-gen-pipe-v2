@@ -41,6 +41,8 @@ class ServiceConnection {
     this._serviceManager = options.serviceManager;
     this._serviceRestarter = options.serviceRestarter || null;
     this._onUrlChanged = options.onUrlChanged || (() => {});
+    // Restart dedup: only one restart per instance at a time
+    this._restartPromise = null;
   }
 
   /**
@@ -96,7 +98,8 @@ class ServiceConnection {
 
   /**
    * Restart the service and retry the operation once.
-   * Used when the process is not running at all.
+   * Deduplicates concurrent restart attempts: if a restart is already in
+   * progress, subsequent callers wait for it instead of spawning another.
    */
   async _restartAndRetry(operation, operationName, attemptRestart) {
     if (!attemptRestart || !this._serviceRestarter) {
@@ -106,16 +109,25 @@ class ServiceConnection {
       );
     }
 
+    // Deduplicate: if restart already in progress, wait for it
+    if (this._restartPromise) {
+      console.log(
+        `[ServiceConnection:${this.serviceName}] Restart already in progress, waiting...`
+      );
+      await this._restartPromise;
+      this._updateUrl();
+      return await operation();
+    }
+
+    // Start the restart and store the promise so concurrent callers can wait
     console.log(
       `[ServiceConnection:${this.serviceName}] Process not running, attempting restart...`
     );
-
-    const restartResult = await this._serviceRestarter();
-
-    if (!restartResult.success) {
-      throw new Error(
-        `[${this.serviceName}] Service restart failed: ${restartResult.error || 'unknown error'}`
-      );
+    this._restartPromise = this._doRestart();
+    try {
+      await this._restartPromise;
+    } finally {
+      this._restartPromise = null;
     }
 
     // Update URL from port file after restart
@@ -129,6 +141,19 @@ class ServiceConnection {
       `[ServiceConnection:${this.serviceName}] Service restarted, retrying ${operationName}...`
     );
     return await operation();
+  }
+
+  /**
+   * Perform the actual restart (called once, awaited by all concurrent callers).
+   * @private
+   */
+  async _doRestart() {
+    const restartResult = await this._serviceRestarter();
+    if (!restartResult.success) {
+      throw new Error(
+        `[${this.serviceName}] Service restart failed: ${restartResult.error || 'unknown error'}`
+      );
+    }
   }
 
   /**
