@@ -9,12 +9,21 @@ import traceback
 from typing import Optional, Tuple, Dict, Any
 from pathlib import Path
 
+import sys
 import numpy as np
 import torch
 from PIL import Image
 
+# Compatibility shim: torchvision >= 0.20 removed transforms.functional_tensor
+# but GFPGAN/basicsr still import from it. Redirect to transforms.functional.
+try:
+    import torchvision.transforms.functional_tensor  # noqa: F401
+except ModuleNotFoundError:
+    import torchvision.transforms.functional as _functional
+    sys.modules['torchvision.transforms.functional_tensor'] = _functional
+    print("[FaceFixing] Applied torchvision.transforms.functional_tensor shim")
+
 # GFPGAN includes RetinaFace for detection + face restoration
-# basicsr-fixed fixes torchvision compatibility
 
 try:
     from gfpgan import GFPGANer
