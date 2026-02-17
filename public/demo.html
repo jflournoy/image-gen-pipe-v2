@@ -1587,6 +1587,60 @@
           </div>
         </section>
 
+        <!-- Face Fixing Section -->
+        <section id="faceFixingSettings" style="margin-bottom: 15px; padding: 12px; background: #f0f8ff; border-radius: 6px; border: 1px solid #b3d9ff; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              🎭 Face Fixing (GFPGAN)
+            </label>
+          </div>
+          <div style="font-size: 11px;">
+            <!-- Enable Face Fixing Checkbox -->
+            <div style="margin-bottom: 10px;">
+              <label for="fixFaces" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="fixFaces" onchange="saveFaceFixingSettings()">
+                <span style="color: #666;">Enable Face Fixing (face enhancement and restoration)</span>
+              </label>
+            </div>
+
+            <!-- Fidelity Slider -->
+            <div style="margin-bottom: 10px;">
+              <label style="display: block; color: #666; margin-bottom: 4px;">
+                Fidelity: <span id="faceFidelityValue">0.7</span>
+                <small style="color: #888; font-weight: normal;">(0.0 = quality, 1.0 = identity)</small>
+              </label>
+              <input type="range" id="faceFidelity" min="0" max="1" step="0.1" value="0.7"
+                     oninput="updateFaceFidelityDisplay(this.value)"
+                     onchange="saveFaceFixingSettings()"
+                     style="width: 100%;">
+              <small style="display: block; color: #888; margin-top: 4px;">
+                Lower values prioritize quality/aesthetics, higher values preserve facial identity
+              </small>
+            </div>
+
+            <!-- Upscale Selector -->
+            <div style="margin-bottom: 6px;">
+              <label for="faceUpscale" style="display: block; color: #666; margin-bottom: 4px;">
+                Face Upscaling (Real-ESRGAN)
+              </label>
+              <select id="faceUpscale" onchange="saveFaceFixingSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                <option value="1" selected>No upscaling (1x)</option>
+                <option value="2">2x upscaling (enhance resolution)</option>
+              </select>
+              <small style="display: block; color: #888; margin-top: 4px;">
+                2x upscaling uses Real-ESRGAN to double face resolution
+              </small>
+            </div>
+
+            <!-- Help Text -->
+            <div style="font-size: 10px; color: #555; padding: 8px; background: #fff; border-radius: 3px; margin-top: 10px;">
+              <strong>💡 About Face Fixing:</strong><br>
+              Uses GFPGAN for portrait quality enhancement. Best for images with faces that need restoration or improvement.
+              Processing adds ~1-2 seconds per image.
+            </div>
+          </div>
+        </section>
+
         <!-- Vision Provider Section -->
         <section id="visionProviderSection" style="margin-bottom: 15px; padding: 12px; background: #fff5f5; border-radius: 6px; border: 1px solid #f5b3b3;">
           <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
