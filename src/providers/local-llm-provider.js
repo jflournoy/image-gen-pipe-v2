@@ -5,15 +5,11 @@
  */
 
 const axios = require('axios');
+const ServiceConnection = require('../utils/service-connection');
+const serviceManager = require('../utils/service-manager');
 
-// Retry configuration for service recovery
-const MAX_RETRIES = parseInt(process.env.LLM_MAX_RETRIES || '3', 10);
-const INITIAL_RETRY_DELAY_MS = parseInt(process.env.LLM_INITIAL_RETRY_DELAY_MS || '2000', 10);
-const MAX_RETRY_DELAY_MS = parseInt(process.env.LLM_MAX_RETRY_DELAY_MS || '30000', 10);
 // Health check timeout - be patient with model loading/busy service
 const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.LLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
-// Only restart after this many consecutive connection failures (prevents restart on transient busy state)
-const RETRIES_BEFORE_RESTART = parseInt(process.env.LLM_RETRIES_BEFORE_RESTART || '2', 10);
 
 /**
  * Local LLM Provider
@@ -26,16 +22,20 @@ class LocalLLMProvider {
    * @param {string} options.apiUrl - Base URL of the local LLM service
    * @param {string} options.model - Model identifier
    * @param {Function} options.serviceRestarter - Service restart callback (dependency injection)
+   * @param {Object} options.serviceConnection - Pre-built ServiceConnection (for testing)
+   * @param {Object} options.serviceManager - ServiceManager override (for testing)
    */
   constructor(options = {}) {
     this.apiUrl = options.apiUrl || 'http://localhost:8003';
     this.model = options.model || 'mistralai/Mistral-7B-Instruct-v0.2';
-    // Service restart callback (can be injected for dependency injection)
-    this._serviceRestarter = options.serviceRestarter || null;
-    // Retry configuration
-    this.maxRetries = options.maxRetries ?? MAX_RETRIES;
-    this.initialRetryDelay = options.initialRetryDelay ?? INITIAL_RETRY_DELAY_MS;
-    this.maxRetryDelay = options.maxRetryDelay ?? MAX_RETRY_DELAY_MS;
+
+    // Use injected ServiceConnection or create one
+    this._serviceConnection = options.serviceConnection || new ServiceConnection({
+      serviceName: 'llm',
+      serviceManager: options.serviceManager || serviceManager,
+      serviceRestarter: options.serviceRestarter || null,
+      onUrlChanged: (newUrl) => { this.apiUrl = newUrl; },
+    });
   }
 
   /**
@@ -43,81 +43,7 @@ class LocalLLMProvider {
    * @param {Function} restarter - Async function() => { success, error? }
    */
   setServiceRestarter(restarter) {
-    this._serviceRestarter = restarter;
-  }
-
-  /**
-   * Retry an operation with exponential backoff and optional service restart
-   * @param {Function} operation - Async function to retry
-   * @param {Object} options - Retry options
-   * @param {string} options.operationName - Name for logging
-   * @param {boolean} options.attemptRestart - Whether to attempt service restart on failure
-   * @returns {Promise<*>} Result of the operation
-   * @private
-   */
-  async _retryWithBackoff(operation, options = {}) {
-    const { operationName = 'LLM operation', attemptRestart = true } = options;
-    let lastError;
-    let delay = this.initialRetryDelay;
-
-    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
-      try {
-        return await operation();
-      } catch (error) {
-        lastError = error;
-
-        // Check if this is a connection error
-        const isConnectionError =
-          error.code === 'ECONNREFUSED' ||
-          error.message.includes('ECONNREFUSED') ||
-          error.message.includes('Cannot reach local LLM service');
-
-        if (!isConnectionError) {
-          // Non-connection error - fail immediately
-          throw error;
-        }
-
-        // Connection error - attempt restart and retry
-        if (attempt < this.maxRetries) {
-          console.warn(
-            `[LocalLLMProvider] ${operationName} failed (attempt ${attempt + 1}/${this.maxRetries + 1}): ${error.message}`
-          );
-
-          // Only restart after multiple failures to avoid restarting a busy service
-          // This prevents unnecessary restarts when service is just slow/busy with other requests
-          const shouldAttemptRestart = attempt >= RETRIES_BEFORE_RESTART && attemptRestart && this._serviceRestarter;
-
-          if (shouldAttemptRestart) {
-            console.log(`[LocalLLMProvider] Service unreachable after ${attempt + 1} attempts, attempting restart...`);
-            try {
-              const restartResult = await this._serviceRestarter();
-              if (restartResult.success) {
-                console.log('[LocalLLMProvider] Service restart successful');
-                // Wait a bit for service to stabilize before retrying
-                await new Promise(resolve => setTimeout(resolve, 2000));
-              } else {
-                console.warn(`[LocalLLMProvider] Service restart failed: ${restartResult.error || 'unknown error'}`);
-              }
-            } catch (restartError) {
-              console.warn(`[LocalLLMProvider] Service restart threw error: ${restartError.message}`);
-            }
-          } else if (attempt < RETRIES_BEFORE_RESTART) {
-            console.log(`[LocalLLMProvider] Retrying without restart (${attempt + 1}/${RETRIES_BEFORE_RESTART} attempts before restart)...`);
-          }
-
-          // Wait before retry with exponential backoff
-          console.log(`[LocalLLMProvider] Waiting ${delay}ms before retry...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-          delay = Math.min(delay * 2, this.maxRetryDelay);
-        } else {
-          // Final attempt failed
-          console.error(`[LocalLLMProvider] ${operationName} failed after ${this.maxRetries + 1} attempts`);
-          throw new Error(`LLM service unavailable after ${this.maxRetries + 1} attempts: ${lastError.message}`);
-        }
-      }
-    }
-
-    throw lastError;
+    this._serviceConnection.setServiceRestarter(restarter);
   }
 
   /**
@@ -376,7 +302,7 @@ Negative prompt:`;
    * @returns {Promise<{text: string, usage: Object}>} Text and usage metadata
    */
   async _generate(prompt, options = {}) {
-    return this._retryWithBackoff(
+    return this._serviceConnection.withRetry(
       async () => {
         try {
           const payload = {
