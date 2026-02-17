@@ -43,6 +43,8 @@ const jobAbortControllers = new Map();
  * @returns {Promise<void>}
  */
 export async function startBeamSearchJob(jobId, params, userApiKey) {
+  console.log('[Beam Search Worker] Received params:', JSON.stringify(params, null, 2));
+
   const {
     prompt,
     n = 4,
@@ -61,7 +63,10 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     bflOptions,
     modalOptions,
     loraOptions,
-    rankingMode = 'vlm'  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
+    rankingMode = 'vlm',  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
+    fixFaces = false,  // Enable face fixing
+    faceFidelity = 0.7,  // Face fixing fidelity (0.0-1.0)
+    faceUpscale = 1  // Face fixing upscale factor (1 or 2)
   } = params;
 
   // Log BFL options if provided
@@ -78,6 +83,10 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
   if (loraOptions) {
     console.log(`[Beam Search Worker] Received loraOptions: path=${loraOptions.path}, scale=${loraOptions.scale}`);
   }
+
+  // Log face fixing options (always log to debug)
+  console.log(`[Beam Search Worker] Face fixing params: fixFaces=${fixFaces}, faceFidelity=${faceFidelity}, faceUpscale=${faceUpscale}`);
+  console.log(`[Beam Search Worker] Full params object keys:`, Object.keys(params));
 
   // Get runtime provider selections early to check if OpenAI is needed
   const runtimeProviders = getRuntimeProviders();
@@ -238,6 +247,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
       ...(loraOptions && { loraOptions }), // Pass LoRA options (path, scale) for Flux provider
+      ...(fixFaces && { fixFaces, faceFidelity, faceUpscale }), // Pass face fixing options (enabled, fidelity, upscale)
       sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking
@@ -401,7 +411,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
               reason: candidate.ranking.reason,
               strengths: candidate.ranking.strengths,
               weaknesses: candidate.ranking.weaknesses,
-              aggregatedRanks: candidate.ranking.ranks,  // Include separated alignment/aesthetics scores
+              aggregatedRanks: candidate.ranking.ranks,  // Now contains AGGREGATE stats across all comparisons
+              aggregateStats: candidate.ranking.aggregateStats,  // Full aggregate data with wins/losses
               timestamp: new Date().toISOString()
             });
           }

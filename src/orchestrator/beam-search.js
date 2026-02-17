@@ -663,6 +663,12 @@ async function processCandidateStream(
     {
       ...options,
       negativePrompt,  // Pass negative prompt to image generation
+      // Face fixing parameters
+      ...(options.fixFaces && {
+        fix_faces: true,
+        face_fidelity: options.faceFidelity ?? 0.7,
+        face_upscale: options.faceUpscale ?? 1
+      }),
       // Flatten fluxOptions so they're available as top-level properties for the image generator
       ...(options.fluxOptions && {
         steps: options.fluxOptions.steps,
@@ -869,6 +875,11 @@ async function initialExpansion(
   }
 
   console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}, onStepProgress=${!!onStepProgress}`);
+  if (config.fixFaces) {
+    console.log(`[initialExpansion] Face fixing enabled: fixFaces=${config.fixFaces}, fidelity=${config.faceFidelity}, upscale=${config.faceUpscale}`);
+  } else {
+    console.log(`[initialExpansion] Face fixing disabled (config.fixFaces=${config.fixFaces})`);
+  }
 
   // Unload Flux before LLM operations to free GPU memory
   await modelCoordinator.prepareForLLM();
@@ -1114,6 +1125,12 @@ async function initialExpansion(
             alpha,
             sessionId: config.sessionId,
             negativePrompt,  // Pass negative prompt to image generation
+            // Face fixing parameters
+            ...(config.fixFaces && {
+              fix_faces: true,
+              face_fidelity: config.faceFidelity ?? 0.7,
+              face_upscale: config.faceUpscale ?? 1
+            }),
             // Flatten fluxOptions so they're available for the image generator
             ...(config.fluxOptions && {
               steps: config.fluxOptions.steps,
@@ -1315,7 +1332,7 @@ async function initialExpansion(
     throw new Error(
       `Candidate failure rate too high during initial expansion: ${Math.round(failureRate * 100)}% ` +
       `(${failedCount}/${N} candidates failed). ` +
-      `Services appear to be broken. Stopping beam search to prevent wasting resources.`
+      'Services appear to be broken. Stopping beam search to prevent wasting resources.'
     );
   }
 
@@ -1472,6 +1489,12 @@ async function refinementIteration(
               autoGenerateNegativePrompts: config.autoGenerateNegativePrompts,
               negativePrompt: config.negativePrompt,
               negativePromptFallback: config.negativePromptFallback,
+              // Pass face fixing parameters for refinement iterations
+              ...(config.fixFaces && {
+                fixFaces: config.fixFaces,
+                faceFidelity: config.faceFidelity,
+                faceUpscale: config.faceUpscale
+              }),
               // Pass Flux generation options so they're available in processCandidateStream
               ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
               // Pass BFL generation options so they're available in processCandidateStream
@@ -1532,7 +1555,7 @@ async function refinementIteration(
     throw new Error(
       `Candidate failure rate too high in iteration ${iteration}: ${Math.round(failureRate * 100)}% ` +
       `(${failedCount}/${allChildren.length} candidates failed). ` +
-      `Services appear to be broken. Stopping beam search to prevent wasting resources.`
+      'Services appear to be broken. Stopping beam search to prevent wasting resources.'
     );
   }
 
