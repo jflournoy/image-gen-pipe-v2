@@ -92,7 +92,7 @@ class LocalLLMProvider {
             try {
               const restartResult = await this._serviceRestarter();
               if (restartResult.success) {
-                console.log(`[LocalLLMProvider] Service restart successful`);
+                console.log('[LocalLLMProvider] Service restart successful');
                 // Wait a bit for service to stabilize before retrying
                 await new Promise(resolve => setTimeout(resolve, 2000));
               } else {

@@ -80,7 +80,7 @@ export default [
     rules: {
       'no-unused-vars': ['error', {
         'argsIgnorePattern': '^_',
-        'varsIgnorePattern': '^(loadJob|confirmClearHistory|showProviderSettings|setFluxModelPath|clearFluxModelPath|displayModelSource|resetFluxModelToEnvDefault|resetFluxLoraSettingsComplete|editConfigValueAsText|restartAllServicesAndDismiss|resetConfigToDefaults|updateModelSourceAndRefresh|saveHfToken|showAdvancedConfig|updateRankingMode|restartServiceInModal|applyQuickLocalSettings|applyProviderSettings|downloadModel|startService|stopService|switchToLocalProviders|DEFAULT_CLIP_ENCODER_PATH|DEFAULT_T5_ENCODER_PATH|DEFAULT_VAE_PATH|failed)$'
+        'varsIgnorePattern': '^(loadJob|confirmClearHistory|showProviderSettings|setFluxModelPath|clearFluxModelPath|displayModelSource|resetFluxModelToEnvDefault|resetFluxLoraSettingsComplete|editConfigValueAsText|restartAllServicesAndDismiss|resetConfigToDefaults|updateModelSourceAndRefresh|saveHfToken|showAdvancedConfig|updateRankingMode|restartServiceInModal|applyQuickLocalSettings|applyProviderSettings|downloadModel|startService|stopService|switchToLocalProviders|updateLLMProviderSettings|updateVisionProviderSettings|startServiceInline|stopServiceInline|restartServiceInline|saveBFLSettings|saveFaceFixingSettings|selectMode|visibleServices|addFluxLora|removeFluxLora|updateFluxLora|updateModalModelDefaults|DEFAULT_CLIP_ENCODER_PATH|DEFAULT_T5_ENCODER_PATH|DEFAULT_VAE_PATH|failed)$'
       }]
     }
   },

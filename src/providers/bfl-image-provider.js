@@ -103,7 +103,7 @@ class BFLImageProvider {
       if (!flux2Variants.has(variant)) {
         throw new Error(
           `Invalid FLUX.2 variant: "flux.2-${variant}". ` +
-          `Valid FLUX.2 models: flux.2-pro, flux.2-flex, flux.2-max, flux.2-klein-4b, flux.2-klein-9b`
+          'Valid FLUX.2 models: flux.2-pro, flux.2-flex, flux.2-max, flux.2-klein-4b, flux.2-klein-9b'
         );
       }
     }
@@ -327,7 +327,7 @@ class BFLImageProvider {
 
       const data = response.data;
       if (!data.id || !data.polling_url) {
-        throw new Error(`Unexpected response format: missing id or polling_url`);
+        throw new Error('Unexpected response format: missing id or polling_url');
       }
 
       return data;
