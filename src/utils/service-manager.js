@@ -548,6 +548,36 @@ async function getAllServiceStatuses() {
   return statuses;
 }
 
+/**
+ * Default ports for each service
+ */
+const DEFAULT_PORTS = {
+  llm: 8003,
+  flux: 8001,
+  vision: 8002,
+  vlm: 8004,
+};
+
+/**
+ * Get the current URL for a service, reading the port file first.
+ * Single canonical source for port resolution across the codebase.
+ * @param {string} serviceName - Service name ('llm', 'flux', 'vision', 'vlm')
+ * @returns {string} Full URL (e.g. 'http://localhost:8003')
+ */
+function getServiceUrl(serviceName) {
+  const defaultPort = DEFAULT_PORTS[serviceName] || 8000;
+  try {
+    const content = fsSync.readFileSync(getPortFilePath(serviceName), 'utf8').trim();
+    const port = parseInt(content, 10);
+    if (!isNaN(port)) {
+      return `http://localhost:${port}`;
+    }
+  } catch {
+    // Port file doesn't exist or can't be read — use default
+  }
+  return `http://localhost:${defaultPort}`;
+}
+
 module.exports = {
   startService,
   stopService,
@@ -565,4 +595,5 @@ module.exports = {
   writePortFile,
   readPortFile,
   deletePortFile,
+  getServiceUrl,
 };
