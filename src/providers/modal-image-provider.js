@@ -58,6 +58,122 @@ class ModalImageProvider {
   }
 
   /**
+   * Build request payload from prompt and options, merging with instance defaults
+   * @param {string} prompt - Text prompt
+   * @param {Object} options - Per-request options
+   * @returns {Object} Request payload for Modal API
+   * @private
+   */
+  _buildRequestPayload(prompt, options = {}) {
+    const payload = {
+      prompt,
+      model: options.model ?? this.model,
+      width: options.width ?? this.generation.width,
+      height: options.height ?? this.generation.height,
+      steps: options.steps ?? this.generation.steps,
+      guidance: options.guidance ?? this.generation.guidance
+    };
+
+    if (options.seed !== undefined) payload.seed = options.seed;
+
+    const loras = options.loras ?? this.generation.loras;
+    if (loras && Array.isArray(loras) && loras.length > 0) {
+      payload.loras = loras;
+    }
+
+    if (options.fix_faces !== undefined) payload.fix_faces = options.fix_faces;
+    if (options.face_fidelity !== undefined) payload.face_fidelity = options.face_fidelity;
+    if (options.face_upscale !== undefined) payload.face_upscale = options.face_upscale;
+
+    return payload;
+  }
+
+  /**
+   * Decode image from Modal API response and save to session directory
+   * @param {Object} result - Single result from Modal API (with image/format fields)
+   * @param {string} prompt - Original prompt (for metadata)
+   * @param {Object} options - Options with sessionId, iteration, candidateId
+   * @param {string} [logPrefix=''] - Prefix for log messages
+   * @returns {Promise<Object>} Standard provider result format
+   * @private
+   */
+  async _processImageResult(result, prompt, options = {}, logPrefix = '') {
+    // Decode image buffer
+    let imageBuffer;
+    if (result.format === 'base64' || result.image) {
+      const base64Data = result.image || result.data;
+      imageBuffer = Buffer.from(base64Data, 'base64');
+    } else if (result.format === 'url' || result.image_url) {
+      const imageUrl = result.image_url || result.url;
+      imageBuffer = await this._downloadImage(imageUrl);
+    } else {
+      throw new Error('Unexpected response format from Modal service');
+    }
+
+    // Save to session directory
+    const sessionId = options.sessionId || this.sessionId;
+    let finalPath = null;
+
+    if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
+      try {
+        finalPath = await this._saveToSessionDir(imageBuffer, options.iteration, options.candidateId, sessionId);
+        console.log(`[Modal Provider]${logPrefix} Saved image to: ${finalPath}`);
+      } catch (saveError) {
+        console.warn(`[Modal Provider]${logPrefix} Could not save to session dir: ${saveError.message}`);
+        throw saveError;
+      }
+    } else if (sessionId) {
+      finalPath = await this._saveWithTimestamp(imageBuffer, sessionId);
+      console.log(`[Modal Provider]${logPrefix} Saved image to: ${finalPath}`);
+    }
+
+    return {
+      url: undefined,
+      localPath: finalPath,
+      revisedPrompt: undefined,
+      metadata: {
+        model: this.model,
+        prompt,
+        width: options.width ?? this.generation.width,
+        height: options.height ?? this.generation.height,
+        steps: options.steps ?? this.generation.steps,
+        guidance: options.guidance ?? this.generation.guidance,
+        seed: result.metadata?.seed,
+        inference_time: result.metadata?.inference_time,
+        loras: result.metadata?.loras,
+        face_fixing: result.metadata?.face_fixing,
+        modal: { endpoint: this.apiUrl }
+      }
+    };
+  }
+
+  /**
+   * Format an axios error into a helpful error message
+   * @param {Error} error - Axios error
+   * @param {string} context - Error context (e.g., 'generate image', 'batch generate images')
+   * @param {string} url - The URL that was called
+   * @returns {Error} Formatted error
+   * @private
+   */
+  _formatError(error, context, url) {
+    if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
+      return new Error(`Failed to ${context}: Request timed out. Modal cold start may take 60-120 seconds. Try again or check if the Modal service is deployed.`);
+    } else if (error.response?.status === 401) {
+      return new Error(`Failed to ${context}: Modal authentication failed. Check your MODAL_TOKEN_ID and MODAL_TOKEN_SECRET.`);
+    } else if (error.response?.status === 429) {
+      return new Error(`Failed to ${context}: Modal rate limit exceeded. Wait and try again.`);
+    } else if (error.response?.status === 404) {
+      return new Error(`Failed to ${context}: Modal endpoint not found (404). Check your MODAL_ENDPOINT_URL or model: ${this.model}`);
+    } else if (error.response?.status >= 500) {
+      return new Error(`Failed to ${context}: Modal server error (${error.response.status}). The service may be overloaded or misconfigured.`);
+    } else if (error.request) {
+      return new Error(`Failed to ${context}: Cannot reach Modal service at ${url}. Is the service deployed?`);
+    } else {
+      return new Error(`Failed to ${context}: ${error.message}`);
+    }
+  }
+
+  /**
    * Generate an image from a text prompt
    * @param {string} prompt - Text description of the image
    * @param {Object} options - Generation options
@@ -72,68 +188,29 @@ class ModalImageProvider {
    * @returns {Promise<Object>} Generation result with localPath and metadata
    */
   async generateImage(prompt, options = {}) {
-    // Validate prompt
     if (!prompt || prompt.trim() === '') {
       throw new Error('Prompt is required for image generation');
     }
 
     try {
-      // Build request payload - merge per-request options with instance defaults
-      const payload = {
-        prompt: prompt,
-        model: options.model ?? this.model,
-        width: options.width ?? this.generation.width,
-        height: options.height ?? this.generation.height,
-        steps: options.steps ?? this.generation.steps,
-        guidance: options.guidance ?? this.generation.guidance
-      };
-
-      // Add optional seed if provided
-      if (options.seed !== undefined) {
-        payload.seed = options.seed;
-      }
-
-      // Add LoRAs if provided (per-request overrides defaults)
-      // Format: [{ path: 'lora.safetensors', scale: 0.8 }, ...]
-      const loras = options.loras ?? this.generation.loras;
-      if (loras && Array.isArray(loras) && loras.length > 0) {
-        payload.loras = loras;
-      }
-
-      // Add face fixing parameters if provided
-      if (options.fix_faces !== undefined) {
-        payload.fix_faces = options.fix_faces;
-      }
-      if (options.face_fidelity !== undefined) {
-        payload.face_fidelity = options.face_fidelity;
-      }
-      if (options.face_upscale !== undefined) {
-        payload.face_upscale = options.face_upscale;
-      }
+      const payload = this._buildRequestPayload(prompt, options);
 
       console.log(`[Modal Provider] Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
       if (payload.fix_faces) {
         console.log(`[Modal Provider] Face fixing enabled: fidelity=${payload.face_fidelity}, upscale=${payload.face_upscale}`);
       }
 
-      // Make HTTP request to Modal endpoint with authentication headers
-      // Modal endpoints are at the root of their URL, not at a /generate path
-      const response = await axios.post(
-        this.apiUrl,
-        payload,
-        {
-          timeout: this.timeout,
-          headers: {
-            'Content-Type': 'application/json',
-            'Modal-Key': this.tokenId,
-            'Modal-Secret': this.tokenSecret
-          }
+      const response = await axios.post(this.apiUrl, payload, {
+        timeout: this.timeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'Modal-Key': this.tokenId,
+          'Modal-Secret': this.tokenSecret
         }
-      );
+      });
 
       const result = response.data;
 
-      // Log response metadata for debugging
       console.log('[Modal Provider] Response metadata:', JSON.stringify(result.metadata || {}, null, 2));
       if (result.metadata?.face_fixing) {
         console.log('[Modal Provider] Face fixing metadata received:', result.metadata.face_fixing);
@@ -141,88 +218,9 @@ class ModalImageProvider {
         console.log('[Modal Provider] WARNING: Face fixing was requested but no metadata received from Modal service');
       }
 
-      // Handle response - Modal can return base64 or URL
-      let imageBuffer;
-      if (result.format === 'base64' || result.image) {
-        // Base64 encoded image
-        const base64Data = result.image || result.data;
-        imageBuffer = Buffer.from(base64Data, 'base64');
-      } else if (result.format === 'url' || result.image_url) {
-        // URL to download
-        const imageUrl = result.image_url || result.url;
-        imageBuffer = await this._downloadImage(imageUrl);
-      } else {
-        throw new Error('Unexpected response format from Modal service');
-      }
-
-      // Save to session directory if session info provided
-      const sessionId = options.sessionId || this.sessionId;
-      let finalPath = null;
-
-      if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
-        try {
-          finalPath = await this._saveToSessionDir(imageBuffer, options.iteration, options.candidateId, sessionId);
-          console.log(`[Modal Provider] Saved image to: ${finalPath}`);
-        } catch (saveError) {
-          console.warn(`[Modal Provider] Could not save to session dir: ${saveError.message}`);
-          throw saveError;
-        }
-      } else if (sessionId) {
-        // Save with timestamp if no iteration/candidate info
-        finalPath = await this._saveWithTimestamp(imageBuffer, sessionId);
-        console.log(`[Modal Provider] Saved image to: ${finalPath}`);
-      }
-
-      // Return result in standard provider format
-      return {
-        url: undefined, // Don't expose internal URLs
-        localPath: finalPath,
-        revisedPrompt: undefined, // Modal doesn't revise prompts
-        metadata: {
-          model: this.model,
-          prompt: prompt,
-          width: payload.width,
-          height: payload.height,
-          steps: payload.steps,
-          guidance: payload.guidance,
-          seed: result.metadata?.seed || payload.seed,
-          inference_time: result.metadata?.inference_time,
-          loras: result.metadata?.loras || payload.loras,
-          face_fixing: result.metadata?.face_fixing,
-          modal: {
-            endpoint: this.apiUrl
-          }
-        }
-      };
+      return await this._processImageResult(result, prompt, options);
     } catch (error) {
-      // Handle specific error cases with helpful messages
-      if (error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT') {
-        throw new Error(
-          'Failed to generate image: Request timed out. Modal cold start may take 60-120 seconds. Try again or check if the Modal service is deployed.'
-        );
-      } else if (error.response?.status === 401) {
-        throw new Error(
-          'Failed to generate image: Modal authentication failed. Check your MODAL_TOKEN_ID and MODAL_TOKEN_SECRET.'
-        );
-      } else if (error.response?.status === 429) {
-        throw new Error(
-          'Failed to generate image: Modal rate limit exceeded. Wait and try again.'
-        );
-      } else if (error.response?.status === 404) {
-        throw new Error(
-          `Failed to generate image: Modal endpoint not found (404). Check your MODAL_ENDPOINT_URL or model: ${this.model}`
-        );
-      } else if (error.response?.status >= 500) {
-        throw new Error(
-          `Failed to generate image: Modal server error (${error.response.status}). The service may be overloaded or misconfigured.`
-        );
-      } else if (error.request) {
-        throw new Error(
-          `Failed to generate image: Cannot reach Modal service at ${this.apiUrl}. Is the service deployed?`
-        );
-      } else {
-        throw new Error(`Failed to generate image: ${error.message}`);
-      }
+      throw this._formatError(error, 'generate image', this.apiUrl);
     }
   }
 
@@ -297,6 +295,77 @@ class ModalImageProvider {
   getHealthUrl() {
     // Replace generate-HASH with health (no hash on health endpoint)
     return this.apiUrl.replace(/generate-[a-f0-9]+/, 'health');
+  }
+
+  /**
+   * Derive the batch endpoint URL from the generate endpoint URL
+   * Batch: https://user--app-class-batch-generate.modal.run
+   * @returns {string} Batch endpoint URL
+   */
+  getBatchUrl() {
+    return this.apiUrl.replace(/generate-[a-f0-9]+/, 'batch-generate');
+  }
+
+  /**
+   * Generate multiple images in a single HTTP request (batch mode)
+   * Sends all requests to Modal's batch endpoint, which processes them
+   * sequentially on the same GPU, saving N-1 HTTP round trips.
+   *
+   * @param {Array<Object>} requests - Array of {prompt, options} objects
+   * @param {string} requests[].prompt - Text prompt for image generation
+   * @param {Object} requests[].options - Per-image generation options
+   * @returns {Promise<Array<Object>>} Array of results in same order as requests
+   */
+  async generateImages(requests) {
+    if (!requests || requests.length === 0) {
+      throw new Error('generateImages requires at least one request');
+    }
+
+    for (const req of requests) {
+      if (!req.prompt || req.prompt.trim() === '') {
+        throw new Error('Prompt is required for image generation');
+      }
+    }
+
+    try {
+      const batchPayload = {
+        requests: requests.map(req => this._buildRequestPayload(req.prompt, req.options || {}))
+      };
+
+      const batchUrl = this.getBatchUrl();
+      const batchTimeout = this.timeout + (requests.length * 60000);
+
+      console.log(`[Modal Provider] Batch generating ${requests.length} images via ${batchUrl}`);
+
+      const response = await axios.post(batchUrl, batchPayload, {
+        timeout: batchTimeout,
+        headers: {
+          'Content-Type': 'application/json',
+          'Modal-Key': this.tokenId,
+          'Modal-Secret': this.tokenSecret
+        }
+      });
+
+      const batchResult = response.data;
+      const results = batchResult.results || [];
+
+      if (results.length !== requests.length) {
+        console.warn(`[Modal Provider] Batch returned ${results.length} results for ${requests.length} requests`);
+      }
+
+      const processedResults = await Promise.all(
+        results.map(async (result, i) => {
+          const req = requests[i];
+          return await this._processImageResult(result, req.prompt, req.options || {}, ` Batch item ${i}:`);
+        })
+      );
+
+      console.log(`[Modal Provider] Batch complete: ${processedResults.length} images`);
+      return processedResults;
+
+    } catch (error) {
+      throw this._formatError(error, 'batch generate images', this.getBatchUrl());
+    }
   }
 
   /**
