@@ -2,7 +2,7 @@
 name = "image-gen-pipe"
 version = "2.0.0"
 description = "Image generation pipeline with beam search orchestration"
-requires-python = ">=3.11"
+requires-python = ">=3.10,<3.11"  # gfpgan dependencies require <3.11
 dependencies = [
     # Core service dependencies
     "fastapi>=0.104.0",
@@ -22,13 +22,15 @@ dependencies = [
     "huggingface_hub>=0.20.0",
     "protobuf>=4.25.0",
     "sentencepiece>=0.1.99",
+    "compel>=2.0.0",  # Long prompt support for diffusers
+    "safetensors>=0.4.0",  # Model loading
 
     # Image processing
     "Pillow>=10.1.0",
     "requests>=2.31.0",
 
     # Face fixing dependencies (GFPGAN + Real-ESRGAN, CodeFormer optional)
-    "mediapipe>=0.10.0",
+    "opencv-python-headless>=4.8.0",  # Headless OpenCV for face detection (replaces mediapipe)
     "gfpgan>=0.3.0",
     "basicsr-fixed>=1.4.2",  # Fixes torchvision compatibility issues in basicsr
     "realesrgan>=0.3.0",
@@ -38,5 +40,10 @@ dependencies = [
 [tool.uv.workspace]
 members = ["services"]
 
+[[tool.uv.index]]
+url = "https://abetlen.github.io/llama-cpp-python/whl/cu122"
+name = "llama-cpp-python-cuda"
+
 [tool.uv.sources]
 image-gen-services = { workspace = true }
+llama-cpp-python = { index = "llama-cpp-python-cuda" }

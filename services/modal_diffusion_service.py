@@ -101,25 +101,23 @@ app = modal.App(APP_NAME)
 model_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
 # Define the container image with dependencies
+# Image version: 2026-02-14-uv-based (using uv.lock for deterministic deps)
 diffusion_image = (
-    modal.Image.debian_slim(python_version="3.11")
-    .pip_install(
-        "torch>=2.1.0",
-        "diffusers>=0.27.0",
-        "transformers>=4.38.0",
-        "accelerate>=0.27.0",
-        "safetensors>=0.4.0",
-        "sentencepiece>=0.1.99",
-        "compel>=2.0.0",
-        "fastapi>=0.109.0",
-        "pydantic>=2.0.0",
-        "Pillow>=10.0.0",
-        "huggingface_hub>=0.21.0",
-        "requests>=2.31.0",
-        # Face fixing dependencies (GFPGAN default, CodeFormer optional)
-        "mediapipe>=0.10.0",
-        "gfpgan>=0.3.0",
-        "realesrgan>=0.3.0",
+    modal.Image.debian_slim(python_version="3.10")  # Match local env (gfpgan requires <3.11)
+    # Install system dependencies for headless OpenCV
+    .apt_install("libgl1", "libglib2.0-0")
+    # Install uv and dependencies from lockfile
+    .run_commands(
+        "pip install uv",
+        # Create temp directory and copy files manually
+        "mkdir -p /tmp/project"
+    )
+    .add_local_file("../pyproject.toml", "/tmp/project/pyproject.toml", copy=True)
+    .add_local_file("../uv.lock", "/tmp/project/uv.lock", copy=True)
+    .add_local_python_source("face_fixing", copy=True)
+    .run_commands(
+        "cd /tmp/project && uv pip install --system --no-cache .",
+        "echo 'Dependencies installed from uv.lock (Python 3.10): 2026-02-14'"
     )
 )
 
@@ -292,8 +290,13 @@ class DiffusionService:
             # Don't load yet - just prepare for lazy loading
             self.face_fixer = get_face_fixer
             print("[Modal Diffusion] Face fixing pipeline ready (lazy-loaded)")
-        except ImportError:
-            print("[Modal Diffusion] Warning: Face fixing not available (face_fixing module not found)")
+        except ImportError as e:
+            print(f"[Modal Diffusion] Warning: Face fixing not available (ImportError: {e})")
+            self.face_fixer = None
+        except Exception as e:
+            print(f"[Modal Diffusion] ERROR: Face fixing initialization failed: {type(e).__name__}: {e}")
+            import traceback
+            traceback.print_exc()
             self.face_fixer = None
 
         # Pre-load default model for faster first inference
@@ -852,6 +855,7 @@ class DiffusionService:
 
         # Apply face fixing if requested
         face_fix_info = None
+        print(f"[Modal Diffusion] Face fixing check: fix_faces={fix_faces}, self.face_fixer={self.face_fixer is not None}")
         if fix_faces and self.face_fixer:
             try:
                 print(f"[Modal Diffusion] Applying face fixing (fidelity={face_fidelity}, upscale={face_upscale or 1})")
@@ -953,6 +957,9 @@ class DiffusionService:
     @modal.fastapi_endpoint(method="POST")
     def generate_endpoint(self, request: GenerateRequest) -> GenerateResponse:
         """HTTP endpoint for image generation"""
+        # Debug: Log face fixing parameters from request
+        print(f"[Modal Diffusion] Request fix_faces={request.fix_faces}, face_fidelity={request.face_fidelity}, face_upscale={request.face_upscale}")
+
         result = self.generate(
             prompt=request.prompt,
             model=request.model,
