@@ -332,12 +332,12 @@ class ModalImageProvider {
         requests: requests.map(req => this._buildRequestPayload(req.prompt, req.options || {}))
       };
 
-      const batchUrl = this.getBatchUrl();
+      // Send batch to the same generate endpoint (it detects batch via 'requests' key)
       const batchTimeout = this.timeout + (requests.length * 60000);
 
-      console.log(`[Modal Provider] Batch generating ${requests.length} images via ${batchUrl}`);
+      console.log(`[Modal Provider] Batch generating ${requests.length} images via ${this.apiUrl}`);
 
-      const response = await axios.post(batchUrl, batchPayload, {
+      const response = await axios.post(this.apiUrl, batchPayload, {
         timeout: batchTimeout,
         headers: {
           'Content-Type': 'application/json',
@@ -364,7 +364,7 @@ class ModalImageProvider {
       return processedResults;
 
     } catch (error) {
-      throw this._formatError(error, 'batch generate images', this.getBatchUrl());
+      throw this._formatError(error, 'batch generate images', this.apiUrl);
     }
   }
 
