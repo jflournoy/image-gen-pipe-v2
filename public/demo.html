@@ -1316,6 +1316,9 @@
         <a href="/evaluation" title="HITL Evaluation" style="margin-right: 15px;">
           <i class="fas fa-users"></i>
         </a>
+        <a href="/comparison" title="Human vs AI Rankings" style="margin-right: 15px;">
+          <i class="fas fa-chart-bar"></i>
+        </a>
         <a href="https://github.com/jflournoy/image-gen-pipe-v2" target="_blank" rel="noopener noreferrer" title="View on GitHub">
           <i class="fab fa-github"></i>
         </a>
@@ -1625,10 +1628,11 @@
               </label>
               <select id="faceUpscale" onchange="saveFaceFixingSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                 <option value="1" selected>No upscaling (1x)</option>
-                <option value="2">2x upscaling (enhance resolution)</option>
+                <option value="2">2x upscaling (Real-ESRGAN x2)</option>
+                <option value="4">4x upscaling (4xUltraSharp)</option>
               </select>
               <small style="display: block; color: #888; margin-top: 4px;">
-                2x upscaling uses Real-ESRGAN to double face resolution
+                Upscaling is composited with face restoration in a single pass for best quality
               </small>
             </div>
 

@@ -16,6 +16,8 @@ import { createRequire } from 'node:module';
 
 const require = createRequire(import.meta.url);
 const EvaluationTracker = require('../services/evaluation-tracker.js');
+const { ComparisonGraph } = require('../utils/comparison-graph.js');
+const { deriveRankingsFromComparisons, computeAgreementMetrics } = require('../utils/ranking-agreement.js');
 
 const router = express.Router();
 
@@ -336,6 +338,195 @@ router.get('/:evaluationId/export', async (req, res) => {
       error: 'Failed to export data',
       message: error.message
     });
+  }
+});
+
+/**
+ * GET /api/evaluation/rankings/:sessionId
+ * Get AI ranking data for a session
+ */
+router.get('/rankings/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    // Find session directory
+    const sessions = await findAllSessions();
+    const session = sessions.find(s => s.sessionId === sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const rankingsPath = path.join(session.path, 'rankings.json');
+    const json = await fsPromises.readFile(rankingsPath, 'utf8');
+    const rankings = JSON.parse(json);
+
+    res.json({ success: true, rankings });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      return res.status(404).json({
+        error: 'Rankings not found',
+        message: 'No AI ranking data available for this session. Rankings are only saved for sessions using VLM comparative ranking.'
+      });
+    }
+    console.error('[EvalRoutes] Error loading rankings:', error);
+    res.status(500).json({ error: 'Failed to load rankings', message: error.message });
+  }
+});
+
+/**
+ * GET /api/evaluation/list/:sessionId
+ * List evaluation files for a session
+ */
+router.get('/list/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+
+    const sessions = await findAllSessions();
+    const session = sessions.find(s => s.sessionId === sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    const files = await fsPromises.readdir(session.path);
+    const evaluationFiles = files
+      .filter(f => f.startsWith('evaluation-') && f.endsWith('.json'))
+      .map(f => {
+        const match = f.match(/^evaluation-(.+)\.json$/);
+        return match ? match[1] : null;
+      })
+      .filter(Boolean);
+
+    res.json({ success: true, evaluations: evaluationFiles });
+  } catch (error) {
+    console.error('[EvalRoutes] Error listing evaluations:', error);
+    res.status(500).json({ error: 'Failed to list evaluations', message: error.message });
+  }
+});
+
+/**
+ * GET /api/evaluation/comparison/:sessionId
+ * Get full comparison data: AI rankings, human rankings, agreement metrics, graph data
+ */
+router.get('/comparison/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { evaluationId } = req.query;
+
+    if (!evaluationId) {
+      return res.status(400).json({ error: 'Missing evaluationId query parameter' });
+    }
+
+    const sessions = await findAllSessions();
+    const session = sessions.find(s => s.sessionId === sessionId);
+
+    if (!session) {
+      return res.status(404).json({ error: 'Session not found' });
+    }
+
+    // Load human evaluation
+    const tracker = await EvaluationTracker.load(OUTPUT_DIR, sessionId, evaluationId);
+    const evaluation = await tracker.getEvaluation();
+
+    // Derive human rankings from comparisons
+    const humanResult = deriveRankingsFromComparisons(evaluation);
+    const humanRankings = humanResult.rankings;
+    const humanGraph = humanResult.graph;
+
+    // Load AI rankings
+    let aiRankings = null;
+    let aiGraph = null;
+    let aiGraphData = null;
+    try {
+      const rankingsPath = path.join(session.path, 'rankings.json');
+      const json = await fsPromises.readFile(rankingsPath, 'utf8');
+      const rankingsData = JSON.parse(json);
+
+      // Use final global ranking if available, otherwise use last iteration
+      if (rankingsData.finalGlobalRanking) {
+        aiRankings = rankingsData.finalGlobalRanking.map((r, idx) => ({
+          candidateId: r.candidateId,
+          rank: r.globalRank || idx + 1
+        }));
+      } else {
+        // Fall back to last iteration
+        const iterKeys = Object.keys(rankingsData.iterations || {}).sort((a, b) => Number(b) - Number(a));
+        if (iterKeys.length > 0) {
+          const lastIter = rankingsData.iterations[iterKeys[0]];
+          aiRankings = (lastIter.rankings || []).map(r => ({
+            candidateId: r.candidateId,
+            rank: r.rank
+          }));
+        }
+      }
+
+      // Rebuild AI comparison graph from stored comparisons
+      const iterKeys = Object.keys(rankingsData.iterations || {}).sort((a, b) => Number(a) - Number(b));
+      if (iterKeys.length > 0) {
+        const lastIter = rankingsData.iterations[iterKeys[iterKeys.length - 1]];
+        if (lastIter.comparisons?.directComparisons) {
+          aiGraph = ComparisonGraph.fromJSON(lastIter.comparisons);
+        }
+      }
+    } catch {
+      // AI rankings not available
+    }
+
+    // Compute agreement metrics
+    const agreement = computeAgreementMetrics(aiRankings, humanRankings);
+
+    // Build candidate metadata
+    const metadata = await loadSessionMetadata(session.path);
+    const candidateIds = evaluation.candidates.map(c => `i${c.iteration}c${c.candidateId}`);
+
+    const candidates = evaluation.candidates.map(c => {
+      const globalId = `i${c.iteration}c${c.candidateId}`;
+      const metaCandidate = metadata?.iterations
+        ?.find(it => it.iteration === c.iteration)
+        ?.candidates
+        ?.find(mc => mc.candidateId === c.candidateId);
+
+      return {
+        globalId,
+        iteration: c.iteration,
+        candidateId: c.candidateId,
+        localPath: c.localPath,
+        combined: c.combined,
+        survived: metaCandidate?.survived || false
+      };
+    });
+
+    // Build graph visualization data
+    const humanGraphData = {
+      edges: humanGraph.getEdges(),
+      matrix: humanGraph.getAdjacencyMatrix(candidateIds)
+    };
+
+    if (aiGraph) {
+      aiGraphData = {
+        edges: aiGraph.getEdges(),
+        matrix: aiGraph.getAdjacencyMatrix(candidateIds)
+      };
+    }
+
+    res.json({
+      success: true,
+      sessionId,
+      evaluationId,
+      candidates,
+      candidateIds,
+      humanRankings,
+      aiRankings,
+      agreement,
+      humanGraph: humanGraphData,
+      aiGraph: aiGraphData,
+      progress: evaluation.progress,
+      status: evaluation.status
+    });
+  } catch (error) {
+    console.error('[EvalRoutes] Error building comparison:', error);
+    res.status(500).json({ error: 'Failed to build comparison', message: error.message });
   }
 });
 

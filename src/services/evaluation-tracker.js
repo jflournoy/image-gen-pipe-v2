@@ -4,17 +4,31 @@
  * Manages Human-in-the-Loop (HITL) evaluation sessions for beam search results.
  * Stores pairwise comparison data for AI evaluation using Bradley-Terry model.
  *
+ * Uses transitive inference (via ComparisonGraph) to skip redundant comparisons:
+ * if A > B and B > C, then A > C is inferred without asking the human.
+ * This reduces comparisons from C(N,2) to roughly O(N log N).
+ *
  * Evaluation Flow:
  * 1. Load completed beam search session
  * 2. Generate all pairwise comparisons C(N, 2) = N*(N-1)/2
- * 3. Present pairs to evaluator
+ * 3. Present pairs to evaluator (skipping inferrable pairs)
  * 4. Collect comparison results (A wins, B wins, or tie)
  * 5. Export data for statistical analysis
  */
 
 const fs = require('fs').promises;
 const path = require('path');
+const { ComparisonGraph } = require('../utils/comparison-graph.js');
 const OutputPathManager = require('../utils/output-path-manager.js');
+
+/**
+ * Build a globally unique ID for a candidate
+ * @param {Object} candidate - Candidate with iteration and candidateId
+ * @returns {string} Global ID like "i0c1"
+ */
+function globalId(candidate) {
+  return `i${candidate.iteration}c${candidate.candidateId}`;
+}
 
 class EvaluationTracker {
   /**
@@ -31,6 +45,9 @@ class EvaluationTracker {
     this.sessionId = options.sessionId;
     this.evaluatorId = options.evaluatorId || 'anonymous';
 
+    // Comparison graph for transitive inference
+    this._comparisonGraph = new ComparisonGraph();
+
     // In-memory evaluation structure
     this.evaluation = {
       evaluationId: this.evaluationId,
@@ -44,7 +61,9 @@ class EvaluationTracker {
       comparisons: [], // Pairwise comparison results
       progress: {
         totalPairs: 0,
-        completedPairs: 0
+        completedPairs: 0,
+        manualPairs: 0,
+        inferredPairs: 0
       }
     };
 
@@ -121,7 +140,8 @@ class EvaluationTracker {
 
   /**
    * Get next pairwise comparison task
-   * Returns the next pair that hasn't been evaluated yet
+   * Returns the next pair that hasn't been evaluated yet and can't be inferred.
+   * Pairs where the winner can be inferred via transitivity are auto-recorded.
    *
    * IMPORTANT: Randomizes presentation order to prevent position bias.
    * Without randomization, the first candidate (e.g., i0c0) always appears
@@ -140,50 +160,86 @@ class EvaluationTracker {
     // Generate all possible pairs
     for (let i = 0; i < candidates.length; i++) {
       for (let j = i + 1; j < candidates.length; j++) {
-        const pairKey = `${candidates[i].candidateId}-${candidates[j].candidateId}`;
+        const first = candidates[i];
+        const second = candidates[j];
+        const firstGlobalId = globalId(first);
+        const secondGlobalId = globalId(second);
+        const pairKey = `${firstGlobalId}-${secondGlobalId}`;
 
-        if (!completedPairs.has(pairKey)) {
-          // Found next unevaluated pair
-          const first = candidates[i];
-          const second = candidates[j];
+        if (completedPairs.has(pairKey)) continue;
 
-          // Randomize presentation order to mitigate position bias
-          // 50% chance to swap A and B positions
-          const shouldSwap = Math.random() < 0.5;
-          const presentedA = shouldSwap ? second : first;
-          const presentedB = shouldSwap ? first : second;
+        // Check if winner can be inferred via transitivity
+        const inferred = this._comparisonGraph.canInferWinner(firstGlobalId, secondGlobalId);
 
-          return {
+        if (inferred) {
+          // Auto-record inferred comparison
+          const winner = inferred.winner === firstGlobalId ? 'A' : 'B';
+          const record = {
             comparisonId: pairKey,
-            candidateA: presentedA,
-            candidateB: presentedB,
-            // Track presentation order for bias analysis
-            presentationOrder: shouldSwap ? 'swapped' : 'original',
-            // Preserve original pair info for correct winner mapping
-            originalPair: {
-              first: first.candidateId,
-              second: second.candidateId
-            },
-            progress: {
-              completed: this.evaluation.progress.completedPairs,
-              total: this.evaluation.progress.totalPairs,
-              percentage: Math.round((this.evaluation.progress.completedPairs / this.evaluation.progress.totalPairs) * 100)
-            }
+            candidateA: firstGlobalId,
+            candidateB: secondGlobalId,
+            winner,
+            responseTimeMs: 0,
+            inferred: true,
+            presentationOrder: 'original',
+            timestamp: new Date().toISOString()
           };
+
+          this.evaluation.comparisons.push(record);
+          this.evaluation.progress.completedPairs++;
+          this.evaluation.progress.inferredPairs++;
+          completedPairs.add(pairKey);
+
+          // Check completion
+          if (this.evaluation.progress.completedPairs >= this.evaluation.progress.totalPairs) {
+            this.evaluation.status = 'completed';
+            this.evaluation.completedAt = new Date().toISOString();
+          }
+          continue;
         }
+
+        // This pair needs manual evaluation — save inferred results so far and return
+        await this._writeEvaluation();
+
+        // Randomize presentation order to mitigate position bias
+        // 50% chance to swap A and B positions
+        const shouldSwap = Math.random() < 0.5;
+        const presentedA = shouldSwap ? second : first;
+        const presentedB = shouldSwap ? first : second;
+
+        return {
+          comparisonId: pairKey,
+          candidateA: presentedA,
+          candidateB: presentedB,
+          // Track presentation order for bias analysis
+          presentationOrder: shouldSwap ? 'swapped' : 'original',
+          // Preserve original pair info for correct winner mapping
+          originalPair: {
+            first: firstGlobalId,
+            second: secondGlobalId
+          },
+          progress: {
+            completed: this.evaluation.progress.completedPairs,
+            total: this.evaluation.progress.totalPairs,
+            manualPairs: this.evaluation.progress.manualPairs,
+            inferredPairs: this.evaluation.progress.inferredPairs,
+            percentage: Math.round((this.evaluation.progress.completedPairs / this.evaluation.progress.totalPairs) * 100)
+          }
+        };
       }
     }
 
-    // All pairs evaluated
+    // All pairs evaluated (or inferred) — persist final state
+    await this._writeEvaluation();
     return null;
   }
 
   /**
    * Record a comparison result
    * @param {Object} comparison - Comparison result
-   * @param {string} comparison.comparisonId - Comparison identifier (e.g., "0-1")
-   * @param {number} comparison.candidateA - First candidate ID (as presented)
-   * @param {number} comparison.candidateB - Second candidate ID (as presented)
+   * @param {string} comparison.comparisonId - Comparison identifier (e.g., "i0c0-i0c1")
+   * @param {string} comparison.candidateA - First candidate global ID (as presented)
+   * @param {string} comparison.candidateB - Second candidate global ID (as presented)
    * @param {string} comparison.winner - Winner: 'A', 'B', or 'tie'
    * @param {number} comparison.responseTimeMs - Time taken to make decision
    * @param {string} [comparison.presentationOrder] - 'original' or 'swapped' for bias analysis
@@ -195,6 +251,14 @@ class EvaluationTracker {
       throw new Error(`Invalid winner: ${comparison.winner}. Must be 'A', 'B', or 'tie'`);
     }
 
+    // Update comparison graph for transitive inference (ties don't contribute)
+    if (comparison.winner !== 'tie') {
+      // Resolve the global IDs for the presented candidates
+      const idA = comparison.candidateA;
+      const idB = comparison.candidateB;
+      this._comparisonGraph.recordComparison(idA, idB, comparison.winner);
+    }
+
     // Add timestamp and store
     const comparisonRecord = {
       ...comparison,
@@ -203,6 +267,7 @@ class EvaluationTracker {
 
     this.evaluation.comparisons.push(comparisonRecord);
     this.evaluation.progress.completedPairs++;
+    this.evaluation.progress.manualPairs++;
 
     // Check if evaluation is complete
     if (this.evaluation.progress.completedPairs >= this.evaluation.progress.totalPairs) {
@@ -211,6 +276,14 @@ class EvaluationTracker {
     }
 
     await this._writeEvaluation();
+  }
+
+  /**
+   * Get the comparison graph (for visualization/export)
+   * @returns {ComparisonGraph}
+   */
+  getComparisonGraph() {
+    return this._comparisonGraph;
   }
 
   /**
@@ -249,6 +322,7 @@ class EvaluationTracker {
         winner: c.winner,
         responseTimeMs: c.responseTimeMs,
         timestamp: c.timestamp,
+        inferred: c.inferred || false,
         // Include presentation order for position bias analysis
         presentationOrder: c.presentationOrder || 'original'
       })),
@@ -258,6 +332,7 @@ class EvaluationTracker {
 
   /**
    * Load existing evaluation from disk
+   * Rebuilds the comparison graph from persisted comparisons for transitive inference.
    * @param {string} outputDir - Base output directory
    * @param {string} sessionId - Session identifier
    * @param {string} evaluationId - Evaluation identifier
@@ -273,6 +348,25 @@ class EvaluationTracker {
     const evaluationPath = tracker._getEvaluationPath();
     const json = await fs.readFile(evaluationPath, 'utf8');
     tracker.evaluation = JSON.parse(json);
+
+    // Rebuild comparison graph from persisted comparisons
+    for (const comp of tracker.evaluation.comparisons) {
+      if (comp.winner !== 'tie' && !comp.inferred) {
+        tracker._comparisonGraph.recordComparison(
+          comp.candidateA,
+          comp.candidateB,
+          comp.winner
+        );
+      }
+    }
+
+    // Ensure progress fields exist (backward compat with old evaluations)
+    if (tracker.evaluation.progress.manualPairs === undefined) {
+      const manual = tracker.evaluation.comparisons.filter(c => !c.inferred).length;
+      const inferred = tracker.evaluation.comparisons.filter(c => c.inferred).length;
+      tracker.evaluation.progress.manualPairs = manual;
+      tracker.evaluation.progress.inferredPairs = inferred;
+    }
 
     return tracker;
   }

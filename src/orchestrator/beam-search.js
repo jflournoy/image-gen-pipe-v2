@@ -1765,6 +1765,23 @@ async function beamSearch(userPrompt, providers, config) {
     const globalRanked = computeGlobalRanks(rankingResults.allRanked, [], floorRank, 0);
     allGlobalRanked = globalRanked;
 
+    // Persist AI ranking data
+    if (metadataTracker && imageRanker?.getComparisonGraph) {
+      await metadataTracker.recordIterationRanking(0, {
+        rankings: rankingResults.allRanked.map(c => ({
+          candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
+          rank: c.ranking?.rank,
+          wins: c.ranking?.aggregateStats?.wins || 0,
+          losses: c.ranking?.aggregateStats?.losses || 0
+        })),
+        comparisons: imageRanker.getComparisonGraph().toJSON(),
+        globalRanked: globalRanked.map(c => ({
+          candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
+          globalRank: c.globalRank
+        }))
+      });
+    }
+
     // Emit ranking data with global ranks
     if (onRankingComplete) {
       onRankingComplete({
@@ -1871,6 +1888,23 @@ async function beamSearch(userPrompt, providers, config) {
       });
       allGlobalRanked = [...globalRanked, ...previousEliminated];
 
+      // Persist AI ranking data for this iteration
+      if (metadataTracker && imageRanker?.getComparisonGraph) {
+        await metadataTracker.recordIterationRanking(iteration, {
+          rankings: iterationRankingResults.allRanked.map(c => ({
+            candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
+            rank: c.ranking?.rank,
+            wins: c.ranking?.aggregateStats?.wins || 0,
+            losses: c.ranking?.aggregateStats?.losses || 0
+          })),
+          comparisons: imageRanker.getComparisonGraph().toJSON(),
+          globalRanked: globalRanked.map(c => ({
+            candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
+            globalRank: c.globalRank
+          }))
+        });
+      }
+
       // Emit ranking data with global ranks
       if (onRankingComplete) {
         onRankingComplete({
@@ -1920,6 +1954,18 @@ async function beamSearch(userPrompt, providers, config) {
       candidateId: winner.metadata.candidateId,
       totalScore: winner.totalScore
     });
+
+    // Persist final global ranking
+    if (useComparativeRanking) {
+      await metadataTracker.recordFinalGlobalRanking(
+        allGlobalRanked.map(c => ({
+          candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
+          globalRank: c.globalRank,
+          iteration: c.metadata.iteration,
+          localId: c.metadata.candidateId
+        }))
+      );
+    }
   }
 
   // Sort all global ranked candidates by their global rank for final display

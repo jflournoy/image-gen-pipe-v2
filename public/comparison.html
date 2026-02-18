@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Human vs AI Ranking Comparison</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/all.min.css">
+  <script async src="https://scripts.simpleanalyticscdn.com/latest.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 {
+      color: #333;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    h1 a {
+      color: #333;
+      text-decoration: none;
+      font-size: 24px;
+      transition: color 0.2s;
+    }
+    h1 a:hover { color: #0066cc; }
+
+    .nav-links {
+      display: flex;
+      gap: 15px;
+      font-size: 14px;
+    }
+    .nav-links a {
+      color: #666;
+      text-decoration: none;
+    }
+    .nav-links a:hover { color: #0066cc; }
+
+    .section {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+    }
+
+    .section h2 {
+      margin-top: 0;
+      color: #333;
+    }
+
+    /* Selectors */
+    .selector-row {
+      display: flex;
+      gap: 15px;
+      align-items: flex-end;
+      flex-wrap: wrap;
+    }
+    .selector-group {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .selector-group label {
+      font-size: 11px;
+      color: #666;
+      font-weight: bold;
+    }
+    .selector-group select, .selector-group input {
+      padding: 8px 12px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 13px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: bold;
+      font-size: 13px;
+      font-family: monospace;
+      transition: all 0.2s;
+    }
+    .btn-primary {
+      background: #4CAF50;
+      color: white;
+    }
+    .btn-primary:hover { background: #45a049; }
+    .btn-primary:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Agreement Metrics Cards */
+    .metrics-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+    .metric-card {
+      padding: 15px;
+      border-radius: 8px;
+      text-align: center;
+      border: 2px solid #ddd;
+    }
+    .metric-card.green { border-color: #4CAF50; background: #e8f5e9; }
+    .metric-card.yellow { border-color: #FF9800; background: #fff3e0; }
+    .metric-card.red { border-color: #f44336; background: #ffebee; }
+    .metric-card .metric-value {
+      font-size: 28px;
+      font-weight: bold;
+      color: #333;
+    }
+    .metric-card .metric-label {
+      font-size: 11px;
+      color: #666;
+      margin-top: 4px;
+    }
+
+    /* Side-by-side Ranking Table */
+    .ranking-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    .ranking-table th {
+      background: #f5f5f5;
+      padding: 8px 12px;
+      text-align: center;
+      border-bottom: 2px solid #ddd;
+      font-size: 11px;
+      color: #666;
+    }
+    .ranking-table td {
+      padding: 6px 12px;
+      text-align: center;
+      border-bottom: 1px solid #eee;
+      vertical-align: middle;
+    }
+    .ranking-table tr:hover { background: #f9f9f9; }
+    .rank-thumbnail {
+      width: 40px;
+      height: 40px;
+      border-radius: 4px;
+      object-fit: cover;
+      border: 1px solid #ddd;
+      cursor: pointer;
+    }
+    .rank-thumbnail:hover {
+      transform: scale(1.1);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    .diff-positive { color: #f44336; font-weight: bold; }
+    .diff-negative { color: #4CAF50; font-weight: bold; }
+    .diff-zero { color: #999; }
+
+    /* DAG Visualization */
+    .dag-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .dag-panel {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: #fafafa;
+      overflow: hidden;
+    }
+    .dag-panel h3 {
+      margin-top: 0;
+      font-size: 14px;
+      color: #333;
+      text-align: center;
+    }
+    .dag-viewport {
+      position: relative;
+      min-height: 200px;
+      overflow: auto;
+    }
+    .dag-svg {
+      position: absolute;
+      top: 0;
+      left: 0;
+      pointer-events: none;
+    }
+    .dag-node {
+      position: absolute;
+      width: 50px;
+      height: 50px;
+      border-radius: 4px;
+      overflow: hidden;
+      border: 2px solid #ddd;
+      background: white;
+      cursor: pointer;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      z-index: 2;
+    }
+    .dag-node:hover {
+      border-color: #2196F3;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      z-index: 10;
+    }
+    .dag-node.highlighted {
+      border-color: #FF9800;
+      box-shadow: 0 0 10px rgba(255, 152, 0, 0.5);
+    }
+    .dag-node img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+    .dag-node-label {
+      position: absolute;
+      bottom: -16px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 9px;
+      color: #666;
+      white-space: nowrap;
+      z-index: 3;
+    }
+    .dag-rank-label {
+      position: absolute;
+      left: -30px;
+      font-size: 11px;
+      color: #999;
+      font-weight: bold;
+    }
+
+    /* Matrix Visualization */
+    .matrix-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    .matrix-panel {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 15px;
+      background: #fafafa;
+      overflow: auto;
+    }
+    .matrix-panel h3 {
+      margin-top: 0;
+      font-size: 14px;
+      color: #333;
+      text-align: center;
+    }
+    .adj-matrix {
+      border-collapse: collapse;
+      font-size: 10px;
+    }
+    .adj-matrix th {
+      padding: 2px;
+      font-weight: normal;
+    }
+    .adj-matrix th img {
+      width: 28px;
+      height: 28px;
+      border-radius: 3px;
+      object-fit: cover;
+      border: 1px solid #ddd;
+    }
+    .adj-matrix td {
+      width: 30px;
+      height: 30px;
+      text-align: center;
+      border: 1px solid #eee;
+      cursor: default;
+      position: relative;
+    }
+    .adj-matrix td.win-direct { background: #2E7D32; color: white; }
+    .adj-matrix td.win-inferred { background: #81C784; color: white; }
+    .adj-matrix td.loss-direct { background: #C62828; color: white; }
+    .adj-matrix td.loss-inferred { background: #EF9A9A; color: #333; }
+    .adj-matrix td.self-cell { background: #e0e0e0; }
+    .adj-matrix td.unknown-cell { background: #fafafa; color: #ccc; }
+
+    .matrix-legend {
+      display: flex;
+      gap: 12px;
+      margin-top: 10px;
+      flex-wrap: wrap;
+      font-size: 10px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 2px;
+      border: 1px solid #ccc;
+    }
+
+    /* Disagreements */
+    .disagreement-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .disagreement-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      background: #fff3e0;
+      border-radius: 4px;
+      border-left: 3px solid #FF9800;
+      font-size: 12px;
+    }
+    .disagreement-row img {
+      width: 36px;
+      height: 36px;
+      border-radius: 4px;
+      object-fit: cover;
+      border: 1px solid #ddd;
+    }
+    .disagreement-verdict {
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+    .verdict-ai { background: #e3f2fd; color: #1565C0; }
+    .verdict-human { background: #fce4ec; color: #C62828; }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #666;
+    }
+    .spinner {
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #4CAF50;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 20px;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .error-message {
+      background: #ffebee;
+      color: #c62828;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 4px solid #f44336;
+    }
+    .info-message {
+      background: #e3f2fd;
+      color: #1565C0;
+      padding: 15px;
+      border-radius: 4px;
+      border-left: 4px solid #2196F3;
+      font-size: 12px;
+    }
+
+    /* Enlarged image overlay */
+    .image-overlay {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0,0,0,0.8);
+      z-index: 1000;
+      cursor: pointer;
+      align-items: center;
+      justify-content: center;
+    }
+    .image-overlay.active { display: flex; }
+    .image-overlay img {
+      max-width: 90%;
+      max-height: 90%;
+      border-radius: 8px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    }
+
+    @media (max-width: 900px) {
+      .dag-container, .matrix-container {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>
+      <span>Human vs AI Ranking Comparison</span>
+      <div class="nav-links">
+        <a href="/evaluation" title="HITL Evaluation"><i class="fas fa-balance-scale"></i> Evaluate</a>
+        <a href="/" title="Back to Demo"><i class="fas fa-home"></i> Home</a>
+      </div>
+    </h1>
+
+    <!-- Session/Evaluation Selectors -->
+    <div id="selectorSection" class="section">
+      <h2>Select Session & Evaluation</h2>
+      <div class="selector-row">
+        <div class="selector-group">
+          <label>Session</label>
+          <select id="sessionSelect">
+            <option value="">-- Select Session --</option>
+          </select>
+        </div>
+        <div class="selector-group">
+          <label>Evaluation</label>
+          <select id="evaluationSelect" disabled>
+            <option value="">-- Select Evaluation --</option>
+          </select>
+        </div>
+        <button id="loadBtn" class="btn btn-primary" disabled>Load Comparison</button>
+      </div>
+    </div>
+
+    <!-- Results Container (hidden until loaded) -->
+    <div id="results" style="display: none;">
+
+      <!-- Agreement Metrics -->
+      <div class="section">
+        <h2>Agreement Metrics</h2>
+        <div id="metricsRow" class="metrics-row"></div>
+      </div>
+
+      <!-- Side-by-side Ranking Table -->
+      <div class="section">
+        <h2>Side-by-Side Rankings</h2>
+        <table class="ranking-table">
+          <thead>
+            <tr>
+              <th>AI Rank</th>
+              <th>Image</th>
+              <th>Candidate</th>
+              <th>Human Rank</th>
+              <th>Diff</th>
+            </tr>
+          </thead>
+          <tbody id="rankingTableBody"></tbody>
+        </table>
+      </div>
+
+      <!-- DAG Visualization -->
+      <div class="section">
+        <h2>Comparison DAGs (Direct & Transitive)</h2>
+        <div class="dag-container">
+          <div class="dag-panel">
+            <h3>Human Comparisons</h3>
+            <div id="humanDag" class="dag-viewport"></div>
+          </div>
+          <div class="dag-panel">
+            <h3>AI Comparisons</h3>
+            <div id="aiDag" class="dag-viewport"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Adjacency Matrix -->
+      <div class="section">
+        <h2>Adjacency Matrices</h2>
+        <div class="matrix-container">
+          <div class="matrix-panel">
+            <h3>Human</h3>
+            <div id="humanMatrix"></div>
+            <div class="matrix-legend">
+              <div class="legend-item"><div class="legend-swatch" style="background:#2E7D32"></div> Direct win</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#81C784"></div> Inferred win</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#C62828"></div> Direct loss</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#EF9A9A"></div> Inferred loss</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#e0e0e0"></div> Self</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#fafafa; border-color:#ccc;"></div> Unknown</div>
+            </div>
+          </div>
+          <div class="matrix-panel">
+            <h3>AI</h3>
+            <div id="aiMatrix"></div>
+            <div class="matrix-legend">
+              <div class="legend-item"><div class="legend-swatch" style="background:#2E7D32"></div> Direct win</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#81C784"></div> Inferred win</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#C62828"></div> Direct loss</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#EF9A9A"></div> Inferred loss</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#e0e0e0"></div> Self</div>
+              <div class="legend-item"><div class="legend-swatch" style="background:#fafafa; border-color:#ccc;"></div> Unknown</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Disagreements -->
+      <div class="section">
+        <h2>Disagreements</h2>
+        <div id="disagreements"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Image Overlay -->
+  <div id="imageOverlay" class="image-overlay" onclick="this.classList.remove('active')">
+    <img id="overlayImage" src="" alt="Enlarged">
+  </div>
+
+  <script>
+    // === State ===
+    let comparisonData = null;
+
+    // === DOM ===
+    const sessionSelect = document.getElementById('sessionSelect');
+    const evaluationSelect = document.getElementById('evaluationSelect');
+    const loadBtn = document.getElementById('loadBtn');
+    const results = document.getElementById('results');
+
+    // === Init ===
+    function init() {
+      // Load sessions from localStorage
+      const jobHistory = JSON.parse(localStorage.getItem('myJobHistory') || '[]');
+      jobHistory.forEach(job => {
+        const opt = document.createElement('option');
+        opt.value = job.sessionId;
+        opt.textContent = `${job.prompt.substring(0, 60)}${job.prompt.length > 60 ? '...' : ''} (${job.sessionId})`;
+        sessionSelect.appendChild(opt);
+      });
+
+      // Check URL params for pre-selection
+      const params = new URLSearchParams(window.location.search);
+      const urlSession = params.get('sessionId');
+      const urlEval = params.get('evaluationId');
+
+      if (urlSession) {
+        sessionSelect.value = urlSession;
+        loadEvaluations(urlSession).then(() => {
+          if (urlEval) {
+            evaluationSelect.value = urlEval;
+            loadBtn.disabled = false;
+            loadComparison();
+          }
+        });
+      }
+
+      sessionSelect.addEventListener('change', () => {
+        const sid = sessionSelect.value;
+        if (sid) {
+          loadEvaluations(sid);
+        } else {
+          evaluationSelect.innerHTML = '<option value="">-- Select Evaluation --</option>';
+          evaluationSelect.disabled = true;
+          loadBtn.disabled = true;
+        }
+      });
+
+      evaluationSelect.addEventListener('change', () => {
+        loadBtn.disabled = !evaluationSelect.value;
+      });
+
+      loadBtn.addEventListener('click', loadComparison);
+    }
+
+    async function loadEvaluations(sessionId) {
+      evaluationSelect.innerHTML = '<option value="">Loading...</option>';
+      evaluationSelect.disabled = true;
+
+      try {
+        const resp = await fetch(`/api/evaluation/list/${sessionId}`);
+        const data = await resp.json();
+
+        evaluationSelect.innerHTML = '<option value="">-- Select Evaluation --</option>';
+        if (data.success && data.evaluations.length > 0) {
+          data.evaluations.forEach(evalId => {
+            const opt = document.createElement('option');
+            opt.value = evalId;
+            opt.textContent = evalId;
+            evaluationSelect.appendChild(opt);
+          });
+          evaluationSelect.disabled = false;
+        } else {
+          evaluationSelect.innerHTML = '<option value="">No evaluations found</option>';
+        }
+      } catch (err) {
+        evaluationSelect.innerHTML = '<option value="">Error loading</option>';
+        console.error('Error loading evaluations:', err);
+      }
+    }
+
+    async function loadComparison() {
+      const sessionId = sessionSelect.value;
+      const evaluationId = evaluationSelect.value;
+      if (!sessionId || !evaluationId) return;
+
+      loadBtn.disabled = true;
+      loadBtn.textContent = 'Loading...';
+      results.style.display = 'none';
+
+      try {
+        const resp = await fetch(`/api/evaluation/comparison/${sessionId}?evaluationId=${evaluationId}`);
+        const data = await resp.json();
+
+        if (!data.success) {
+          throw new Error(data.error || 'Failed to load comparison');
+        }
+
+        comparisonData = data;
+        renderAll(data);
+        results.style.display = 'block';
+      } catch (err) {
+        alert(`Error: ${err.message}`);
+        console.error('Error loading comparison:', err);
+      } finally {
+        loadBtn.disabled = false;
+        loadBtn.textContent = 'Load Comparison';
+      }
+    }
+
+    // === Rendering ===
+    function getImageUrl(sessionId, candidate) {
+      if (!candidate.localPath) return '';
+      const filename = candidate.localPath.split('/').pop();
+      return `/api/images/${sessionId}/${filename}`;
+    }
+
+    function enlargeImage(src) {
+      document.getElementById('overlayImage').src = src;
+      document.getElementById('imageOverlay').classList.add('active');
+    }
+
+    function renderAll(data) {
+      renderMetrics(data.agreement);
+      renderRankingTable(data);
+      renderDAG('humanDag', data.humanGraph, data.humanRankings, data);
+      if (data.aiGraph) {
+        renderDAG('aiDag', data.aiGraph, data.aiRankings, data);
+      } else {
+        document.getElementById('aiDag').innerHTML = '<div class="info-message">No AI ranking data available for this session.</div>';
+      }
+      renderMatrix('humanMatrix', data.humanGraph, data.humanRankings, data);
+      if (data.aiGraph) {
+        renderMatrix('aiMatrix', data.aiGraph, data.aiRankings, data);
+      } else {
+        document.getElementById('aiMatrix').innerHTML = '<div class="info-message">No AI ranking data available.</div>';
+      }
+      renderDisagreements(data);
+    }
+
+    function metricColor(value, thresholds) {
+      if (value >= thresholds.green) return 'green';
+      if (value >= thresholds.yellow) return 'yellow';
+      return 'red';
+    }
+
+    function renderMetrics(agreement) {
+      const container = document.getElementById('metricsRow');
+      if (!agreement) {
+        container.innerHTML = '<div class="info-message">Agreement metrics unavailable (need both AI and human rankings)</div>';
+        return;
+      }
+
+      const cards = [
+        {
+          label: 'Spearman rho',
+          value: agreement.spearmanRho.toFixed(3),
+          color: metricColor(agreement.spearmanRho, { green: 0.7, yellow: 0.3 })
+        },
+        {
+          label: 'Kendall tau',
+          value: agreement.kendallTau.toFixed(3),
+          color: metricColor(agreement.kendallTau, { green: 0.7, yellow: 0.3 })
+        },
+        {
+          label: 'Top-1 Match',
+          value: agreement.topKOverlap.top1 ? 'Yes' : 'No',
+          color: agreement.topKOverlap.top1 ? 'green' : 'red'
+        },
+        {
+          label: 'Top-3 Overlap',
+          value: `${agreement.topKOverlap.top3.count}/3`,
+          color: metricColor(agreement.topKOverlap.top3.fraction, { green: 0.7, yellow: 0.3 })
+        }
+      ];
+
+      container.innerHTML = cards.map(c => `
+        <div class="metric-card ${c.color}">
+          <div class="metric-value">${c.value}</div>
+          <div class="metric-label">${c.label}</div>
+        </div>
+      `).join('');
+    }
+
+    function renderRankingTable(data) {
+      const tbody = document.getElementById('rankingTableBody');
+      const { candidates, aiRankings, humanRankings, sessionId } = data;
+
+      // Build lookup maps
+      const aiRankMap = new Map((aiRankings || []).map(r => [r.candidateId, r.rank]));
+      const humanRankMap = new Map((humanRankings || []).map(r => [r.candidateId, r.rank]));
+      const candidateMap = new Map(candidates.map(c => [c.globalId, c]));
+
+      // Get all candidate IDs, sorted by AI rank (or human rank if no AI)
+      const allIds = [...new Set([
+        ...(aiRankings || []).map(r => r.candidateId),
+        ...(humanRankings || []).map(r => r.candidateId)
+      ])];
+
+      allIds.sort((a, b) => (aiRankMap.get(a) || 999) - (aiRankMap.get(b) || 999));
+
+      tbody.innerHTML = allIds.map(id => {
+        const c = candidateMap.get(id);
+        const aiRank = aiRankMap.get(id);
+        const humanRank = humanRankMap.get(id);
+        const diff = (aiRank != null && humanRank != null) ? humanRank - aiRank : null;
+        const imgUrl = c ? getImageUrl(sessionId, c) : '';
+
+        let diffClass = 'diff-zero';
+        let diffText = '-';
+        if (diff !== null) {
+          if (diff > 0) { diffClass = 'diff-positive'; diffText = `+${diff}`; }
+          else if (diff < 0) { diffClass = 'diff-negative'; diffText = `${diff}`; }
+          else { diffText = '0'; }
+        }
+
+        return `
+          <tr>
+            <td>${aiRank ?? '-'}</td>
+            <td>${imgUrl ? `<img src="${imgUrl}" class="rank-thumbnail" onclick="enlargeImage('${imgUrl}')" alt="${id}">` : '-'}</td>
+            <td>${id}</td>
+            <td>${humanRank ?? '-'}</td>
+            <td class="${diffClass}">${diffText}</td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    // === DAG Visualization ===
+    function renderDAG(containerId, graphData, rankings, data) {
+      const container = document.getElementById(containerId);
+      if (!graphData || !rankings || rankings.length === 0) {
+        container.innerHTML = '<div class="info-message">No data available</div>';
+        return;
+      }
+
+      const { candidates, sessionId } = data;
+      const candidateMap = new Map(candidates.map(c => [c.globalId, c]));
+      const rankMap = new Map(rankings.map(r => [r.candidateId, r.rank]));
+
+      // Group candidates by rank into layers
+      const layers = new Map();
+      for (const r of rankings) {
+        const rank = r.rank;
+        if (!layers.has(rank)) layers.set(rank, []);
+        layers.get(rank).push(r.candidateId);
+      }
+
+      const sortedRanks = [...layers.keys()].sort((a, b) => a - b);
+      const maxLayerSize = Math.max(...[...layers.values()].map(l => l.length));
+
+      // Layout constants
+      const nodeSize = 50;
+      const hGap = 70; // horizontal gap between nodes
+      const vGap = 90; // vertical gap between layers
+      const leftPad = 40;
+      const topPad = 20;
+
+      const viewportWidth = leftPad + maxLayerSize * hGap + 20;
+      const viewportHeight = topPad + sortedRanks.length * vGap + 30;
+
+      // Compute node positions
+      const nodePositions = new Map();
+      sortedRanks.forEach((rank, layerIdx) => {
+        const layer = layers.get(rank);
+        const layerWidth = layer.length * hGap;
+        const startX = leftPad + (maxLayerSize * hGap - layerWidth) / 2;
+
+        layer.forEach((id, nodeIdx) => {
+          nodePositions.set(id, {
+            x: startX + nodeIdx * hGap,
+            y: topPad + layerIdx * vGap
+          });
+        });
+      });
+
+      // Build HTML
+      let html = '';
+
+      // SVG for arrows
+      html += `<svg class="dag-svg" width="${viewportWidth}" height="${viewportHeight}">
+        <defs>
+          <marker id="arrowhead-${containerId}" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#999" />
+          </marker>
+          <marker id="arrowhead-direct-${containerId}" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto">
+            <polygon points="0 0, 8 3, 0 6" fill="#4CAF50" />
+          </marker>
+        </defs>`;
+
+      // Draw edges
+      for (const edge of graphData.edges) {
+        const fromPos = nodePositions.get(edge.from);
+        const toPos = nodePositions.get(edge.to);
+        if (!fromPos || !toPos) continue;
+
+        const x1 = fromPos.x + nodeSize / 2;
+        const y1 = fromPos.y + nodeSize;
+        const x2 = toPos.x + nodeSize / 2;
+        const y2 = toPos.y;
+
+        const isDirect = edge.type === 'direct';
+        const strokeColor = isDirect ? '#4CAF50' : '#ccc';
+        const strokeDash = isDirect ? '' : 'stroke-dasharray="4,3"';
+        const markerId = isDirect ? `arrowhead-direct-${containerId}` : `arrowhead-${containerId}`;
+        const strokeWidth = isDirect ? 2 : 1;
+
+        html += `<line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}"
+          stroke="${strokeColor}" stroke-width="${strokeWidth}" ${strokeDash}
+          marker-end="url(#${markerId})" />`;
+      }
+
+      html += '</svg>';
+
+      // Draw nodes
+      for (const [id, pos] of nodePositions) {
+        const c = candidateMap.get(id);
+        const imgUrl = c ? getImageUrl(data.sessionId, c) : '';
+        html += `<div class="dag-node" style="left:${pos.x}px; top:${pos.y}px;"
+          onclick="enlargeImage('${imgUrl}')" title="${id}">
+          ${imgUrl ? `<img src="${imgUrl}" alt="${id}">` : id}
+        </div>`;
+        html += `<div class="dag-node-label" style="position:absolute; left:${pos.x + nodeSize / 2}px; top:${pos.y + nodeSize + 2}px; transform:translateX(-50%);">${id}</div>`;
+      }
+
+      // Rank labels
+      sortedRanks.forEach((rank, layerIdx) => {
+        const y = topPad + layerIdx * vGap + nodeSize / 2 - 6;
+        html += `<div class="dag-rank-label" style="position:absolute; left:5px; top:${y}px;">#${rank}</div>`;
+      });
+
+      container.style.width = viewportWidth + 'px';
+      container.style.height = viewportHeight + 'px';
+      container.innerHTML = html;
+    }
+
+    // === Matrix Visualization ===
+    function renderMatrix(containerId, graphData, rankings, data) {
+      const container = document.getElementById(containerId);
+      if (!graphData || !graphData.matrix || !rankings || rankings.length === 0) {
+        container.innerHTML = '<div class="info-message">No data available</div>';
+        return;
+      }
+
+      const { candidates, candidateIds, sessionId } = data;
+      const candidateMap = new Map(candidates.map(c => [c.globalId, c]));
+
+      // Order candidates by rank for the matrix
+      const rankMap = new Map(rankings.map(r => [r.candidateId, r.rank]));
+      const orderedIds = [...candidateIds].sort((a, b) => (rankMap.get(a) || 999) - (rankMap.get(b) || 999));
+
+      // The matrix from the API uses the candidateIds order; we need to reorder
+      const origIdxMap = new Map(candidateIds.map((id, idx) => [id, idx]));
+
+      let html = '<table class="adj-matrix"><thead><tr><th></th>';
+
+      // Column headers (thumbnails)
+      for (const id of orderedIds) {
+        const c = candidateMap.get(id);
+        const imgUrl = c ? getImageUrl(sessionId, c) : '';
+        html += `<th title="${id}">${imgUrl ? `<img src="${imgUrl}" alt="${id}">` : id}</th>`;
+      }
+      html += '</tr></thead><tbody>';
+
+      // Rows
+      for (const rowId of orderedIds) {
+        const c = candidateMap.get(rowId);
+        const imgUrl = c ? getImageUrl(sessionId, c) : '';
+        html += `<tr><th title="${rowId}">${imgUrl ? `<img src="${imgUrl}" alt="${rowId}">` : rowId}</th>`;
+
+        const rowOrigIdx = origIdxMap.get(rowId);
+
+        for (const colId of orderedIds) {
+          const colOrigIdx = origIdxMap.get(colId);
+          const cell = graphData.matrix[rowOrigIdx]?.[colOrigIdx];
+
+          let cellClass = 'unknown-cell';
+          let cellText = '';
+
+          if (cell) {
+            if (cell.result === 'self') {
+              cellClass = 'self-cell';
+            } else if (cell.result === 'win') {
+              cellClass = cell.type === 'direct' ? 'win-direct' : 'win-inferred';
+              cellText = 'W';
+            } else if (cell.result === 'loss') {
+              cellClass = cell.type === 'direct' ? 'loss-direct' : 'loss-inferred';
+              cellText = 'L';
+            }
+          }
+
+          html += `<td class="${cellClass}" title="${rowId} vs ${colId}: ${cell?.result || 'unknown'} (${cell?.type || 'n/a'})">${cellText}</td>`;
+        }
+        html += '</tr>';
+      }
+
+      html += '</tbody></table>';
+      container.innerHTML = html;
+    }
+
+    // === Disagreements ===
+    function renderDisagreements(data) {
+      const container = document.getElementById('disagreements');
+
+      if (!data.agreement || !data.agreement.positionDifferences) {
+        container.innerHTML = '<div class="info-message">Need both AI and human rankings to show disagreements</div>';
+        return;
+      }
+
+      const candidateMap = new Map(data.candidates.map(c => [c.globalId, c]));
+      const disagreements = data.agreement.positionDifferences.filter(d => d.difference !== 0 && d.difference !== null);
+
+      if (disagreements.length === 0) {
+        container.innerHTML = '<div class="info-message" style="background:#e8f5e9; border-color:#4CAF50; color:#2E7D32;">Perfect agreement! Human and AI rankings match exactly.</div>';
+        return;
+      }
+
+      // Sort by absolute difference (biggest disagreements first)
+      disagreements.sort((a, b) => Math.abs(b.difference) - Math.abs(a.difference));
+
+      container.innerHTML = '<div class="disagreement-list">' +
+        disagreements.map(d => {
+          const c = candidateMap.get(d.candidateId);
+          const imgUrl = c ? getImageUrl(data.sessionId, c) : '';
+          const direction = d.difference > 0 ? 'Human ranks lower' : 'Human ranks higher';
+
+          return `
+            <div class="disagreement-row">
+              ${imgUrl ? `<img src="${imgUrl}" alt="${d.candidateId}" onclick="enlargeImage('${imgUrl}')" style="cursor:pointer;">` : ''}
+              <strong>${d.candidateId}</strong>
+              <span class="disagreement-verdict verdict-ai">AI: #${d.aiRank}</span>
+              <span class="disagreement-verdict verdict-human">Human: #${d.humanRank}</span>
+              <span style="color:#666;">${direction} (diff: ${d.difference > 0 ? '+' : ''}${d.difference})</span>
+            </div>
+          `;
+        }).join('') +
+      '</div>';
+    }
+
+    // === Start ===
+    init();
+  </script>
+</body>
+</html>

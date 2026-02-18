@@ -305,6 +305,77 @@ class MetadataTracker {
   }
 
   /**
+   * Record ranking data for an iteration
+   * Writes to a separate rankings.json file alongside metadata.json
+   * @param {number} iteration - Iteration number
+   * @param {Object} rankingData - Ranking results for this iteration
+   * @param {Array} rankingData.rankings - Candidate rankings with rank, wins, aggregateStats
+   * @param {Array} rankingData.comparisons - Direct comparison results from ComparisonGraph
+   * @param {Array} rankingData.globalRanked - Global rank assignments
+   * @returns {Promise<void>}
+   */
+  async recordIterationRanking(iteration, rankingData) {
+    const rankingsPath = this._getRankingsPath();
+
+    // Load existing rankings file or create new
+    let rankings;
+    try {
+      const json = await fs.readFile(rankingsPath, 'utf8');
+      rankings = JSON.parse(json);
+    } catch {
+      rankings = {
+        sessionId: this.sessionId,
+        iterations: {}
+      };
+    }
+
+    rankings.iterations[iteration] = rankingData;
+
+    // Write rankings file
+    this.writeQueue = this.writeQueue.then(async () => {
+      await fs.writeFile(rankingsPath, JSON.stringify(rankings, null, 2), 'utf8');
+    });
+    await this.writeQueue;
+  }
+
+  /**
+   * Record the final global ranking across all iterations
+   * @param {Array} finalGlobalRanking - Final ranking with candidateId and globalRank
+   * @returns {Promise<void>}
+   */
+  async recordFinalGlobalRanking(finalGlobalRanking) {
+    const rankingsPath = this._getRankingsPath();
+
+    let rankings;
+    try {
+      const json = await fs.readFile(rankingsPath, 'utf8');
+      rankings = JSON.parse(json);
+    } catch {
+      rankings = {
+        sessionId: this.sessionId,
+        iterations: {}
+      };
+    }
+
+    rankings.finalGlobalRanking = finalGlobalRanking;
+
+    this.writeQueue = this.writeQueue.then(async () => {
+      await fs.writeFile(rankingsPath, JSON.stringify(rankings, null, 2), 'utf8');
+    });
+    await this.writeQueue;
+  }
+
+  /**
+   * Get path to rankings.json file
+   * @returns {string} Path to rankings file
+   * @private
+   */
+  _getRankingsPath() {
+    const metadataPath = this._getMetadataPath();
+    return path.join(path.dirname(metadataPath), 'rankings.json');
+  }
+
+  /**
    * Build lineage path from a candidate back to root
    * @param {number} iteration - Current iteration
    * @param {number} candidateId - Current candidate ID
