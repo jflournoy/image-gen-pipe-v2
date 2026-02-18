@@ -1,159 +1,47 @@
 # Claude Current Status
 
-## Current Task: Face Fixing Documentation & Dependency Resolution
+## Current Task: Human vs AI Ranking Comparison - COMPLETE ✅
 
-### Timestamp: 2026-02-10 (continued session 2)
-
-### Summary
-Face fixing implementation is functionally complete with GFPGAN working via basicsr-fixed. Resolved all critical dependency issues. CodeFormer installation deferred (setuptools complexity) pending user evaluation of GFPGAN quality.
-
-### Architecture (Final)
-- **Detection**: OpenCV Cascade Classifiers (CPU, ~50-100ms, stable)
-- **Enhancement**: GFPGAN (default, ~1-2s per face, fully working)
-- **Upscaling**: Real-ESRGAN 2x (optional, ~3-5s)
-- **GPU Memory**: Safe on 12GB Flux and 24GB Modal GPUs
-- **Graceful Fallback**: Returns original image if enhancement unavailable
-
-### Key Implementation Details
-- **basicsr-fixed**: Resolves torchvision compatibility issue (basicsr June 2022 vs torchvision 0.17 May 2024 API change)
-- **OpenCV**: Replaced MediaPipe due to API instability
-- **CodeFormer**: Optional, deferred pending GFPGAN quality assessment
-
-### Implementation Complete ✅
-
-**New Files**:
-- [services/face_fixing.py](services/face_fixing.py) - Core face fixing pipeline (~280 lines)
-  - FaceFixingPipeline class with lazy model loading
-  - OpenCV cascade detection, GFPGAN enhancement (default), Real-ESRGAN upscaling
-  - Returns (enhanced_image, metadata_dict) with timing and face count
-  - Graceful fallback if models unavailable
-- [docs/FACE_FIXING.md](docs/FACE_FIXING.md) - Comprehensive user guide (~400 lines)
-  - Quick start examples with all three parameters
-  - Performance characteristics (GFPGAN verified working)
-  - Installation via `uv sync` (fully automated)
-  - CodeFormer marked as optional/deferred
-  - Troubleshooting with dependencies resolved
-
-**Modified Files**:
-- [services/modal_diffusion_service.py](services/modal_diffusion_service.py) - Added face fixing integration
-  - Parameters: fix_faces, face_fidelity, face_upscale
-  - Container image updated with face fixing dependencies
-  - Face fixing applied after touchup, includes metadata in response
-- [services/flux_service.py](services/flux_service.py) - Added face fixing integration
-  - Same parameters as Modal
-  - GPU memory coordination (unload Flux before face processing for 12GB constraint)
-  - Metadata included in response
-- [src/providers/modal-image-provider.js](src/providers/modal-image-provider.js) - Pass face fixing parameters
-- [src/providers/flux-image-provider.js](src/providers/flux-image-provider.js) - Pass face fixing parameters
-- [pyproject.toml](pyproject.toml) - Added face fixing dependencies via uv
-- [services/requirements.txt](services/requirements.txt) - Added face fixing dependencies
-- [services/README.md](services/README.md) - Updated with uv-based installation
-- [CLAUDE.md](CLAUDE.md) - Documented uv dependency management system
-- [.gitignore](.gitignore) - Added vendor/CodeFormer/ to keep repo clean
-
-### Resolution of Dependency Issues
-
-**Problem**: BasicSR (Aug 2022) incompatible with modern torchvision (removed functional_tensor API May 2024)
-- Error: `ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'`
-- Root cause: Research software without active maintenance
-
-**Solution**: Switch to `basicsr-fixed>=1.4.2` fork that backports the torchvision fix
-- Now GFPGAN loads successfully
-- All dependencies installed via `uv sync` without issues
-- Models download and cache on first use
-
-### Key Decisions
-
-**GFPGAN as Default + CodeFormer Deferred**:
-- GFPGAN fully working with basicsr-fixed, ready to ship
-- CodeFormer requires manual GitHub clone + setuptools complexity
-- User stated: "i don't know how much better codeformer actually is. i'll return to it if gfpgan doesn't seem to be cutting it"
-- Decision: Defer CodeFormer pending user evaluation of GFPGAN quality
-- Documentation updated to reflect optional/deferred status
-
-**uv Integration**:
-- All dependencies managed via uv (pyproject.toml + uv sync)
-- CodeFormer installation uses `uv run pip install` and `uv run python basicsr/setup.py develop`
-- Proper documentation for all three installation methods
-
-**Vendor Directory Approach**:
-- Recommended: Clone CodeFormer to ./vendor/CodeFormer/ (keeps it in project)
-- Alternative: Clone to /tmp or activate venv manually
-- vendor/CodeFormer/ added to .gitignore (don't commit external repos)
-
-### Parameter API
-```javascript
-fix_faces: boolean = false              // Enable face fixing (opt-in)
-face_fidelity: float = 0.7             // CodeFormer fidelity (0.0=quality, 1.0=identity)
-face_upscale: Optional[int] = null     // 2x upscaling (null=none, 2=2x)
-```
-
-### Response Metadata
-```javascript
-face_fixing: {
-  applied: boolean,           // Was face fixing applied?
-  faces_count: int,          // Number of faces detected
-  fidelity: float,           // Fidelity parameter used
-  upscale: int,              // Upscale factor (1=none, 2=2x)
-  time: float,               // Processing time in seconds
-  error?: string             // Error message if failed
-}
-```
-
-### Ready for Testing
-- Unit tests can be written (see plan for test structure)
-- Integration tests ready for Modal and Flux providers
-- Manual testing: Generate portrait with fix_faces: true via demo UI
-- GPU memory monitoring: Peak ~900MB (safe on both 12GB and 24GB)
-
----
-
-## Previous Task: Completed - VLM Modal Image Paths Fix (Issue #33)
-
-### Timestamp: 2026-02-09 14:16
+### Timestamp: 2026-02-17
 
 ### Summary
-Fixed VLM comparison failures when using Modal/BFL image providers. The issue was that image paths were relative, so the VLM Python service couldn't find them.
+Implemented full human vs AI ranking comparison system per plan in `fluttering-exploring-swan.md`. All 8 steps complete, 0 new test failures.
 
-### The Bug
-When beam-search-worker.js created image providers for Modal/BFL:
-- `outputDir` was not passed to `createImageProvider`
-- Modal/BFL providers defaulted to `outputDir: 'output'` (relative)
-- Images were saved at relative paths like `output/2026-02-09/ses-123456/iter0-cand0.png`
-- VLM Python service (running from a different working directory) couldn't find these files
+### Changes Made
 
-### The Fix
-Added `outputDir: OUTPUT_DIR` to the `createImageProvider` call in [beam-search-worker.js:154](src/api/beam-search-worker.js#L154):
-```javascript
-imageGen: createImageProvider({
-  mode: 'real',
-  provider: runtimeProviders.image,
-  apiKey: userApiKey,
-  llmProvider: llmProvider,
-  outputDir: OUTPUT_DIR,  // Required for VLM access - must be absolute path (Issue #33)
-  ...(models?.imageGen && { model: models.imageGen })
-}),
-```
+**Step 1: Fix HITL pairKey bug** ✅
+- `src/services/evaluation-tracker.js`: Changed pairKey from local candidateId (0-3, repeating) to global IDs (`i{iter}c{id}`), fixing false "completion" after ~16 of 190 comparisons
 
-### Test Coverage
-Created [test/integration/vlm-modal-image-paths.test.js](test/integration/vlm-modal-image-paths.test.js) with 10 tests:
-- OUTPUT_DIR should be absolute
-- Modal provider produces absolute paths when outputDir is absolute
-- Documents the bug (Modal/BFL with default outputDir)
-- Verifies beam-search-worker passes outputDir
-- Verifies actual code contains the fix
-- VLM _getImagePath works with absolute paths
-- VLM throws error for URL-only images
-- Provider factory integration for modal/bfl
+**Step 2: Extract ComparisonGraph to shared module** ✅
+- Created `src/utils/comparison-graph.js` with toJSON/fromJSON, getRankings, getEdges, getAdjacencyMatrix
+- Refactored `src/services/image-ranker.js` and `src/providers/local-vlm-provider.js` to use shared module
 
-### TDD Workflow
-1. 🔴 RED: Wrote failing test that showed Modal provider created without outputDir produces relative paths
-2. 🟢 GREEN: Added `outputDir: OUTPUT_DIR` to createImageProvider call
-3. ✅ Tests pass (10/10)
+**Step 3: Add transitive inference to HITL evaluation** ✅
+- `src/services/evaluation-tracker.js`: ComparisonGraph integration, auto-records inferred comparisons, tracks manualPairs/inferredPairs
 
-### Files Modified
-- [src/api/beam-search-worker.js](src/api/beam-search-worker.js) - Line 154: Added outputDir parameter
-- [test/integration/vlm-modal-image-paths.test.js](test/integration/vlm-modal-image-paths.test.js) - New test file
+**Step 4: Fix HITL session persistence on page reload** ✅
+- `public/evaluation.html`: localStorage persistence, resume prompt on reload, clear on completion
 
-### Previous Task: Vary Descriptiveness Randomly Feature (Completed)
-- Implemented random descriptiveness variation during beam search
+**Step 5: Persist AI ranking data during beam search** ✅
+- `src/services/metadata-tracker.js`: Added recordIterationRanking() and recordFinalGlobalRanking()
+- `src/orchestrator/beam-search.js`: Calls ranking persistence after each iteration and at end
+
+**Step 6: Comparison API endpoints** ✅
+- `src/api/evaluation-routes.js`: Added /rankings/:sessionId, /list/:sessionId, /comparison/:sessionId
+- `src/utils/ranking-agreement.js`: Spearman, Kendall, top-K metrics
+
+**Step 7: Comparison Web UI** ✅
+- Created `public/comparison.html`: Agreement metrics cards, side-by-side ranking table, layered DAG viz (SVG arrows), adjacency matrices, disagreement list
+
+**Step 8: Navigation links** ✅
+- Added "Compare with AI Rankings" button to evaluation completion screen
+- Added comparison nav link to demo.html
+- Added /comparison route to server.js
+
+### Test Results
+- 47/47 directly-affected tests pass (evaluation-tracker, metadata-tracker, comparison-graph, global-ranking)
+- Pre-existing beam-search failures unchanged (12 pass/26 fail — same before and after)
+- VLM tournament pre-existing failures actually improved (one fixed by ComparisonGraph extraction)
+
+### Branch
+`feat/human-vs-ai-ranking-comparison`

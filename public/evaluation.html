@@ -452,6 +452,9 @@
           candidateCount: data.candidateCount
         };
 
+        // Persist to localStorage for page reload recovery
+        localStorage.setItem('currentEvaluation', JSON.stringify(currentEvaluation));
+
         // Switch to comparison interface
         sessionSelection.style.display = 'none';
         comparisonInterface.classList.add('active');
@@ -557,8 +560,9 @@
           body: JSON.stringify({
             sessionId: currentEvaluation.sessionId,
             comparisonId: currentComparison.comparisonId,
-            candidateA: currentComparison.candidateA.candidateId,
-            candidateB: currentComparison.candidateB.candidateId,
+            // Use global IDs (i{iter}c{id}) for comparison graph
+            candidateA: `i${currentComparison.candidateA.iteration}c${currentComparison.candidateA.candidateId}`,
+            candidateB: `i${currentComparison.candidateB.iteration}c${currentComparison.candidateB.candidateId}`,
             winner: winner,
             responseTimeMs: responseTimeMs,
             // Include presentation order for position bias analysis
@@ -583,6 +587,9 @@
 
     // Show completion screen
     function showCompletionScreen() {
+      // Clear persisted evaluation on completion
+      localStorage.removeItem('currentEvaluation');
+
       comparisonContent.innerHTML = `
         <div class="completion-message">
           <h2>✅ Evaluation Complete!</h2>
@@ -592,6 +599,9 @@
             <button class="btn btn-export" onclick="exportResults()">
               <i class="fas fa-download"></i> Export Results (JSON)
             </button>
+            <a class="btn btn-export" href="/comparison?sessionId=${encodeURIComponent(currentEvaluation.sessionId)}&evaluationId=${encodeURIComponent(currentEvaluation.evaluationId)}" style="display: inline-block; text-decoration: none;">
+              <i class="fas fa-chart-bar"></i> Compare with AI Rankings
+            </a>
             <button class="btn btn-export btn-new" onclick="location.reload()">
               <i class="fas fa-redo"></i> Start New Evaluation
             </button>
@@ -646,8 +656,46 @@
       return div.innerHTML;
     }
 
+    // Check for in-progress evaluation to resume
+    async function checkForResumableEvaluation() {
+      const saved = localStorage.getItem('currentEvaluation');
+      if (!saved) return false;
+
+      try {
+        const savedEval = JSON.parse(saved);
+        // Check if the evaluation still exists and is in progress
+        const response = await fetch(
+          `/api/evaluation/${savedEval.evaluationId}/status?sessionId=${savedEval.sessionId}`
+        );
+        const data = await response.json();
+
+        if (data.success && data.evaluation.status === 'in_progress') {
+          // Offer to resume
+          if (confirm(`Resume in-progress evaluation?\n\nSession: ${savedEval.sessionId}\nProgress: ${data.evaluation.progress.completedPairs}/${data.evaluation.progress.totalPairs} pairs`)) {
+            currentEvaluation = savedEval;
+            sessionSelection.style.display = 'none';
+            comparisonInterface.classList.add('active');
+            await loadNextComparison();
+            return true;
+          }
+        }
+
+        // Evaluation completed or not found — clear stale data
+        localStorage.removeItem('currentEvaluation');
+      } catch {
+        localStorage.removeItem('currentEvaluation');
+      }
+      return false;
+    }
+
     // Initialize
-    loadSessions();
+    async function init() {
+      const resumed = await checkForResumableEvaluation();
+      if (!resumed) {
+        loadSessions();
+      }
+    }
+    init();
   </script>
 </body>
 </html>

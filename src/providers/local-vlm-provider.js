@@ -6,6 +6,7 @@
  */
 
 const axios = require('axios');
+const { ComparisonGraph } = require('../utils/comparison-graph');
 const ServiceConnection = require('../utils/service-connection');
 const serviceManager = require('../utils/service-manager');
 
@@ -21,60 +22,6 @@ const DEFAULT_ALIGNMENT_WEIGHT = 0.7;
 
 // Health check timeout - be patient with model loading/busy service
 const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.VLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
-
-/**
- * Comparison Graph for transitive inference
- * Tracks A > B relationships and infers A > C when A > B and B > C
- */
-class ComparisonGraph {
-  constructor() {
-    this.beats = new Map();  // candidateId → Set of candidateIds it beats
-    this.losesTo = new Map(); // candidateId → Set of candidateIds it loses to
-  }
-
-  recordComparison(idA, idB, winner) {
-    const winnerId = winner === 'A' ? idA : idB;
-    const loserId = winner === 'A' ? idB : idA;
-
-    if (!this.beats.has(winnerId)) this.beats.set(winnerId, new Set());
-    if (!this.losesTo.has(loserId)) this.losesTo.set(loserId, new Set());
-
-    this.beats.get(winnerId).add(loserId);
-    this.losesTo.get(loserId).add(winnerId);
-
-    this._propagateTransitivity(winnerId, loserId);
-  }
-
-  _propagateTransitivity(winnerId, loserId) {
-    // All candidates that beat winner also beat loser
-    const beatWinner = this.losesTo.get(winnerId) || new Set();
-    for (const superiorId of beatWinner) {
-      if (!this.beats.has(superiorId)) this.beats.set(superiorId, new Set());
-      this.beats.get(superiorId).add(loserId);
-      if (!this.losesTo.has(loserId)) this.losesTo.set(loserId, new Set());
-      this.losesTo.get(loserId).add(superiorId);
-    }
-
-    // Winner beats all candidates that loser beats
-    const loserBeats = this.beats.get(loserId) || new Set();
-    for (const inferiorId of loserBeats) {
-      if (!this.beats.has(winnerId)) this.beats.set(winnerId, new Set());
-      this.beats.get(winnerId).add(inferiorId);
-      if (!this.losesTo.has(inferiorId)) this.losesTo.set(inferiorId, new Set());
-      this.losesTo.get(inferiorId).add(winnerId);
-    }
-  }
-
-  canInferWinner(idA, idB) {
-    if (this.beats.has(idA) && this.beats.get(idA).has(idB)) {
-      return { winner: idA, inferred: true };
-    }
-    if (this.beats.has(idB) && this.beats.get(idB).has(idA)) {
-      return { winner: idB, inferred: true };
-    }
-    return null;
-  }
-}
 
 class LocalVLMProvider {
   constructor(options = {}) {

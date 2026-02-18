@@ -517,6 +517,18 @@ export function createApp() {
     }
   });
 
+  // Comparison page (human vs AI rankings)
+  app.get('/comparison', async (req, res) => {
+    try {
+      const comparisonPath = join(process.cwd(), 'public', 'comparison.html');
+      const html = await readFile(comparisonPath, 'utf-8');
+      res.status(200).send(html);
+    } catch (error) {
+      console.error('Error serving comparison page:', error);
+      res.status(500).json({ error: 'Failed to serve comparison page' });
+    }
+  });
+
   // Register demo routes
   app.use('/api/demo', demoRouter);
 
