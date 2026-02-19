@@ -119,7 +119,7 @@ diffusion_image = (
     .add_local_python_source("face_fixing", copy=True)
     .run_commands(
         "cd /tmp/project && uv pip install --system --no-cache .",
-        "echo 'Dependencies installed from uv.lock (Python 3.10): 2026-02-14'"
+        "echo 'Dependencies installed from uv.lock (Python 3.10): 2026-02-19'"
     )
 )
 
