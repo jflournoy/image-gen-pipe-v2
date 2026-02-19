@@ -666,7 +666,7 @@ async function processCandidateStream(
       // Face fixing parameters
       ...(options.fixFaces && {
         fix_faces: true,
-        face_fidelity: options.faceFidelity ?? 0.7,
+        restoration_strength: options.restorationStrength ?? 0.5,
         face_upscale: options.faceUpscale ?? 1
       }),
       // Flatten fluxOptions so they're available as top-level properties for the image generator
@@ -876,7 +876,7 @@ async function initialExpansion(
 
   console.log(`[initialExpansion] Starting with N=${N}, onCandidateProcessed=${!!onCandidateProcessed}, onStepProgress=${!!onStepProgress}`);
   if (config.fixFaces) {
-    console.log(`[initialExpansion] Face fixing enabled: fixFaces=${config.fixFaces}, fidelity=${config.faceFidelity}, upscale=${config.faceUpscale}`);
+    console.log(`[initialExpansion] Face fixing enabled: fixFaces=${config.fixFaces}, restorationStrength=${config.restorationStrength ?? 0.5}, upscale=${config.faceUpscale}`);
   } else {
     console.log(`[initialExpansion] Face fixing disabled (config.fixFaces=${config.fixFaces})`);
   }
@@ -1055,7 +1055,7 @@ async function initialExpansion(
     // Build gen options shared across all requests
     const sharedGenOptions = {
       sessionId: config.sessionId,
-      ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
       ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
       ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
       ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
@@ -1230,7 +1230,7 @@ async function initialExpansion(
 
           const image = await generateImageWithSafetyRetry(combined, imageGenProvider, llmProvider, {
             iteration: 0, candidateId: i, dimension: 'what', alpha, sessionId: config.sessionId, negativePrompt,
-            ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+            ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
             ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
             ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
             ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance }),
@@ -1519,7 +1519,7 @@ async function refinementIteration(
     // Phase 2: Batch generate all images
     const sharedGenOptions = {
       sessionId: config.sessionId,
-      ...(config.fixFaces && { fix_faces: true, face_fidelity: config.faceFidelity ?? 0.7, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
       ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
       ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
       ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
@@ -1648,7 +1648,7 @@ async function refinementIteration(
                 autoGenerateNegativePrompts: config.autoGenerateNegativePrompts,
                 negativePrompt: config.negativePrompt,
                 negativePromptFallback: config.negativePromptFallback,
-                ...(config.fixFaces && { fixFaces: config.fixFaces, faceFidelity: config.faceFidelity, faceUpscale: config.faceUpscale }),
+                ...(config.fixFaces && { fixFaces: config.fixFaces, restorationStrength: config.restorationStrength, faceUpscale: config.faceUpscale }),
                 ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
                 ...(config.bflOptions && { bflOptions: config.bflOptions }),
                 ...(config.modalOptions && { modalOptions: config.modalOptions })
