@@ -930,10 +930,10 @@ class DiffusionService:
                 }
 
         # Convert to base64
-        image_np = np.array(image)
-        image_shape = image_np.shape
-        print(f"[Modal Diffusion] Final image being returned: shape={image_shape}, size_mb={len(image_to_base64(image)) / (1024*1024):.1f}MB")
+        print(f"[Modal Diffusion] Final image size: {image.size}, mode={image.mode}")
         image_base64 = image_to_base64(image)
+        image_size_mb = len(image_base64) / (1024 * 1024)
+        print(f"[Modal Diffusion] Encoded image size: {image_size_mb:.1f}MB")
 
         # Clear GPU cache to prevent memory buildup (unless batching)
         if clear_cache:
