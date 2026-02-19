@@ -697,23 +697,26 @@ function saveModalSettings() {
 
 /**
  * Save face fixing settings to localStorage
- * Persists fixFaces checkbox state, fidelity value, and upscale selection
+ * Persists fixFaces checkbox state, restoration strength, upscale selection, and debug flag
  */
 function saveFaceFixingSettings() {
   const fixFaces = document.getElementById('fixFaces')?.checked;
   const restorationStrength = document.getElementById('restorationStrength')?.value;
   const faceUpscale = document.getElementById('faceUpscale')?.value;
+  const returnIntermediateImages = document.getElementById('returnIntermediateImages')?.checked;
 
-  console.log('[Face Fixing] Saving settings:', { fixFaces, restorationStrength, faceUpscale });
+  console.log('[Face Fixing] Saving settings:', { fixFaces, restorationStrength, faceUpscale, returnIntermediateImages });
 
   localStorage.setItem('fixFaces', fixFaces ? 'true' : 'false');
   if (restorationStrength !== undefined) localStorage.setItem('restorationStrength', restorationStrength);
   if (faceUpscale) localStorage.setItem('faceUpscale', faceUpscale);
+  localStorage.setItem('returnIntermediateImages', returnIntermediateImages ? 'true' : 'false');
 
   console.log('[Face Fixing] Saved to localStorage:', {
     fixFaces: localStorage.getItem('fixFaces'),
     restorationStrength: localStorage.getItem('restorationStrength'),
-    faceUpscale: localStorage.getItem('faceUpscale')
+    faceUpscale: localStorage.getItem('faceUpscale'),
+    returnIntermediateImages: localStorage.getItem('returnIntermediateImages')
   });
 }
 
@@ -725,12 +728,15 @@ function loadFaceFixingSettings() {
   const fixFaces = localStorage.getItem('fixFaces') === 'true';
   const restorationStrength = localStorage.getItem('restorationStrength') || '0.5';
   const faceUpscale = localStorage.getItem('faceUpscale') || '1';
+  const returnIntermediateImages = localStorage.getItem('returnIntermediateImages') === 'true';
 
   console.log('[Face Fixing] Loading settings from localStorage:', {
     fixFaces: localStorage.getItem('fixFaces'),
     restorationStrength: localStorage.getItem('restorationStrength'),
     faceUpscale: localStorage.getItem('faceUpscale'),
-    parsedFixFaces: fixFaces
+    returnIntermediateImages: localStorage.getItem('returnIntermediateImages'),
+    parsedFixFaces: fixFaces,
+    parsedReturnIntermediateImages: returnIntermediateImages
   });
 
   if (document.getElementById('fixFaces')) {
@@ -742,6 +748,9 @@ function loadFaceFixingSettings() {
   }
   if (document.getElementById('faceUpscale')) {
     document.getElementById('faceUpscale').value = faceUpscale;
+  }
+  if (document.getElementById('returnIntermediateImages')) {
+    document.getElementById('returnIntermediateImages').checked = returnIntermediateImages;
   }
 }
 
@@ -2525,11 +2534,16 @@ async function startBeamSearch() {
     if (imageProvider === 'modal' || imageProvider === 'flux' || imageProvider === 'local') {
       const fixFacesRaw = localStorage.getItem('fixFaces');
       const fixFaces = fixFacesRaw === 'true';
+      const returnIntermediateImagesRaw = localStorage.getItem('returnIntermediateImages');
+      const returnIntermediateImages = returnIntermediateImagesRaw === 'true';
+
       console.log('[Face Fixing] Reading from localStorage:', {
         fixFacesRaw,
         fixFaces,
         restorationStrength: localStorage.getItem('restorationStrength'),
-        faceUpscale: localStorage.getItem('faceUpscale')
+        faceUpscale: localStorage.getItem('faceUpscale'),
+        returnIntermediateImagesRaw,
+        returnIntermediateImages
       });
 
       if (fixFaces) {
@@ -2547,6 +2561,12 @@ async function startBeamSearch() {
         });
       } else {
         console.log('[Face Fixing] NOT adding to params (fixFaces is false or not set)');
+      }
+
+      // Add return_intermediate_images flag if enabled
+      if (returnIntermediateImages) {
+        params.return_intermediate_images = true;
+        console.log('[Face Fixing] Added return_intermediate_images to params');
       }
     } else {
       console.log('[Face Fixing] Provider does not support face fixing, skipping');
