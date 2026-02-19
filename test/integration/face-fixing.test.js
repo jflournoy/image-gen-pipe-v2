@@ -24,7 +24,7 @@ describe('Face Fixing Integration Tests', () => {
   describe('Modal Provider Face Fixing (Mock HTTP)', () => {
     test('should construct request with face fixing parameters', async () => {
       /**
-       * TDD RED: Provider should include fix_faces, face_fidelity, face_upscale in request
+       * TDD RED: Provider should include fix_faces, restoration_strength, face_upscale in request
        */
       nock('http://localhost:8001', {
         reqheaders: {
@@ -34,7 +34,7 @@ describe('Face Fixing Integration Tests', () => {
         .post('/generate', (body) => {
           // Verify face fixing parameters are in request
           assert.strictEqual(body.fix_faces, true);
-          assert.strictEqual(body.face_fidelity, 0.7);
+          assert.strictEqual(body.restoration_strength, 0.7);
           assert.strictEqual(body.face_upscale, 2);
           return true;
         })
@@ -45,7 +45,7 @@ describe('Face Fixing Integration Tests', () => {
             face_fixing: {
               applied: true,
               faces_count: 1,
-              fidelity: 0.7,
+              restoration_strength: 0.7,
               upscale: 2,
               time: 3.5,
             },
@@ -59,7 +59,7 @@ describe('Face Fixing Integration Tests', () => {
         body: JSON.stringify({
           prompt: 'portrait',
           fix_faces: true,
-          face_fidelity: 0.7,
+          restoration_strength: 0.7,
           face_upscale: 2,
         }),
       });
@@ -80,7 +80,7 @@ describe('Face Fixing Integration Tests', () => {
           face_fixing: {
             applied: true,
             faces_count: 2,
-            fidelity: 0.75,
+            restoration_strength: 0.75,
             upscale: 1,
             time: 2.8,
           },
@@ -100,7 +100,7 @@ describe('Face Fixing Integration Tests', () => {
       // Verify metadata structure
       assert.strictEqual(data.metadata.face_fixing.applied, true);
       assert.strictEqual(data.metadata.face_fixing.faces_count, 2);
-      assert.strictEqual(data.metadata.face_fixing.fidelity, 0.75);
+      assert.strictEqual(data.metadata.face_fixing.restoration_strength, 0.75);
       assert.strictEqual(data.metadata.face_fixing.upscale, 1);
       assert.strictEqual(typeof data.metadata.face_fixing.time, 'number');
     });
@@ -173,18 +173,18 @@ describe('Face Fixing Integration Tests', () => {
       assert.ok(data.localPath); // Original image still returned
     });
 
-    test('should respect fidelity parameter variations', async () => {
+    test('should respect restoration_strength parameter variations', async () => {
       /**
-       * TDD RED: Different fidelity values should be passed through
+       * TDD RED: Different restoration_strength values should be passed through
        */
       nock('http://localhost:8001')
         .post('/generate', (body) => {
-          assert.strictEqual(body.face_fidelity, 0.5);
+          assert.strictEqual(body.restoration_strength, 0.5);
           return true;
         })
         .reply(200, {
           localPath: '/output/image.png',
-          metadata: { face_fixing: { fidelity: 0.5, applied: true, faces_count: 1, time: 2.0 } },
+          metadata: { face_fixing: { restoration_strength: 0.5, applied: true, faces_count: 1, time: 2.0 } },
         });
 
       const response = await fetch('http://localhost:8001/generate', {
@@ -193,12 +193,12 @@ describe('Face Fixing Integration Tests', () => {
         body: JSON.stringify({
           prompt: 'portrait',
           fix_faces: true,
-          face_fidelity: 0.5,
+          restoration_strength: 0.5,
         }),
       });
 
       const data = await response.json();
-      assert.strictEqual(data.metadata.face_fixing.fidelity, 0.5);
+      assert.strictEqual(data.metadata.face_fixing.restoration_strength, 0.5);
     });
 
     test('should apply 2x upscaling when requested', async () => {
@@ -239,7 +239,7 @@ describe('Face Fixing Integration Tests', () => {
           face_fixing: {
             applied: true,
             faces_count: 4, // Family photo
-            fidelity: 0.6,
+            restoration_strength: 0.6,
             upscale: 1,
             time: 7.2,
           },
@@ -302,7 +302,7 @@ describe('Face Fixing Integration Tests', () => {
       nock('http://localhost:5000')
         .post('/generate', (body) => {
           assert.strictEqual(body.fix_faces, true);
-          assert.strictEqual(body.face_fidelity, 0.7);
+          assert.strictEqual(body.restoration_strength, 0.7);
           return true;
         })
         .reply(200, {
@@ -311,7 +311,7 @@ describe('Face Fixing Integration Tests', () => {
             face_fixing: {
               applied: true,
               faces_count: 1,
-              fidelity: 0.7,
+              restoration_strength: 0.7,
               time: 4.2,
             },
           },
@@ -323,7 +323,7 @@ describe('Face Fixing Integration Tests', () => {
         body: JSON.stringify({
           prompt: 'portrait',
           fix_faces: true,
-          face_fidelity: 0.7,
+          restoration_strength: 0.7,
         }),
       });
 
@@ -367,21 +367,21 @@ describe('Face Fixing Integration Tests', () => {
   });
 
   describe('Parameter Validation (No GPU)', () => {
-    test('should accept valid fidelity range 0.0-1.0', async () => {
+    test('should accept valid restoration_strength range 0.0-1.0', async () => {
       /**
        * TDD RED: Fidelity validation
        */
       const validFidelities = [0.0, 0.3, 0.5, 0.7, 1.0];
 
-      for (const fidelity of validFidelities) {
+      for (const restoration_strength of validFidelities) {
         nock('http://localhost:8001')
           .post('/generate', (body) => {
-            assert.strictEqual(body.face_fidelity, fidelity);
+            assert.strictEqual(body.restoration_strength, restoration_strength);
             return true;
           })
           .reply(200, {
             localPath: '/output/image.png',
-            metadata: { face_fixing: { fidelity, applied: true, faces_count: 1, time: 2.5 } },
+            metadata: { face_fixing: { restoration_strength, applied: true, faces_count: 1, time: 2.5 } },
           });
 
         const response = await fetch('http://localhost:8001/generate', {
@@ -390,7 +390,7 @@ describe('Face Fixing Integration Tests', () => {
           body: JSON.stringify({
             prompt: 'portrait',
             fix_faces: true,
-            face_fidelity: fidelity,
+            restoration_strength: restoration_strength,
           }),
         });
 
@@ -441,7 +441,7 @@ describe('Face Fixing Integration Tests', () => {
           face_fixing: {
             applied: true,
             faces_count: 1,
-            fidelity: 0.7,
+            restoration_strength: 0.7,
             upscale: 1,
             time: 2.8,
           },
@@ -462,14 +462,14 @@ describe('Face Fixing Integration Tests', () => {
       // All required fields present
       assert.ok('applied' in ff);
       assert.ok('faces_count' in ff);
-      assert.ok('fidelity' in ff);
+      assert.ok('restoration_strength' in ff);
       assert.ok('upscale' in ff);
       assert.ok('time' in ff);
 
       // Correct types
       assert.strictEqual(typeof ff.applied, 'boolean');
       assert.strictEqual(typeof ff.faces_count, 'number');
-      assert.strictEqual(typeof ff.fidelity, 'number');
+      assert.strictEqual(typeof ff.restoration_strength, 'number');
       assert.strictEqual(typeof ff.upscale, 'number');
       assert.strictEqual(typeof ff.time, 'number');
     });

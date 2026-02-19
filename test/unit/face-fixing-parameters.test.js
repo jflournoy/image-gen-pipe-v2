@@ -101,7 +101,7 @@ describe('🔴 Face Fixing Parameter Naming (RED Phase)', () => {
   });
 
   describe('JavaScript/UI Parameter Names', () => {
-    test('demo.html should have restrationStrength slider (not faceFidelity)', () => {
+    test('demo.html should have restorationStrength slider (not faceFidelity)', () => {
       /**
        * UI slider should use descriptive ID
        * <input type="range" id="restorationStrength">
