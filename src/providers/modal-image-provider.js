@@ -148,6 +148,19 @@ class ModalImageProvider {
   }
 
   /**
+   * Build an image tag (i0c0 format) from iteration and candidate ID
+   * @param {Object} options - Options object with iteration and candidateId
+   * @returns {string|null} Tag in format 'i<iteration>c<candidateId>' or null if info not available
+   * @private
+   */
+  _getImageTag(options = {}) {
+    if (options.iteration !== undefined && options.candidateId !== undefined) {
+      return `i${options.iteration}c${options.candidateId}`;
+    }
+    return null;
+  }
+
+  /**
    * Format an axios error into a helpful error message
    * @param {Error} error - Axios error
    * @param {string} context - Error context (e.g., 'generate image', 'batch generate images')
@@ -192,12 +205,15 @@ class ModalImageProvider {
       throw new Error('Prompt is required for image generation');
     }
 
+    const imageTag = this._getImageTag(options);
+    const logPrefix = imageTag ? ` [${imageTag}]` : '';
+
     try {
       const payload = this._buildRequestPayload(prompt, options);
 
-      console.log(`[Modal Provider] Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
+      console.log(`[Modal Provider]${logPrefix} Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
       if (payload.fix_faces) {
-        console.log(`[Modal Provider] Face fixing enabled: restoration_strength=${payload.restoration_strength}, upscale=${payload.face_upscale}`);
+        console.log(`[Modal Provider]${logPrefix} Face fixing enabled: restoration_strength=${payload.restoration_strength}, upscale=${payload.face_upscale}`);
       }
 
       const response = await axios.post(this.apiUrl, payload, {
@@ -211,15 +227,16 @@ class ModalImageProvider {
 
       const result = response.data;
 
-      console.log('[Modal Provider] Response metadata:', JSON.stringify(result.metadata || {}, null, 2));
+      console.log(`[Modal Provider]${logPrefix} Response metadata:`, JSON.stringify(result.metadata || {}, null, 2));
       if (result.metadata?.face_fixing) {
-        console.log('[Modal Provider] Face fixing metadata received:', result.metadata.face_fixing);
+        console.log(`[Modal Provider]${logPrefix} Face fixing metadata received:`, result.metadata.face_fixing);
       } else if (payload.fix_faces) {
-        console.log('[Modal Provider] WARNING: Face fixing was requested but no metadata received from Modal service');
+        console.log(`[Modal Provider]${logPrefix} WARNING: Face fixing was requested but no metadata received from Modal service`);
       }
 
-      return await this._processImageResult(result, prompt, options);
+      return await this._processImageResult(result, prompt, options, logPrefix);
     } catch (error) {
+      console.error(`[Modal Provider]${logPrefix} Error generating image:`, error.message);
       throw this._formatError(error, 'generate image', this.apiUrl);
     }
   }
@@ -336,6 +353,11 @@ class ModalImageProvider {
       const batchTimeout = this.timeout + (requests.length * 60000);
 
       console.log(`[Modal Provider] Batch generating ${requests.length} images via ${this.apiUrl}`);
+      requests.forEach((req, i) => {
+        const tag = this._getImageTag(req.options);
+        const tagStr = tag ? ` [${tag}]` : ` [batch item ${i}]`;
+        console.log(`[Modal Provider]${tagStr} Prompt: "${req.prompt.substring(0, 60)}..."`);
+      });
 
       const response = await axios.post(this.apiUrl, batchPayload, {
         timeout: batchTimeout,
@@ -356,7 +378,9 @@ class ModalImageProvider {
       const processedResults = await Promise.all(
         results.map(async (result, i) => {
           const req = requests[i];
-          return await this._processImageResult(result, req.prompt, req.options || {}, ` Batch item ${i}:`);
+          const imageTag = this._getImageTag(req.options);
+          const logPrefix = imageTag ? ` [${imageTag}]` : ` [batch item ${i}]`;
+          return await this._processImageResult(result, req.prompt, req.options || {}, logPrefix);
         })
       );
 
@@ -364,6 +388,7 @@ class ModalImageProvider {
       return processedResults;
 
     } catch (error) {
+      console.error(`[Modal Provider] Error in batch generation:`, error.message);
       throw this._formatError(error, 'batch generate images', this.apiUrl);
     }
   }
