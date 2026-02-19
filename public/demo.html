@@ -1636,6 +1636,17 @@
               </small>
             </div>
 
+            <!-- Return Intermediate Images (Debugging) -->
+            <div style="margin-bottom: 10px;">
+              <label for="returnIntermediateImages" style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="returnIntermediateImages" onchange="saveFaceFixingSettings()">
+                <span style="color: #666;">🔍 Return base image (for debugging face issues)</span>
+              </label>
+              <small style="display: block; color: #888; margin-top: 4px; margin-left: 24px;">
+                Compare before/after face enhancement to debug artifacts
+              </small>
+            </div>
+
             <!-- Help Text -->
             <div style="font-size: 10px; color: #555; padding: 8px; background: #fff; border-radius: 3px; margin-top: 10px;">
               <strong>💡 About Face Fixing:</strong><br>
