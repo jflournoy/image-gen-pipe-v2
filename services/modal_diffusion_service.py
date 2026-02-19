@@ -103,7 +103,7 @@ app = modal.App(APP_NAME)
 model_volume = modal.Volume.from_name(VOLUME_NAME, create_if_missing=True)
 
 # Define the container image with dependencies
-# Image version: 2026-02-14-uv-based (using uv.lock for deterministic deps)
+# Image version: 2026-02-19-logging-fix (using uv.lock for deterministic deps)
 diffusion_image = (
     modal.Image.debian_slim(python_version="3.10")  # Match local env (gfpgan requires <3.11)
     # Install system dependencies for headless OpenCV
