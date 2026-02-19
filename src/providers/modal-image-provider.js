@@ -85,6 +85,10 @@ class ModalImageProvider {
     if (options.restoration_strength !== undefined) payload.restoration_strength = options.restoration_strength;
     if (options.face_upscale !== undefined) payload.face_upscale = options.face_upscale;
 
+    // Include diagnostic tags for Modal logging
+    if (options.iteration !== undefined) payload.iteration = options.iteration;
+    if (options.candidateId !== undefined) payload.candidateId = options.candidateId;
+
     return payload;
   }
 

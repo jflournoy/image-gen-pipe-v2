@@ -160,6 +160,9 @@ class GenerateRequest(BaseModel):
     fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
     restoration_strength: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
     face_upscale: Optional[int] = Field(default=None, ge=1, le=4, description="Optional face upscaling factor (1=none, 2=2x, 4=4x via Real-ESRGAN integrated with GFPGAN)")
+    # Diagnostic tagging for batch image tracking
+    iteration: Optional[int] = Field(default=None, description="Iteration number (for logging/diagnostics)")
+    candidateId: Optional[int] = Field(default=None, description="Candidate ID (for logging/diagnostics)")
 
     @field_validator('prompt')
     @classmethod
@@ -903,6 +906,16 @@ class DiffusionService:
                 face_fix_time = time.time() - face_fix_start
                 if face_fix_info:
                     face_fix_info['time'] = face_fix_time
+
+                # Log what was returned to client
+                applied = face_fix_info.get('applied', False)
+                faces_count = face_fix_info.get('faces_count', 0)
+                if applied:
+                    print(f"[Modal Diffusion] Face fixing APPLIED: {faces_count} face(s) fixed, returning enhanced image")
+                else:
+                    reason = face_fix_info.get('reason', 'unknown')
+                    print(f"[Modal Diffusion] Face fixing NOT applied ({reason}), returning original image")
+
                 print(f"[Modal Diffusion] Face fixing completed in {face_fix_time:.1f}s")
                 inference_time += face_fix_time
                 # Only commit volume if new models were actually downloaded
@@ -917,6 +930,9 @@ class DiffusionService:
                 }
 
         # Convert to base64
+        image_np = np.array(image)
+        image_shape = image_np.shape
+        print(f"[Modal Diffusion] Final image being returned: shape={image_shape}, size_mb={len(image_to_base64(image)) / (1024*1024):.1f}MB")
         image_base64 = image_to_base64(image)
 
         # Clear GPU cache to prevent memory buildup (unless batching)
@@ -990,6 +1006,12 @@ class DiffusionService:
         """List all available models (Modal method for external calls)"""
         return self._get_models_list()
 
+    def _get_image_tag(self, request: GenerateRequest) -> str:
+        """Build image tag from iteration and candidateId for diagnostics"""
+        if request.iteration is not None and request.candidateId is not None:
+            return f"[i{request.iteration}c{request.candidateId}]"
+        return ""
+
     def _generate_single(self, request: GenerateRequest, clear_cache: bool = True) -> dict:
         """Process a single generation request and return response dict"""
         result = self.generate(
@@ -1034,7 +1056,8 @@ class DiffusionService:
             print(f"[Modal Diffusion] Batch request: {len(batch_req.requests)} images")
 
             for i, req in enumerate(batch_req.requests):
-                print(f"[Modal Diffusion] Batch item {i+1}/{len(batch_req.requests)}: "
+                tag = self._get_image_tag(req)
+                print(f"[Modal Diffusion] Batch item {i+1}/{len(batch_req.requests)} {tag}: "
                       f"model={req.model}, fix_faces={req.fix_faces}")
                 # Skip per-image cache clear for batch; do it once at the end
                 results.append(self._generate_single(req, clear_cache=False))
@@ -1051,7 +1074,8 @@ class DiffusionService:
             }
         else:
             request = GenerateRequest(**body)
-            print(f"[Modal Diffusion] Request fix_faces={request.fix_faces}, "
+            tag = self._get_image_tag(request)
+            print(f"[Modal Diffusion] Request {tag}: fix_faces={request.fix_faces}, "
                   f"restoration_strength={request.restoration_strength}, face_upscale={request.face_upscale}")
             return self._generate_single(request)
 
