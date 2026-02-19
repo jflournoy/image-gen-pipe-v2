@@ -158,7 +158,7 @@ class GenerateRequest(BaseModel):
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (things to avoid in generation)")
     # Face fixing support (CodeFormer enhancement)
     fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
-    face_fidelity: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
+    restoration_strength: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
     face_upscale: Optional[int] = Field(default=None, ge=1, le=4, description="Optional face upscaling factor (1=none, 2=2x, 4=4x via Real-ESRGAN integrated with GFPGAN)")
 
     @field_validator('prompt')
@@ -707,7 +707,7 @@ class DiffusionService:
         touchup_strength: float = 0.0,
         negative_prompt: Optional[str] = None,
         fix_faces: bool = False,
-        face_fidelity: float = 0.7,
+        restoration_strength: float = 0.5,
         face_upscale: Optional[int] = None,
         clear_cache: bool = True,
     ) -> Dict[str, Any]:
@@ -889,14 +889,14 @@ class DiffusionService:
         print(f"[Modal Diffusion] Face fixing check: fix_faces={fix_faces}, self.face_fixer={self.face_fixer is not None}")
         if fix_faces and self.face_fixer:
             try:
-                print(f"[Modal Diffusion] Applying face fixing (fidelity={face_fidelity}, upscale={face_upscale or 1})")
+                print(f"[Modal Diffusion] Applying face fixing (restoration_strength={restoration_strength}, upscale={face_upscale or 1})")
                 face_fix_start = time.time()
 
                 # Get or initialize face fixer instance (models cached on volume)
                 fixer = self.face_fixer(device=self.device, models_dir=self._face_fixing_models_dir)
                 image, face_fix_info = fixer.fix_faces(
                     image,
-                    fidelity=face_fidelity,
+                    restoration_strength=restoration_strength,
                     upscale=face_upscale or 1,
                 )
 
@@ -1008,7 +1008,7 @@ class DiffusionService:
             touchup_strength=request.touchup_strength,
             negative_prompt=request.negative_prompt,
             fix_faces=request.fix_faces,
-            face_fidelity=request.face_fidelity,
+            restoration_strength=request.restoration_strength,
             face_upscale=request.face_upscale,
             clear_cache=clear_cache,
         )
@@ -1052,7 +1052,7 @@ class DiffusionService:
         else:
             request = GenerateRequest(**body)
             print(f"[Modal Diffusion] Request fix_faces={request.fix_faces}, "
-                  f"face_fidelity={request.face_fidelity}, face_upscale={request.face_upscale}")
+                  f"restoration_strength={request.restoration_strength}, face_upscale={request.face_upscale}")
             return self._generate_single(request)
 
     @modal.fastapi_endpoint(method="GET")

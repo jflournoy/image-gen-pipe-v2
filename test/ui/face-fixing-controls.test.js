@@ -52,44 +52,44 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
     });
   });
 
-  describe('Face Fidelity Slider', () => {
-    it('should have faceFidelity slider input', () => {
-      assert.match(demoHtmlContent, /id\s*=\s*["']faceFidelity["']/,
-        'faceFidelity slider should exist');
+  describe('Face Restoration Strength Slider', () => {
+    it('should have restorationStrength slider input', () => {
+      assert.match(demoHtmlContent, /id\s*=\s*["']restorationStrength["']/,
+        'restorationStrength slider should exist');
     });
 
     it('should be range type', () => {
-      assert.match(demoHtmlContent, /id\s*=\s*["']faceFidelity["'][^>]*type\s*=\s*["']range["']|type\s*=\s*["']range["'][^>]*id\s*=\s*["']faceFidelity["']/i,
-        'faceFidelity should be a range input');
+      assert.match(demoHtmlContent, /id\s*=\s*["']restorationStrength["'][^>]*type\s*=\s*["']range["']|type\s*=\s*["']range["'][^>]*id\s*=\s*["']restorationStrength["']/i,
+        'restorationStrength should be a range input');
     });
 
     it('should have min value of 0', () => {
-      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}min\s*=\s*["']0(?:\.0)?["']/i,
-        'Fidelity min should be 0.0');
+      assert.match(demoHtmlContent, /restorationStrength[\s\S]{0,50}min\s*=\s*["']0(?:\.0)?["']/i,
+        'Restoration strength min should be 0.0');
     });
 
     it('should have max value of 1', () => {
-      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}max\s*=\s*["']1(?:\.0)?["']/i,
-        'Fidelity max should be 1.0');
+      assert.match(demoHtmlContent, /restorationStrength[\s\S]{0,50}max\s*=\s*["']1(?:\.0)?["']/i,
+        'Restoration strength max should be 1.0');
     });
 
     it('should have step of 0.1 or 0.05', () => {
-      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}step\s*=\s*["']0\.(?:1|05)["']/i,
-        'Fidelity step should be 0.1 or 0.05');
+      assert.match(demoHtmlContent, /restorationStrength[\s\S]{0,50}step\s*=\s*["']0\.(?:1|05)["']/i,
+        'Restoration strength step should be 0.1 or 0.05');
     });
 
     it('should default to 0.5', () => {
-      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}value\s*=\s*["']0\.5["']/i,
-        'Fidelity should default to 0.5');
+      assert.match(demoHtmlContent, /restorationStrength[\s\S]{0,50}value\s*=\s*["']0\.5["']/i,
+        'Restoration strength should default to 0.5');
     });
 
-    it('should display current fidelity value', () => {
-      assert.match(demoHtmlContent, /faceFidelityValue|Fidelity.*<span/i,
-        'Should display current fidelity value');
+    it('should display current restoration strength value', () => {
+      assert.match(demoHtmlContent, /restorationStrengthValue|Restoration.*<span/i,
+        'Should display current restoration strength value');
     });
 
     it('should update displayed value when slider changes', () => {
-      assert.match(demoJsContent, /faceFidelity[\s\S]{0,200}addEventListener|faceFidelity[\s\S]{0,200}oninput/i,
+      assert.match(demoJsContent, /restorationStrength[\s\S]{0,200}addEventListener|restorationStrength[\s\S]{0,200}oninput/i,
         'JS should listen for fidelity slider changes');
     });
 
@@ -134,7 +134,7 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
   describe('Face Fixing Settings Visibility', () => {
     it('should show/hide face fixing settings based on provider support', () => {
       // Face fixing is supported by Modal and Flux providers
-      assert.match(demoJsContent, /faceFixingSettings|faceFidelity|fixFaces[\s\S]{0,200}display|style\.display/i,
+      assert.match(demoJsContent, /faceFixingSettings|restorationStrength|fixFaces[\s\S]{0,200}display|style\.display/i,
         'JS should control face fixing settings visibility based on provider');
     });
 
@@ -151,9 +151,9 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
         'fixFaces should be included in config');
     });
 
-    it('should include faceFidelity in config', () => {
-      assert.match(demoJsContent, /config\.faceFidelity|faceFidelity.*config/i,
-        'faceFidelity should be included in config');
+    it('should include restorationStrength in config', () => {
+      assert.match(demoJsContent, /config\.restorationStrength|restorationStrength.*config/i,
+        'restorationStrength should be included in config');
     });
 
     it('should include faceUpscale in config', () => {
@@ -161,9 +161,9 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
         'faceUpscale should be included in config');
     });
 
-    it('should parse faceFidelity as float', () => {
-      assert.match(demoJsContent, /parseFloat.*faceFidelity|faceFidelity.*parseFloat/i,
-        'faceFidelity should be parsed as float');
+    it('should parse restorationStrength as float', () => {
+      assert.match(demoJsContent, /parseFloat.*restorationStrength|restorationStrength.*parseFloat/i,
+        'restorationStrength should be parsed as float');
     });
 
     it('should parse faceUpscale as integer', () => {
