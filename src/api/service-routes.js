@@ -20,12 +20,28 @@ const router = express.Router();
 
 /**
  * GET /api/services/status
- * Get status of all services
+ * Get status of all services including STOP_LOCK state
  */
 router.get('/status', async (req, res) => {
   try {
     const statuses = await ServiceManager.getAllServiceStatuses();
-    res.json(statuses);
+
+    // Add STOP_LOCK status for each service
+    const servicesWithLocks = {};
+    for (const [serviceName, status] of Object.entries(statuses)) {
+      const hasLock = await ServiceManager.hasStopLock(serviceName);
+      servicesWithLocks[serviceName] = {
+        ...status,
+        stopLocked: hasLock,
+        message: hasLock
+          ? 'Stopped by user - click reset to allow restarts'
+          : status.running
+            ? 'Running'
+            : 'Stopped'
+      };
+    }
+
+    res.json(servicesWithLocks);
   } catch (error) {
     console.error('[ServiceRoutes] Error getting service statuses:', error);
     res.status(500).json({
@@ -249,6 +265,29 @@ router.post('/ensure-healthy', async (req, res) => {
     console.error('[ServiceRoutes] Error ensuring service health:', error);
     res.status(500).json({
       error: 'Failed to ensure service health',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * GET /api/services/stop-locks
+ * Get STOP_LOCK status for all services
+ * Useful for UI to check which services have locks without full status check
+ */
+router.get('/stop-locks', async (req, res) => {
+  try {
+    const locks = await ServiceManager.getAllStopLocks();
+    res.json({
+      locks,
+      lockedServices: Object.entries(locks)
+        .filter(([, status]) => status.hasLock)
+        .map(([name]) => name),
+    });
+  } catch (error) {
+    console.error('[ServiceRoutes] Error getting STOP_LOCK statuses:', error);
+    res.status(500).json({
+      error: 'Failed to get STOP_LOCK statuses',
       message: error.message,
     });
   }
