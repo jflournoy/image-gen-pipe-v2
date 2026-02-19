@@ -54,6 +54,7 @@ router.get('/status', async (req, res) => {
 /**
  * POST /api/services/:name/start
  * Start a service
+ * Removes STOP_LOCK if present (user is explicitly starting the service)
  *
  * Request body:
  * - hfToken: HuggingFace API token (optional)
@@ -107,6 +108,13 @@ router.post('/:name/start', async (req, res) => {
   }
 
   try {
+    // Remove STOP_LOCK if it exists (user is explicitly starting the service)
+    const hadLock = await ServiceManager.hasStopLock(name);
+    if (hadLock) {
+      await ServiceManager.deleteStopLock(name);
+      console.log(`[ServiceRoutes] Removed STOP_LOCK for ${name} before starting`);
+    }
+
     const result = await ServiceManager.startService(name, {
       hfToken,
       modelPath,
@@ -131,7 +139,7 @@ router.post('/:name/start', async (req, res) => {
       success: true,
       pid: result.pid,
       port: result.port,
-      message: `Service ${name} started successfully`,
+      message: `Service ${name} started successfully${hadLock ? ' (STOP_LOCK removed)' : ''}`,
     });
   } catch (error) {
     console.error(`[ServiceRoutes] Error starting ${name}:`, error);
@@ -265,6 +273,62 @@ router.post('/ensure-healthy', async (req, res) => {
     console.error('[ServiceRoutes] Error ensuring service health:', error);
     res.status(500).json({
       error: 'Failed to ensure service health',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * POST /api/services/all/start
+ * Start all services at once
+ * Removes STOP_LOCKs to allow all services to run
+ */
+router.post('/all/start', async (req, res) => {
+  const services = ['llm', 'flux', 'vision', 'vlm'];
+  const results = {};
+
+  try {
+    // Remove STOP_LOCKs for all services first
+    for (const serviceName of services) {
+      try {
+        const hadLock = await ServiceManager.hasStopLock(serviceName);
+        if (hadLock) {
+          await ServiceManager.deleteStopLock(serviceName);
+          console.log(`[ServiceRoutes] Removed STOP_LOCK for ${serviceName}`);
+        }
+      } catch (error) {
+        console.error(`[ServiceRoutes] Failed to remove STOP_LOCK for ${serviceName}:`, error);
+      }
+    }
+
+    // Start all services
+    for (const serviceName of services) {
+      try {
+        const result = await ServiceManager.startService(serviceName, {});
+        ModelCoordinator.markServiceIntent(serviceName, true);
+        results[serviceName] = {
+          success: result.success,
+          message: result.message || `Started`,
+          pid: result.pid,
+          port: result.port,
+        };
+      } catch (error) {
+        results[serviceName] = {
+          success: false,
+          error: error.message,
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'All services started (STOP_LOCKs removed)',
+      results,
+    });
+  } catch (error) {
+    console.error('[ServiceRoutes] Error starting all services:', error);
+    res.status(500).json({
+      error: 'Failed to start all services',
       message: error.message,
     });
   }
