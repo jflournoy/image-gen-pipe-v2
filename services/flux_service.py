@@ -183,8 +183,8 @@ class GenerationRequest(BaseModel):
     loras: List[dict] = []
     lora_scale: Optional[float] = None  # Per-request LoRA strength override
     scheduler: Optional[str] = None  # euler, dpmsolver, ddim, pndm (per-request override)
-    fix_faces: bool = False  # Enable face fixing via CodeFormer
-    face_fidelity: float = 0.7  # CodeFormer fidelity (0.0=max quality, 1.0=max identity)
+    fix_faces: bool = False  # Enable face fixing via GFPGAN
+    restoration_strength: float = 0.5  # GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)
     face_upscale: Optional[int] = None  # Optional upscaling factor (1=none, 2=2x)
 
 
@@ -778,7 +778,7 @@ async def generate_image(request: GenerationRequest):
         face_fix_info = None
         if request.fix_faces:
             try:
-                print(f'[Flux Service] Applying face fixing (fidelity={request.face_fidelity}, upscale={request.face_upscale or 1})')
+                print(f'[Flux Service] Applying face fixing (restoration_strength={request.restoration_strength}, upscale={request.face_upscale or 1})')
                 import time as time_module
                 face_fix_start = time_module.time()
 
@@ -787,7 +787,7 @@ async def generate_image(request: GenerationRequest):
                 if fixer:
                     fixed_image, face_fix_info = fixer.fix_faces(
                         result.images[0],
-                        fidelity=request.face_fidelity,
+                        restoration_strength=request.restoration_strength,
                         upscale=request.face_upscale or 1,
                     )
                     result.images[0] = fixed_image
