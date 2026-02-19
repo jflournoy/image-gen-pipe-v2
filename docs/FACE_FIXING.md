@@ -16,7 +16,7 @@ const result = await imageProvider.generateImage(
   'professional headshot of a woman, studio lighting',
   {
     fix_faces: true,              // Enable face fixing
-    face_fidelity: 0.7,           // Balance quality vs identity (0.0-1.0)
+    restoration_strength: 0.7,           // Balance quality vs identity (0.0-1.0)
     // face_upscale: 2            // Optional: 2x upscaling (slower)
   }
 );
@@ -25,7 +25,7 @@ console.log(result.metadata.face_fixing);
 // {
 //   applied: true,
 //   faces_count: 1,
-//   fidelity: 0.7,
+//   restoration_strength: 0.5,
 //   upscale: 1,
 //   time: 3.25  // processing time in seconds
 // }
@@ -39,7 +39,7 @@ const result = await imageProvider.generateImage(
   'family portrait, 4 people smiling at camera',
   {
     fix_faces: true,
-    face_fidelity: 0.6,  // slightly less strict for group photos
+    restoration_strength: 0.6,  // slightly less strict for group photos
   }
 );
 ```
@@ -52,7 +52,7 @@ const result = await imageProvider.generateImage(
   'detailed portrait, studio lighting',
   {
     fix_faces: true,
-    face_fidelity: 0.7,
+    restoration_strength: 0.7,
     face_upscale: 2      // 2x upscaling via Real-ESRGAN
   }
 );
@@ -70,22 +70,22 @@ Enable or disable face fixing post-processing.
 
 **Recommendation**: Only enable for portrait-focused generations where faces are important.
 
-### `face_fidelity` (float, default: `0.7`)
+### `restoration_strength` (float, default: `0.5`)
 
-CodeFormer's fidelity parameter controlling the balance between enhancement quality and identity preservation.
+Controls the balance between preserving the original face and applying GFPGAN enhancement.
 
 Range: `0.0` to `1.0`
 
-- **0.0** - Maximum enhancement quality (faces look very polished, may change appearance)
-- **0.3-0.5** - High quality with some identity change (best for fixing poor generations)
-- **0.7** - Balanced (recommended, default)
-- **0.9+** - Maximum identity preservation (minimal enhancement)
-- **1.0** - No enhancement, only cleanup
+- **0.0** - Preserve original (no enhancement applied)
+- **0.3-0.5** - Light enhancement, preserve more of original appearance
+- **0.5** - Balanced blend (recommended, default)
+- **0.7-0.9** - Strong enhancement, significant restoration
+- **1.0** - Maximum restoration (fully enhanced face)
 
 **Recommendations by use case**:
-- Fixing blurry/artifacted faces: `0.3-0.5` (prioritize quality)
-- General portraits: `0.6-0.8` (balanced)
-- Celebrity/specific identity: `0.85-1.0` (preserve identity)
+- Minimal touch-ups: `0.3-0.4` (preserve original character)
+- General portraits: `0.5-0.7` (balanced enhancement)
+- Fixing artifacts: `0.8-1.0` (strong restoration for poor generations)
 
 ### `face_upscale` (integer, optional)
 
@@ -132,12 +132,12 @@ Face enhancement using one of two models:
 - Processing time: ~2-3 seconds per face
 - Requires manual installation from GitHub
 
-**How fidelity works** (CodeFormer only):
-- CodeFormer has a learned trade-off between visual quality and identity preservation
-- Lower fidelity (0.0) → prioritizes restoring fine details (may change appearance)
-- Higher fidelity (1.0) → preserves original appearance (minimal changes)
-- `0.7` default provides good balance for most cases
-- GFPGAN ignores this parameter (fixed enhancement strength)
+**How restoration_strength works** (GFPGAN):
+- GFPGAN blends the original face with the enhanced version
+- `restoration_strength = 0.5` means: `0.5 * enhanced + 0.5 * original`
+- Lower values (0.0-0.3) preserve more of the original appearance
+- Higher values (0.7-1.0) apply stronger enhancement and restoration
+- `0.5` default provides balanced enhancement for most cases
 
 ### 3. Optional Upscaling
 
@@ -228,25 +228,25 @@ generateImage(
 );
 ```
 
-### 2. Adjust Fidelity by Use Case
+### 2. Adjust Restoration Strength by Use Case
 
 ```javascript
 // Professional headshots - preserve identity
 generateImage(
   'corporate portrait of John, CEO',
-  { fix_faces: true, face_fidelity: 0.85 }
+  { fix_faces: true, restoration_strength: 0.85 }
 );
 
 // Fixing poor generations - prioritize quality
 generateImage(
   'beautiful portrait, high quality',
-  { fix_faces: true, face_fidelity: 0.5 }
+  { fix_faces: true, restoration_strength: 0.5 }
 );
 
 // Artistic portraits - balanced
 generateImage(
   'elegant portrait, soft lighting',
-  { fix_faces: true, face_fidelity: 0.7 }
+  { fix_faces: true, restoration_strength: 0.7 }
 );
 ```
 
@@ -283,7 +283,7 @@ const portraitSettings = {
   width: 1024,
   height: 1024,
   fix_faces: true,        // Enable face fixing
-  face_fidelity: 0.7,
+  restoration_strength: 0.7,
   // Skip upscaling - already high resolution
 };
 ```
@@ -344,8 +344,8 @@ CodeFormer offers higher quality enhancement but requires manual setup (not on P
 **Problem**: Faces look worse or over-processed
 
 **Solutions**:
-1. Increase `face_fidelity` (e.g., 0.85) to preserve identity
-2. Lower `face_fidelity` (e.g., 0.5) if faces are too blurry
+1. Increase `restoration_strength` (e.g., 0.85) to preserve identity
+2. Lower `restoration_strength` (e.g., 0.5) if faces are too blurry
 3. Disable upscaling to avoid artifacts
 4. Generate with better source quality (higher steps/guidance)
 
@@ -371,7 +371,7 @@ Face fixing metadata is included in the generation response:
     face_fixing: {
       applied: true,              // Was face fixing applied?
       faces_count: 1,             // Number of faces detected
-      fidelity: 0.7,              // Fidelity parameter used
+      restoration_strength: 0.5,  // Restoration strength parameter used
       upscale: 1,                 // Upscale factor (1=none, 2=2x)
       time: 3.45,                 // Processing time in seconds
       // If error occurred:
@@ -414,7 +414,7 @@ const beamSearchConfig = {
   // ... other settings
   evaluationOptions: {
     use_face_fixing: true,        // Fix faces for evaluation
-    face_fidelity: 0.7,
+    restoration_strength: 0.7,
     face_upscale: null,           // Skip upscaling for speed
   }
 };
