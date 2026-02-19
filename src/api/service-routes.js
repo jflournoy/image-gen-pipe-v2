@@ -271,6 +271,57 @@ router.post('/ensure-healthy', async (req, res) => {
 });
 
 /**
+ * POST /api/services/all/stop
+ * Stop all services at once
+ * Creates STOP_LOCK for each service to prevent auto-restarts
+ */
+router.post('/all/stop', async (req, res) => {
+  const services = ['llm', 'flux', 'vision', 'vlm'];
+  const results = {};
+
+  try {
+    // Create STOP_LOCKs for all services first
+    for (const serviceName of services) {
+      try {
+        await ServiceManager.createStopLock(serviceName);
+        console.log(`[ServiceRoutes] Created STOP_LOCK for ${serviceName}`);
+      } catch (error) {
+        console.error(`[ServiceRoutes] Failed to create STOP_LOCK for ${serviceName}:`, error);
+      }
+    }
+
+    // Stop all services
+    for (const serviceName of services) {
+      try {
+        const result = await ServiceManager.stopService(serviceName);
+        ModelCoordinator.markServiceIntent(serviceName, false);
+        results[serviceName] = {
+          success: result.success,
+          message: result.message || `Stopped (STOP_LOCK created)`,
+        };
+      } catch (error) {
+        results[serviceName] = {
+          success: false,
+          error: error.message,
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'All services stopped with STOP_LOCK enabled',
+      results,
+    });
+  } catch (error) {
+    console.error('[ServiceRoutes] Error stopping all services:', error);
+    res.status(500).json({
+      error: 'Failed to stop all services',
+      message: error.message,
+    });
+  }
+});
+
+/**
  * GET /api/services/stop-locks
  * Get STOP_LOCK status for all services
  * Useful for UI to check which services have locks without full status check
@@ -288,6 +339,49 @@ router.get('/stop-locks', async (req, res) => {
     console.error('[ServiceRoutes] Error getting STOP_LOCK statuses:', error);
     res.status(500).json({
       error: 'Failed to get STOP_LOCK statuses',
+      message: error.message,
+    });
+  }
+});
+
+/**
+ * DELETE /api/services/all/stop-locks
+ * Remove STOP_LOCK for all services
+ * Call this to reset all locks at once and re-enable auto-restart for all services
+ */
+router.delete('/all/stop-locks', async (req, res) => {
+  const services = ['llm', 'flux', 'vision', 'vlm'];
+  const results = {};
+
+  try {
+    for (const serviceName of services) {
+      try {
+        const hadLock = await ServiceManager.hasStopLock(serviceName);
+        await ServiceManager.deleteStopLock(serviceName);
+        results[serviceName] = {
+          success: true,
+          hadLock,
+          message: hadLock
+            ? 'STOP_LOCK removed'
+            : 'No lock found',
+        };
+      } catch (error) {
+        results[serviceName] = {
+          success: false,
+          error: error.message,
+        };
+      }
+    }
+
+    res.json({
+      success: true,
+      message: 'All STOP_LOCKs removed. Auto-restart is now enabled for all services.',
+      results,
+    });
+  } catch (error) {
+    console.error('[ServiceRoutes] Error removing all STOP_LOCKs:', error);
+    res.status(500).json({
+      error: 'Failed to remove all STOP_LOCKs',
       message: error.message,
     });
   }
