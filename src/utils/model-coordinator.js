@@ -236,6 +236,7 @@ async function checkServiceHealth(service) {
 
 /**
  * Ensure a service is healthy, restarting if needed
+ * Respects STOP_LOCK - won't restart if lock exists (user manually stopped service)
  * @param {string} service - Service name
  * @returns {Promise<Object>} Result of health check or restart attempt
  */
@@ -243,6 +244,17 @@ async function ensureServiceHealth(service) {
   const health = await checkServiceHealth(service);
 
   if (health.needsRestart) {
+    // Check for STOP_LOCK - if present, don't auto-restart
+    const hasLock = await serviceManager.hasStopLock(service);
+    if (hasLock) {
+      console.log(`[ModelCoordinator] Service ${service} needs restart but STOP_LOCK exists - skipping restart`);
+      return {
+        ...health,
+        needsRestart: false,
+        blockedByStopLock: true
+      };
+    }
+
     console.log(`[ModelCoordinator] Service ${service} needs restart, attempting...`);
     return await serviceRestarter(service);
   }

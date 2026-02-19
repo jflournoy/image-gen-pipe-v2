@@ -66,6 +66,9 @@ const PID_DIR = '/tmp';
 // spawning multiple processes. Maps serviceName → Promise of start result.
 const _startLocks = new Map();
 
+// STOP_LOCK files prevent restarts after user-initiated service stops
+// Protects against race conditions where UI stop button and auto-restart happen simultaneously
+
 /**
  * Get PID file path for a service
  */
@@ -186,6 +189,52 @@ async function deletePortFile(serviceName) {
   try {
     await fs.unlink(getPortFilePath(serviceName));
     console.log(`[ServiceManager] Deleted port file for ${serviceName}`);
+  } catch {
+    // Ignore if file doesn't exist
+  }
+}
+
+/**
+ * Get STOP_LOCK file path for a service
+ * STOP_LOCK prevents auto-restart after manual service stop
+ */
+function getStopLockPath(serviceName) {
+  return path.join(PID_DIR, `${serviceName}_service.STOP_LOCK`);
+}
+
+/**
+ * Create STOP_LOCK file with timestamp
+ * Prevents restarts while lock exists
+ */
+async function createStopLock(serviceName) {
+  const lockPath = getStopLockPath(serviceName);
+  const timestamp = Date.now().toString();
+  await fs.writeFile(lockPath, timestamp);
+  console.log(`[ServiceManager] Created STOP_LOCK for ${serviceName} at ${lockPath}`);
+}
+
+/**
+ * Check if STOP_LOCK exists for a service
+ */
+async function hasStopLock(serviceName) {
+  const lockPath = getStopLockPath(serviceName);
+  try {
+    await fs.access(lockPath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Delete STOP_LOCK file for a service
+ * Called when we're confident no pending restarts will occur
+ */
+async function deleteStopLock(serviceName) {
+  const lockPath = getStopLockPath(serviceName);
+  try {
+    await fs.unlink(lockPath);
+    console.log(`[ServiceManager] Deleted STOP_LOCK for ${serviceName}`);
   } catch {
     // Ignore if file doesn't exist
   }
@@ -628,4 +677,9 @@ module.exports = {
   readPortFile,
   deletePortFile,
   getServiceUrl,
+  // STOP_LOCK functions
+  getStopLockPath,
+  createStopLock,
+  hasStopLock,
+  deleteStopLock,
 };
