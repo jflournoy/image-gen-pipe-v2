@@ -98,6 +98,7 @@ class ServiceConnection {
 
   /**
    * Restart the service and retry the operation once.
+   * Respects STOP_LOCK - if lock exists, restart is blocked.
    * Deduplicates concurrent restart attempts: if a restart is already in
    * progress, subsequent callers wait for it instead of spawning another.
    */
@@ -106,6 +107,18 @@ class ServiceConnection {
       throw new Error(
         `[${this.serviceName}] Service is not running and no restarter available. ` +
         `Start the service manually or check configuration.`
+      );
+    }
+
+    // Check for STOP_LOCK - if it exists, don't auto-restart
+    const hasStopLock = await this._serviceManager.hasStopLock(this.serviceName);
+    if (hasStopLock) {
+      console.log(
+        `[ServiceConnection:${this.serviceName}] STOP_LOCK exists - skipping auto-restart`
+      );
+      throw new Error(
+        `[${this.serviceName}] Service is stopped by user (STOP_LOCK exists). ` +
+        `Restart manually or remove STOP_LOCK to allow auto-restart.`
       );
     }
 
