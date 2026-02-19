@@ -82,7 +82,7 @@ export function createApp() {
 
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, faceFidelity, faceUpscale } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
     // Check if OpenAI providers are being used
@@ -136,7 +136,7 @@ export function createApp() {
       bflOptions,  // Pass BFL generation options (safety_tolerance, width, height)
       modalOptions, // Pass Modal generation options (model, steps, guidance, gpu)
       fixFaces, // Pass face fixing enable flag
-      faceFidelity, // Pass face fixing fidelity (0.0-1.0)
+      restorationStrength, // Pass face fixing fidelity (0.0-1.0)
       faceUpscale // Pass face fixing upscale factor (1 or 2)
     }, userApiKey).catch(error => {
       console.error(`Error in beam search job ${jobId}:`, error);
@@ -146,7 +146,7 @@ export function createApp() {
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, faceFidelity, faceUpscale }
+      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale }
     });
   });
 
