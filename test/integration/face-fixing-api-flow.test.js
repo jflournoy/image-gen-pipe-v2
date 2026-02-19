@@ -69,7 +69,7 @@ describe('Face Fixing API Flow Integration', () => {
         temperature: 0.7,
         descriptiveness: 2,
         fixFaces: true,
-        faceFidelity: 0.8,
+        restorationStrength: 0.8,
         faceUpscale: 2,
         modalOptions: {
           model: 'test-model',
@@ -88,7 +88,7 @@ describe('Face Fixing API Flow Integration', () => {
 
     // CRITICAL: Verify face fixing params are in the response params
     assert.strictEqual(data.params.fixFaces, true, 'fixFaces should be true in response');
-    assert.strictEqual(data.params.faceFidelity, 0.8, 'faceFidelity should be 0.8 in response');
+    assert.strictEqual(data.params.restorationStrength, 0.8, 'restorationStrength should be 0.8 in response');
     assert.strictEqual(data.params.faceUpscale, 2, 'faceUpscale should be 2 in response');
   });
 
@@ -117,7 +117,7 @@ describe('Face Fixing API Flow Integration', () => {
 
     // Face fixing params should be undefined when not provided
     assert.strictEqual(data.params.fixFaces, undefined, 'fixFaces should be undefined when not provided');
-    assert.strictEqual(data.params.faceFidelity, undefined, 'faceFidelity should be undefined when not provided');
+    assert.strictEqual(data.params.restorationStrength, undefined, 'restorationStrength should be undefined when not provided');
     assert.strictEqual(data.params.faceUpscale, undefined, 'faceUpscale should be undefined when not provided');
   });
 
@@ -135,7 +135,7 @@ describe('Face Fixing API Flow Integration', () => {
         m: 1,
         iterations: 1,
         fixFaces: true
-        // faceFidelity and faceUpscale omitted - should use defaults in worker
+        // restorationStrength and faceUpscale omitted - should use defaults in worker
       })
     });
 
@@ -146,7 +146,7 @@ describe('Face Fixing API Flow Integration', () => {
     // fixFaces should be passed through
     assert.strictEqual(data.params.fixFaces, true, 'fixFaces should be true');
     // fidelity and upscale will be undefined here, but worker will apply defaults
-    assert.strictEqual(data.params.faceFidelity, undefined, 'faceFidelity not provided');
+    assert.strictEqual(data.params.restorationStrength, undefined, 'restorationStrength not provided');
     assert.strictEqual(data.params.faceUpscale, undefined, 'faceUpscale not provided');
   });
 
@@ -164,7 +164,7 @@ describe('Face Fixing API Flow Integration', () => {
         m: 1,
         iterations: 1,
         fixFaces: true,
-        faceFidelity: 0.6,
+        restorationStrength: 0.6,
         faceUpscale: 1,
         fluxOptions: {
           steps: 25,
@@ -194,7 +194,7 @@ describe('Face Fixing API Flow Integration', () => {
         m: 1,
         iterations: 1,
         fixFaces: true,
-        faceFidelity: 0.9,
+        restorationStrength: 0.9,
         faceUpscale: 2,
         modalOptions: {
           model: 'flux-dev',
@@ -225,14 +225,14 @@ describe('Face Fixing API Flow Integration', () => {
         m: 1,
         iterations: 1,
         fixFaces: true,
-        faceFidelity: 0.5,  // Valid: 0.0-1.0
+        restorationStrength: 0.5,  // Valid: 0.0-1.0
         faceUpscale: 2      // Valid: 1 or 2
       })
     });
 
     assert.strictEqual(validResponse.status, 200, 'Valid params should return 200');
     const validData = await validResponse.json();
-    assert.strictEqual(typeof validData.params.faceFidelity, 'number', 'faceFidelity should be a number');
+    assert.strictEqual(typeof validData.params.restorationStrength, 'number', 'restorationStrength should be a number');
     assert.strictEqual(typeof validData.params.faceUpscale, 'number', 'faceUpscale should be a number');
   });
 });

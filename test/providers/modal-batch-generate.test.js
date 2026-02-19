@@ -253,14 +253,14 @@ describe('ModalImageProvider - Batch Generation', () => {
           prompt: 'a portrait',
           options: {
             fix_faces: true,
-            face_fidelity: 0.8,
+            restoration_strength: 0.8,
             face_upscale: 2
           }
         }
       ]);
 
       assert.strictEqual(capturedBody.requests[0].fix_faces, true);
-      assert.strictEqual(capturedBody.requests[0].face_fidelity, 0.8);
+      assert.strictEqual(capturedBody.requests[0].restoration_strength, 0.8);
       assert.strictEqual(capturedBody.requests[0].face_upscale, 2);
     });
 

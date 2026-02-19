@@ -42,7 +42,7 @@ describe('Beam Search - Face Fixing Integration', () => {
             face_fixing: options.fix_faces ? {
               applied: true,
               faces_count: 2,
-              fidelity: options.face_fidelity || 0.7,
+              restoration_strength: options.restoration_strength || 0.7,
               upscale: options.face_upscale || 1,
               time: 1.5
             } : undefined
@@ -86,7 +86,7 @@ describe('Beam Search - Face Fixing Integration', () => {
         maxIterations: 1,
         keepTop: 1,
         fixFaces: true,  // Enable face fixing
-        faceFidelity: 0.8,
+        restorationStrength: 0.8,
         faceUpscale: 2,
         onStepProgress: () => {}
       };
@@ -103,9 +103,9 @@ describe('Beam Search - Face Fixing Integration', () => {
         'Face fixing should be applied'
       );
       assert.strictEqual(
-        result.image.metadata.face_fixing.fidelity,
+        result.image.metadata.face_fixing.restoration_strength,
         0.8,
-        'Should use correct fidelity value'
+        'Should use correct restoration_strength value'
       );
       assert.strictEqual(
         result.image.metadata.face_fixing.upscale,
@@ -134,9 +134,9 @@ describe('Beam Search - Face Fixing Integration', () => {
 
       assert.ok(result.image.metadata.face_fixing, 'Should include face fixing metadata');
       assert.strictEqual(
-        result.image.metadata.face_fixing.fidelity,
+        result.image.metadata.face_fixing.restoration_strength,
         0.7,
-        'Should use default fidelity of 0.7'
+        'Should use default restoration_strength of 0.7'
       );
       assert.strictEqual(
         result.image.metadata.face_fixing.upscale,
@@ -211,7 +211,7 @@ describe('Beam Search - Face Fixing Integration', () => {
               face_fixing: options.fix_faces ? {
                 applied: true,
                 faces_count: 1,
-                fidelity: options.face_fidelity || 0.7,
+                restoration_strength: options.restoration_strength || 0.7,
                 upscale: options.face_upscale || 1,
                 time: 2.1
               } : undefined
@@ -232,7 +232,7 @@ describe('Beam Search - Face Fixing Integration', () => {
         maxIterations: 1,
         keepTop: 1,
         fixFaces: true,
-        faceFidelity: 0.9,
+        restorationStrength: 0.9,
         onStepProgress: () => {}
       };
 
@@ -240,9 +240,9 @@ describe('Beam Search - Face Fixing Integration', () => {
 
       assert.ok(result.image.metadata.face_fixing, 'Should support face fixing with Modal');
       assert.strictEqual(
-        result.image.metadata.face_fixing.fidelity,
+        result.image.metadata.face_fixing.restoration_strength,
         0.9,
-        'Should pass fidelity to Modal provider'
+        'Should pass restoration_strength to Modal provider'
       );
     });
 
@@ -259,7 +259,7 @@ describe('Beam Search - Face Fixing Integration', () => {
               face_fixing: options.fix_faces ? {
                 applied: true,
                 faces_count: 3,
-                fidelity: options.face_fidelity || 0.7,
+                restoration_strength: options.restoration_strength || 0.7,
                 upscale: options.face_upscale || 1,
                 time: 1.8
               } : undefined
@@ -328,7 +328,7 @@ describe('Beam Search - Face Fixing Integration', () => {
   });
 
   describe('Parameter validation', () => {
-    it('should handle invalid fidelity values gracefully', async () => {
+    it('should handle invalid restoration_strength values gracefully', async () => {
       const providers = {
         llm: mockProviders.llmProvider,
         imageGen: mockProviders.imageGenProvider,
@@ -341,7 +341,7 @@ describe('Beam Search - Face Fixing Integration', () => {
         maxIterations: 1,
         keepTop: 1,
         fixFaces: true,
-        faceFidelity: 1.5,  // Invalid: should be 0.0-1.0
+        restorationStrength: 1.5,  // Invalid: should be 0.0-1.0
         onStepProgress: () => {}
       };
 
@@ -351,7 +351,7 @@ describe('Beam Search - Face Fixing Integration', () => {
         async () => {
           await beamSearch.beamSearch('portrait', providers, config);
         },
-        'Should handle invalid fidelity without crashing'
+        'Should handle invalid restoration_strength without crashing'
       );
     });
 
