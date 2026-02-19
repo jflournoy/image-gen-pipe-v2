@@ -252,14 +252,14 @@ class FaceFixingPipeline:
             print(f'[FaceFixing] Failed to load Real-ESRGAN upsampler: {e}')
             raise
 
-    def _enhance_faces(self, image_bgr: np.ndarray, fidelity: float = 0.5, scale: int = 1) -> Tuple[np.ndarray, int]:
+    def _enhance_faces(self, image_bgr: np.ndarray, restoration_strength: float = 0.5, scale: int = 1) -> Tuple[np.ndarray, int]:
         """
         Detect and enhance all faces using GFPGAN v1.4's full pipeline
         (RetinaFace detection + face restoration + bg_upsampler compositing).
 
         Args:
             image_bgr: BGR image as numpy array (HxWxC)
-            fidelity: Restoration strength (0=more original, 1=more restored)
+            restoration_strength: Restoration strength (0=preserve original, 1=full restoration)
             scale: Output upscale factor (1=none, 2=2x, 4=4x). When >1, GFPGAN
                    composites upscaled faces with Real-ESRGAN background in one pass.
 
@@ -273,20 +273,20 @@ class FaceFixingPipeline:
 
         # GFPGAN expects BGR input (uses OpenCV/RetinaFace internally)
         # Note: GFPGAN's weight blends: weight * restored + (1-weight) * original
-        # We invert fidelity to match semantics: 0=original, 1=fully restored
+        # restoration_strength directly maps to weight (0=original, 1=fully restored)
         with torch.no_grad():
             cropped_faces, restored_faces, restored_bgr = self.enhancer.enhance(
                 image_bgr,
                 has_aligned=False,
                 only_center_face=False,
                 paste_back=True,
-                weight=1 - fidelity,
+                weight=restoration_strength,
             )
 
         return restored_bgr, len(cropped_faces)
 
     def fix_faces(
-        self, image: Image.Image, fidelity: float = 0.5, upscale: int = 1
+        self, image: Image.Image, restoration_strength: float = 0.5, upscale: int = 1
     ) -> Tuple[Image.Image, Dict[str, Any]]:
         """
         Fix faces in image using GFPGAN v1.4 (RetinaFace detection + restoration).
@@ -296,7 +296,7 @@ class FaceFixingPipeline:
 
         Args:
             image: PIL Image
-            fidelity: Restoration strength (0.0=more original, 1.0=more restored), default 0.5
+            restoration_strength: Restoration strength (0.0=preserve original, 1.0=full restoration), default 0.5
             upscale: Upscaling factor (1=none, 2=2x, 4=4x), default 1
 
         Returns:
@@ -305,17 +305,17 @@ class FaceFixingPipeline:
         Metadata includes:
             - applied: bool (whether face fixing was applied)
             - faces_count: int (number of faces detected by RetinaFace)
-            - fidelity: float (fidelity parameter used)
+            - restoration_strength: float (restoration strength parameter used)
             - upscale: int (upscale factor used)
             - time: float (processing time in seconds)
             - error: str (error message if applicable)
         """
         start_time = time.time()
-        metadata = {'fidelity': fidelity, 'upscale': upscale}
+        metadata = {'restoration_strength': restoration_strength, 'upscale': upscale}
 
         try:
-            if not 0.0 <= fidelity <= 1.0:
-                raise ValueError(f'fidelity must be between 0.0 and 1.0, got {fidelity}')
+            if not 0.0 <= restoration_strength <= 1.0:
+                raise ValueError(f'restoration_strength must be between 0.0 and 1.0, got {restoration_strength}')
             if upscale not in (1, 2, 4):
                 raise ValueError(f'upscale must be 1, 2, or 4, got {upscale}')
 
@@ -331,7 +331,7 @@ class FaceFixingPipeline:
             upscale_label = f' + {upscale}x upscale' if upscale > 1 else ''
             print(f'[FaceFixing] Running GFPGAN v1.4 (RetinaFace + restoration{upscale_label})...')
             enhance_start = time.time()
-            enhanced_bgr, faces_count = self._enhance_faces(image_bgr, fidelity, scale=upscale)
+            enhanced_bgr, faces_count = self._enhance_faces(image_bgr, restoration_strength, scale=upscale)
             enhance_time = time.time() - enhance_start
             print(f'[FaceFixing] Detected {faces_count} faces, enhanced in {enhance_time:.2f}s')
 

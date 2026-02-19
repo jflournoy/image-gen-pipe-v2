@@ -398,11 +398,11 @@ describe('Face Fixing Integration Tests', () => {
       }
     });
 
-    test('should only accept upscale values 1 or 2', async () => {
+    test('should only accept upscale values 1, 2, or 4', async () => {
       /**
        * TDD RED: Upscale validation
        */
-      const validUpscales = [1, 2];
+      const validUpscales = [1, 2, 4];
 
       for (const upscale of validUpscales) {
         nock('http://localhost:8001')

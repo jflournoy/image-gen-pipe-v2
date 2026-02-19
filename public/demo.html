@@ -1609,11 +1609,11 @@
             <!-- Face Restoration Slider -->
             <div style="margin-bottom: 10px;">
               <label style="display: block; color: #666; margin-bottom: 4px;">
-                Face Restoration: <span id="faceFidelityValue">0.5</span>
+                Face Restoration: <span id="restorationStrengthValue">0.5</span>
                 <small style="color: #888; font-weight: normal;">(0.0 = preserve original, 1.0 = full restoration)</small>
               </label>
-              <input type="range" id="faceFidelity" min="0" max="1" step="0.1" value="0.5"
-                     oninput="updateFaceFidelityDisplay(this.value)"
+              <input type="range" id="restorationStrength" min="0" max="1" step="0.1" value="0.5"
+                     oninput="updateRestorationStrengthDisplay(this.value)"
                      onchange="saveFaceFixingSettings()"
                      style="width: 100%;">
               <small style="display: block; color: #888; margin-top: 4px;">

@@ -701,18 +701,18 @@ function saveModalSettings() {
  */
 function saveFaceFixingSettings() {
   const fixFaces = document.getElementById('fixFaces')?.checked;
-  const faceFidelity = document.getElementById('faceFidelity')?.value;
+  const restorationStrength = document.getElementById('restorationStrength')?.value;
   const faceUpscale = document.getElementById('faceUpscale')?.value;
 
-  console.log('[Face Fixing] Saving settings:', { fixFaces, faceFidelity, faceUpscale });
+  console.log('[Face Fixing] Saving settings:', { fixFaces, restorationStrength, faceUpscale });
 
   localStorage.setItem('fixFaces', fixFaces ? 'true' : 'false');
-  if (faceFidelity !== undefined) localStorage.setItem('faceFidelity', faceFidelity);
+  if (restorationStrength !== undefined) localStorage.setItem('restorationStrength', restorationStrength);
   if (faceUpscale) localStorage.setItem('faceUpscale', faceUpscale);
 
   console.log('[Face Fixing] Saved to localStorage:', {
     fixFaces: localStorage.getItem('fixFaces'),
-    faceFidelity: localStorage.getItem('faceFidelity'),
+    restorationStrength: localStorage.getItem('restorationStrength'),
     faceUpscale: localStorage.getItem('faceUpscale')
   });
 }
@@ -723,12 +723,12 @@ function saveFaceFixingSettings() {
  */
 function loadFaceFixingSettings() {
   const fixFaces = localStorage.getItem('fixFaces') === 'true';
-  const faceFidelity = localStorage.getItem('faceFidelity') || '0.7';
+  const restorationStrength = localStorage.getItem('restorationStrength') || '0.5';
   const faceUpscale = localStorage.getItem('faceUpscale') || '1';
 
   console.log('[Face Fixing] Loading settings from localStorage:', {
     fixFaces: localStorage.getItem('fixFaces'),
-    faceFidelity: localStorage.getItem('faceFidelity'),
+    restorationStrength: localStorage.getItem('restorationStrength'),
     faceUpscale: localStorage.getItem('faceUpscale'),
     parsedFixFaces: fixFaces
   });
@@ -736,9 +736,9 @@ function loadFaceFixingSettings() {
   if (document.getElementById('fixFaces')) {
     document.getElementById('fixFaces').checked = fixFaces;
   }
-  if (document.getElementById('faceFidelity')) {
-    document.getElementById('faceFidelity').value = faceFidelity;
-    updateFaceFidelityDisplay(faceFidelity);
+  if (document.getElementById('restorationStrength')) {
+    document.getElementById('restorationStrength').value = restorationStrength;
+    updateRestorationStrengthDisplay(restorationStrength);
   }
   if (document.getElementById('faceUpscale')) {
     document.getElementById('faceUpscale').value = faceUpscale;
@@ -749,8 +749,8 @@ function loadFaceFixingSettings() {
  * Update the displayed fidelity value as the slider changes
  * @param {string} value - The current fidelity value (0.0-1.0)
  */
-function updateFaceFidelityDisplay(value) {
-  const display = document.getElementById('faceFidelityValue');
+function updateRestorationStrengthDisplay(value) {
+  const display = document.getElementById('restorationStrengthValue');
   if (display) {
     display.textContent = parseFloat(value).toFixed(1);
   }
@@ -2528,21 +2528,21 @@ async function startBeamSearch() {
       console.log('[Face Fixing] Reading from localStorage:', {
         fixFacesRaw,
         fixFaces,
-        faceFidelity: localStorage.getItem('faceFidelity'),
+        restorationStrength: localStorage.getItem('restorationStrength'),
         faceUpscale: localStorage.getItem('faceUpscale')
       });
 
       if (fixFaces) {
-        const faceFidelity = localStorage.getItem('faceFidelity');
+        const restorationStrength = localStorage.getItem('restorationStrength');
         const faceUpscale = localStorage.getItem('faceUpscale');
 
         params.fixFaces = true;
-        if (faceFidelity) params.faceFidelity = parseFloat(faceFidelity);
+        if (restorationStrength) params.restorationStrength = parseFloat(restorationStrength);
         if (faceUpscale) params.faceUpscale = parseInt(faceUpscale, 10);
 
         console.log('[Face Fixing] Added to params:', {
           fixFaces: params.fixFaces,
-          faceFidelity: params.faceFidelity,
+          restorationStrength: params.restorationStrength,
           faceUpscale: params.faceUpscale
         });
       } else {
