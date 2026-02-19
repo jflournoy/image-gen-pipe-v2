@@ -78,9 +78,9 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
         'Fidelity step should be 0.1 or 0.05');
     });
 
-    it('should default to 0.7', () => {
-      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}value\s*=\s*["']0\.7["']/i,
-        'Fidelity should default to 0.7');
+    it('should default to 0.5', () => {
+      assert.match(demoHtmlContent, /faceFidelity[\s\S]{0,50}value\s*=\s*["']0\.5["']/i,
+        'Fidelity should default to 0.5');
     });
 
     it('should display current fidelity value', () => {
@@ -94,8 +94,8 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
     });
 
     it('should have descriptive label explaining fidelity', () => {
-      assert.match(demoHtmlContent, /fidelity.*quality.*identity|identity.*quality|CodeFormer/i,
-        'Should explain fidelity parameter (quality vs identity trade-off)');
+      assert.match(demoHtmlContent, /fidelity.*restore|restore.*fidelity|preserve.*original|GFPGAN/i,
+        'Should explain fidelity parameter (restoration strength)');
     });
   });
 
@@ -196,8 +196,8 @@ describe('🔴 RED: Face Fixing UI Controls', () => {
     });
 
     it('should explain fidelity trade-off', () => {
-      assert.match(demoHtmlContent, /fidelity.*0.*quality.*1.*identity|quality.*vs.*identity/i,
-        'Should explain fidelity trade-off (0=quality, 1=identity)');
+      assert.match(demoHtmlContent, /fidelity.*0.*preserve|preserve.*original|restore.*1|restoration.*strength/i,
+        'Should explain fidelity trade-off (0=preserve original, 1=full restoration)');
     });
 
     it('should explain upscaling options', () => {

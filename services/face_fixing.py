@@ -50,12 +50,16 @@ class FaceFixingPipeline:
     Uses GFPGAN (which includes RetinaFace detection) for face enhancement.
     """
 
-    # Model URLs for downloading
-    GFPGAN_MODEL_URL = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.0/GFPGANv1.3.pth'
+    # Model sources for downloading
+    GFPGAN_MODEL_URL = 'https://github.com/TencentARC/GFPGAN/releases/download/v1.3.4/GFPGANv1.4.pth'
     REALESRGAN_URLS = {
         2: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.1/RealESRGAN_x2plus.pth',
         4: 'https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth',
     }
+    # Community models (e.g. 4xUltraSharp) use old ESRGAN checkpoint format which is
+    # incompatible with RealESRGANer's loader (expects 'params'/'params_ema' wrapper +
+    # basicsr key naming). Left here for future format-conversion support.
+    REALESRGAN_HF_SOURCES: dict = {}
     # facexlib detection/parsing model URLs (downloaded by GFPGAN internally)
     FACEXLIB_URLS = {
         'detection_Resnet50_Final.pth': 'https://github.com/xinntao/facexlib/releases/download/v0.1.0/detection_Resnet50_Final.pth',
@@ -80,6 +84,9 @@ class FaceFixingPipeline:
         self.enhancer = None
         self.upsampler = None
         self.enhancer_type = None  # Track which enhancer is loaded
+        self._enhancer_scale: Optional[int] = None  # Scale the enhancer was built for
+        self._upsampler_scale: Optional[int] = None  # Scale the upsampler was built for
+        self._volume_needs_commit = False  # Track if new models were downloaded to volume
 
         # Ensure models_dir exists
         if self.models_dir:
@@ -110,66 +117,97 @@ class FaceFixingPipeline:
         urllib.request.urlretrieve(url, str(local_path))
         size_mb = local_path.stat().st_size / (1024 * 1024)
         print(f'[FaceFixing] Downloaded {filename} ({size_mb:.1f}MB) in {time.time() - start:.1f}s')
+        self._volume_needs_commit = True  # Mark volume for commit
         return str(local_path)
 
-    def _load_enhancer(self) -> None:
-        """Load face enhancement model (GFPGAN only for now)."""
-        if self.enhancer is not None:
+    def _ensure_hf_model_cached(self, repo_id: str, filename: str) -> str:
+        """Download model from HuggingFace Hub to models_dir if not already cached."""
+        from huggingface_hub import hf_hub_download
+        import shutil
+
+        if self.models_dir:
+            local_path = Path(self.models_dir) / filename
+            if local_path.exists():
+                size_mb = local_path.stat().st_size / (1024 * 1024)
+                print(f'[FaceFixing] Model cached: {filename} ({size_mb:.1f}MB)')
+                return str(local_path)
+
+            print(f'[FaceFixing] Downloading {filename} from HuggingFace ({repo_id})...')
+            start = time.time()
+            tmp_path = hf_hub_download(repo_id=repo_id, filename=filename)
+            shutil.copy2(tmp_path, str(local_path))
+            size_mb = local_path.stat().st_size / (1024 * 1024)
+            print(f'[FaceFixing] Downloaded {filename} ({size_mb:.1f}MB) in {time.time() - start:.1f}s')
+            self._volume_needs_commit = True  # Mark volume for commit
+            return str(local_path)
+
+        # No persistent cache dir — use HuggingFace's default cache
+        print(f'[FaceFixing] Downloading {filename} from HuggingFace ({repo_id})...')
+        return hf_hub_download(repo_id=repo_id, filename=filename)
+
+    def _load_enhancer(self, scale: int = 1) -> None:
+        """Load GFPGAN v1.4 with integrated bg_upsampler. Reinitializes if scale changes."""
+        if self.enhancer is not None and self._enhancer_scale == scale:
             return
 
-        # Load GFPGAN (primary face enhancement model)
-        if HAS_GFPGAN:
-            try:
-                print('[FaceFixing] Loading GFPGAN enhancement model...')
+        if not HAS_GFPGAN:
+            print('[FaceFixing] No face enhancement model available')
+            self.enhancer_type = 'none'
+            return
 
-                # Cache GFPGAN model
-                gfpgan_path = self._ensure_model_cached(
-                    self.GFPGAN_MODEL_URL, 'GFPGANv1.3.pth'
-                )
+        try:
+            print(f'[FaceFixing] Loading GFPGAN v1.4 (scale={scale})...')
 
-                # Cache facexlib detection/parsing models so GFPGAN doesn't re-download.
-                # GFPGANer hardcodes model_rootpath='gfpgan/weights' internally,
-                # so we symlink cached models there for it to find.
-                if self.models_dir:
-                    weights_dir = Path(self.models_dir) / 'weights'
-                    weights_dir.mkdir(parents=True, exist_ok=True)
-                    for fname, url in self.FACEXLIB_URLS.items():
-                        self._ensure_model_cached(url, f'weights/{fname}')
+            gfpgan_path = self._ensure_model_cached(
+                self.GFPGAN_MODEL_URL, 'GFPGANv1.4.pth'
+            )
 
-                    # Symlink cached models to gfpgan/weights/ (GFPGANer's hardcoded path)
-                    gfpgan_weights = Path('gfpgan/weights')
-                    gfpgan_weights.mkdir(parents=True, exist_ok=True)
-                    for fname in self.FACEXLIB_URLS:
-                        src = weights_dir / fname
-                        dst = gfpgan_weights / fname
-                        if src.exists() and not dst.exists():
-                            os.symlink(str(src.resolve()), str(dst))
-                            print(f'[FaceFixing] Symlinked {fname} to gfpgan/weights/')
+            # Cache facexlib detection/parsing models so GFPGAN doesn't re-download.
+            # GFPGANer hardcodes model_rootpath='gfpgan/weights' internally,
+            # so we symlink cached models there for it to find.
+            if self.models_dir:
+                weights_dir = Path(self.models_dir) / 'weights'
+                weights_dir.mkdir(parents=True, exist_ok=True)
+                for fname, url in self.FACEXLIB_URLS.items():
+                    self._ensure_model_cached(url, f'weights/{fname}')
 
-                self.enhancer = GFPGANer(
-                    model_path=gfpgan_path,
-                    upscale=1,
-                    arch='clean',
-                    channel_multiplier=2,
-                    bg_upsampler=None,
-                    device=self.device,
-                )
-                self.enhancer_type = 'gfpgan'
-                print('[FaceFixing] GFPGAN model loaded')
-                return
-            except Exception as e:
-                print(f'[FaceFixing] Warning: Failed to load GFPGAN: {e}')
-                print('[FaceFixing] Face enhancement unavailable - will return original image')
-                self.enhancer_type = 'none'
-                return
+                gfpgan_weights = Path('gfpgan/weights')
+                gfpgan_weights.mkdir(parents=True, exist_ok=True)
+                for fname in self.FACEXLIB_URLS:
+                    src = weights_dir / fname
+                    dst = gfpgan_weights / fname
+                    if src.exists() and not dst.exists():
+                        os.symlink(str(src.resolve()), str(dst))
+                        print(f'[FaceFixing] Symlinked {fname} to gfpgan/weights/')
 
-        # No enhancement models available - this is not fatal, just skip enhancement
-        print('[FaceFixing] No face enhancement model available')
-        self.enhancer_type = 'none'
+            # Load bg_upsampler first so GFPGAN composites face + background together.
+            # This is far better than upscaling the whole image after face restoration.
+            bg_upsampler = None
+            if scale > 1:
+                self._load_upsampler(scale)
+                bg_upsampler = self.upsampler
+
+            self.enhancer = GFPGANer(
+                model_path=gfpgan_path,
+                upscale=scale,
+                arch='clean',
+                channel_multiplier=2,
+                bg_upsampler=bg_upsampler,
+                device=self.device,
+            )
+            self._enhancer_scale = scale
+            self.enhancer_type = 'gfpgan'
+            hf = self.REALESRGAN_HF_SOURCES.get(scale)
+            upsampler_label = hf['filename'] if (bg_upsampler and hf) else (f'Real-ESRGAN {scale}x' if bg_upsampler else 'None')
+            print(f'[FaceFixing] GFPGAN v1.4 loaded (scale={scale}, bg_upsampler={upsampler_label})')
+        except Exception as e:
+            print(f'[FaceFixing] Warning: Failed to load GFPGAN: {e}')
+            print('[FaceFixing] Face enhancement unavailable - will return original image')
+            self.enhancer_type = 'none'
 
     def _load_upsampler(self, scale: int = 2) -> None:
-        """Load Real-ESRGAN upsampler model."""
-        if self.upsampler is not None:
+        """Load Real-ESRGAN upsampler model. Reinitializes if scale changes."""
+        if self.upsampler is not None and self._upsampler_scale == scale:
             return
 
         if not HAS_REALESRGAN:
@@ -179,14 +217,20 @@ class FaceFixingPipeline:
             )
 
         try:
-            print(f'[FaceFixing] Loading Real-ESRGAN {scale}x upsampler...')
+            supported = set(self.REALESRGAN_URLS) | set(self.REALESRGAN_HF_SOURCES)
+            if scale not in supported:
+                raise ValueError(f'Unsupported scale: {scale}. Supported: {sorted(supported)}')
 
-            if scale not in self.REALESRGAN_URLS:
-                raise ValueError(f'Unsupported scale: {scale}. Supported scales: {list(self.REALESRGAN_URLS.keys())}')
-
-            model_url = self.REALESRGAN_URLS[scale]
-            model_filename = f'RealESRGAN_x{scale}plus.pth'
-            model_path = self._ensure_model_cached(model_url, model_filename)
+            if scale in self.REALESRGAN_HF_SOURCES:
+                hf = self.REALESRGAN_HF_SOURCES[scale]
+                model_filename = hf['filename']
+                print(f'[FaceFixing] Loading {model_filename} ({scale}x) from HuggingFace...')
+                model_path = self._ensure_hf_model_cached(hf['repo_id'], hf['filename'])
+            else:
+                model_url = self.REALESRGAN_URLS[scale]
+                model_filename = f'RealESRGAN_x{scale}plus.pth'
+                print(f'[FaceFixing] Loading Real-ESRGAN {scale}x upsampler...')
+                model_path = self._ensure_model_cached(model_url, model_filename)
 
             model = RRDBNet(
                 num_in_ch=3, num_out_ch=3, num_feat=64, num_block=23, num_grow_ch=32, scale=scale
@@ -202,76 +246,58 @@ class FaceFixingPipeline:
                 half=True,  # FP16 for speed
                 device=self.device,
             )
-            print(f'[FaceFixing] Real-ESRGAN {scale}x upsampler loaded')
+            self._upsampler_scale = scale
+            print(f'[FaceFixing] {model_filename} ({scale}x) loaded')
         except Exception as e:
             print(f'[FaceFixing] Failed to load Real-ESRGAN upsampler: {e}')
             raise
 
-    def _enhance_faces(self, image_bgr: np.ndarray, fidelity: float = 0.5) -> Tuple[np.ndarray, int]:
+    def _enhance_faces(self, image_bgr: np.ndarray, fidelity: float = 0.5, scale: int = 1) -> Tuple[np.ndarray, int]:
         """
-        Detect and enhance all faces in image using GFPGAN's full pipeline
-        (RetinaFace detection + face restoration + paste-back).
+        Detect and enhance all faces using GFPGAN v1.4's full pipeline
+        (RetinaFace detection + face restoration + bg_upsampler compositing).
 
         Args:
             image_bgr: BGR image as numpy array (HxWxC)
             fidelity: Restoration strength (0=more original, 1=more restored)
+            scale: Output upscale factor (1=none, 2=2x, 4=4x). When >1, GFPGAN
+                   composites upscaled faces with Real-ESRGAN background in one pass.
 
         Returns:
             Tuple of (enhanced BGR image, number of faces detected)
         """
-        self._load_enhancer()
+        self._load_enhancer(scale)
 
         if self.enhancer_type == 'none' or self.enhancer is None:
             return image_bgr, 0
 
         # GFPGAN expects BGR input (uses OpenCV/RetinaFace internally)
+        # Note: GFPGAN's weight blends: weight * restored + (1-weight) * original
+        # We invert fidelity to match semantics: 0=original, 1=fully restored
         with torch.no_grad():
             cropped_faces, restored_faces, restored_bgr = self.enhancer.enhance(
                 image_bgr,
                 has_aligned=False,
                 only_center_face=False,
                 paste_back=True,
-                weight=fidelity,
+                weight=1 - fidelity,
             )
 
-        faces_count = len(cropped_faces)
-
-        return restored_bgr, faces_count
-
-    def _upscale_image(self, image: np.ndarray, scale: int = 2) -> np.ndarray:
-        """
-        Upscale image using Real-ESRGAN.
-
-        Args:
-            image: BGR image as numpy array (HxWxC)
-            scale: Upscaling factor (2 or 4)
-
-        Returns:
-            Upscaled image as numpy array
-        """
-        self._load_upsampler(scale)
-
-        # Real-ESRGAN expects RGB
-        rgb_image = np.flip(image, axis=2)
-
-        # Upscale (returns RGB)
-        upscaled_rgb, _ = self.upsampler.enhance(rgb_image)
-
-        # Convert back to BGR
-        upscaled_bgr = np.flip(upscaled_rgb, axis=2)
-
-        return upscaled_bgr
+        return restored_bgr, len(cropped_faces)
 
     def fix_faces(
         self, image: Image.Image, fidelity: float = 0.5, upscale: int = 1
     ) -> Tuple[Image.Image, Dict[str, Any]]:
         """
-        Fix faces in image using GFPGAN (RetinaFace detection + restoration) + optional upscale.
+        Fix faces in image using GFPGAN v1.4 (RetinaFace detection + restoration).
+
+        When upscale > 1, GFPGAN composites upscaled faces with Real-ESRGAN background
+        in a single pass, which preserves face detail far better than post-hoc upscaling.
 
         Args:
             image: PIL Image
             fidelity: Restoration strength (0.0=more original, 1.0=more restored), default 0.5
-            upscale: Upscaling factor (1=none, 2=2x), default 1
+            upscale: Upscaling factor (1=none, 2=2x, 4=4x), default 1
 
         Returns:
             Tuple of (enhanced PIL Image, metadata dict)
@@ -288,23 +314,24 @@ class FaceFixingPipeline:
         metadata = {'fidelity': fidelity, 'upscale': upscale}
 
         try:
-            # Validate parameters
             if not 0.0 <= fidelity <= 1.0:
                 raise ValueError(f'fidelity must be between 0.0 and 1.0, got {fidelity}')
-            if upscale not in (1, 2):
-                raise ValueError(f'upscale must be 1 or 2, got {upscale}')
+            if upscale not in (1, 2, 4):
+                raise ValueError(f'upscale must be 1, 2, or 4, got {upscale}')
 
-            # Convert PIL to numpy BGR
             import cv2
             image_np = np.array(image)
             if image_np.shape[2] == 4:
                 image_np = image_np[:, :, :3]
             image_bgr = cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
 
-            # Detect + enhance faces via GFPGAN (uses RetinaFace internally)
-            print('[FaceFixing] Running GFPGAN (RetinaFace detection + restoration)...')
+            # GFPGAN handles detection + restoration + bg composite in one pass.
+            # When upscale > 1, faces are upscaled face-aligned and background via
+            # Real-ESRGAN — all composited together before returning.
+            upscale_label = f' + {upscale}x upscale' if upscale > 1 else ''
+            print(f'[FaceFixing] Running GFPGAN v1.4 (RetinaFace + restoration{upscale_label})...')
             enhance_start = time.time()
-            enhanced_bgr, faces_count = self._enhance_faces(image_bgr, fidelity)
+            enhanced_bgr, faces_count = self._enhance_faces(image_bgr, fidelity, scale=upscale)
             enhance_time = time.time() - enhance_start
             print(f'[FaceFixing] Detected {faces_count} faces, enhanced in {enhance_time:.2f}s')
 
@@ -315,19 +342,6 @@ class FaceFixingPipeline:
                 metadata['time'] = time.time() - start_time
                 return image, metadata
 
-            # Optional upscaling
-            if upscale > 1:
-                print(f'[FaceFixing] Upscaling {upscale}x...')
-                upscale_start = time.time()
-                try:
-                    enhanced_bgr = self._upscale_image(enhanced_bgr, upscale)
-                    upscale_time = time.time() - upscale_start
-                    print(f'[FaceFixing] Upscaled in {upscale_time:.2f}s')
-                except Exception as e:
-                    print(f'[FaceFixing] Warning: Upscaling failed: {e}')
-                    metadata['upscale_error'] = str(e)
-
-            # Convert back to PIL (BGR → RGB)
             enhanced_image = Image.fromarray(cv2.cvtColor(enhanced_bgr, cv2.COLOR_BGR2RGB))
 
             total_time = time.time() - start_time

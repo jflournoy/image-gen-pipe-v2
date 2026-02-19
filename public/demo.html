@@ -1606,18 +1606,18 @@
               </label>
             </div>
 
-            <!-- Fidelity Slider -->
+            <!-- Face Restoration Slider -->
             <div style="margin-bottom: 10px;">
               <label style="display: block; color: #666; margin-bottom: 4px;">
-                Fidelity: <span id="faceFidelityValue">0.7</span>
-                <small style="color: #888; font-weight: normal;">(0.0 = quality, 1.0 = identity)</small>
+                Face Restoration: <span id="faceFidelityValue">0.5</span>
+                <small style="color: #888; font-weight: normal;">(0.0 = preserve original, 1.0 = full restoration)</small>
               </label>
-              <input type="range" id="faceFidelity" min="0" max="1" step="0.1" value="0.7"
+              <input type="range" id="faceFidelity" min="0" max="1" step="0.1" value="0.5"
                      oninput="updateFaceFidelityDisplay(this.value)"
                      onchange="saveFaceFixingSettings()"
                      style="width: 100%;">
               <small style="display: block; color: #888; margin-top: 4px;">
-                Lower values prioritize quality/aesthetics, higher values preserve facial identity
+                Lower values keep the generated face mostly as-is, higher values apply heavy GFPGAN restoration
               </small>
             </div>
 
