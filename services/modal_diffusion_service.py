@@ -160,6 +160,8 @@ class GenerateRequest(BaseModel):
     fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
     restoration_strength: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
     face_upscale: Optional[int] = Field(default=None, ge=1, le=4, description="Optional face upscaling factor (1=none, 2=2x, 4=4x via Real-ESRGAN integrated with GFPGAN)")
+    # Debug/comparison support
+    return_intermediate_images: bool = Field(default=False, description="Return base image before face fixing/upscaling for debugging (useful for comparing before/after face enhancement)")
     # Diagnostic tagging for batch image tracking
     iteration: Optional[int] = Field(default=None, description="Iteration number (for logging/diagnostics)")
     candidateId: Optional[int] = Field(default=None, description="Candidate ID (for logging/diagnostics)")
@@ -712,6 +714,7 @@ class DiffusionService:
         fix_faces: bool = False,
         restoration_strength: float = 0.5,
         face_upscale: Optional[int] = None,
+        return_intermediate_images: bool = False,
         clear_cache: bool = True,
     ) -> Dict[str, Any]:
         """Generate an image from a text prompt"""
@@ -898,6 +901,12 @@ class DiffusionService:
                 }
                 inference_time += touchup_time
 
+        # Save base image before face fixing (for debugging/comparison)
+        base_image_b64 = None
+        if return_intermediate_images:
+            base_image_b64 = image_to_base64(image)
+            print(f"[Modal Diffusion] Saved base image for comparison ({len(base_image_b64) / (1024 * 1024):.1f}MB)")
+
         # Apply face fixing if requested
         face_fix_info = None
         print(f"[Modal Diffusion] Face fixing check: fix_faces={fix_faces}, self.face_fixer={self.face_fixer is not None}")
@@ -950,7 +959,7 @@ class DiffusionService:
         if clear_cache:
             torch.cuda.empty_cache()
 
-        return {
+        result = {
             "image": image_base64,
             "format": "base64",
             "metadata": {
@@ -970,6 +979,12 @@ class DiffusionService:
                 "face_fixing": face_fix_info,
             }
         }
+
+        # Include base image for debugging face fixing issues
+        if base_image_b64:
+            result["base_image"] = base_image_b64
+
+        return result
 
     def _get_models_list(self) -> List[Dict[str, Any]]:
         """Internal helper to get list of available models with their defaults"""
@@ -1043,13 +1058,18 @@ class DiffusionService:
             fix_faces=request.fix_faces,
             restoration_strength=request.restoration_strength,
             face_upscale=request.face_upscale,
+            return_intermediate_images=request.return_intermediate_images,
             clear_cache=clear_cache,
         )
-        return {
+        response = {
             "image": result["image"],
             "format": result["format"],
             "metadata": result.get("metadata"),
         }
+        # Include base image if available (for debugging face fixing)
+        if "base_image" in result:
+            response["base_image"] = result["base_image"]
+        return response
 
     @modal.fastapi_endpoint(method="POST")
     def generate_endpoint(self, body: dict) -> dict:
