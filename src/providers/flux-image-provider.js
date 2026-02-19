@@ -110,8 +110,8 @@ class FluxImageProvider {
           if (options.fix_faces !== undefined) {
             payload.fix_faces = options.fix_faces;
           }
-          if (options.face_fidelity !== undefined) {
-            payload.face_fidelity = options.face_fidelity;
+          if (options.restoration_strength !== undefined) {
+            payload.restoration_strength = options.restoration_strength;
           }
           if (options.face_upscale !== undefined) {
             payload.face_upscale = options.face_upscale;

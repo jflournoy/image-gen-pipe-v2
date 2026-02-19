@@ -82,7 +82,7 @@ class ModalImageProvider {
     }
 
     if (options.fix_faces !== undefined) payload.fix_faces = options.fix_faces;
-    if (options.face_fidelity !== undefined) payload.face_fidelity = options.face_fidelity;
+    if (options.restoration_strength !== undefined) payload.restoration_strength = options.restoration_strength;
     if (options.face_upscale !== undefined) payload.face_upscale = options.face_upscale;
 
     return payload;
@@ -197,7 +197,7 @@ class ModalImageProvider {
 
       console.log(`[Modal Provider] Generating image with model=${payload.model}: "${prompt.substring(0, 50)}..."`);
       if (payload.fix_faces) {
-        console.log(`[Modal Provider] Face fixing enabled: fidelity=${payload.face_fidelity}, upscale=${payload.face_upscale}`);
+        console.log(`[Modal Provider] Face fixing enabled: restoration_strength=${payload.restoration_strength}, upscale=${payload.face_upscale}`);
       }
 
       const response = await axios.post(this.apiUrl, payload, {
