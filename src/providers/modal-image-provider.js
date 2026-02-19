@@ -57,8 +57,16 @@ class ModalImageProvider {
     }
 
     // Set modelType for negative prompt generation and other features
-    // Modal supports SDXL and other models, default to 'modal' for beam search compatibility
-    this.modelType = 'modal';
+    // Only set to 'modal' for SDXL models (supports negative prompts)
+    // Flux models don't support negative prompts
+    const modelLower = this.model.toLowerCase();
+    if (modelLower.includes('sdxl') || modelLower.includes('sd3')) {
+      this.modelType = 'modal'; // SDXL/SD3 on Modal - supports negative prompts
+    } else if (modelLower.includes('flux')) {
+      this.modelType = 'flux'; // Flux on Modal - no negative prompt support
+    } else {
+      this.modelType = 'modal'; // Default to modal for unknown models
+    }
   }
 
   /**
