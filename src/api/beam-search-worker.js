@@ -65,7 +65,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     loraOptions,
     rankingMode = 'vlm',  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
     fixFaces = false,  // Enable face fixing
-    faceFidelity = 0.7,  // Face fixing fidelity (0.0-1.0)
+    restorationStrength = 0.5,  // GFPGAN restoration strength (0.0=preserve, 1.0=full restoration)
     faceUpscale = 1  // Face fixing upscale factor (1 or 2)
   } = params;
 
@@ -85,7 +85,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
   }
 
   // Log face fixing options (always log to debug)
-  console.log(`[Beam Search Worker] Face fixing params: fixFaces=${fixFaces}, faceFidelity=${faceFidelity}, faceUpscale=${faceUpscale}`);
+  console.log(`[Beam Search Worker] Face fixing params: fixFaces=${fixFaces}, restorationStrength=${restorationStrength}, faceUpscale=${faceUpscale}`);
   console.log(`[Beam Search Worker] Full params object keys:`, Object.keys(params));
 
   // Get runtime provider selections early to check if OpenAI is needed
@@ -247,7 +247,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       ...(bflOptions && { bflOptions }),   // Pass BFL generation options (safety_tolerance, width, height, model, steps, guidance, seed, output_format)
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
       ...(loraOptions && { loraOptions }), // Pass LoRA options (path, scale) for Flux provider
-      ...(fixFaces && { fixFaces, faceFidelity, faceUpscale }), // Pass face fixing options (enabled, fidelity, upscale)
+      ...(fixFaces && { fixFaces, restorationStrength, faceUpscale }), // Pass face fixing options (enabled, fidelity, upscale)
       sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking
