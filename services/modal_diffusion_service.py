@@ -30,6 +30,7 @@ import json
 from pathlib import Path
 from typing import Optional, Dict, Any, List
 
+import torch
 import modal
 from pydantic import BaseModel, Field, field_validator, ConfigDict
 
@@ -156,9 +157,9 @@ class GenerateRequest(BaseModel):
     # Negative prompt support (for SDXL and other models)
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (things to avoid in generation)")
     # Face fixing support (CodeFormer enhancement)
-    fix_faces: bool = Field(default=False, description="Enable face fixing via CodeFormer enhancement")
-    face_fidelity: float = Field(default=0.7, ge=0.0, le=1.0, description="CodeFormer fidelity (0.0=max quality, 1.0=max identity)")
-    face_upscale: Optional[int] = Field(default=None, ge=1, le=2, description="Optional face upscaling factor (1=none, 2=2x via Real-ESRGAN)")
+    fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
+    face_fidelity: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
+    face_upscale: Optional[int] = Field(default=None, ge=1, le=4, description="Optional face upscaling factor (1=none, 2=2x, 4=4x via Real-ESRGAN integrated with GFPGAN)")
 
     @field_validator('prompt')
     @classmethod
@@ -510,25 +511,32 @@ class DiffusionService:
 
         print(f"[Modal Diffusion] Setting scheduler to: {scheduler_name}")
 
+        import inspect
+
+        def _filtered_config(scheduler_class):
+            """Return only config keys accepted by scheduler_class to avoid cross-type warnings."""
+            valid = set(inspect.signature(scheduler_class.__init__).parameters) - {"self"}
+            return {k: v for k, v in self.pipeline.scheduler.config.items() if k in valid}
+
         if scheduler_name == "lcm":
             from diffusers import LCMScheduler
-            self.pipeline.scheduler = LCMScheduler.from_config(self.pipeline.scheduler.config)
+            self.pipeline.scheduler = LCMScheduler.from_config(_filtered_config(LCMScheduler))
         elif scheduler_name == "euler":
             from diffusers import EulerDiscreteScheduler
-            self.pipeline.scheduler = EulerDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+            self.pipeline.scheduler = EulerDiscreteScheduler.from_config(_filtered_config(EulerDiscreteScheduler))
         elif scheduler_name == "euler_a":
             from diffusers import EulerAncestralDiscreteScheduler
-            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(self.pipeline.scheduler.config)
+            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(_filtered_config(EulerAncestralDiscreteScheduler))
         elif scheduler_name == "dpm++":
             from diffusers import DPMSolverMultistepScheduler
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(self.pipeline.scheduler.config)
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(_filtered_config(DPMSolverMultistepScheduler))
         elif scheduler_name == "ddim":
             from diffusers import DDIMScheduler
-            self.pipeline.scheduler = DDIMScheduler.from_config(self.pipeline.scheduler.config)
+            self.pipeline.scheduler = DDIMScheduler.from_config(_filtered_config(DDIMScheduler))
         elif scheduler_name == "karras":
             from diffusers import DPMSolverMultistepScheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
-                self.pipeline.scheduler.config,
+                _filtered_config(DPMSolverMultistepScheduler),
                 use_karras_sigmas=True
             )
 
@@ -701,6 +709,7 @@ class DiffusionService:
         fix_faces: bool = False,
         face_fidelity: float = 0.7,
         face_upscale: Optional[int] = None,
+        clear_cache: bool = True,
     ) -> Dict[str, Any]:
         """Generate an image from a text prompt"""
         import torch
@@ -896,8 +905,10 @@ class DiffusionService:
                     face_fix_info['time'] = face_fix_time
                 print(f"[Modal Diffusion] Face fixing completed in {face_fix_time:.1f}s")
                 inference_time += face_fix_time
-                # Commit volume so downloaded models persist across container restarts
-                model_volume.commit()
+                # Only commit volume if new models were actually downloaded
+                if fixer._volume_needs_commit:
+                    model_volume.commit()
+                    fixer._volume_needs_commit = False  # Reset after commit
             except Exception as e:
                 print(f"[Modal Diffusion] Face fixing failed: {e}")
                 face_fix_info = {
@@ -908,8 +919,9 @@ class DiffusionService:
         # Convert to base64
         image_base64 = image_to_base64(image)
 
-        # Clear GPU cache to prevent memory buildup
-        torch.cuda.empty_cache()
+        # Clear GPU cache to prevent memory buildup (unless batching)
+        if clear_cache:
+            torch.cuda.empty_cache()
 
         return {
             "image": image_base64,
@@ -978,7 +990,7 @@ class DiffusionService:
         """List all available models (Modal method for external calls)"""
         return self._get_models_list()
 
-    def _generate_single(self, request: GenerateRequest) -> dict:
+    def _generate_single(self, request: GenerateRequest, clear_cache: bool = True) -> dict:
         """Process a single generation request and return response dict"""
         result = self.generate(
             prompt=request.prompt,
@@ -998,6 +1010,7 @@ class DiffusionService:
             fix_faces=request.fix_faces,
             face_fidelity=request.face_fidelity,
             face_upscale=request.face_upscale,
+            clear_cache=clear_cache,
         )
         return {
             "image": result["image"],
@@ -1023,7 +1036,11 @@ class DiffusionService:
             for i, req in enumerate(batch_req.requests):
                 print(f"[Modal Diffusion] Batch item {i+1}/{len(batch_req.requests)}: "
                       f"model={req.model}, fix_faces={req.fix_faces}")
-                results.append(self._generate_single(req))
+                # Skip per-image cache clear for batch; do it once at the end
+                results.append(self._generate_single(req, clear_cache=False))
+
+            # Clear GPU cache once after all images in batch
+            torch.cuda.empty_cache()
 
             batch_time = time.time() - batch_start
             print(f"[Modal Diffusion] Batch complete: {len(results)} images in {batch_time:.1f}s")
