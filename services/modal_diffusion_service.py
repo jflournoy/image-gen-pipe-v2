@@ -787,6 +787,18 @@ class DiffusionService:
                     denoising_end=effective_refiner_switch,
                     output_type="latent",
                 )
+                # Refiner pass - use Compel embeddings for consistency
+                result = self.refiner_pipeline(
+                    prompt_embeds=conditioning,
+                    pooled_prompt_embeds=pooled,
+                    negative_prompt_embeds=negative_conditioning,
+                    negative_pooled_prompt_embeds=negative_pooled,
+                    image=base_result.images,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                    denoising_start=effective_refiner_switch,
+                )
             else:
                 base_result = self.pipeline(
                     prompt=prompt,
@@ -799,17 +811,16 @@ class DiffusionService:
                     denoising_end=effective_refiner_switch,
                     output_type="latent",
                 )
-
-            # Refiner pass - continues from refiner_switch point
-            result = self.refiner_pipeline(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                image=base_result.images,
-                num_inference_steps=steps,
-                guidance_scale=guidance,
-                generator=generator,
-                denoising_start=effective_refiner_switch,
-            )
+                # Refiner pass - continues from refiner_switch point
+                result = self.refiner_pipeline(
+                    prompt=prompt,
+                    negative_prompt=negative_prompt,
+                    image=base_result.images,
+                    num_inference_steps=steps,
+                    guidance_scale=guidance,
+                    generator=generator,
+                    denoising_start=effective_refiner_switch,
+                )
             refiner_info = {
                 "used": True,
                 "switch_point": effective_refiner_switch,
