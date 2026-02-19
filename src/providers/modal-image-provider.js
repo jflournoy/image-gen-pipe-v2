@@ -55,6 +55,10 @@ class ModalImageProvider {
     if (!this.tokenId || !this.tokenSecret) {
       throw new Error('Modal authentication required (set MODAL_TOKEN_ID and MODAL_TOKEN_SECRET environment variables or pass tokenId and tokenSecret options)');
     }
+
+    // Set modelType for negative prompt generation and other features
+    // Modal supports SDXL and other models, default to 'modal' for beam search compatibility
+    this.modelType = 'modal';
   }
 
   /**
@@ -75,6 +79,7 @@ class ModalImageProvider {
     };
 
     if (options.seed !== undefined) payload.seed = options.seed;
+    if (options.negative_prompt !== undefined) payload.negative_prompt = options.negative_prompt;
 
     const loras = options.loras ?? this.generation.loras;
     if (loras && Array.isArray(loras) && loras.length > 0) {
@@ -84,6 +89,7 @@ class ModalImageProvider {
     if (options.fix_faces !== undefined) payload.fix_faces = options.fix_faces;
     if (options.restoration_strength !== undefined) payload.restoration_strength = options.restoration_strength;
     if (options.face_upscale !== undefined) payload.face_upscale = options.face_upscale;
+    if (options.return_intermediate_images !== undefined) payload.return_intermediate_images = options.return_intermediate_images;
 
     // Include diagnostic tags for Modal logging
     if (options.iteration !== undefined) payload.iteration = options.iteration;
@@ -114,14 +120,35 @@ class ModalImageProvider {
       throw new Error('Unexpected response format from Modal service');
     }
 
+    // Decode base image if available (for debugging face fixing)
+    let baseImageBuffer = null;
+    if (result.base_image) {
+      try {
+        baseImageBuffer = Buffer.from(result.base_image, 'base64');
+      } catch (e) {
+        console.warn(`[Modal Provider]${logPrefix} Could not decode base_image: ${e.message}`);
+      }
+    }
+
     // Save to session directory
     const sessionId = options.sessionId || this.sessionId;
     let finalPath = null;
+    let baseImagePath = null;
 
     if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
       try {
         finalPath = await this._saveToSessionDir(imageBuffer, options.iteration, options.candidateId, sessionId);
         console.log(`[Modal Provider]${logPrefix} Saved image to: ${finalPath}`);
+
+        // Save base image if available
+        if (baseImageBuffer) {
+          try {
+            baseImagePath = await this._saveToSessionDir(baseImageBuffer, options.iteration, options.candidateId, sessionId, 'base');
+            console.log(`[Modal Provider]${logPrefix} Saved base image to: ${baseImagePath}`);
+          } catch (e) {
+            console.warn(`[Modal Provider]${logPrefix} Could not save base image: ${e.message}`);
+          }
+        }
       } catch (saveError) {
         console.warn(`[Modal Provider]${logPrefix} Could not save to session dir: ${saveError.message}`);
         throw saveError;
@@ -129,15 +156,25 @@ class ModalImageProvider {
     } else if (sessionId) {
       finalPath = await this._saveWithTimestamp(imageBuffer, sessionId);
       console.log(`[Modal Provider]${logPrefix} Saved image to: ${finalPath}`);
+
+      if (baseImageBuffer) {
+        try {
+          baseImagePath = await this._saveWithTimestamp(baseImageBuffer, sessionId, 'base');
+          console.log(`[Modal Provider]${logPrefix} Saved base image to: ${baseImagePath}`);
+        } catch (e) {
+          console.warn(`[Modal Provider]${logPrefix} Could not save base image: ${e.message}`);
+        }
+      }
     }
 
-    return {
+    const resultObj = {
       url: undefined,
       localPath: finalPath,
       revisedPrompt: undefined,
       metadata: {
         model: this.model,
         prompt,
+        negative_prompt: result.metadata?.negative_prompt,
         width: options.width ?? this.generation.width,
         height: options.height ?? this.generation.height,
         steps: options.steps ?? this.generation.steps,
@@ -149,6 +186,13 @@ class ModalImageProvider {
         modal: { endpoint: this.apiUrl }
       }
     };
+
+    // Include base image path if available
+    if (baseImagePath) {
+      resultObj.baseImagePath = baseImagePath;
+    }
+
+    return resultObj;
   }
 
   /**
@@ -273,9 +317,10 @@ class ModalImageProvider {
    * @returns {Promise<string>} Final path in session directory
    * @private
    */
-  async _saveToSessionDir(imageBuffer, iteration, candidateId, sessionId) {
+  async _saveToSessionDir(imageBuffer, iteration, candidateId, sessionId, suffix = '') {
     const sessionDir = OutputPathManager.buildSessionPath(this.outputDir, sessionId);
-    const filename = `iter${iteration}-cand${candidateId}.png`;
+    const suffixPart = suffix ? `-${suffix}` : '';
+    const filename = `iter${iteration}-cand${candidateId}${suffixPart}.png`;
     const finalPath = path.join(sessionDir, filename);
 
     // Ensure session directory exists
@@ -294,10 +339,11 @@ class ModalImageProvider {
    * @returns {Promise<string>} Final path in session directory
    * @private
    */
-  async _saveWithTimestamp(imageBuffer, sessionId) {
+  async _saveWithTimestamp(imageBuffer, sessionId, suffix = '') {
     const sessionDir = OutputPathManager.buildSessionPath(this.outputDir, sessionId);
     const timestamp = Date.now();
-    const filename = `modal-${timestamp}.png`;
+    const suffixPart = suffix ? `-${suffix}` : '';
+    const filename = `modal-${timestamp}${suffixPart}.png`;
     const finalPath = path.join(sessionDir, filename);
 
     await fs.mkdir(sessionDir, { recursive: true });
