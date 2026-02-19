@@ -11,6 +11,10 @@ let ws = null;
 let currentJobId = null;
 let seenImages = new Set(); // Track which images we've already added
 
+// Image comparison state for modal
+let currentModalBaseImageUrl = null; // Base image for comparison in modal
+let isShowingBaseImage = false; // Track which image is displayed
+
 // Full candidate tracking for winner showcase
 let candidates = new Map(); // candidateId -> full candidate data
 let rankings = new Map();   // candidateId -> ranking data
@@ -1087,7 +1091,9 @@ window.openShowcaseImageModal = function(imgElement) {
 
   const index = allShowcaseImages.indexOf(imgElement);
   const imageId = imgElement.alt || 'Showcase image';
-  openImageModal(imgElement.src, imageId, index, 'showcase');
+  const candidate = candidates.get(imageId);
+  const baseImageUrl = candidate?.baseImage || null;
+  openImageModal(imgElement.src, imageId, index, 'showcase', baseImageUrl);
 };
 
 /**
@@ -1097,9 +1103,11 @@ window.openShowcaseImageModal = function(imgElement) {
  * @param {number} [imageIndex] - Index in the collection for arrow key navigation
  * @param {string} [context] - Context: 'grid' (generated images) or 'showcase' (top results)
  */
-function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid') {
+function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid', baseImageUrl = null) {
   const modal = document.getElementById('imageModal');
   const modalImage = document.getElementById('modalImage');
+  const baseModalImage = document.getElementById('baseModalImage');
+  const comparisonToggleBtn = document.getElementById('comparisonToggleBtn');
   const modalInfo = document.getElementById('modalInfo');
   const showPromptsBtn = document.getElementById('showPromptsBtn');
 
@@ -1109,6 +1117,18 @@ function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid
   currentModalImageIndex = imageIndex;
   currentModalContext = context;
   currentModalImageId = imageId;
+
+  // Set up image comparison if base image is available
+  currentModalBaseImageUrl = baseImageUrl;
+  isShowingBaseImage = false;
+  if (baseImageUrl) {
+    baseModalImage.src = baseImageUrl;
+    comparisonToggleBtn.style.display = 'block';
+    comparisonToggleBtn.textContent = '🔄 Show Base Image';
+  } else {
+    comparisonToggleBtn.style.display = 'none';
+    baseModalImage.style.display = 'none';
+  }
 
   // Show/hide prompts button based on whether we have candidate data
   if (showPromptsBtn) {
@@ -1126,6 +1146,29 @@ function openImageModal(imageUrl, imageId = '', imageIndex = -1, context = 'grid
 }
 
 /**
+ * Toggle between final image and base image in modal
+ */
+function toggleImageComparison() {
+  const modalImage = document.getElementById('modalImage');
+  const baseModalImage = document.getElementById('baseModalImage');
+  const comparisonToggleBtn = document.getElementById('comparisonToggleBtn');
+
+  if (!currentModalBaseImageUrl) return;
+
+  isShowingBaseImage = !isShowingBaseImage;
+
+  if (isShowingBaseImage) {
+    modalImage.style.display = 'none';
+    baseModalImage.style.display = 'block';
+    comparisonToggleBtn.textContent = '🔄 Show Final Image';
+  } else {
+    modalImage.style.display = 'block';
+    baseModalImage.style.display = 'none';
+    comparisonToggleBtn.textContent = '🔄 Show Base Image';
+  }
+}
+
+/**
  * Close image preview modal
  */
 function closeImageModal() {
@@ -1133,6 +1176,15 @@ function closeImageModal() {
   modal.classList.remove('active');
   currentModalImageIndex = -1;
   currentModalImageId = '';
+  currentModalBaseImageUrl = null;
+  isShowingBaseImage = false;
+
+  // Reset image display
+  const modalImage = document.getElementById('modalImage');
+  const baseModalImage = document.getElementById('baseModalImage');
+  modalImage.style.display = 'block';
+  baseModalImage.style.display = 'none';
+
   document.removeEventListener('keydown', handleModalKeydown);
 }
 
@@ -1299,14 +1351,18 @@ function handleModalKeydown(event) {
       // Showcase images are direct img elements
       const img = images[newIndex];
       const imageId = img.alt || `Image ${newIndex + 1}`;
-      openImageModal(img.src, imageId, newIndex, 'showcase');
+      const candidate = candidates.get(imageId);
+      const baseImageUrl = candidate?.baseImage || null;
+      openImageModal(img.src, imageId, newIndex, 'showcase', baseImageUrl);
     } else {
       // Grid images are wrapped in cards
       const card = images[newIndex];
       const img = card.querySelector('img');
       const label = card.querySelector('.image-card-label');
       if (img && label) {
-        openImageModal(img.src, label.textContent, newIndex, 'grid');
+        const candidate = candidates.get(label.textContent);
+        const baseImageUrl = candidate?.baseImage || null;
+        openImageModal(img.src, label.textContent, newIndex, 'grid', baseImageUrl);
       }
     }
   }
@@ -2342,7 +2398,7 @@ function getImageCards() {
 }
 
 // Add image thumbnail to gallery
-function addImageThumbnail(iteration, candidateId, imageUrl) {
+function addImageThumbnail(iteration, candidateId, imageUrl, baseImageUrl = null) {
   if (!imageUrl) return;
 
   // Create unique key for this image
@@ -2351,6 +2407,12 @@ function addImageThumbnail(iteration, candidateId, imageUrl) {
   // Skip if we've already added this image
   if (seenImages.has(imageKey)) return;
   seenImages.add(imageKey);
+
+  // Store base image in candidates map if available
+  if (baseImageUrl) {
+    const existing = candidates.get(imageKey) || {};
+    candidates.set(imageKey, { ...existing, baseImage: baseImageUrl });
+  }
 
   // Show images section if not already visible
   if (imagesSection.style.display === 'none') {
@@ -2370,7 +2432,9 @@ function addImageThumbnail(iteration, candidateId, imageUrl) {
     // Single click to open modal with navigation
     const allCards = getImageCards();
     const clickedIndex = allCards.indexOf(card);
-    openImageModal(imageUrl, `i${iteration}c${candidateId}`, clickedIndex);
+    const candidate = candidates.get(imageKey);
+    const storedBaseImageUrl = candidate?.baseImage || null;
+    openImageModal(imageUrl, `i${iteration}c${candidateId}`, clickedIndex, 'grid', storedBaseImageUrl);
   };
   img.onmouseenter = () => {
     // Show clickable state
@@ -2753,7 +2817,8 @@ function connectWebSocket() {
         if (msg.type === 'candidate' && msg.imageUrl) {
           const iteration = msg.iteration !== undefined ? msg.iteration : 0;
           const candidateId = msg.candidateId !== undefined ? msg.candidateId : 0;
-          addImageThumbnail(iteration, candidateId, msg.imageUrl);
+          const baseImageUrl = msg.baseImage || msg.base_image; // Support both naming conventions
+          addImageThumbnail(iteration, candidateId, msg.imageUrl, baseImageUrl);
         }
       } catch (err) {
         addMessage(`Message parse error: ${err.message}`, 'warning');

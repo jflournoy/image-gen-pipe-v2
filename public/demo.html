@@ -1948,7 +1948,22 @@
   <div id="imageModal" class="image-modal" onclick="if(event.target === this) closeImageModal()">
     <div class="modal-content">
       <button class="modal-close" onclick="closeImageModal()">&times;</button>
-      <img id="modalImage" class="modal-image" alt="Preview">
+
+      <!-- Image comparison container -->
+      <div id="imageComparisonContainer" style="position: relative; display: inline-block; width: 100%;">
+        <img id="modalImage" class="modal-image" alt="Preview">
+        <img id="baseModalImage" class="modal-image" alt="Base Image" style="display: none;">
+
+        <!-- Comparison toggle button -->
+        <button id="comparisonToggleBtn" class="comparison-toggle"
+                style="position: absolute; top: 10px; right: 10px; padding: 8px 12px;
+                       background: rgba(0,0,0,0.6); color: white; border: none;
+                       border-radius: 4px; cursor: pointer; font-size: 12px; z-index: 10; display: none;"
+                onclick="toggleImageComparison()">
+          🔄 Show Base Image
+        </button>
+      </div>
+
       <div class="modal-info" id="modalInfo"></div>
       <button id="showPromptsBtn" class="show-prompts-btn" onclick="showPromptsForCurrentImage()">
         View Prompts
