@@ -630,6 +630,23 @@ async function getAllServiceStatuses() {
 }
 
 /**
+ * Get STOP_LOCK status for all services
+ * @returns {Promise<Object>} Map of serviceName -> { hasLock: boolean }
+ */
+async function getAllStopLocks() {
+  const locks = {};
+
+  for (const serviceName of Object.keys(SERVICES)) {
+    locks[serviceName] = {
+      hasLock: await hasStopLock(serviceName),
+      lockPath: getStopLockPath(serviceName),
+    };
+  }
+
+  return locks;
+}
+
+/**
  * Default ports for each service
  */
 const DEFAULT_PORTS = {
@@ -682,4 +699,5 @@ module.exports = {
   createStopLock,
   hasStopLock,
   deleteStopLock,
+  getAllStopLocks,
 };
