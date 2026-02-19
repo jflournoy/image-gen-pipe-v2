@@ -240,7 +240,7 @@ describe('Beam Search - Batch Image Generation', () => {
         alpha: 0.7,
         descriptiveness: 2,
         fixFaces: true,
-        faceFidelity: 0.8,
+        restorationStrength: 0.8,
         faceUpscale: 2
       };
 
@@ -249,7 +249,7 @@ describe('Beam Search - Batch Image Generation', () => {
       const batchRequest = imageGen.batchCalls[0];
       for (const req of batchRequest) {
         assert.strictEqual(req.options.fix_faces, true);
-        assert.strictEqual(req.options.face_fidelity, 0.8);
+        assert.strictEqual(req.options.restoration_strength, 0.8);
         assert.strictEqual(req.options.face_upscale, 2);
       }
     });
