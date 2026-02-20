@@ -87,7 +87,9 @@ class ModalImageProvider {
     };
 
     if (options.seed !== undefined) payload.seed = options.seed;
-    if (options.negative_prompt !== undefined) payload.negative_prompt = options.negative_prompt;
+    // Accept both camelCase (from beam search) and snake_case (from direct calls)
+    const negPrompt = options.negative_prompt ?? options.negativePrompt;
+    if (negPrompt !== undefined) payload.negative_prompt = negPrompt;
 
     const loras = options.loras ?? this.generation.loras;
     if (loras && Array.isArray(loras) && loras.length > 0) {
