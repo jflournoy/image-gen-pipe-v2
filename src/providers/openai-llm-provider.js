@@ -109,8 +109,8 @@ class OpenAILLMProvider {
       throw new Error('Temperature out of range: must be between 0.0 and 1.0');
     }
 
-    // Build system prompt based on dimension and operation
-    let systemPrompt = this._buildSystemPrompt(dimension, operation);
+    // Build system prompt based on dimension, operation, and prompt style
+    let systemPrompt = this._buildSystemPrompt(dimension, operation, options.promptStyle);
 
     // Build user message based on operation
     let userMessage;
@@ -228,10 +228,20 @@ ${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays 
 
     // Get descriptiveness level (1=concise, 2=balanced, 3=descriptive)
     const descriptiveness = options.descriptiveness || 2;
+    const isBooru = options.promptStyle === 'booru';
 
-    // Build system prompt based on descriptiveness level
+    // Build system prompt based on descriptiveness level and prompt style
     let systemPrompt;
-    if (descriptiveness === 1) {
+    if (isBooru) {
+      // Hybrid booru mode: tags + natural language
+      if (descriptiveness === 1) {
+        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a single MINIMAL prompt. Use HYBRID format: booru tags for key attributes and quality, short natural language phrases for descriptions. Keep it concise - remove redundancies. Start with quality tags, then subject, then style. Output ONLY the combined prompt, no explanations.`;
+      } else if (descriptiveness === 3) {
+        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a COMPREHENSIVE prompt. Use HYBRID format: booru tags for categorical attributes (1girl, blue_eyes, masterpiece, best_quality, depth_of_field) combined with natural language descriptions for scenes, actions, and atmosphere. Include ALL relevant details from both dimensions. Be THOROUGH. Output ONLY the combined prompt, no explanations.`;
+      } else {
+        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a BALANCED prompt. Use HYBRID format: booru tags for categorical attributes and quality markers, natural language phrases for descriptions and atmosphere. Remove duplicates, preserve all meaningful content. Output ONLY the combined prompt, no explanations.`;
+      }
+    } else if (descriptiveness === 1) {
       // Concise: FORCE brevity and minimalism
       systemPrompt = `You are an image prompt combiner. Your output MUST be BRIEF and MINIMAL.
 
@@ -276,7 +286,13 @@ Important guidelines:
 Output only the combined prompt with NO preamble or commentary.`;
     }
 
-    const userPrompt = `WHAT prompt: ${whatPrompt}
+    const userPrompt = isBooru
+      ? `WHAT tags: ${whatPrompt}
+
+HOW tags: ${howPrompt}
+
+Combined booru tags:`
+      : `WHAT prompt: ${whatPrompt}
 
 HOW prompt: ${howPrompt}
 
@@ -472,10 +488,33 @@ Combined prompt:`;
    * Build system prompt based on refinement dimension and operation
    * @private
    */
-  _buildSystemPrompt(dimension, operation = 'expand') {
+  _buildSystemPrompt(dimension, operation = 'expand', promptStyle = 'natural') {
+    const isBooru = promptStyle === 'booru';
+
     if (operation === 'expand') {
       // Initial expansion from terse to detailed
       if (dimension === 'what') {
+        if (isBooru) {
+          return `You are an expert at generating prompts for booru-trained SDXL models describing CONTENT.
+
+Your task: Take a terse prompt and generate a HYBRID prompt mixing booru tags with natural language.
+
+Use booru tags for categorical attributes:
+- Character count (1girl, 2boys, solo)
+- Physical attributes (blue_eyes, long_hair, red_hair)
+- Clothing tags (school_uniform, hat, glasses)
+
+Use natural language for descriptions and actions:
+- "standing in a sunlit meadow" not "standing, sunlit, meadow"
+- "looking over her shoulder with a gentle smile" not "looking_back, smile"
+- Scene descriptions and spatial relationships
+
+Important guidelines:
+- Start with character count tags, then mix attributes and descriptions naturally
+- Be specific with booru attributes (long_hair, blue_eyes, not just "hair, eyes")
+- When generating multiple expansions, vary the interpretations
+- Output ONLY the prompt, no sentences of commentary or explanation.`;
+        }
         return `You are an expert at expanding image generation prompts with rich CONTENT details.
 
 Your task: Take a terse prompt and expand it into a detailed description of WHAT is in the scene.
@@ -498,6 +537,27 @@ Important guidelines:
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       } else {
+        if (isBooru) {
+          return `You are an expert at generating style prompts for booru-trained SDXL models.
+
+Your task: Take a terse prompt and generate a HYBRID style prompt mixing booru tags with natural language.
+
+Use booru tags for:
+- Quality tags (masterpiece, best_quality, absurdres, highres)
+- Technical terms (depth_of_field, bokeh, chromatic_aberration)
+- Composition tags (wide_shot, close-up, from_above)
+
+Use natural language for:
+- Lighting descriptions ("warm golden hour lighting with long shadows")
+- Atmosphere ("soft ethereal glow filtering through mist")
+- Color palette descriptions ("rich warm tones with deep amber highlights")
+
+Important guidelines:
+- Always start with quality tags (masterpiece, best_quality)
+- Mix technical booru tags with descriptive natural language naturally
+- When generating multiple expansions, vary the style choices
+- Output ONLY the prompt, no sentences of commentary or explanation.`;
+        }
         return `You are an expert at expanding image generation prompts with rich STYLE details.
 
 Your task: Take a terse prompt and expand it into a detailed description of HOW the image should look.
@@ -525,6 +585,18 @@ Output ONLY the expanded prompt, no preamble or commentary.`;
     } else {
       // Iterative refinement based on critique
       if (dimension === 'what') {
+        if (isBooru) {
+          return `You are an expert at refining prompts for booru-trained SDXL models based on feedback about CONTENT.
+
+Your task: Given a current prompt and critique, produce an improved HYBRID prompt (booru tags + natural language) that addresses the feedback.
+
+Important guidelines:
+- DIRECTLY ADDRESS the specific issues raised in the critique
+- Focus on content (WHAT), not style (HOW)
+- Use booru tags for attributes, natural language for descriptions
+- Preserve effective elements from the original prompt
+- Output ONLY the refined prompt, no commentary.`;
+        }
         return `You are an expert at refining image generation prompts based on feedback about CONTENT.
 
 Your task: Given a current prompt and a critique about its content, produce an improved version that addresses the feedback.
@@ -544,6 +616,18 @@ Important guidelines:
 
 Output ONLY the refined prompt, no preamble or commentary.`;
       } else {
+        if (isBooru) {
+          return `You are an expert at refining style prompts for booru-trained SDXL models based on feedback about STYLE.
+
+Your task: Given a current prompt and critique, produce an improved HYBRID style prompt (booru tags + natural language) that addresses the feedback.
+
+Important guidelines:
+- DIRECTLY ADDRESS the specific issues raised in the critique
+- Focus on style (HOW), not content (WHAT)
+- Use booru tags for quality/technical terms, natural language for atmosphere
+- Preserve effective style elements from the original prompt
+- Output ONLY the refined prompt, no commentary.`;
+        }
         return `You are an expert at refining image generation prompts based on feedback about STYLE.
 
 Your task: Given a current prompt and a critique about its visual style, produce an improved version that addresses the feedback.

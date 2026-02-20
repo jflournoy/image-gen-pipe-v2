@@ -72,8 +72,8 @@ class LocalLLMProvider {
 
         if (isBooru) {
           systemPrompt = dimension === 'what' ?
-            'You are a booru tag refiner focused on CONTENT (WHAT). Based on the critique, improve the comma-separated tags to better match user intent. Output ONLY comma-separated booru tags, no sentences.' :
-            'You are a booru tag refiner focused on VISUAL STYLE (HOW). Based on the critique, improve the comma-separated style/quality tags. Output ONLY comma-separated booru tags, no sentences.';
+            'You are a prompt refiner for booru-trained SDXL models, focused on CONTENT (WHAT). Based on the critique, improve the prompt to better match user intent. Use a HYBRID format: booru tags for attributes (hair_color, eye_color, 1girl) mixed with natural language for descriptions and actions. Output ONLY the improved prompt, no explanations.' :
+            'You are a prompt refiner for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Based on the critique, improve the style prompt. Use a HYBRID format: booru tags for quality (masterpiece, best_quality) and technical terms (depth_of_field) mixed with natural language for describing lighting and atmosphere. Output ONLY the improved prompt, no explanations.';
         } else {
           systemPrompt = dimension === 'what' ?
             'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on the critique and recommendation, improve the prompt to better match user intent while maintaining alignment with the original request.' :
@@ -97,8 +97,8 @@ Provide an improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'} th
 
         if (isBooru) {
           systemPrompt = dimension === 'what' ?
-            'You are a booru tag refiner focused on CONTENT (WHAT). Based on critique, improve the tags to better match user intent and boost CLIP score. Output ONLY comma-separated booru tags, no sentences.' :
-            'You are a booru tag refiner focused on VISUAL STYLE (HOW). Based on critique, improve the style/quality tags to enhance aesthetic quality. Output ONLY comma-separated booru tags, no sentences.';
+            'You are a prompt refiner for booru-trained SDXL models, focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score. Use a HYBRID format: booru tags for attributes (hair_color, 1girl) mixed with natural language for descriptions. Output ONLY the improved prompt, no explanations.' :
+            'You are a prompt refiner for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Based on critique, improve the style prompt to enhance aesthetic quality. Use a HYBRID format: booru tags for quality/technical terms mixed with natural language for describing visual effects. Output ONLY the improved prompt, no explanations.';
         } else {
           systemPrompt = dimension === 'what' ?
             'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score.' :
@@ -115,16 +115,16 @@ Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'w
         // Dimension-aware expansion/refinement
         if (dimension === 'what') {
           if (isBooru) {
-            systemPrompt = 'You are a booru tag generator for CONTENT (WHAT). Generate comma-separated booru-style tags describing subjects (character count like 1girl/2boys, gender, hair color, eye color, hairstyle, clothing, accessories), actions (standing, sitting, walking), body attributes (posture, expression), and setting (indoors, outdoors, location type). Use standard booru tag format: lowercase, underscores for multi-word tags. Output ONLY comma-separated tags, no sentences.';
-            userPromptText = `Generate CONTENT booru tags for: "${prompt}"`;
+            systemPrompt = 'You are a prompt generator for booru-trained SDXL models, focused on CONTENT (WHAT). Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for categorical attributes (1girl, blue_eyes, long_hair, school_uniform) and natural language phrases for descriptions and actions (e.g., "standing in a sunlit meadow", "looking over her shoulder with a gentle smile"). Start with character count tags (1girl, solo, etc.), then mix attributes and descriptions naturally. Output ONLY the prompt, no explanations.';
+            userPromptText = `Generate CONTENT prompt for booru-trained model: "${prompt}"`;
           } else {
             systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Describe physical appearances rather than abstract qualities. If evoking mood, anchor it to specific visual elements.';
             userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
           }
         } else {
           if (isBooru) {
-            systemPrompt = 'You are a booru tag generator for VISUAL STYLE (HOW). Generate comma-separated booru-style tags for quality (masterpiece, best quality, absurdres, highres), artistic style (anime, realistic, oil painting), lighting (dramatic lighting, backlighting, rim lighting), composition (depth of field, wide shot, close-up), and visual effects (bloom, lens flare, chromatic aberration). Use standard booru tag format: lowercase, underscores for multi-word tags. Output ONLY comma-separated tags, no sentences.';
-            userPromptText = `Generate STYLE booru tags for: "${prompt}"`;
+            systemPrompt = 'You are a prompt generator for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for quality (masterpiece, best_quality, absurdres, highres) and technical terms (depth_of_field, bokeh, chromatic_aberration). Use natural language for describing lighting and atmosphere (e.g., "warm golden hour lighting with long shadows", "soft diffused glow"). Start with quality tags, then mix style tags and descriptions naturally. Output ONLY the prompt, no explanations.';
+            userPromptText = `Generate STYLE prompt for booru-trained model: "${prompt}"`;
           } else {
             systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE - describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Describe what effects LOOK LIKE, e.g., "soft diffused shadows with gentle falloff" not just "soft lighting".';
             userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
@@ -167,13 +167,13 @@ Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'w
       // Build system prompt based on descriptiveness level and prompt style
       let systemPrompt;
       if (isBooru) {
-        // Booru mode: combine tag lists
+        // Hybrid booru mode: combine tags with natural language descriptions
         if (descriptiveness === 1) {
-          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a single comma-separated list. Keep it MINIMAL: remove redundant tags, keep only the most important ones. Order: quality tags first (masterpiece, best quality), then subject tags, then style/composition tags. Output ONLY comma-separated tags, no sentences or explanations.';
+          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a single MINIMAL prompt. Use HYBRID format: booru tags for key attributes and quality, short natural language phrases for descriptions. Keep it concise - remove redundancies. Start with quality tags, then subject, then style. Output ONLY the combined prompt, no explanations.';
         } else if (descriptiveness === 3) {
-          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a COMPREHENSIVE comma-separated list. Include ALL relevant tags from both dimensions. Add related tags that enhance the description (e.g., add "detailed eyes" if eye color is specified). Order: quality tags first (masterpiece, best quality, absurdres, highres), then subject tags (character details, clothing, accessories), then setting tags, then style/composition tags. Be THOROUGH - more tags is better. Output ONLY comma-separated tags, no sentences or explanations.';
+          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a COMPREHENSIVE prompt. Use HYBRID format: booru tags for categorical attributes (1girl, blue_eyes, masterpiece, best_quality, depth_of_field) combined with natural language descriptions for scenes, actions, and atmosphere. Include ALL relevant details from both dimensions. Be THOROUGH. Output ONLY the combined prompt, no explanations.';
         } else {
-          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a BALANCED comma-separated list. Remove duplicates, preserve all meaningful tags from both dimensions. Order: quality tags first (masterpiece, best quality), then subject tags, then setting tags, then style/composition tags. Output ONLY comma-separated tags, no sentences or explanations.';
+          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a BALANCED prompt. Use HYBRID format: booru tags for categorical attributes and quality markers, natural language phrases for descriptions and atmosphere. Remove duplicates, preserve all meaningful content from both dimensions. Output ONLY the combined prompt, no explanations.';
         }
       } else {
         // Natural language mode (existing behavior)
@@ -357,14 +357,30 @@ Negative prompt:`;
   _cleanLLMResponse(text) {
     let cleaned = text;
 
-    // Remove trailing explanation/note blocks (everything after double-newline + marker)
-    cleaned = cleaned.replace(/\n\n\s*(Explanation|Note|The combined|The revised|The improved|Additionally|Furthermore|I (?:also |have )?(?:removed|replaced|adjusted|added|simplified|restructured))[\s\S]*/i, '');
+    // 1. Remove trailing explanation/note blocks (everything after double-newline + marker)
+    cleaned = cleaned.replace(/\n\n\s*(Explanation|Note|The combined|The revised|The improved|Additionally|Furthermore|These are|In summary|To summarize|I (?:also |have )?(?:removed|replaced|adjusted|added|simplified|restructured))[\s\S]*/i, '');
 
-    // Remove preamble patterns like "Improved WHAT tags:", "Improved comma-separated WHAT tags:", etc.
+    // 2. If multiple paragraphs remain, take the last substantial one
+    //    (model sometimes outputs raw tags, then a "deduplicated" version)
+    const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim().length > 0);
+    if (paragraphs.length > 1) {
+      cleaned = paragraphs[paragraphs.length - 1];
+    }
+
+    // 3. Remove action prefixes like "Remove duplicates:", "Deduplicated:", "Combined and deduplicated:"
+    cleaned = cleaned.replace(/^(?:Remove\s+duplicates|Deduplicated|Combined(?:\s+and\s+deduplicated)?|Merged)\s*:\s*/i, '');
+
+    // 4. Remove label preambles like "Improved WHAT tags:", "Here are the tags:", etc.
     cleaned = cleaned.replace(/^(?:(?:Improved|Refined|Updated|Generated|Combined|Here (?:are|is)(?: the)?)\s+)?(?:comma-separated\s+)?(?:WHAT|HOW|CONTENT|STYLE|booru|SDXL)?\s*(?:tags|prompt|booru tags|result)\s*:\s*/i, '');
 
-    // Strip surrounding quotes (the LLM often wraps output in quotes)
+    // 5. Strip "quality:" prefix (model sometimes labels tag lists this way)
+    cleaned = cleaned.replace(/^quality\s*:\s*/i, '');
+
+    // 6. Strip surrounding quotes (the LLM often wraps output in quotes)
     cleaned = cleaned.replace(/^["']|["']$/g, '');
+
+    // 7. Strip trailing period from tag lists (model adds sentence-ending punctuation)
+    cleaned = cleaned.replace(/\.\s*$/, '');
 
     return cleaned.trim();
   }
