@@ -497,7 +497,9 @@ Combined prompt:`;
         if (isBooru) {
           return `You are an expert at generating prompts for booru-trained SDXL models describing CONTENT.
 
-Your task: Take a terse prompt and generate a HYBRID prompt mixing booru tags with natural language.
+Your task: Take a terse prompt and generate a SINGLE HYBRID prompt mixing booru tags with natural language.
+
+CRITICAL: Generate a prompt for the EXACT subject given — do not change the topic or invent a different scenario.
 
 Use booru tags for categorical attributes:
 - Character count (1girl, 2boys, solo)
@@ -512,7 +514,6 @@ Use natural language for descriptions and actions:
 Important guidelines:
 - Start with character count tags, then mix attributes and descriptions naturally
 - Be specific with booru attributes (long_hair, blue_eyes, not just "hair, eyes")
-- When generating multiple expansions, vary the interpretations
 - Output ONLY the prompt, no sentences of commentary or explanation.`;
         }
         return `You are an expert at expanding image generation prompts with rich CONTENT details.
@@ -520,6 +521,7 @@ Important guidelines:
 Your task: Take a terse prompt and expand it into a detailed description of WHAT is in the scene.
 
 CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible.
+CRITICAL: Stay focused on the EXACT subject given — do not change the topic or invent a different scenario.
 
 Focus on:
 - Subjects and characters - their appearance, posture, expression, clothing
@@ -532,15 +534,15 @@ Important guidelines:
 - Describe physical appearances rather than abstract qualities
 - If evoking mood, anchor it to specific visual elements (lighting, color, composition)
 - Be specific about what things LOOK LIKE, not just what they ARE
-- When generating multiple expansions, introduce VARIETY in your interpretations
-- Explore different aspects, angles, or moments that honor the core concept
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       } else {
         if (isBooru) {
           return `You are an expert at generating style prompts for booru-trained SDXL models.
 
-Your task: Take a terse prompt and generate a HYBRID style prompt mixing booru tags with natural language.
+Your task: Take a terse prompt and generate a SINGLE HYBRID style prompt mixing booru tags with natural language.
+
+CRITICAL: Do NOT include subject/content tags in the style prompt — focus purely on how the image looks.
 
 Use booru tags for:
 - Quality tags (masterpiece, best_quality, absurdres, highres)
@@ -555,7 +557,6 @@ Use natural language for:
 Important guidelines:
 - Always start with quality tags (masterpiece, best_quality)
 - Mix technical booru tags with descriptive natural language naturally
-- When generating multiple expansions, vary the style choices
 - Output ONLY the prompt, no sentences of commentary or explanation.`;
         }
         return `You are an expert at expanding image generation prompts with rich STYLE details.
@@ -563,6 +564,7 @@ Important guidelines:
 Your task: Take a terse prompt and expand it into a detailed description of HOW the image should look.
 
 CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe the visual effects, not just name the techniques.
+CRITICAL: Do NOT include subject/content details — focus purely on visual style.
 
 Focus on:
 - Lighting (direction, quality, color temperature, shadow characteristics)
@@ -575,10 +577,8 @@ Focus on:
 Important guidelines:
 - Describe what the visual effect LOOKS LIKE, not just the technique name
   (e.g., "soft diffused shadows with gentle falloff" not just "soft lighting")
-- When generating multiple expansions, introduce VARIETY in your style choices
-- Explore different lighting scenarios, compositions, or artistic approaches
+- Derive style cues from the user's request (mood, setting, and subject inform the aesthetic)
 - Be specific about technical choices rather than using vague terms
-- Consider how style choices produce specific visual results
 
 Output ONLY the expanded prompt, no preamble or commentary.`;
       }
