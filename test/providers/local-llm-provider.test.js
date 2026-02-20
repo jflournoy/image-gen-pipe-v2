@@ -633,6 +633,36 @@ describe('LocalLLMProvider', () => {
       assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
     });
 
+    test('should strip "Remove duplicates:" prefix from repeated output', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'quality: masterpiece, tag1, tag2, tag1\n\nRemove duplicates: quality: masterpiece, tag1, tag2\n\nThese are your combined and deduplicated tags.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'masterpiece, tag1, tag2');
+    });
+
+    test('should strip "These are your..." trailing explanation', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'tag1, tag2, tag3\n\nThese are your combined and deduplicated tags.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should strip "quality:" prefix from tag lists', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'quality: masterpiece, best_quality, 1girl, dramatic_lighting';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'masterpiece, best_quality, 1girl, dramatic_lighting');
+    });
+
+    test('should strip trailing period from tag lists', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'masterpiece, tag1, tag2, bloom, lens_flare.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'masterpiece, tag1, tag2, bloom, lens_flare');
+    });
+
+    test('should handle multi-paragraph output taking last substantial paragraph', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'raw tags here, with duplicates\n\nDeduplicated: clean_tag1, clean_tag2, clean_tag3';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'clean_tag1, clean_tag2, clean_tag3');
+    });
+
     test('should apply cleanup in refinePrompt responses', async () => {
       const provider = new LocalLLMProvider();
 
