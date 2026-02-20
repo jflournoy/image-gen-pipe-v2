@@ -112,22 +112,22 @@ Current ${focusMetric}
 
 Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'what' ? 'content alignment' : 'visual style'}.`;
       } else {
-        // Dimension-aware expansion/refinement
+        // Dimension-aware expansion: expand the user's prompt into what/how details
         if (dimension === 'what') {
           if (isBooru) {
-            systemPrompt = 'You are a prompt generator for booru-trained SDXL models, focused on CONTENT (WHAT). Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for categorical attributes (1girl, blue_eyes, long_hair, school_uniform) and natural language phrases for descriptions and actions (e.g., "standing in a sunlit meadow", "looking over her shoulder with a gentle smile"). Start with character count tags (1girl, solo, etc.), then mix attributes and descriptions naturally. Output ONLY the prompt, no explanations.';
-            userPromptText = `Generate CONTENT prompt for booru-trained model: "${prompt}"`;
+            systemPrompt = 'You are a prompt generator for booru-trained SDXL models describing CONTENT (WHAT). CRITICAL: Generate a prompt for the EXACT subject given — do not change the topic or invent a different scenario. Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for categorical attributes (1girl, blue_eyes, long_hair, school_uniform) and natural language phrases for descriptions and actions. Do NOT add section labels, category prefixes, or numbering. Output ONLY the prompt, nothing else.';
+            userPromptText = `User request: "${prompt}"\n\nWHAT (content):`;
           } else {
-            systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Describe physical appearances rather than abstract qualities. If evoking mood, anchor it to specific visual elements.';
-            userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
+            systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). CRITICAL: Expand the EXACT subject given — do not change the topic or invent a different scenario. Use CONCRETE VISUAL LANGUAGE — describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Output ONLY the expanded description, no labels or commentary.';
+            userPromptText = `User request: "${prompt}"\n\nWHAT (content):`;
           }
         } else {
           if (isBooru) {
-            systemPrompt = 'You are a prompt generator for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for quality (masterpiece, best_quality, absurdres, highres) and technical terms (depth_of_field, bokeh, chromatic_aberration). Use natural language for describing lighting and atmosphere (e.g., "warm golden hour lighting with long shadows", "soft diffused glow"). Start with quality tags, then mix style tags and descriptions naturally. Output ONLY the prompt, no explanations.';
-            userPromptText = `Generate STYLE prompt for booru-trained model: "${prompt}"`;
+            systemPrompt = 'You are a prompt generator for booru-trained SDXL models describing VISUAL STYLE (HOW). Generate a HYBRID style prompt mixing booru tags with natural language. Start with quality tags (masterpiece, best_quality, absurdres, highres), then add technical terms (depth_of_field, bokeh, chromatic_aberration) and natural language for lighting and atmosphere. Do NOT copy subject/content tags from the user request into the style prompt. Do NOT add section labels. Output ONLY the style prompt as a flat list, nothing else.';
+            userPromptText = `User request: "${prompt}"\n\nHOW (style):`;
           } else {
-            systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE - describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Describe what effects LOOK LIKE, e.g., "soft diffused shadows with gentle falloff" not just "soft lighting".';
-            userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
+            systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE — describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Derive style cues from the user\'s request (mood, setting, and subject inform the style). Output ONLY the style description, no labels or commentary.';
+            userPromptText = `User request: "${prompt}"\n\nHOW (style):`;
           }
         }
       }
@@ -357,30 +357,64 @@ Negative prompt:`;
   _cleanLLMResponse(text) {
     let cleaned = text;
 
+    // 0. Fix escaped underscores (model uses markdown formatting for booru tags)
+    cleaned = cleaned.replace(/\\_/g, '_');
+
+    // 0b. Collapse multiple quoted sections into one flat list
+    //     e.g. "masterpiece, best_quality" "warm tones, bokeh" → masterpiece, best_quality, warm tones, bokeh
+    if (/^"[^"]*"(\s+"[^"]*")+/.test(cleaned)) {
+      // Replace boundaries between quoted sections with ", " then strip outer quotes
+      cleaned = cleaned.replace(/"\s+"/g, ', ').replace(/^"|"$/g, '').replace(/,\s*,/g, ',').trim();
+    }
+
     // 1. Remove trailing explanation/note blocks (everything after double-newline + marker)
     cleaned = cleaned.replace(/\n\n\s*(Explanation|Note|The combined|The revised|The improved|Additionally|Furthermore|These are|In summary|To summarize|I (?:also |have )?(?:removed|replaced|adjusted|added|simplified|restructured))[\s\S]*/i, '');
 
-    // 2. If multiple paragraphs remain, take the last substantial one
+    // 2. Handle numbered lists — take only the first item
+    //    e.g. "1. "A young boy..." 2. "Elegant woman..."" → first item only
+    const numberedListMatch = cleaned.match(/^(?:\d+\.\s+["']?)(.+?)["']?\s*(?:\n|$)/);
+    if (numberedListMatch && /^\d+\.\s+/m.test(cleaned.slice(numberedListMatch[0].length))) {
+      cleaned = numberedListMatch[1];
+    }
+
+    // 3. If multiple paragraphs remain, take the last substantial one
     //    (model sometimes outputs raw tags, then a "deduplicated" version)
     const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim().length > 0);
     if (paragraphs.length > 1) {
       cleaned = paragraphs[paragraphs.length - 1];
     }
 
-    // 3. Remove action prefixes like "Remove duplicates:", "Deduplicated:", "Combined and deduplicated:"
+    // 3b. Handle labeled multi-line sections (quality: ...\nartistic_style: ...)
+    //     Strip the labels and join lines as a flat comma-separated list
+    const singleLines = cleaned.split('\n').filter(l => l.trim().length > 0);
+    if (singleLines.length > 1 && singleLines.every(l => /^\w[\w_ ]*:\s*\S/.test(l.trim()))) {
+      cleaned = singleLines.map(l => l.replace(/^\w[\w_ ]*:\s*/, '').trim()).join(', ');
+    }
+
+    // 4. Remove action prefixes like "Remove duplicates:", "Deduplicated:", "Combined and deduplicated:"
     cleaned = cleaned.replace(/^(?:Remove\s+duplicates|Deduplicated|Combined(?:\s+and\s+deduplicated)?|Merged)\s*:\s*/i, '');
 
-    // 4. Remove label preambles like "Improved WHAT tags:", "Here are the tags:", etc.
+    // 5. Remove label preambles like "Improved WHAT tags:", "Here are the tags:", etc.
     cleaned = cleaned.replace(/^(?:(?:Improved|Refined|Updated|Generated|Combined|Here (?:are|is)(?: the)?)\s+)?(?:comma-separated\s+)?(?:WHAT|HOW|CONTENT|STYLE|booru|SDXL)?\s*(?:tags|prompt|booru tags|result)\s*:\s*/i, '');
 
-    // 5. Strip "quality:" prefix (model sometimes labels tag lists this way)
+    // 5b. Strip combined/description meta-commentary prefixes
+    //     e.g. "Combined natural language phrases:", "Natural language description:", "Generative description:"
+    cleaned = cleaned.replace(/^(?:Combined\s+natural\s+language\s+(?:phrases|description)|Natural\s+language\s+(?:description|phrases)|Generative\s+description)\s*:\s*/i, '');
+
+    // 5c. Strip instruction-echo patterns (model repeating the userPromptText anchor)
+    //     e.g. "WHAT (content):", "HOW (style):", "Input: "..." WHAT (content):"
+    cleaned = cleaned.replace(/^(?:WHAT\s*\(content\)|HOW\s*\(style\))\s*:\s*/i, '');
+    // Strip full instruction-echo: "Generate CONTENT/STYLE prompt for booru-trained model: "...""
+    cleaned = cleaned.replace(/^Generate\s+(?:CONTENT|STYLE)\s+(?:prompt|tags)\s+(?:for\s+booru-trained\s+model\s*)?:\s*["']?/i, '');
+
+    // 6. Strip "quality:" prefix (model sometimes labels tag lists this way)
     cleaned = cleaned.replace(/^quality\s*:\s*/i, '');
 
-    // 6. Strip surrounding quotes (the LLM often wraps output in quotes)
+    // 7. Strip surrounding quotes (the LLM often wraps output in quotes)
     cleaned = cleaned.replace(/^["']|["']$/g, '');
 
-    // 7. Strip trailing period from tag lists (model adds sentence-ending punctuation)
-    cleaned = cleaned.replace(/\.\s*$/, '');
+    // 8. Strip trailing period from tag lists (but not ellipses like ...)
+    cleaned = cleaned.replace(/(?<![.])\.\s*$/, '');
 
     return cleaned.trim();
   }
