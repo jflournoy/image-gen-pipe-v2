@@ -63,10 +63,12 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     bflOptions,
     modalOptions,
     loraOptions,
+    promptStyle = 'natural',  // 'natural' (sentences) or 'booru' (comma-separated tags for anime models)
     rankingMode = 'vlm',  // 'vlm' (LocalVLMProvider tournament) or 'scoring' (CLIP/aesthetic only)
     fixFaces = false,  // Enable face fixing
     restorationStrength = 0.5,  // GFPGAN restoration strength (0.0=preserve, 1.0=full restoration)
-    faceUpscale = 1  // Face fixing upscale factor (1 or 2)
+    faceUpscale = 1,  // Face fixing upscale factor (1 or 2)
+    return_intermediate_images = false  // Return base image before face fixing for debugging
   } = params;
 
   // Log BFL options if provided
@@ -157,6 +159,10 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       ...(models?.llm && { model: models.llm })
     });
 
+    // Determine the actual model for provider construction
+    // modalOptions.model overrides the default so modelType is set correctly (e.g., SDXL vs Flux)
+    const imageModel = models?.imageGen || modalOptions?.model;
+
     const providers = {
       llm: llmProvider,
       imageGen: createImageProvider({
@@ -165,7 +171,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
         apiKey: userApiKey,
         llmProvider: llmProvider,  // Pass LLM for content moderation rephrasing (BFL)
         outputDir: OUTPUT_DIR,     // Required for VLM access - must be absolute path (Issue #33)
-        ...(models?.imageGen && { model: models.imageGen })
+        ...(imageModel && { model: imageModel })
       }),
       vision: createVisionProvider({
         mode: 'real',
@@ -216,9 +222,9 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     });
 
     // Warn user if using expensive fallback image model
-    const imageModel = providers.imageGen.model;
+    const actualImageModel = providers.imageGen.model;
     const orgRegistered = process.env.OPENAI_ORG_REGISTERED_FOR_GPT5_IMAGE === 'true';
-    if (imageModel === 'gpt-image-1' && !orgRegistered && !models?.imageGen) {
+    if (actualImageModel === 'gpt-image-1' && !orgRegistered && !models?.imageGen) {
       emitProgress(jobId, {
         type: 'warning',
         timestamp: new Date().toISOString(),
@@ -240,6 +246,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       temperature,
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
+      promptStyle, // 'natural' (sentences) or 'booru' (comma-separated tags)
       autoGenerateNegativePrompts, // Enable/disable negative prompt auto-generation
       ...(negativePrompt && { negativePrompt }), // Optional manual override
       ...(negativePromptFallback && { negativePromptFallback }), // Fallback if generation fails
@@ -248,6 +255,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       ...(modalOptions && { modalOptions }), // Pass Modal generation options (model, steps, guidance, gpu, seed)
       ...(loraOptions && { loraOptions }), // Pass LoRA options (path, scale) for Flux provider
       ...(fixFaces && { fixFaces, restorationStrength, faceUpscale }), // Pass face fixing options (enabled, fidelity, upscale)
+      ...(return_intermediate_images && { return_intermediate_images }), // Return base image before face fixing
       sessionId,       // Pass session ID for image URL construction
       metadataTracker, // Pass metadata tracker to beam search
       tokenTracker,    // Pass token tracker for cost tracking

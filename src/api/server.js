@@ -82,7 +82,7 @@ export function createApp() {
 
   // Beam search endpoint
   app.post('/api/beam-search', (req, res) => {
-    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale } = req.body;
+    const { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, promptStyle, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale, return_intermediate_images } = req.body;
     const userApiKey = req.headers['x-openai-api-key'];
 
     // Check if OpenAI providers are being used
@@ -131,13 +131,15 @@ export function createApp() {
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
       useSeparateEvaluations, // Use separate alignment/aesthetics evaluations in VLM
+      promptStyle, // 'natural' (sentences) or 'booru' (comma-separated tags)
       models, // Pass user-selected models (if provided)
       fluxOptions, // Pass Flux generation options (steps, guidance)
       bflOptions,  // Pass BFL generation options (safety_tolerance, width, height)
       modalOptions, // Pass Modal generation options (model, steps, guidance, gpu)
       fixFaces, // Pass face fixing enable flag
       restorationStrength, // Pass face fixing fidelity (0.0-1.0)
-      faceUpscale // Pass face fixing upscale factor (1 or 2)
+      faceUpscale, // Pass face fixing upscale factor (1 or 2)
+      return_intermediate_images // Return base image before face fixing for debugging
     }, userApiKey).catch(error => {
       console.error(`Error in beam search job ${jobId}:`, error);
     });
@@ -146,7 +148,7 @@ export function createApp() {
     res.status(200).json({
       jobId,
       status: 'started',
-      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale }
+      params: { prompt, n, m, iterations, alpha, temperature, descriptiveness, varyDescriptivenessRandomly, useSeparateEvaluations, promptStyle, models, fluxOptions, bflOptions, modalOptions, fixFaces, restorationStrength, faceUpscale, return_intermediate_images }
     });
   });
 
