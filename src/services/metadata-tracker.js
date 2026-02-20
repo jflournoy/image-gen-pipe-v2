@@ -251,7 +251,8 @@ class MetadataTracker {
     candidate.negativePromptMetadata = results.negativePromptMetadata || null;
     candidate.image = {
       url: results.image.url,
-      localPath: results.image.localPath
+      localPath: results.image.localPath,
+      ...(results.image.baseImagePath && { baseImagePath: results.image.baseImagePath })
     };
 
     // Handle evaluation (null when using ranking-based flow)

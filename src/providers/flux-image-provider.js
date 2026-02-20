@@ -116,6 +116,9 @@ class FluxImageProvider {
           if (options.face_upscale !== undefined) {
             payload.face_upscale = options.face_upscale;
           }
+          if (options.return_intermediate_images !== undefined) {
+            payload.return_intermediate_images = options.return_intermediate_images;
+          }
 
           // Timeouts include model load time (Flux reload after GPU swap takes ~7-10 min)
           // Normal generation (model may need reloading): 15 minutes
@@ -149,6 +152,7 @@ class FluxImageProvider {
           // Check both constructor sessionId and options.sessionId for flexibility
           const sessionId = options.sessionId || this.sessionId;
           let finalPath = result.localPath;
+          let baseImagePath = null;
           if (sessionId && options.iteration !== undefined && options.candidateId !== undefined) {
             try {
               finalPath = await this._saveToSessionDir(result.localPath, options.iteration, options.candidateId, sessionId);
@@ -156,10 +160,21 @@ class FluxImageProvider {
             } catch (copyError) {
               console.warn(`[Flux Provider] Could not copy to session dir, using temp path: ${copyError.message}`);
             }
+
+            // Save base image if returned (pre-face-fixing)
+            if (result.base_image) {
+              try {
+                const baseImageBuffer = Buffer.from(result.base_image, 'base64');
+                baseImagePath = await this._saveBufferToSessionDir(baseImageBuffer, options.iteration, options.candidateId, sessionId, 'base');
+                console.log(`[Flux Provider] Saved base image to: ${baseImagePath}`);
+              } catch (e) {
+                console.warn(`[Flux Provider] Could not save base image: ${e.message}`);
+              }
+            }
           }
 
           // Return result in provider interface format
-          return {
+          const resultObj = {
             url: undefined, // Local provider doesn't use URLs
             localPath: finalPath,
             revisedPrompt: result.metadata?.revisedPrompt || undefined,
@@ -176,6 +191,12 @@ class FluxImageProvider {
               ...result.metadata
             }
           };
+
+          if (baseImagePath) {
+            resultObj.baseImagePath = baseImagePath;
+          }
+
+          return resultObj;
         } catch (error) {
           // Let connection errors pass through to ServiceConnection for retry/restart
           if (error.code === 'ECONNREFUSED' || error.message?.includes('ECONNREFUSED')) {
@@ -228,6 +249,28 @@ class FluxImageProvider {
 
     // Copy the file (don't move in case Flux service needs it)
     await fs.copyFile(tempPath, finalPath);
+
+    return finalPath;
+  }
+
+  /**
+   * Save image buffer to session directory (for base64-decoded images like base_image)
+   * @param {Buffer} imageBuffer - PNG image data
+   * @param {number} iteration - Iteration number
+   * @param {number} candidateId - Candidate ID
+   * @param {string} sessionId - Session ID for path construction
+   * @param {string} suffix - Filename suffix (e.g., 'base')
+   * @returns {Promise<string>} Final path in session directory
+   * @private
+   */
+  async _saveBufferToSessionDir(imageBuffer, iteration, candidateId, sessionId, suffix = '') {
+    const sessionDir = OutputPathManager.buildSessionPath(this.outputDir, sessionId);
+    const suffixPart = suffix ? `-${suffix}` : '';
+    const filename = `iter${iteration}-cand${candidateId}${suffixPart}.png`;
+    const finalPath = path.join(sessionDir, filename);
+
+    await fs.mkdir(sessionDir, { recursive: true });
+    await fs.writeFile(finalPath, imageBuffer);
 
     return finalPath;
   }
