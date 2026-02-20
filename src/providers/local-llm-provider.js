@@ -51,6 +51,7 @@ class LocalLLMProvider {
    * @param {string} prompt - Original prompt to refine
    * @param {Object} options - Refinement options
    * @param {string} options.dimension - 'what' (content) or 'how' (style)
+   * @param {string} options.promptStyle - 'natural' (sentences) or 'booru' (comma-separated tags)
    * @param {Object} options.previousResult - Previous generation result for critique-based refinement (test interface)
    * @param {Object} options.critique - Structured critique from CritiqueGenerator (pipeline interface)
    * @param {string} options.userPrompt - Original user request (for alignment)
@@ -62,14 +63,22 @@ class LocalLLMProvider {
       let systemPrompt;
       let userPromptText;
 
+      const isBooru = options.promptStyle === 'booru';
+
       if (options.critique) {
         // Pipeline interface: structured critique from CritiqueGenerator
         const { critique, recommendation, reason } = options.critique;
         const originalUserPrompt = options.userPrompt || prompt;
 
-        systemPrompt = dimension === 'what' ?
-          'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on the critique and recommendation, improve the prompt to better match user intent while maintaining alignment with the original request.' :
-          'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on the critique and recommendation, improve the prompt to enhance aesthetic quality and visual appeal.';
+        if (isBooru) {
+          systemPrompt = dimension === 'what' ?
+            'You are a booru tag refiner focused on CONTENT (WHAT). Based on the critique, improve the comma-separated tags to better match user intent. Output ONLY comma-separated booru tags, no sentences.' :
+            'You are a booru tag refiner focused on VISUAL STYLE (HOW). Based on the critique, improve the comma-separated style/quality tags. Output ONLY comma-separated booru tags, no sentences.';
+        } else {
+          systemPrompt = dimension === 'what' ?
+            'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on the critique and recommendation, improve the prompt to better match user intent while maintaining alignment with the original request.' :
+            'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on the critique and recommendation, improve the prompt to enhance aesthetic quality and visual appeal.';
+        }
 
         userPromptText = `Original user request: "${originalUserPrompt}"
 Current ${dimension.toUpperCase()} prompt: "${prompt}"
@@ -78,7 +87,7 @@ Critique: ${critique}
 Recommendation: ${recommendation}
 Reason: ${reason}
 
-Provide an improved ${dimension.toUpperCase()} prompt that addresses the critique while staying aligned with the original user request.`;
+Provide an improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'} that addresses the critique while staying aligned with the original user request.`;
       } else if (options.previousResult) {
         // Test interface: previousResult with scores
         const { prompt: prevPrompt, clipScore, aestheticScore, caption } = options.previousResult;
@@ -86,31 +95,47 @@ Provide an improved ${dimension.toUpperCase()} prompt that addresses the critiqu
           `CLIP score: ${clipScore}` :
           `Aesthetic score: ${aestheticScore}`;
 
-        systemPrompt = dimension === 'what' ?
-          'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score.' :
-          'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on critique, improve the prompt to enhance aesthetic quality and visual appeal.';
+        if (isBooru) {
+          systemPrompt = dimension === 'what' ?
+            'You are a booru tag refiner focused on CONTENT (WHAT). Based on critique, improve the tags to better match user intent and boost CLIP score. Output ONLY comma-separated booru tags, no sentences.' :
+            'You are a booru tag refiner focused on VISUAL STYLE (HOW). Based on critique, improve the style/quality tags to enhance aesthetic quality. Output ONLY comma-separated booru tags, no sentences.';
+        } else {
+          systemPrompt = dimension === 'what' ?
+            'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score.' :
+            'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on critique, improve the prompt to enhance aesthetic quality and visual appeal.';
+        }
 
         userPromptText = `Original prompt: "${prompt}"
 Previous result: "${prevPrompt}"
 Image caption: "${caption}"
 Current ${focusMetric}
 
-Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignment' : 'visual style'}.`;
+Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'what' ? 'content alignment' : 'visual style'}.`;
       } else {
         // Dimension-aware expansion/refinement
         if (dimension === 'what') {
-          systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Describe physical appearances rather than abstract qualities. If evoking mood, anchor it to specific visual elements.';
-          userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
+          if (isBooru) {
+            systemPrompt = 'You are a booru tag generator for CONTENT (WHAT). Generate comma-separated booru-style tags describing subjects (character count like 1girl/2boys, gender, hair color, eye color, hairstyle, clothing, accessories), actions (standing, sitting, walking), body attributes (posture, expression), and setting (indoors, outdoors, location type). Use standard booru tag format: lowercase, underscores for multi-word tags. Output ONLY comma-separated tags, no sentences.';
+            userPromptText = `Generate CONTENT booru tags for: "${prompt}"`;
+          } else {
+            systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Describe physical appearances rather than abstract qualities. If evoking mood, anchor it to specific visual elements.';
+            userPromptText = `Expand this prompt focusing on CONTENT: "${prompt}"`;
+          }
         } else {
-          systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE - describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Describe what effects LOOK LIKE, e.g., "soft diffused shadows with gentle falloff" not just "soft lighting".';
-          userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
+          if (isBooru) {
+            systemPrompt = 'You are a booru tag generator for VISUAL STYLE (HOW). Generate comma-separated booru-style tags for quality (masterpiece, best quality, absurdres, highres), artistic style (anime, realistic, oil painting), lighting (dramatic lighting, backlighting, rim lighting), composition (depth of field, wide shot, close-up), and visual effects (bloom, lens flare, chromatic aberration). Use standard booru tag format: lowercase, underscores for multi-word tags. Output ONLY comma-separated tags, no sentences.';
+            userPromptText = `Generate STYLE booru tags for: "${prompt}"`;
+          } else {
+            systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE - describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Describe what effects LOOK LIKE, e.g., "soft diffused shadows with gentle falloff" not just "soft lighting".';
+            userPromptText = `Expand this prompt focusing on STYLE: "${prompt}"`;
+          }
         }
       }
 
       const fullPrompt = `${systemPrompt}\n\n${userPromptText}`;
 
       const { text, usage } = await this._generate(fullPrompt, options);
-      const refinedPrompt = text.trim();
+      const refinedPrompt = this._cleanLLMResponse(text);
 
       // Return object matching OpenAI provider interface
       return {
@@ -137,21 +162,36 @@ Provide an improved prompt focusing on ${dimension === 'what' ? 'content alignme
     try {
       // Get descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       const descriptiveness = options.descriptiveness || 2;
+      const isBooru = options.promptStyle === 'booru';
 
-      // Build system prompt based on descriptiveness level
+      // Build system prompt based on descriptiveness level and prompt style
       let systemPrompt;
-      if (descriptiveness === 1) {
-        // Concise: FORCE brevity and minimalism
-        systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be BRIEF and MINIMAL. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual. Output ONLY the combined prompt - NO explanations. Keep it SHORT.';
-      } else if (descriptiveness === 3) {
-        // Descriptive: FORCE comprehensiveness and detail
-        systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED. CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, materials, spatial relationships. Describe subjects: posture, expression, clothing, positioning. Describe environment: concrete spatial details, depth, scale. Describe style: lighting direction and quality, color palette, composition, visual techniques. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy"). Avoid vague qualifiers like "beautiful" or "amazing" - describe HOW things look. Write a description that a viewer could verify against the actual image. Make it LONG and DETAILED.';
+      if (isBooru) {
+        // Booru mode: combine tag lists
+        if (descriptiveness === 1) {
+          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a single comma-separated list. Keep it MINIMAL: remove redundant tags, keep only the most important ones. Order: quality tags first (masterpiece, best quality), then subject tags, then style/composition tags. Output ONLY comma-separated tags, no sentences or explanations.';
+        } else if (descriptiveness === 3) {
+          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a COMPREHENSIVE comma-separated list. Include ALL relevant tags from both dimensions. Add related tags that enhance the description (e.g., add "detailed eyes" if eye color is specified). Order: quality tags first (masterpiece, best quality, absurdres, highres), then subject tags (character details, clothing, accessories), then setting tags, then style/composition tags. Be THOROUGH - more tags is better. Output ONLY comma-separated tags, no sentences or explanations.';
+        } else {
+          systemPrompt = 'You are a booru tag combiner. Merge WHAT and HOW tags into a BALANCED comma-separated list. Remove duplicates, preserve all meaningful tags from both dimensions. Order: quality tags first (masterpiece, best quality), then subject tags, then setting tags, then style/composition tags. Output ONLY comma-separated tags, no sentences or explanations.';
+        }
       } else {
-        // Balanced (default): moderate detail with focus
-        systemPrompt = 'You are an SDXL prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, spatial relationships. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling"). Avoid vague qualifiers like "beautiful" - describe HOW things look. Preserve ALL meaningful details from both WHAT and HOW dimensions. Write a description that a viewer could verify against the actual image.';
+        // Natural language mode (existing behavior)
+        if (descriptiveness === 1) {
+          systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be BRIEF and MINIMAL. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual. Output ONLY the combined prompt - NO explanations. Keep it SHORT.';
+        } else if (descriptiveness === 3) {
+          systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED. CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, materials, spatial relationships. Describe subjects: posture, expression, clothing, positioning. Describe environment: concrete spatial details, depth, scale. Describe style: lighting direction and quality, color palette, composition, visual techniques. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy"). Avoid vague qualifiers like "beautiful" or "amazing" - describe HOW things look. Write a description that a viewer could verify against the actual image. Make it LONG and DETAILED.';
+        } else {
+          systemPrompt = 'You are an SDXL prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, spatial relationships. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling"). Avoid vague qualifiers like "beautiful" - describe HOW things look. Preserve ALL meaningful details from both WHAT and HOW dimensions. Write a description that a viewer could verify against the actual image.';
+        }
       }
 
-      const userPrompt = `WHAT prompt: ${whatPrompt || '(none)'}
+      const userPrompt = isBooru
+        ? `WHAT tags: ${whatPrompt || '(none)'}
+HOW tags: ${howPrompt || '(none)'}
+
+Combined booru tags:`
+        : `WHAT prompt: ${whatPrompt || '(none)'}
 HOW prompt: ${howPrompt || '(none)'}
 
 Combined SDXL prompt:`;
@@ -159,7 +199,7 @@ Combined SDXL prompt:`;
       const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
 
       const { text, usage } = await this._generate(fullPrompt);
-      const combinedPrompt = text.trim();
+      const combinedPrompt = this._cleanLLMResponse(text);
 
       // Return object matching OpenAI provider interface
       return {
@@ -215,7 +255,17 @@ Combined SDXL prompt:`;
     }
 
     try {
-      const systemPrompt = `You are an expert at generating negative prompts for SDXL image generation.
+      const isBooru = options.promptStyle === 'booru';
+
+      const systemPrompt = isBooru
+        ? `You are an expert at generating negative prompt tags for SDXL anime/booru-style image generation.
+
+Generate comma-separated negative tags. Always include these standard quality negatives:
+lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry
+
+Add context-specific negative tags based on the positive prompt to prevent unwanted elements.
+Output ONLY comma-separated tags, nothing else.`
+        : `You are an expert at generating negative prompts for SDXL image generation.
 
 Your task: Given a positive prompt, generate a negative prompt that:
 1. Prevents common artifacts (blurry, low quality, distorted, deformed, etc.)
@@ -249,7 +299,7 @@ Negative prompt:`;
         stop: ['\n\n', 'Positive:', 'Example:']
       });
 
-      const negativePrompt = text.trim();
+      const negativePrompt = this._cleanLLMResponse(text);
       const generationTime = Date.now() - startTime;
 
       return {
@@ -294,6 +344,29 @@ Negative prompt:`;
     } catch (error) {
       throw new Error(`Failed to generate text: ${error.message}`);
     }
+  }
+
+  /**
+   * Strip preamble, explanations, and notes from LLM output
+   * Local models often include "Improved WHAT tags: ...", "Explanation: ...", etc.
+   * despite system prompts telling them not to.
+   * @private
+   * @param {string} text - Raw LLM output
+   * @returns {string} Cleaned text with only the desired content
+   */
+  _cleanLLMResponse(text) {
+    let cleaned = text;
+
+    // Remove trailing explanation/note blocks (everything after double-newline + marker)
+    cleaned = cleaned.replace(/\n\n\s*(Explanation|Note|The combined|The revised|The improved|Additionally|Furthermore|I (?:also |have )?(?:removed|replaced|adjusted|added|simplified|restructured))[\s\S]*/i, '');
+
+    // Remove preamble patterns like "Improved WHAT tags:", "Improved comma-separated WHAT tags:", etc.
+    cleaned = cleaned.replace(/^(?:(?:Improved|Refined|Updated|Generated|Combined|Here (?:are|is)(?: the)?)\s+)?(?:comma-separated\s+)?(?:WHAT|HOW|CONTENT|STYLE|booru|SDXL)?\s*(?:tags|prompt|booru tags|result)\s*:\s*/i, '');
+
+    // Strip surrounding quotes (the LLM often wraps output in quotes)
+    cleaned = cleaned.replace(/^["']|["']$/g, '');
+
+    return cleaned.trim();
   }
 
   /**

@@ -549,6 +549,119 @@ describe('LocalLLMProvider', () => {
     });
   });
 
+  describe('_cleanLLMResponse', () => {
+    test('should strip "Improved WHAT tags:" preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Improved WHAT tags: "tag1, tag2, tag3"';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should strip "Improved comma-separated WHAT tags:" preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Improved comma-separated WHAT tags: "lithe_nymph, college_woman, naked"';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'lithe_nymph, college_woman, naked');
+    });
+
+    test('should strip trailing Explanation block', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'tag1, tag2, tag3\n\nExplanation: The critique suggests addressing weaknesses to improve content alignment.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should strip trailing Note block', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'tag1, tag2, tag3\n\nNote: There are duplicate tags due to both WHAT and HOW lists containing them.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should strip both preamble and explanation (real-world case)', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Improved WHAT tags: "college_woman, nymph-like, lithe_build, naked"\n\nExplanation: The revised WHAT tags focus on content that aligns with the user request.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'college_woman, nymph-like, lithe_build, naked');
+    });
+
+    test('should strip "The combined tags" trailing commentary', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'masterpiece, tag1, tag2\n\nThe combined tags are ordered based on the given hierarchy.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'masterpiece, tag1, tag2');
+    });
+
+    test('should strip "Additionally" trailing commentary', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'tag1, tag2\n\nAdditionally, the tags have been restructured for improved readability.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2');
+    });
+
+    test('should strip "I removed" trailing commentary', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'tag1, tag2\n\nI removed "gorgeous" as it is subjective.';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2');
+    });
+
+    test('should strip "Refined HOW prompt:" preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Refined HOW prompt: "dramatic lighting, oil painting style"';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'dramatic lighting, oil painting style');
+    });
+
+    test('should strip "Here are the tags:" preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Here are the tags: tag1, tag2, tag3';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should strip "Here is the prompt:" preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'Here is the prompt: A golden retriever in a meadow';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'A golden retriever in a meadow');
+    });
+
+    test('should pass through clean text unchanged', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'masterpiece, best_quality, 1girl, dramatic_lighting';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'masterpiece, best_quality, 1girl, dramatic_lighting');
+    });
+
+    test('should handle whitespace-only input', () => {
+      const provider = new LocalLLMProvider();
+      assert.strictEqual(provider._cleanLLMResponse('  \n  '), '');
+    });
+
+    test('should strip surrounding quotes without preamble', () => {
+      const provider = new LocalLLMProvider();
+      const input = '"tag1, tag2, tag3"';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'tag1, tag2, tag3');
+    });
+
+    test('should apply cleanup in refinePrompt responses', async () => {
+      const provider = new LocalLLMProvider();
+
+      nock('http://localhost:8003')
+        .post('/v1/completions')
+        .reply(200, {
+          choices: [{ text: 'Improved WHAT tags: "tag1, tag2"\n\nExplanation: I improved the tags.', finish_reason: 'stop' }],
+          usage: { total_tokens: 50 }
+        });
+
+      const result = await provider.refinePrompt('test', { dimension: 'what' });
+      assert.strictEqual(result.refinedPrompt, 'tag1, tag2');
+    });
+
+    test('should apply cleanup in combinePrompts responses', async () => {
+      const provider = new LocalLLMProvider();
+
+      nock('http://localhost:8003')
+        .post('/v1/completions')
+        .reply(200, {
+          choices: [{ text: 'masterpiece, tag1, tag2\n\nNote: Duplicates were removed.', finish_reason: 'stop' }],
+          usage: { total_tokens: 50 }
+        });
+
+      const result = await provider.combinePrompts('what content', 'how style');
+      assert.strictEqual(result.combinedPrompt, 'masterpiece, tag1, tag2');
+    });
+  });
+
   describe('OpenAI compatibility', () => {
     test('should format request as OpenAI completions API', async () => {
       const provider = new LocalLLMProvider();
