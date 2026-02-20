@@ -487,7 +487,7 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
-  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness, varyDescriptivenessRandomly } = options;
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness, varyDescriptivenessRandomly, promptStyle } = options;
   const candidateId_str = `i${iteration}c${candidateId}`;
 
   // Progress: Combine start
@@ -507,7 +507,7 @@ async function processCandidateStream(
 
   // Stage 1: Combine prompts with descriptiveness level
   const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness });
+  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle });
   const combined = combineResult.combinedPrompt;
 
   console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -564,7 +564,8 @@ async function processCandidateStream(
         const generator = options.negativePromptGenerator || llmProvider;
         const negativeResult = await generator.generateNegativePrompt(combined, {
           enabled: true,
-          fallback: options.negativePromptFallback
+          fallback: options.negativePromptFallback,
+          promptStyle
         });
 
         negativePrompt = negativeResult.negativePrompt;
@@ -669,6 +670,8 @@ async function processCandidateStream(
         restoration_strength: options.restorationStrength ?? 0.5,
         face_upscale: options.faceUpscale ?? 1
       }),
+      // Return base image before face fixing for debugging
+      ...(options.return_intermediate_images && { return_intermediate_images: true }),
       // Flatten fluxOptions so they're available as top-level properties for the image generator
       ...(options.fluxOptions && {
         steps: options.fluxOptions.steps,
@@ -856,7 +859,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, varyDescriptivenessRandomly = false, metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
+  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, varyDescriptivenessRandomly = false, promptStyle = 'natural', metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
 
   // Helper to get effective descriptiveness (random 1-3 or fixed value)
   const getEffectiveDescriptiveness = () => {
@@ -904,12 +907,14 @@ async function initialExpansion(
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
           dimension: 'what',
           operation: 'expand',
-          temperature
+          temperature,
+          promptStyle
         })),
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
           dimension: 'how',
           operation: 'expand',
-          temperature
+          temperature,
+          promptStyle
         }))
       ]);
 
@@ -994,7 +999,7 @@ async function initialExpansion(
 
           const effectiveDescriptiveness = getEffectiveDescriptiveness();
           const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle });
           const combined = combineResult.combinedPrompt;
 
           console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -1017,7 +1022,7 @@ async function initialExpansion(
             if (isSDXL) {
               try {
                 const generator = config.negativePromptGenerator || llmProvider;
-                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle });
                 negativePrompt = negativeResult.negativePrompt;
               } catch {
                 negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
@@ -1056,6 +1061,7 @@ async function initialExpansion(
     const sharedGenOptions = {
       sessionId: config.sessionId,
       ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.return_intermediate_images && { return_intermediate_images: true }),
       ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
       ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
       ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
@@ -1129,11 +1135,15 @@ async function initialExpansion(
           }
 
           if (metadataTracker) {
-            await metadataTracker.updateAttemptWithResults(0, r.candidateId, { combined: r.combined, image, evaluation, totalScore });
+            await metadataTracker.updateAttemptWithResults(0, r.candidateId, {
+              combined: r.combined, negativePrompt: r.negativePrompt, negativePromptMetadata: null,
+              image, evaluation, totalScore
+            });
           }
 
           const candidate = {
             whatPrompt: r.what, howPrompt: r.how, combined: r.combined,
+            negativePrompt: r.negativePrompt,
             image, evaluation, totalScore,
             metadata: { iteration: 0, candidateId: r.candidateId, dimension: 'what' }
           };
@@ -1169,7 +1179,7 @@ async function initialExpansion(
 
           const effectiveDescriptiveness = getEffectiveDescriptiveness();
           const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness });
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle });
           const combined = combineResult.combinedPrompt;
 
           console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -1196,7 +1206,7 @@ async function initialExpansion(
               }
               try {
                 const generator = config.negativePromptGenerator || llmProvider;
-                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle });
                 negativePrompt = negativeResult.negativePrompt;
                 if (tokenTracker && negativeResult.metadata?.tokensUsed) {
                   tokenTracker.recordUsage({ provider: 'llm', operation: 'negativePrompt', tokens: negativeResult.metadata.tokensUsed,
@@ -1231,6 +1241,7 @@ async function initialExpansion(
           const image = await generateImageWithSafetyRetry(combined, imageGenProvider, llmProvider, {
             iteration: 0, candidateId: i, dimension: 'what', alpha, sessionId: config.sessionId, negativePrompt,
             ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
+            ...(config.return_intermediate_images && { return_intermediate_images: true }),
             ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
             ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
             ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance }),
@@ -1442,7 +1453,7 @@ async function refinementIteration(
             // Refine the selected dimension using critique
             const refinedResult = await llmProvider.refinePrompt(
               dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-              { operation: 'refine', dimension, critique: parent.critique, userPrompt }
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle }
             );
 
             if (tokenTracker && refinedResult.metadata?.tokensUsed) {
@@ -1460,7 +1471,7 @@ async function refinementIteration(
             }
 
             const effectiveDescriptiveness = getEffectiveDescriptiveness();
-            const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness });
+            const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle: config.promptStyle });
             const combined = combineResult.combinedPrompt;
 
             if (tokenTracker && combineResult.metadata) {
@@ -1481,7 +1492,7 @@ async function refinementIteration(
               if (isSDXL) {
                 try {
                   const generator = config.negativePromptGenerator || llmProvider;
-                  const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback });
+                  const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle: config.promptStyle });
                   negativePrompt = negativeResult.negativePrompt;
                 } catch {
                   negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
@@ -1520,6 +1531,7 @@ async function refinementIteration(
     const sharedGenOptions = {
       sessionId: config.sessionId,
       ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
+      ...(config.return_intermediate_images && { return_intermediate_images: true }),
       ...(config.fluxOptions && { steps: config.fluxOptions.steps, guidance: config.fluxOptions.guidance, scheduler: config.fluxOptions.scheduler, width: config.fluxOptions.width, height: config.fluxOptions.height, loraScale: config.fluxOptions.loraScale }),
       ...(config.bflOptions && { safety_tolerance: config.bflOptions.safety_tolerance, width: config.bflOptions.width, height: config.bflOptions.height }),
       ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance })
@@ -1587,11 +1599,15 @@ async function refinementIteration(
           }
 
           if (metadataTracker) {
-            await metadataTracker.updateAttemptWithResults(iteration, r.candidateId, { combined: r.combined, image, evaluation, totalScore });
+            await metadataTracker.updateAttemptWithResults(iteration, r.candidateId, {
+              combined: r.combined, negativePrompt: r.negativePrompt, negativePromptMetadata: null,
+              image, evaluation, totalScore
+            });
           }
 
           const candidate = {
             whatPrompt: r.whatPrompt, howPrompt: r.howPrompt, combined: r.combined,
+            negativePrompt: r.negativePrompt,
             image, evaluation, totalScore,
             metadata: { iteration, candidateId: r.candidateId, dimension, parentId: r.parentId }
           };
@@ -1625,7 +1641,7 @@ async function refinementIteration(
 
             const refinedResult = await llmProvider.refinePrompt(
               dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-              { operation: 'refine', dimension, critique: parent.critique, userPrompt }
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle }
             );
 
             if (tokenTracker && refinedResult.metadata?.tokensUsed) {
@@ -1644,6 +1660,7 @@ async function refinementIteration(
                 alpha, metadataTracker, tokenTracker, skipVisionAnalysis, onStepProgress,
                 descriptiveness: config.descriptiveness,
                 varyDescriptivenessRandomly: config.varyDescriptivenessRandomly,
+                promptStyle: config.promptStyle,
                 sessionId: config.sessionId,
                 autoGenerateNegativePrompts: config.autoGenerateNegativePrompts,
                 negativePrompt: config.negativePrompt,
