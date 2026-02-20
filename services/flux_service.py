@@ -186,12 +186,14 @@ class GenerationRequest(BaseModel):
     fix_faces: bool = False  # Enable face fixing via GFPGAN
     restoration_strength: float = 0.5  # GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)
     face_upscale: Optional[int] = None  # Optional upscaling factor (1=none, 2=2x)
+    return_intermediate_images: bool = False  # Return base image before face fixing for debugging
 
 
 class GenerationResponse(BaseModel):
     """Image generation response"""
     localPath: str
     metadata: dict
+    base_image: Optional[str] = None  # Base64-encoded base image before face fixing
 
 
 def load_pipeline():
@@ -774,6 +776,16 @@ async def generate_image(request: GenerationRequest):
         if original_scheduler is not None:
             pipe.scheduler = original_scheduler
 
+        # Capture base image before face fixing if requested
+        base_image_b64 = None
+        if request.return_intermediate_images and request.fix_faces:
+            import io
+            import base64
+            buf = io.BytesIO()
+            result.images[0].save(buf, format='PNG')
+            base_image_b64 = base64.b64encode(buf.getvalue()).decode('utf-8')
+            print(f'[Flux Service] Captured base image ({len(base_image_b64)} chars base64)')
+
         # Apply face fixing if requested
         face_fix_info = None
         if request.fix_faces:
@@ -834,7 +846,8 @@ async def generate_image(request: GenerationRequest):
                 'scheduler': scheduler_to_use,
                 'loras': lora_info if lora_info else current_loras if current_loras else None,
                 'face_fixing': face_fix_info,
-            }
+            },
+            base_image=base_image_b64
         )
 
     except Exception as e:
