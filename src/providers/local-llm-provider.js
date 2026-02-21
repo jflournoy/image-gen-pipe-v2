@@ -357,6 +357,13 @@ Negative prompt:`;
   _cleanLLMResponse(text) {
     let cleaned = text;
 
+    // -2. Strip Qwen3 thinking blocks: <think>...</think> or unclosed <think> at start
+    cleaned = cleaned.replace(/<think>[\s\S]*?<\/think>\s*/g, '');
+    cleaned = cleaned.replace(/^<think>\s*/i, '');
+
+    // -1. Strip hashtag prefixes from booru tags (#tag_name → tag_name)
+    cleaned = cleaned.replace(/(^|,\s*)#(\w)/g, '$1$2');
+
     // 0. Fix escaped underscores (model uses markdown formatting for booru tags)
     cleaned = cleaned.replace(/\\_/g, '_');
 
