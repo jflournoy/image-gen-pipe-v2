@@ -9,7 +9,7 @@
 const DEFAULT_FALLBACK = 'blurry, low quality, distorted, deformed, artifacts';
 
 /**
- * System prompt for LLM negative prompt generation
+ * System prompt for LLM negative prompt generation (natural language)
  */
 const SYSTEM_PROMPT = `You are an expert at generating negative prompts for SDXL image generation.
 
@@ -32,6 +32,17 @@ Positive: "beautiful sunset over mountains"
 Negative: "blurry, low quality, no mountains, flat, urban, city, text, watermark"
 
 Now generate a negative prompt for the following positive prompt. Output ONLY the negative prompt, nothing else.`;
+
+/**
+ * System prompt for booru-style negative tag generation
+ */
+const BOORU_SYSTEM_PROMPT = `You are an expert at generating negative prompt tags for SDXL anime/booru-style image generation.
+
+Generate comma-separated negative tags. Always include these standard quality negatives:
+lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry
+
+Add context-specific negative tags based on the positive prompt to prevent unwanted elements.
+Output ONLY comma-separated tags, nothing else.`;
 
 /**
  * NegativePromptGenerator class
@@ -92,7 +103,8 @@ class NegativePromptGenerator {
 
     // Try to generate with LLM
     try {
-      const prompt = `${SYSTEM_PROMPT}\n\nPositive prompt: "${positivePrompt}"\n\nNegative prompt:`;
+      const selectedSystemPrompt = options.promptStyle === 'booru' ? BOORU_SYSTEM_PROMPT : SYSTEM_PROMPT;
+      const prompt = `${selectedSystemPrompt}\n\nPositive prompt: "${positivePrompt}"\n\nNegative prompt:`;
 
       const result = await this.llmProvider.generateCompletion(prompt, {
         temperature: this.temperature,
