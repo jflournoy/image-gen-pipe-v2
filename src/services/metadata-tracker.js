@@ -249,6 +249,11 @@ class MetadataTracker {
     candidate.combined = results.combined;
     candidate.negativePrompt = results.negativePrompt || null;
     candidate.negativePromptMetadata = results.negativePromptMetadata || null;
+    if (candidate.negativePrompt) {
+      console.log(`[MetadataTracker] Recording negative prompt for iter ${iteration} cand ${candidateId}: "${candidate.negativePrompt.substring(0, 80)}..."`);
+    } else {
+      console.log(`[MetadataTracker] No negative prompt for iter ${iteration} cand ${candidateId} (received: ${results.negativePrompt === undefined ? 'undefined' : results.negativePrompt === null ? 'null' : `"${results.negativePrompt}"`})`);
+    }
     candidate.image = {
       url: results.image.url,
       localPath: results.image.localPath,

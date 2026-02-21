@@ -754,7 +754,8 @@ class DiffusionService:
             seed = torch.randint(0, 2**32, (1,)).item()
             generator = torch.Generator(device="cuda").manual_seed(seed)
 
-        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}, scheduler={effective_scheduler}")
+        neg_info = f'negative_prompt="{negative_prompt[:80]}..."' if negative_prompt else "negative_prompt=None"
+        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}, scheduler={effective_scheduler}, {neg_info}")
         start_time = time.time()
 
         # Determine if we should use refiner (from request or model config)
@@ -861,6 +862,9 @@ class DiffusionService:
             }
             if negative_prompt and pipeline_type == "sdxl":
                 pipeline_kwargs["negative_prompt"] = negative_prompt
+                print(f"[Modal Diffusion] Applied negative_prompt to SDXL pipeline")
+            elif negative_prompt:
+                print(f"[Modal Diffusion] WARNING: negative_prompt provided but pipeline_type={pipeline_type} - NOT applied (only SDXL supports negative prompts)")
             result = self.pipeline(**pipeline_kwargs)
 
         inference_time = time.time() - start_time
@@ -1088,8 +1092,9 @@ class DiffusionService:
 
             for i, req in enumerate(batch_req.requests):
                 tag = self._get_image_tag(req)
+                neg_info = f'negative_prompt="{req.negative_prompt[:80]}..."' if req.negative_prompt else "negative_prompt=None"
                 print(f"[Modal Diffusion] Batch item {i+1}/{len(batch_req.requests)} {tag}: "
-                      f"model={req.model}, fix_faces={req.fix_faces}")
+                      f"model={req.model}, fix_faces={req.fix_faces}, {neg_info}")
                 # Skip per-image cache clear for batch; do it once at the end
                 results.append(self._generate_single(req, clear_cache=False))
 
@@ -1106,8 +1111,9 @@ class DiffusionService:
         else:
             request = GenerateRequest(**body)
             tag = self._get_image_tag(request)
+            neg_info = f'negative_prompt="{request.negative_prompt[:80]}..."' if request.negative_prompt else "negative_prompt=None"
             print(f"[Modal Diffusion] Request {tag}: fix_faces={request.fix_faces}, "
-                  f"restoration_strength={request.restoration_strength}, face_upscale={request.face_upscale}")
+                  f"restoration_strength={request.restoration_strength}, face_upscale={request.face_upscale}, {neg_info}")
             return self._generate_single(request)
 
     @modal.fastapi_endpoint(method="GET")
