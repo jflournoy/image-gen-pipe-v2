@@ -507,7 +507,7 @@ async function processCandidateStream(
 
   // Stage 1: Combine prompts with descriptiveness level
   const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle });
+  const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle, top_p, top_k });
   const combined = combineResult.combinedPrompt;
 
   console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -547,6 +547,7 @@ async function processCandidateStream(
     // Check if this is an SDXL model (supports negative prompts)
     const modelType = imageGenProvider.modelType || 'unknown';
     const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+    console.log(`[${candidateId_str}] Negative prompt check: modelType=${modelType}, isSDXL=${isSDXL}, autoGenerate=${options.autoGenerateNegativePrompts}`);
 
     if (isSDXL) {
       // Progress: Negative prompt generation starting
@@ -615,7 +616,13 @@ async function processCandidateStream(
           });
         }
       }
+    } else {
+      console.log(`[${candidateId_str}] Skipping negative prompt: model type "${modelType}" is not SDXL/modal`);
     }
+  } else if (negativePrompt) {
+    console.log(`[${candidateId_str}] Using manual negative prompt: "${negativePrompt.substring(0, 80)}..."`);
+  } else {
+    console.log(`[${candidateId_str}] Negative prompt disabled (autoGenerate=${options.autoGenerateNegativePrompts})`);
   }
 
   // DEFENSIVE PATTERN: Record attempt BEFORE risky API calls
@@ -859,7 +866,7 @@ async function initialExpansion(
   visionProvider,
   config
 ) {
-  const { beamWidth: N, temperature = 0.7, alpha = 0.7, descriptiveness = 2, varyDescriptivenessRandomly = false, promptStyle = 'natural', metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
+  const { beamWidth: N, temperature = 0.7, top_p = 0.8, top_k = 20, alpha = 0.7, descriptiveness = 2, varyDescriptivenessRandomly = false, promptStyle = 'natural', metadataTracker, tokenTracker, onCandidateProcessed, onStepProgress, abortSignal } = config;
 
   // Helper to get effective descriptiveness (random 1-3 or fixed value)
   const getEffectiveDescriptiveness = () => {
@@ -907,13 +914,13 @@ async function initialExpansion(
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
           dimension: 'what',
           operation: 'expand',
-          temperature,
+          temperature, top_p, top_k,
           promptStyle
         })),
         llmLimiter.execute(() => llmProvider.refinePrompt(userPrompt, {
           dimension: 'how',
           operation: 'expand',
-          temperature,
+          temperature, top_p, top_k,
           promptStyle
         }))
       ]);
@@ -999,7 +1006,7 @@ async function initialExpansion(
 
           const effectiveDescriptiveness = getEffectiveDescriptiveness();
           const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle });
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle, top_p, top_k });
           const combined = combineResult.combinedPrompt;
 
           console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -1019,15 +1026,24 @@ async function initialExpansion(
           if (!negativePrompt && config.autoGenerateNegativePrompts) {
             const modelType = imageGenProvider.modelType || 'unknown';
             const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+            console.log(`[${candidateId_str}] Negative prompt check: modelType=${modelType}, isSDXL=${isSDXL}, autoGenerate=${config.autoGenerateNegativePrompts}`);
             if (isSDXL) {
               try {
                 const generator = config.negativePromptGenerator || llmProvider;
                 const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle });
                 negativePrompt = negativeResult.negativePrompt;
-              } catch {
+                console.log(`[${candidateId_str}] Negative prompt generated: "${negativePrompt?.substring(0, 80)}..."`);
+              } catch (err) {
                 negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
+                console.warn(`[${candidateId_str}] Negative prompt generation failed, using fallback: ${err.message}`);
               }
+            } else {
+              console.log(`[${candidateId_str}] Skipping negative prompt: model type "${modelType}" is not SDXL/modal`);
             }
+          } else if (negativePrompt) {
+            console.log(`[${candidateId_str}] Using manual negative prompt: "${negativePrompt.substring(0, 80)}..."`);
+          } else {
+            console.log(`[${candidateId_str}] Negative prompt disabled (autoGenerate=${config.autoGenerateNegativePrompts})`);
           }
 
           // Record attempt before image gen
@@ -1179,7 +1195,7 @@ async function initialExpansion(
 
           const effectiveDescriptiveness = getEffectiveDescriptiveness();
           const descriptiveLabels = ['', 'concise', 'balanced', 'descriptive'];
-          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle });
+          const combineResult = await llmProvider.combinePrompts(what, how, { descriptiveness: effectiveDescriptiveness, promptStyle, top_p, top_k });
           const combined = combineResult.combinedPrompt;
 
           console.log(`[${candidateId_str}] Combined prompt (${descriptiveLabels[effectiveDescriptiveness]}, level ${effectiveDescriptiveness}): ${combined.length} chars`);
@@ -1199,6 +1215,7 @@ async function initialExpansion(
           if (!negativePrompt && config.autoGenerateNegativePrompts) {
             const modelType = imageGenProvider.modelType || 'unknown';
             const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+            console.log(`[${candidateId_str}] Negative prompt check: modelType=${modelType}, isSDXL=${isSDXL}, autoGenerate=${config.autoGenerateNegativePrompts}`);
             if (isSDXL) {
               if (onStepProgress) {
                 onStepProgress({ stage: 'negativePrompt', status: 'starting', candidateId: candidateId_str,
@@ -1208,6 +1225,7 @@ async function initialExpansion(
                 const generator = config.negativePromptGenerator || llmProvider;
                 const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle });
                 negativePrompt = negativeResult.negativePrompt;
+                console.log(`[${candidateId_str}] Negative prompt generated: "${negativePrompt?.substring(0, 80)}..."`);
                 if (tokenTracker && negativeResult.metadata?.tokensUsed) {
                   tokenTracker.recordUsage({ provider: 'llm', operation: 'negativePrompt', tokens: negativeResult.metadata.tokensUsed,
                     metadata: { model: negativeResult.metadata.model, iteration: 0, candidateId: i, operation: 'negativePrompt' } });
@@ -1225,6 +1243,8 @@ async function initialExpansion(
                     message: `⚠️ ${candidateId_str}: Using fallback negative prompt` });
                 }
               }
+            } else {
+              console.log(`[${candidateId_str}] Skipping negative prompt: model type "${modelType}" is not SDXL/modal`);
             }
           }
 
@@ -1288,7 +1308,7 @@ async function initialExpansion(
           }
 
           if (metadataTracker) {
-            await metadataTracker.updateAttemptWithResults(0, i, { combined, image, evaluation, totalScore });
+            await metadataTracker.updateAttemptWithResults(0, i, { combined, negativePrompt, negativePromptMetadata: null, image, evaluation, totalScore });
           }
 
           const candidate = {
@@ -1453,7 +1473,7 @@ async function refinementIteration(
             // Refine the selected dimension using critique
             const refinedResult = await llmProvider.refinePrompt(
               dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle }
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle, top_p: config.top_p, top_k: config.top_k }
             );
 
             if (tokenTracker && refinedResult.metadata?.tokensUsed) {
@@ -1471,7 +1491,7 @@ async function refinementIteration(
             }
 
             const effectiveDescriptiveness = getEffectiveDescriptiveness();
-            const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle: config.promptStyle });
+            const combineResult = await llmProvider.combinePrompts(whatPrompt, howPrompt, { descriptiveness: effectiveDescriptiveness, promptStyle: config.promptStyle, top_p: config.top_p, top_k: config.top_k });
             const combined = combineResult.combinedPrompt;
 
             if (tokenTracker && combineResult.metadata) {
@@ -1489,15 +1509,22 @@ async function refinementIteration(
             if (!negativePrompt && config.autoGenerateNegativePrompts) {
               const modelType = imageGenProvider.modelType || 'unknown';
               const isSDXL = modelType === 'sdxl' || modelType === 'modal';
+              console.log(`[${candidateId_str}] Negative prompt check: modelType=${modelType}, isSDXL=${isSDXL}, autoGenerate=${config.autoGenerateNegativePrompts}`);
               if (isSDXL) {
                 try {
                   const generator = config.negativePromptGenerator || llmProvider;
                   const negativeResult = await generator.generateNegativePrompt(combined, { enabled: true, fallback: config.negativePromptFallback, promptStyle: config.promptStyle });
                   negativePrompt = negativeResult.negativePrompt;
-                } catch {
+                  console.log(`[${candidateId_str}] Negative prompt generated: "${negativePrompt?.substring(0, 80)}..."`);
+                } catch (err) {
                   negativePrompt = config.negativePromptFallback || 'blurry, low quality, distorted, deformed, artifacts';
+                  console.warn(`[${candidateId_str}] Negative prompt generation failed, using fallback: ${err.message}`);
                 }
+              } else {
+                console.log(`[${candidateId_str}] Skipping negative prompt: model type "${modelType}" is not SDXL/modal`);
               }
+            } else if (negativePrompt) {
+              console.log(`[${candidateId_str}] Using manual negative prompt override`);
             }
 
             // Record attempt before image gen
@@ -1641,7 +1668,7 @@ async function refinementIteration(
 
             const refinedResult = await llmProvider.refinePrompt(
               dimension === 'what' ? parent.whatPrompt : parent.howPrompt,
-              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle }
+              { operation: 'refine', dimension, critique: parent.critique, userPrompt, promptStyle: config.promptStyle, top_p: config.top_p, top_k: config.top_k }
             );
 
             if (tokenTracker && refinedResult.metadata?.tokensUsed) {
@@ -1819,6 +1846,8 @@ async function beamSearch(userPrompt, providers, config) {
         candidate.metadata.candidateId,
         {
           combined: candidate.combined,
+          negativePrompt: candidate.negativePrompt,
+          negativePromptMetadata: candidate.negativePromptMetadata,
           image: candidate.image,
           evaluation: candidate.evaluation,
           totalScore: candidate.totalScore
@@ -1942,6 +1971,8 @@ async function beamSearch(userPrompt, providers, config) {
           candidate.metadata.candidateId,
           {
             combined: candidate.combined,
+            negativePrompt: candidate.negativePrompt,
+            negativePromptMetadata: candidate.negativePromptMetadata,
             image: candidate.image,
             evaluation: candidate.evaluation,
             totalScore: candidate.totalScore

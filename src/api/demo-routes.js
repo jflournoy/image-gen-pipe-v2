@@ -32,9 +32,12 @@ router.post('/start', async (req, res) => {
       m = 2,
       maxIterations = 3,
       alpha = 0.7,
-      temperature = 0.8,
+      temperature = 0.7,
+      top_p = 0.8,
+      top_k = 20,
       ensembleSize = 3,
       rankingMode = 'vlm',  // 'vlm' (tournament pairwise) or 'scoring' (CLIP/aesthetic)
+      promptStyle = 'natural',  // 'natural' (sentences) or 'booru' (comma-separated tags)
       autoGenerateNegativePrompts = true,  // Auto-generate negative prompts for SDXL/Modal
       negativePrompt = null,  // Optional manual negative prompt override
       negativePromptFallback = 'blurry, low quality, distorted, deformed, artifacts'  // Fallback if generation fails
@@ -106,7 +109,7 @@ router.post('/start', async (req, res) => {
       return num;
     };
 
-    let nValidated, mValidated, iterationsValidated, alphaValidated, tempValidated, ensembleValidated;
+    let nValidated, mValidated, iterationsValidated, alphaValidated, tempValidated, topPValidated, topKValidated, ensembleValidated;
     try {
       nValidated = validateParam(n, 2, 8, 'Beam width (n)');
       mValidated = validateParam(m, 1, Math.floor(nValidated / 2) || 1, 'Keep top (m)');
@@ -119,7 +122,9 @@ router.post('/start', async (req, res) => {
 
       iterationsValidated = validateParam(maxIterations, 1, 10, 'Max iterations');
       alphaValidated = validateParam(alpha, 0, 1, 'Alpha');
-      tempValidated = validateParam(temperature, 0, 2, 'Temperature');
+      tempValidated = validateParam(temperature, 0, 0.7, 'Temperature');
+      topPValidated = validateParam(top_p, 0.1, 1, 'Top-P');
+      topKValidated = validateParam(top_k, 1, 100, 'Top-K');
       ensembleValidated = validateParam(ensembleSize, 1, 5, 'Ensemble size');
     } catch (err) {
       return res.status(400).json({
@@ -144,8 +149,11 @@ router.post('/start', async (req, res) => {
       iterations: iterationsValidated,
       alpha: alphaValidated,
       temperature: tempValidated,
+      top_p: topPValidated,
+      top_k: topKValidated,
       ensembleSize: ensembleValidated,  // Pass ensemble size to beam search for custom voting
       rankingMode: rankingModeValidated,  // 'vlm' or 'scoring'
+      promptStyle,  // 'natural' (sentences) or 'booru' (comma-separated tags)
       autoGenerateNegativePrompts,  // Enable/disable negative prompt auto-generation
       negativePrompt,  // Optional manual override
       negativePromptFallback  // Fallback if generation fails
@@ -165,8 +173,11 @@ router.post('/start', async (req, res) => {
         maxIterations: iterationsValidated,
         alpha: alphaValidated,
         temperature: tempValidated,
+        top_p: topPValidated,
+        top_k: topKValidated,
         ensembleSize: ensembleValidated,
-        rankingMode: rankingModeValidated
+        rankingMode: rankingModeValidated,
+        promptStyle
       }
     });
   } catch (err) {
