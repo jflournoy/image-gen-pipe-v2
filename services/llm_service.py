@@ -27,7 +27,7 @@ PORT = int(os.getenv('LLM_PORT', '8003'))
 # Example HuggingFace: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
 # Example local: "/path/to/model.gguf"
 MODEL_REPO = os.getenv('LLM_MODEL_REPO', 'Mungert/Qwen3-8B-abliterated-GGUF')
-MODEL_FILE = os.getenv('LLM_MODEL_FILE', '*Q6_K_M.gguf')  # Glob pattern for model file
+MODEL_FILE = os.getenv('LLM_MODEL_FILE', '*q6_k_m.gguf')  # Glob pattern for model file
 MODEL_PATH = os.getenv('LLM_MODEL_PATH', None)  # Override for local file path
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only, N = N layers on GPU
@@ -50,7 +50,7 @@ async def lifespan(app):
         print(f'[LLM Service] Model file: {MODEL_FILE}')
     print(f'[LLM Service] GPU layers: {N_GPU_LAYERS}')
     print(f'[LLM Service] Context size: {N_CTX}')
-    print('[LLM Service] OpenAI-compatible API at /v1/completions')
+    print('[LLM Service] OpenAI-compatible API at /v1/completions and /v1/chat/completions')
     yield
     # Cleanup on shutdown
     global llm
@@ -97,6 +97,26 @@ class CompletionResponse(BaseModel):
     model: str
     choices: List[dict]
     usage: dict
+
+
+class ChatMessage(BaseModel):
+    """Single chat message"""
+    role: str  # "system", "user", or "assistant"
+    content: str
+
+
+class ChatCompletionRequest(BaseModel):
+    """Chat completion request (OpenAI-compatible format)"""
+    model: str
+    messages: List[ChatMessage]
+    max_tokens: int = 500
+    temperature: float = 0.7
+    top_p: float = 0.9
+    top_k: int = 40
+    repeat_penalty: float = 1.1
+    stop: Optional[List[str]] = None
+    stream: bool = False
+    seed: Optional[int] = None
 
 
 class DownloadRequest(BaseModel):
@@ -281,6 +301,83 @@ async def create_completion(request: CompletionRequest):
 
     except Exception as e:
         print(f'[LLM Service] Generation error: {e}')
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post('/v1/chat/completions')
+async def create_chat_completion(request: ChatCompletionRequest):
+    """
+    Generate chat completion (OpenAI-compatible endpoint)
+    Uses model's built-in chat template for proper message formatting.
+    Appends /no_think to the last user message to disable Qwen3 thinking mode.
+    """
+    try:
+        model = load_model()
+
+        # Build messages list for llama-cpp-python
+        messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+        # Append /no_think to last user message to disable Qwen3 thinking mode.
+        # Inside the chat template, this is properly formatted within <|im_start|>user
+        # tokens where the model interprets it as a soft switch directive.
+        for msg in reversed(messages):
+            if msg["role"] == "user":
+                if "/no_think" not in msg["content"]:
+                    msg["content"] += " /no_think"
+                break
+
+        # Log preview of last user message
+        last_user = next((m for m in reversed(messages) if m["role"] == "user"), None)
+        if last_user:
+            preview = last_user["content"][:80] + '...' if len(last_user["content"]) > 80 else last_user["content"]
+            print(f'[LLM Service] Chat completion for: {preview}')
+
+        seed = request.seed if request.seed is not None else random.randint(0, 2**31 - 1)
+
+        start_time = time.time()
+        result = model.create_chat_completion(
+            messages=messages,
+            max_tokens=request.max_tokens,
+            temperature=request.temperature,
+            top_p=request.top_p,
+            top_k=request.top_k,
+            repeat_penalty=request.repeat_penalty,
+            stop=request.stop or ["<|im_end|>", "<|endoftext|>"],
+            seed=seed,
+        )
+        elapsed = time.time() - start_time
+
+        # Extract response
+        generated_text = result["choices"][0]["message"]["content"]
+        usage = result.get("usage", {})
+        completion_tokens = usage.get("completion_tokens", len(generated_text.split()))
+
+        print(f'[LLM Service] Chat generated {completion_tokens} tokens in {elapsed:.1f}s')
+
+        return {
+            'id': f'chatcmpl-{int(time.time())}',
+            'object': 'chat.completion',
+            'created': int(time.time()),
+            'model': request.model,
+            'choices': [
+                {
+                    'index': 0,
+                    'message': {
+                        'role': 'assistant',
+                        'content': generated_text
+                    },
+                    'finish_reason': result["choices"][0].get("finish_reason", "stop")
+                }
+            ],
+            'usage': {
+                'prompt_tokens': usage.get("prompt_tokens", 0),
+                'completion_tokens': completion_tokens,
+                'total_tokens': usage.get("prompt_tokens", 0) + completion_tokens
+            }
+        }
+
+    except Exception as e:
+        print(f'[LLM Service] Chat generation error: {e}')
         raise HTTPException(status_code=500, detail=str(e))
 
 

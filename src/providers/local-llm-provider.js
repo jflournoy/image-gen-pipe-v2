@@ -132,9 +132,7 @@ Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'w
         }
       }
 
-      const fullPrompt = `${systemPrompt}\n\n${userPromptText}`;
-
-      const { text, usage } = await this._generate(fullPrompt, options);
+      const { text, usage } = await this._generateChat(systemPrompt, userPromptText, options);
       const refinedPrompt = this._cleanLLMResponse(text);
 
       // Return object matching OpenAI provider interface
@@ -196,9 +194,7 @@ HOW prompt: ${howPrompt || '(none)'}
 
 Combined SDXL prompt:`;
 
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-
-      const { text, usage } = await this._generate(fullPrompt);
+      const { text, usage } = await this._generateChat(systemPrompt, userPrompt, options);
       const combinedPrompt = this._cleanLLMResponse(text);
 
       // Return object matching OpenAI provider interface
@@ -287,16 +283,11 @@ Negative: "blurry, low quality, no mountains, flat, urban, city, text, watermark
 
 Now generate a negative prompt for the following positive prompt. Output ONLY the negative prompt, nothing else.`;
 
-      const userPrompt = `Positive prompt: "${positivePrompt}"
+      const userPrompt = `Positive prompt: "${positivePrompt}"`;
 
-Negative prompt:`;
-
-      const fullPrompt = `${systemPrompt}\n\n${userPrompt}`;
-
-      const { text, usage } = await this._generate(fullPrompt, {
+      const { text, usage } = await this._generateChat(systemPrompt, userPrompt, {
         temperature: 0.3,  // Lower temp for consistency
         max_tokens: 150,
-        stop: ['\n\n', 'Positive:', 'Example:']
       });
 
       const negativePrompt = this._cleanLLMResponse(text);
@@ -439,8 +430,10 @@ Negative prompt:`;
             model: this.model,
             prompt: prompt,
             max_tokens: options.max_tokens || 500,
-            temperature: options.temperature || 0.7,
-            top_p: options.top_p || 0.9,
+            // Qwen3 non-thinking mode recommended: temp 0.7, top_p 0.8, top_k 20
+            temperature: Math.min(options.temperature || 0.7, 0.7),
+            top_p: options.top_p || 0.8,
+            top_k: options.top_k || 20,
             stream: false
           };
 
@@ -483,6 +476,78 @@ Negative prompt:`;
       },
       {
         operationName: 'LLM generation',
+        attemptRestart: true
+      }
+    );
+  }
+
+  /**
+   * Internal method to call local LLM chat API (OpenAI-compatible)
+   * Uses /v1/chat/completions which applies the model's chat template,
+   * enabling proper thinking mode control for Qwen3.
+   * @private
+   * @param {string} systemPrompt - System instruction
+   * @param {string} userMessage - User message
+   * @param {Object} options - Generation options
+   * @returns {Promise<{text: string, usage: Object}>} Text and usage metadata
+   */
+  async _generateChat(systemPrompt, userMessage, options = {}) {
+    return this._serviceConnection.withRetry(
+      async () => {
+        try {
+          const payload = {
+            model: this.model,
+            messages: [
+              { role: 'system', content: systemPrompt },
+              { role: 'user', content: userMessage }
+            ],
+            max_tokens: options.max_tokens || 500,
+            // Qwen3 non-thinking mode recommended: temp 0.7, top_p 0.8, top_k 20
+            temperature: Math.min(options.temperature || 0.7, 0.7),
+            top_p: options.top_p || 0.8,
+            top_k: options.top_k || 20,
+            stream: false
+          };
+
+          // Add stop sequences if provided
+          if (options.stop) {
+            payload.stop = options.stop;
+          }
+
+          const response = await axios.post(
+            `${this.apiUrl}/v1/chat/completions`,
+            payload,
+            {
+              // 3 minute timeout: local LLM processes requests sequentially on single GPU,
+              // so with 4 parallel beam search candidates, later requests may wait 60-90+ seconds
+              timeout: 180000,
+              headers: {
+                'Content-Type': 'application/json'
+              }
+            }
+          );
+
+          // Extract text from chat completion response
+          const text = response.data.choices[0]?.message?.content || '';
+          const usage = response.data.usage || {};
+
+          return { text, usage };
+        } catch (error) {
+          if (error.response) {
+            throw new Error(
+              `HTTP ${error.response.status}: ${JSON.stringify(error.response.data)}`
+            );
+          } else if (error.request) {
+            throw new Error(
+              `Cannot reach local LLM service at ${this.apiUrl}. Is it running?`
+            );
+          } else {
+            throw error;
+          }
+        }
+      },
+      {
+        operationName: 'LLM chat generation',
         attemptRestart: true
       }
     );
