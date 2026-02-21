@@ -23,9 +23,21 @@ describe('🔴 RED: Service Stop Lock Mechanism', () => {
     } catch {
       // Already exists
     }
+
+    // Clean up main service locks to avoid interference with other tests
+    await ServiceManager.deleteStopLock('flux');
+    await ServiceManager.deleteStopLock('llm');
+    await ServiceManager.deleteStopLock('vision');
+    await ServiceManager.deleteStopLock('vlm');
   });
 
   after(async () => {
+    // Cleanup locks created during tests
+    const services = ['flux', 'llm', 'vision', 'vlm', 'test-flux', 'test-llm', 'test-vision', 'test-vlm'];
+    for (const service of services) {
+      await ServiceManager.deleteStopLock(service);
+    }
+
     // Cleanup temp directory
     try {
       await fs.rm(TEMP_DIR, { recursive: true, force: true });

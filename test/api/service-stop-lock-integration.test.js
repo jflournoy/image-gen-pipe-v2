@@ -15,11 +15,21 @@ describe('🟢 GREEN: Service Stop Lock Integration Workflow', () => {
   before(async () => {
     // Ensure no locks exist before tests
     await ServiceManager.deleteStopLock(testService);
+
+    // Also clean up main service locks to avoid interference
+    await ServiceManager.deleteStopLock('flux');
+    await ServiceManager.deleteStopLock('llm');
+    await ServiceManager.deleteStopLock('vision');
+    await ServiceManager.deleteStopLock('vlm');
   });
 
   after(async () => {
     // Clean up any locks created during tests
-    await ServiceManager.deleteStopLock(testService);
+    const services = ['test-integration-flux', 'test-integration-flux-cycle', 'test-integration-flux-timestamp',
+                      'flux', 'llm', 'vision', 'vlm'];
+    for (const service of services) {
+      await ServiceManager.deleteStopLock(service);
+    }
   });
 
   it('should have STOP_LOCK functions integrated into ServiceManager', async () => {
