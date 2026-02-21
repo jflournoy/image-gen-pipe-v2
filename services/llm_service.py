@@ -26,8 +26,8 @@ PORT = int(os.getenv('LLM_PORT', '8003'))
 # Model configuration - supports HuggingFace Hub or local path
 # Example HuggingFace: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF"
 # Example local: "/path/to/model.gguf"
-MODEL_REPO = os.getenv('LLM_MODEL_REPO', 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF')
-MODEL_FILE = os.getenv('LLM_MODEL_FILE', '*Q4_K_M.gguf')  # Glob pattern for model file
+MODEL_REPO = os.getenv('LLM_MODEL_REPO', 'Mungert/Qwen3-8B-abliterated-GGUF')
+MODEL_FILE = os.getenv('LLM_MODEL_FILE', '*Q6_K_M.gguf')  # Glob pattern for model file
 MODEL_PATH = os.getenv('LLM_MODEL_PATH', None)  # Override for local file path
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only, N = N layers on GPU
@@ -242,7 +242,7 @@ async def create_completion(request: CompletionRequest):
             top_p=request.top_p,
             top_k=request.top_k,
             repeat_penalty=request.repeat_penalty,
-            stop=request.stop or ["<|im_end|>", "</s>", "[/INST]"],
+            stop=request.stop or ["<|im_end|>", "<|endoftext|>", "<think>"],
             seed=seed
         )
         elapsed = time.time() - start_time
