@@ -1831,6 +1831,14 @@ window.handleReconnect = function(jobId) {
       document.getElementById('temperature').value = pendingJob.params.temperature;
       document.getElementById('temperatureNumber').value = pendingJob.params.temperature;
     }
+    if (pendingJob.params.top_p) {
+      document.getElementById('topP').value = pendingJob.params.top_p;
+      document.getElementById('topPNumber').value = pendingJob.params.top_p;
+    }
+    if (pendingJob.params.top_k) {
+      document.getElementById('topK').value = pendingJob.params.top_k;
+      document.getElementById('topKNumber').value = pendingJob.params.top_k;
+    }
 
     // Display restored settings in message
     const settingsStr = `N=${pendingJob.params.n}, M=${pendingJob.params.m}, Iterations=${pendingJob.params.maxIterations}, α=${pendingJob.params.alpha}, T=${pendingJob.params.temperature}`;
@@ -1851,6 +1859,10 @@ window.handleReconnect = function(jobId) {
   document.getElementById('alphaNumber').disabled = true;
   document.getElementById('temperature').disabled = true;
   document.getElementById('temperatureNumber').disabled = true;
+  document.getElementById('topP').disabled = true;
+  document.getElementById('topPNumber').disabled = true;
+  document.getElementById('topK').disabled = true;
+  document.getElementById('topKNumber').disabled = true;
   const stepsSliderReload = document.getElementById('steps');
   const stepsNumberReload = document.getElementById('stepsNumber');
   const guidanceSliderReload = document.getElementById('guidance');
@@ -2005,10 +2017,44 @@ temperatureSlider.addEventListener('input', (e) => {
 });
 
 temperatureNumber.addEventListener('change', (e) => {
-  const val = Math.min(1, Math.max(0, parseFloat(e.target.value) || 1.0));
+  const val = Math.min(0.7, Math.max(0, parseFloat(e.target.value) || 0.7));
   temperatureSlider.value = val;
   temperatureNumber.value = val;
   temperatureValue.textContent = val.toFixed(2);
+});
+
+// Sync top-p slider and number input
+const topPSlider = document.getElementById('topP');
+const topPNumber = document.getElementById('topPNumber');
+const topPValue = document.getElementById('topPValue');
+
+topPSlider.addEventListener('input', (e) => {
+  topPNumber.value = e.target.value;
+  topPValue.textContent = e.target.value;
+});
+
+topPNumber.addEventListener('change', (e) => {
+  const val = Math.min(1, Math.max(0.1, parseFloat(e.target.value) || 0.8));
+  topPSlider.value = val;
+  topPNumber.value = val;
+  topPValue.textContent = val.toFixed(2);
+});
+
+// Sync top-k slider and number input
+const topKSlider = document.getElementById('topK');
+const topKNumber = document.getElementById('topKNumber');
+const topKValue = document.getElementById('topKValue');
+
+topKSlider.addEventListener('input', (e) => {
+  topKNumber.value = e.target.value;
+  topKValue.textContent = e.target.value;
+});
+
+topKNumber.addEventListener('change', (e) => {
+  const val = Math.min(100, Math.max(1, parseInt(e.target.value) || 20));
+  topKSlider.value = val;
+  topKNumber.value = val;
+  topKValue.textContent = val;
 });
 
 // Sync steps slider and number input (Flux diffusion steps)
@@ -2490,10 +2536,13 @@ async function startBeamSearch() {
       iterations: parseInt(document.getElementById('maxIterations').value),
       alpha: parseFloat(document.getElementById('alpha').value),
       temperature: parseFloat(document.getElementById('temperature').value),
+      top_p: parseFloat(document.getElementById('topP').value),
+      top_k: parseInt(document.getElementById('topK').value),
       descriptiveness: parseInt(document.getElementById('combine-descriptiveness').value),
       varyDescriptivenessRandomly: document.getElementById('vary-descriptiveness-randomly')?.checked || false,
       rankingMode: document.getElementById('rankingMode')?.value || 'vlm',
-      useSeparateEvaluations: document.getElementById('useSeparateEvaluations')?.checked || false
+      useSeparateEvaluations: document.getElementById('useSeparateEvaluations')?.checked || false,
+      promptStyle: document.getElementById('prompt-style')?.value || 'natural'
     };
 
     // Add selected models (if user selected non-default options)
@@ -2757,6 +2806,10 @@ async function startBeamSearch() {
     document.getElementById('alphaNumber').disabled = true;
     document.getElementById('temperature').disabled = true;
     document.getElementById('temperatureNumber').disabled = true;
+    document.getElementById('topP').disabled = true;
+    document.getElementById('topPNumber').disabled = true;
+    document.getElementById('topK').disabled = true;
+    document.getElementById('topKNumber').disabled = true;
     const stepsSliderStart = document.getElementById('steps');
     const stepsNumberStart = document.getElementById('stepsNumber');
     const guidanceSliderStart = document.getElementById('guidance');
@@ -2889,6 +2942,10 @@ function stopBeamSearch(userInitiated = true) {
   document.getElementById('alphaNumber').disabled = false;
   document.getElementById('temperature').disabled = false;
   document.getElementById('temperatureNumber').disabled = false;
+  document.getElementById('topP').disabled = false;
+  document.getElementById('topPNumber').disabled = false;
+  document.getElementById('topK').disabled = false;
+  document.getElementById('topKNumber').disabled = false;
   const stepsSliderStop = document.getElementById('steps');
   const stepsNumberStop = document.getElementById('stepsNumber');
   const guidanceSliderStop = document.getElementById('guidance');
@@ -2925,6 +2982,25 @@ if (descriptiveSlider) {
   descriptiveSlider.addEventListener('input', (e) => {
     const level = parseInt(e.target.value);
     descriptivityLabel.textContent = descriptivityLevels[level];
+  });
+}
+
+// Prompt style dropdown event listener + localStorage persistence
+const promptStyleSelect = document.getElementById('prompt-style');
+const promptStyleLabel = document.getElementById('promptStyleLabel');
+if (promptStyleSelect) {
+  const labels = { natural: 'Natural Language', booru: 'Booru Tags' };
+
+  // Restore from localStorage
+  const saved = localStorage.getItem('promptStyle');
+  if (saved && labels[saved]) {
+    promptStyleSelect.value = saved;
+    promptStyleLabel.textContent = labels[saved];
+  }
+
+  promptStyleSelect.addEventListener('change', (e) => {
+    localStorage.setItem('promptStyle', e.target.value);
+    promptStyleLabel.textContent = labels[e.target.value] || 'Natural Language';
   });
 }
 

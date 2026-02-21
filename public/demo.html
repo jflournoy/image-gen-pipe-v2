@@ -1340,7 +1340,7 @@
           </div>
           <select id="llmProvider" onchange="updateLLMProviderSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px;">
             <option value="openai">OpenAI (GPT-5 models)</option>
-            <option value="local-llm">Local LLM (Mistral 7B)</option>
+            <option value="local-llm">Local LLM (Qwen3-8B)</option>
           </select>
 
           <!-- OpenAI LLM Settings -->
@@ -1374,16 +1374,36 @@
             </div>
           </div>
 
-          <!-- Temperature (LLM options) -->
+          <!-- LLM Sampling Parameters -->
           <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
-            <div>
+            <div style="margin-bottom: 8px;">
               <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
-                Temperature: <span id="temperatureValue">1.0</span>
-                <small style="color: #888;">(creativity)</small>
+                Temperature: <span id="temperatureValue">0.7</span>
+                <small style="color: #888;">(creativity, max 0.7)</small>
               </label>
               <div style="display: flex; gap: 8px;">
-                <input type="range" id="temperature" min="0" max="1" step="0.05" value="1.0" style="flex: 1;">
-                <input type="number" id="temperatureNumber" min="0" max="1" step="0.05" value="1.0" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+                <input type="range" id="temperature" min="0" max="0.7" step="0.05" value="0.7" style="flex: 1;">
+                <input type="number" id="temperatureNumber" min="0" max="0.7" step="0.05" value="0.7" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+              </div>
+            </div>
+            <div style="margin-bottom: 8px;">
+              <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
+                Top-P: <span id="topPValue">0.8</span>
+                <small style="color: #888;">(nucleus sampling)</small>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="range" id="topP" min="0.1" max="1" step="0.05" value="0.8" style="flex: 1;">
+                <input type="number" id="topPNumber" min="0.1" max="1" step="0.05" value="0.8" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
+              </div>
+            </div>
+            <div>
+              <label style="font-size: 11px; color: #555; display: block; margin-bottom: 4px;">
+                Top-K: <span id="topKValue">20</span>
+                <small style="color: #888;">(token candidates)</small>
+              </label>
+              <div style="display: flex; gap: 8px;">
+                <input type="range" id="topK" min="1" max="100" step="1" value="20" style="flex: 1;">
+                <input type="number" id="topKNumber" min="1" max="100" step="1" value="20" style="width: 50px; padding: 4px; border-radius: 3px; border: 1px solid #ccc;">
               </div>
             </div>
           </div>
@@ -1878,6 +1898,19 @@
           </label>
           <small style="display: block; margin-top: 5px; color: #666;">
             When enabled, randomly selects concise/balanced/descriptive for each prompt combination, creating more variety in output lengths.
+          </small>
+        </div>
+        <div class="form-group" style="margin-top: 10px;">
+          <label for="prompt-style">Prompt Style:
+            <span id="promptStyleLabel" style="font-weight: normal; color: #0066cc;">Natural Language</span>
+          </label>
+          <select id="prompt-style" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ccc;">
+            <option value="natural" selected>Natural Language</option>
+            <option value="booru">Booru Tags (anime/SDXL fine-tunes)</option>
+          </select>
+          <small style="display: block; margin-top: 5px; color: #666;">
+            Natural Language: descriptive sentences (best for Flux, DALL-E, standard SDXL).
+            Booru Tags: comma-separated tags like "1girl, long hair, masterpiece" (best for Pony Diffusion, Animagine, and other anime SDXL fine-tunes).
           </small>
         </div>
       </div>

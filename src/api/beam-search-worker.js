@@ -52,6 +52,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     iterations = 2,
     alpha = 0.7,
     temperature = 0.7,
+    top_p = 0.8,
+    top_k = 20,
     descriptiveness = 2,  // 1=concise, 2=balanced (default), 3=descriptive
     varyDescriptivenessRandomly = false, // Random selection of 1/2/3 per prompt
     useSeparateEvaluations = false, // Use separate alignment/aesthetics evaluations in VLM
@@ -120,7 +122,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     outputDir: OUTPUT_DIR,
     sessionId,
     userPrompt: prompt,
-    config: { beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature }
+    config: { beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature, top_p, top_k }
   });
   await metadataTracker.initialize();
 
@@ -217,7 +219,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     emitProgress(jobId, {
       type: 'started',
       timestamp: new Date().toISOString(),
-      params: { prompt, n, m, iterations, alpha, temperature },
+      params: { prompt, n, m, iterations, alpha, temperature, top_p, top_k },
       providers: runtimeProviders
     });
 
@@ -244,6 +246,8 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
       maxIterations: iterations,
       alpha,
       temperature,
+      top_p,
+      top_k,
       descriptiveness, // Pass combine descriptiveness level (1=concise, 2=balanced, 3=descriptive)
       varyDescriptivenessRandomly, // Random selection of descriptiveness per prompt
       promptStyle, // 'natural' (sentences) or 'booru' (comma-separated tags)
