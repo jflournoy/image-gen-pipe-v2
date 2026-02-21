@@ -89,7 +89,12 @@ class ModalImageProvider {
     if (options.seed !== undefined) payload.seed = options.seed;
     // Accept both camelCase (from beam search) and snake_case (from direct calls)
     const negPrompt = options.negative_prompt ?? options.negativePrompt;
-    if (negPrompt !== undefined) payload.negative_prompt = negPrompt;
+    if (negPrompt !== undefined && negPrompt !== null) {
+      payload.negative_prompt = negPrompt;
+      console.log(`[Modal Provider] Including negative_prompt in payload: "${String(negPrompt).substring(0, 80)}..."`);
+    } else {
+      console.log(`[Modal Provider] No negative_prompt in payload (negative_prompt=${options.negative_prompt}, negativePrompt=${options.negativePrompt})`);
+    }
 
     const loras = options.loras ?? this.generation.loras;
     if (loras && Array.isArray(loras) && loras.length > 0) {
@@ -177,6 +182,13 @@ class ModalImageProvider {
       }
     }
 
+    const responseNegPrompt = result.metadata?.negative_prompt;
+    if (responseNegPrompt) {
+      console.log(`[Modal Provider]${logPrefix} Response includes negative_prompt: "${String(responseNegPrompt).substring(0, 80)}..."`);
+    } else {
+      console.log(`[Modal Provider]${logPrefix} Response has no negative_prompt in metadata`);
+    }
+
     const resultObj = {
       url: undefined,
       localPath: finalPath,
@@ -184,7 +196,7 @@ class ModalImageProvider {
       metadata: {
         model: this.model,
         prompt,
-        negative_prompt: result.metadata?.negative_prompt,
+        negative_prompt: responseNegPrompt,
         width: options.width ?? this.generation.width,
         height: options.height ?? this.generation.height,
         steps: options.steps ?? this.generation.steps,
