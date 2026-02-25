@@ -15,17 +15,21 @@ const router = express.Router();
 
 /**
  * POST /api/video/generate
- * Generate a video from an image
+ * Generate a video from an image (I2V) or from text only (T2V)
  *
  * Body:
- *   - imageData (required): base64 image data or imagePath
- *   - imagePath: path to local image file
+ *   - mode: 'i2v' (default) or 't2v' — determines whether image is required
+ *   - imageData: base64 image data (required for I2V)
+ *   - imagePath: path to local image file (alternative to imageData for I2V)
  *   - prompt (required): motion/animation prompt
- *   - model: video model name
+ *   - model: video model name (wan2.2-i2v-high, wan2.2-ti2v-5b, wan2.2-t2v-14b)
  *   - steps: inference steps (10-50)
- *   - guidance: guidance scale (1-10)
+ *   - guidance: guidance scale for high-noise expert (1-10)
+ *   - guidance_2: guidance scale for low-noise expert (MoE 14B models only, 1-10)
  *   - fps: frames per second (12-30)
  *   - num_frames: number of frames (17-144)
+ *   - height: video height (T2V mode, default 480)
+ *   - width: video width (T2V mode, default 832)
  *   - seed: random seed (optional)
  *   - sessionId: session ID for output organization
  *   - outputDir: base output directory
@@ -33,26 +37,34 @@ const router = express.Router();
 router.post('/generate', async (req, res) => {
   try {
     const {
+      mode,
       imageData,
       imagePath,
       prompt,
       model,
       steps,
       guidance,
+      guidance_2,
       fps,
       num_frames,
+      height,
+      width,
       seed,
       sessionId,
       outputDir
     } = req.body;
 
+    const videoMode = mode || 'i2v';
+
     console.log('[VideoRoutes] Video generation request', {
+      mode: videoMode,
       hasImageData: !!imageData,
       imagePath,
       prompt: prompt?.substring(0, 50),
       model,
       steps,
-      guidance
+      guidance,
+      guidance_2
     });
 
     // Validate required parameters
@@ -62,18 +74,19 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    if (!imageData && !imagePath) {
+    // Image is required for I2V mode, optional for T2V
+    if (videoMode === 'i2v' && !imageData && !imagePath) {
       return res.status(400).json({
-        error: 'imageData or imagePath is required'
+        error: 'imageData or imagePath is required for I2V mode'
       });
     }
 
-    // Get image buffer
-    let imageBuffer;
+    // Get image buffer (only for I2V mode or when provided)
+    let imageBuffer = null;
     if (imageData) {
       try {
         imageBuffer = Buffer.from(imageData, 'base64');
-      } catch (e) {
+      } catch {
         return res.status(400).json({
           error: 'imageData must be valid base64'
         });
@@ -99,10 +112,12 @@ router.post('/generate', async (req, res) => {
       });
 
       console.log('[VideoRoutes] Generating video', {
+        mode: videoMode,
         prompt: prompt.substring(0, 50),
         model,
         steps,
-        guidance
+        guidance,
+        guidance_2
       });
 
       // Generate video
@@ -110,11 +125,15 @@ router.post('/generate', async (req, res) => {
         imageBuffer,
         prompt,
         {
+          mode: videoMode,
           model,
           steps,
           guidance,
+          guidance_2,
           fps,
           num_frames,
+          height,
+          width,
           seed
         }
       );
