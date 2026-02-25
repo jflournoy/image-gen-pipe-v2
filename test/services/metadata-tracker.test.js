@@ -663,5 +663,425 @@ describe('Metadata Tracker', () => {
       assert.strictEqual(candidate.status, 'attempted');
       assert.strictEqual(candidate.whatPrompt, 'test what');
     });
+
+    it('should record critique in attempt when provided', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      const critique = {
+        critique: 'Lighting is too flat',
+        recommendation: 'Add dramatic side lighting with shadows',
+        reason: 'Will add depth and visual interest',
+        dimension: 'how',
+        metadata: { model: 'mistral-7b', tokensUsed: 312, feedbackType: 'ranking' }
+      };
+
+      await tracker.recordAttempt({
+        whatPrompt: 'mountain scene',
+        howPrompt: 'flat lighting',
+        critique,
+        metadata: {
+          iteration: 1,
+          candidateId: 0,
+          dimension: 'how',
+          parentId: 0
+        }
+      });
+
+      const metadata = await tracker.getMetadata();
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.ok(candidate.critique);
+      assert.strictEqual(candidate.critique.critique, 'Lighting is too flat');
+      assert.strictEqual(candidate.critique.recommendation, 'Add dramatic side lighting with shadows');
+      assert.strictEqual(candidate.critique.dimension, 'how');
+      assert.strictEqual(candidate.critique.metadata.model, 'mistral-7b');
+    });
+  });
+
+  describe('Enriched Config', () => {
+    it('should persist full pipeline config including providers and options', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const fullConfig = {
+        beamWidth: 4,
+        keepTop: 2,
+        maxIterations: 3,
+        alpha: 0.7,
+        temperature: 0.7,
+        top_p: 0.8,
+        top_k: 20,
+        promptStyle: 'booru',
+        descriptiveness: 3,
+        varyDescriptivenessRandomly: true,
+        rankingMode: 'vlm',
+        useSeparateEvaluations: true,
+        autoGenerateNegativePrompts: true,
+        fixFaces: true,
+        restorationStrength: 0.5,
+        faceUpscale: 2,
+        return_intermediate_images: true,
+        providers: { llm: 'local-llm', image: 'flux', vision: 'local' },
+        models: { llm: 'mistral-7b-q4' },
+        fluxOptions: { steps: 20, guidance: 7.5 },
+        bflOptions: null,
+        modalOptions: null,
+        loraOptions: { path: '/models/lora.safetensors', scale: 0.8 },
+      };
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test prompt',
+        config: fullConfig
+      });
+
+      await tracker.initialize();
+
+      // Read from disk to verify all fields persisted
+      const date = getDateString();
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
+      const content = await fs.readFile(metadataPath, 'utf8');
+      const metadata = JSON.parse(content);
+
+      assert.strictEqual(metadata.config.promptStyle, 'booru');
+      assert.strictEqual(metadata.config.descriptiveness, 3);
+      assert.strictEqual(metadata.config.rankingMode, 'vlm');
+      assert.strictEqual(metadata.config.useSeparateEvaluations, true);
+      assert.strictEqual(metadata.config.fixFaces, true);
+      assert.strictEqual(metadata.config.restorationStrength, 0.5);
+      assert.strictEqual(metadata.config.return_intermediate_images, true);
+      assert.deepStrictEqual(metadata.config.providers, { llm: 'local-llm', image: 'flux', vision: 'local' });
+      assert.deepStrictEqual(metadata.config.fluxOptions, { steps: 20, guidance: 7.5 });
+      assert.deepStrictEqual(metadata.config.loraOptions, { path: '/models/lora.safetensors', scale: 0.8 });
+      assert.strictEqual(metadata.config.bflOptions, null);
+    });
+  });
+
+  describe('Ranking Data Enrichment', () => {
+    it('should enrich candidate with comparisons and aggregatedFeedback', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // Record an attempt first
+      await tracker.recordAttempt({
+        whatPrompt: 'mountain',
+        howPrompt: 'dramatic',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what', parentId: null }
+      });
+
+      // Enrich with ranking data
+      await tracker.enrichCandidateWithRankingData(0, 0, {
+        comparisons: [
+          { opponentId: 'i0c1', result: 'win', myRanks: { alignment: 4, aesthetics: 3, combined: 3.5 }, opponentRanks: { alignment: 2, aesthetics: 2, combined: 2 }, timestamp: '2026-02-23T10:00:00Z' },
+          { opponentId: 'i0c2', result: 'loss', myRanks: { alignment: 2, aesthetics: 2, combined: 2 }, opponentRanks: { alignment: 4, aesthetics: 4, combined: 4 }, timestamp: '2026-02-23T10:01:00Z' }
+        ],
+        aggregatedFeedback: {
+          strengths: ['good composition'],
+          weaknesses: ['slightly blurry'],
+          ranks: { alignment: 3, aesthetics: 2.5, combined: 2.75 },
+          improvementSuggestion: 'Sharpen the edges'
+        }
+      });
+
+      const metadata = await tracker.getMetadata();
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.strictEqual(candidate.comparisons.length, 2);
+      assert.strictEqual(candidate.comparisons[0].opponentId, 'i0c1');
+      assert.strictEqual(candidate.comparisons[0].result, 'win');
+      assert.strictEqual(candidate.comparisons[1].result, 'loss');
+      assert.deepStrictEqual(candidate.aggregatedFeedback.strengths, ['good composition']);
+      assert.strictEqual(candidate.aggregatedFeedback.improvementSuggestion, 'Sharpen the edges');
+    });
+
+    it('should enrich candidate with critique', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await tracker.recordAttempt({
+        whatPrompt: 'mountain',
+        howPrompt: 'dramatic',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what', parentId: null }
+      });
+
+      const critique = {
+        critique: 'Needs better lighting',
+        recommendation: 'Add dramatic side lighting',
+        reason: 'Will improve depth',
+        dimension: 'how'
+      };
+
+      await tracker.enrichCandidateWithRankingData(0, 0, {
+        comparisons: [],
+        aggregatedFeedback: null,
+        critique
+      });
+
+      const metadata = await tracker.getMetadata();
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.ok(candidate.critique);
+      assert.strictEqual(candidate.critique.critique, 'Needs better lighting');
+    });
+
+    it('should throw when iteration not found', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await assert.rejects(
+        () => tracker.enrichCandidateWithRankingData(99, 0, { comparisons: [], aggregatedFeedback: null }),
+        /Iteration 99 not found/
+      );
+    });
+
+    it('should throw when candidate not found', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await tracker.recordAttempt({
+        whatPrompt: 'test',
+        howPrompt: 'test',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what' }
+      });
+
+      await assert.rejects(
+        () => tracker.enrichCandidateWithRankingData(0, 99, { comparisons: [], aggregatedFeedback: null }),
+        /Candidate 99 not found in iteration 0/
+      );
+    });
+
+    it('should persist enriched data to disk', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await tracker.recordAttempt({
+        whatPrompt: 'mountain',
+        howPrompt: 'dramatic',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what', parentId: null }
+      });
+
+      await tracker.enrichCandidateWithRankingData(0, 0, {
+        comparisons: [{ opponentId: 'i0c1', result: 'win', myRanks: null, opponentRanks: null, timestamp: '2026-02-23T10:00:00Z' }],
+        aggregatedFeedback: { strengths: ['nice'], weaknesses: [], ranks: null, improvementSuggestion: null }
+      });
+
+      // Read directly from disk
+      const date = getDateString();
+      const metadataPath = path.join(testOutputDir, date, testSessionId, 'metadata.json');
+      const content = await fs.readFile(metadataPath, 'utf8');
+      const metadata = JSON.parse(content);
+
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.strictEqual(candidate.comparisons.length, 1);
+      assert.ok(candidate.aggregatedFeedback);
+    });
+
+    it('should include default comparisons and aggregatedFeedback in recordAttempt', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await tracker.recordAttempt({
+        whatPrompt: 'test',
+        howPrompt: 'test',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what' }
+      });
+
+      const metadata = await tracker.getMetadata();
+      const candidate = metadata.iterations[0].candidates[0];
+      assert.deepStrictEqual(candidate.comparisons, []);
+      assert.strictEqual(candidate.aggregatedFeedback, null);
+    });
+  });
+
+  describe('bestCandidateId from ranking data', () => {
+    it('should set bestCandidateId from aggregatedFeedback ranks when totalScore is null', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // Record two attempts
+      await tracker.recordAttempt({
+        whatPrompt: 'mountain',
+        howPrompt: 'dramatic',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what', parentId: null }
+      });
+
+      await tracker.recordAttempt({
+        whatPrompt: 'ocean',
+        howPrompt: 'serene',
+        metadata: { iteration: 0, candidateId: 1, dimension: 'what', parentId: null }
+      });
+
+      // Enrich candidate 0 with worse rank (higher = worse)
+      await tracker.enrichCandidateWithRankingData(0, 0, {
+        comparisons: [{ opponentId: 'i0c1', result: 'loss', myRanks: { combined: 2 }, opponentRanks: { combined: 1 }, timestamp: '2026-02-24T10:00:00Z' }],
+        aggregatedFeedback: {
+          strengths: [], weaknesses: ['blurry'],
+          ranks: { alignment: 1.8, aesthetics: 1.6, combined: 1.72 },
+          improvementSuggestion: null
+        }
+      });
+
+      // Enrich candidate 1 with better rank (lower = better)
+      await tracker.enrichCandidateWithRankingData(0, 1, {
+        comparisons: [{ opponentId: 'i0c0', result: 'win', myRanks: { combined: 1 }, opponentRanks: { combined: 2 }, timestamp: '2026-02-24T10:00:00Z' }],
+        aggregatedFeedback: {
+          strengths: ['sharp', 'well composed'], weaknesses: [],
+          ranks: { alignment: 1.2, aesthetics: 1.1, combined: 1.16 },
+          improvementSuggestion: null
+        }
+      });
+
+      const metadata = await tracker.getMetadata();
+      // bestCandidateId should be 1 (lower combined rank = better)
+      assert.strictEqual(metadata.iterations[0].bestCandidateId, 1);
+      assert.strictEqual(metadata.iterations[0].bestScore, 1.16);
+    });
+
+    it('should not update bestCandidateId when aggregatedFeedback has no ranks', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      await tracker.recordAttempt({
+        whatPrompt: 'test',
+        howPrompt: 'test',
+        metadata: { iteration: 0, candidateId: 0, dimension: 'what', parentId: null }
+      });
+
+      await tracker.enrichCandidateWithRankingData(0, 0, {
+        comparisons: [],
+        aggregatedFeedback: { strengths: [], weaknesses: [], ranks: null, improvementSuggestion: null }
+      });
+
+      const metadata = await tracker.getMetadata();
+      assert.strictEqual(metadata.iterations[0].bestCandidateId, null);
+      assert.strictEqual(metadata.iterations[0].bestScore, null);
+    });
+  });
+
+  describe('Token Persistence', () => {
+    it('should write tokens.json alongside metadata.json', async () => {
+      const MetadataTracker = require('../../src/services/metadata-tracker.js');
+
+      const tracker = new MetadataTracker({
+        outputDir: testOutputDir,
+        sessionId: testSessionId,
+        userPrompt: 'test',
+        config: { beamWidth: 4, keepTop: 2 }
+      });
+
+      await tracker.initialize();
+
+      // Mock token tracker with the expected interface
+      const mockTokenTracker = {
+        getStats: () => ({
+          totalTokens: 4521,
+          llmTokens: 1820,
+          visionTokens: 980,
+          critiqueTokens: 640,
+          imageGenTokens: 8
+        }),
+        getEstimatedCost: () => ({
+          total: 0.0234,
+          llm: 0.0045,
+          vision: 0.0147,
+          critique: 0.0016,
+          imageGen: 0.0
+        }),
+        getRecords: () => ([
+          {
+            provider: 'llm',
+            operation: 'expand',
+            tokens: 210,
+            metadata: { model: 'mistral-7b-q4', iteration: 0, candidateId: 0 }
+          }
+        ])
+      };
+
+      await tracker.persistTokens(mockTokenTracker);
+
+      // Read tokens.json from disk
+      const date = getDateString();
+      const tokensPath = path.join(testOutputDir, date, testSessionId, 'tokens.json');
+      const content = await fs.readFile(tokensPath, 'utf8');
+      const tokenData = JSON.parse(content);
+
+      assert.strictEqual(tokenData.sessionId, testSessionId);
+      assert.ok(tokenData.generatedAt);
+      assert.strictEqual(tokenData.totals.totalTokens, 4521);
+      assert.strictEqual(tokenData.totals.llmTokens, 1820);
+      assert.strictEqual(tokenData.estimatedCost.total, 0.0234);
+      assert.strictEqual(tokenData.records.length, 1);
+      assert.strictEqual(tokenData.records[0].provider, 'llm');
+    });
   });
 });

@@ -204,7 +204,9 @@ class MetadataTracker {
       image: null,
       evaluation: null,
       totalScore: null,
-      survived: null
+      survived: null,
+      comparisons: [],
+      aggregatedFeedback: null
     };
 
     // Add to iteration
@@ -285,6 +287,49 @@ class MetadataTracker {
     }
 
     // Persist to disk
+    await this._writeMetadata();
+  }
+
+  /**
+   * Enrich a candidate record with ranking data from pairwise comparisons.
+   * Called after ranking completes to attach per-comparison details and
+   * aggregated feedback to the candidate's metadata record.
+   *
+   * @param {number} iteration - Iteration number
+   * @param {number} candidateId - Candidate ID
+   * @param {Object} rankingData - Ranking enrichment data
+   * @param {Array} rankingData.comparisons - Per-pairwise comparison results
+   * @param {Object|null} rankingData.aggregatedFeedback - Merged feedback from all comparisons
+   * @param {Object} [rankingData.critique] - Optional critique object
+   * @returns {Promise<void>}
+   */
+  async enrichCandidateWithRankingData(iteration, candidateId, rankingData) {
+    const { comparisons, aggregatedFeedback, critique } = rankingData;
+
+    const iterationEntry = this.metadata.iterations.find(it => it.iteration === iteration);
+    if (!iterationEntry) {
+      throw new Error(`Iteration ${iteration} not found`);
+    }
+
+    const candidate = iterationEntry.candidates.find(c => c.candidateId === candidateId);
+    if (!candidate) {
+      throw new Error(`Candidate ${candidateId} not found in iteration ${iteration}`);
+    }
+
+    candidate.comparisons = comparisons || [];
+    candidate.aggregatedFeedback = aggregatedFeedback || null;
+    if (critique) candidate.critique = critique;
+
+    // Update bestCandidateId for ranking-based flow (where totalScore is null)
+    // Use combined rank from aggregated feedback — lower rank is better
+    if (aggregatedFeedback?.ranks?.combined != null) {
+      const candidateRank = aggregatedFeedback.ranks.combined;
+      if (iterationEntry.bestScore === null || candidateRank < iterationEntry.bestScore) {
+        iterationEntry.bestCandidateId = candidateId;
+        iterationEntry.bestScore = candidateRank;
+      }
+    }
+
     await this._writeMetadata();
   }
 
@@ -379,6 +424,40 @@ class MetadataTracker {
   _getRankingsPath() {
     const metadataPath = this._getMetadataPath();
     return path.join(path.dirname(metadataPath), 'rankings.json');
+  }
+
+  /**
+   * Get path to tokens.json file
+   * @returns {string} Path to tokens file
+   * @private
+   */
+  _getTokensPath() {
+    const metadataPath = this._getMetadataPath();
+    return path.join(path.dirname(metadataPath), 'tokens.json');
+  }
+
+  /**
+   * Persist token usage and cost data to tokens.json
+   * @param {Object} tokenTracker - TokenTracker instance with getStats(), getEstimatedCost(), getRecords()
+   * @returns {Promise<void>}
+   */
+  async persistTokens(tokenTracker) {
+    const tokensPath = this._getTokensPath();
+    const stats = tokenTracker.getStats();
+    const cost = tokenTracker.getEstimatedCost();
+
+    const tokenData = {
+      sessionId: this.sessionId,
+      generatedAt: new Date().toISOString(),
+      totals: stats,
+      estimatedCost: cost,
+      records: tokenTracker.getRecords()
+    };
+
+    this.writeQueue = this.writeQueue.then(async () => {
+      await fs.writeFile(tokensPath, JSON.stringify(tokenData, null, 2), 'utf8');
+    });
+    await this.writeQueue;
   }
 
   /**
