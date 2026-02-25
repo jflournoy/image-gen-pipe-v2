@@ -27,7 +27,8 @@ class ModalVideoProvider {
    * @param {number} options.timeout - Request timeout in ms (default: 600000 for longer video generation)
    */
   constructor(options = {}) {
-    this.apiUrl = options.apiUrl || process.env.MODAL_ENDPOINT_URL;
+    this.apiUrl = options.apiUrl || process.env.MODAL_VIDEO_ENDPOINT_URL || process.env.MODAL_ENDPOINT_URL;
+    this.healthUrl = options.healthUrl || process.env.MODAL_VIDEO_HEALTH_URL;
     this.tokenId = options.tokenId || process.env.MODAL_TOKEN_ID;
     this.tokenSecret = options.tokenSecret || process.env.MODAL_TOKEN_SECRET;
     this.model = options.model || 'wan2.2-i2v-high';
@@ -42,6 +43,7 @@ class ModalVideoProvider {
     this.generation = {
       steps: configDefaults.steps !== undefined ? configDefaults.steps : 30,
       guidance: configDefaults.guidance !== undefined ? configDefaults.guidance : 4.0,
+      guidance_2: configDefaults.guidance_2 !== undefined ? configDefaults.guidance_2 : undefined,
       fps: configDefaults.fps !== undefined ? configDefaults.fps : 24,
       num_frames: configDefaults.num_frames !== undefined ? configDefaults.num_frames : 97,
     };
@@ -67,11 +69,11 @@ class ModalVideoProvider {
    * @private
    */
   _buildRequestPayload(imageBuffer, prompt, options = {}) {
-    // Convert image buffer to base64
-    const imageBase64 = imageBuffer.toString('base64');
+    // Determine mode: t2v (text-to-video) or i2v (image-to-video)
+    const mode = options.mode || (imageBuffer ? 'i2v' : 't2v');
 
     const payload = {
-      image: imageBase64,
+      mode,
       prompt: prompt || '',
       model: options.model !== undefined ? options.model : this.model,
       steps: options.steps !== undefined ? options.steps : this.generation.steps,
@@ -79,6 +81,21 @@ class ModalVideoProvider {
       fps: options.fps !== undefined ? options.fps : this.generation.fps,
       num_frames: options.num_frames !== undefined ? options.num_frames : this.generation.num_frames,
     };
+
+    // Include image for I2V mode
+    if (mode === 'i2v' && imageBuffer) {
+      payload.image = imageBuffer.toString('base64');
+    }
+
+    // Include guidance_2 for MoE low-noise expert (only if set)
+    const guidance2 = options.guidance_2 !== undefined ? options.guidance_2 : this.generation.guidance_2;
+    if (guidance2 !== undefined) {
+      payload.guidance_2 = guidance2;
+    }
+
+    // T2V-specific: height/width (no image to infer size from)
+    if (options.height !== undefined) payload.height = options.height;
+    if (options.width !== undefined) payload.width = options.width;
 
     if (options.seed !== undefined) payload.seed = options.seed;
 
@@ -171,7 +188,10 @@ class ModalVideoProvider {
    * @returns {Promise<Object>} Generation result with videoPath and metadata
    */
   async generateVideo(imageBuffer, prompt, options = {}) {
-    if (!imageBuffer || imageBuffer.length === 0) {
+    const mode = options.mode || (imageBuffer ? 'i2v' : 't2v');
+
+    // Image is required for I2V mode, optional for T2V
+    if (mode === 'i2v' && (!imageBuffer || imageBuffer.length === 0)) {
       throw new Error('Image buffer is required for video generation');
     }
 
@@ -189,7 +209,7 @@ class ModalVideoProvider {
       console.log(`[Modal Video Provider]${logPrefix} Settings: steps=${payload.steps}, guidance=${payload.guidance}, fps=${payload.fps}, frames=${payload.num_frames}`);
 
       const response = await axios.post(
-        this.apiUrl.replace('generate', 'generate-video'),
+        this.apiUrl,
         payload,
         {
           timeout: this.timeout,
@@ -257,7 +277,7 @@ class ModalVideoProvider {
           duration_seconds: result.duration_seconds,
           seed: result.metadata?.seed,
           inference_time: result.metadata?.inference_time,
-          modal: { endpoint: this.apiUrl.replace('generate-video', 'generate') },
+          modal: { endpoint: this.apiUrl },
         }
       };
 
@@ -275,7 +295,7 @@ class ModalVideoProvider {
    */
   async healthCheck() {
     try {
-      const healthUrl = this.apiUrl.replace(/generate[^/]*/, 'health');
+      const healthUrl = this.healthUrl;
       const response = await axios.get(healthUrl, {
         timeout: 120000, // 2 minutes - allow time for cold start containers
         headers: {
