@@ -15,6 +15,7 @@ import evaluationRouter from './evaluation-routes.js';
 import providerRouter, { getRuntimeProviders } from './provider-routes.js';
 import serviceRouter from './service-routes.js';
 import configRouter from './config-routes.js';
+import videoRouter from './video-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -545,6 +546,9 @@ export function createApp() {
 
   // Register configuration management routes (.env reading/writing)
   app.use('/api/config', configRouter);
+
+  // Register video generation routes (image-to-video via WAN Modal)
+  app.use('/api/video', videoRouter);
 
   return app;
 }

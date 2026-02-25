@@ -116,8 +116,14 @@
 
     .params-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      grid-template-columns: repeat(2, 1fr);
       gap: 15px;
+    }
+
+    @media (max-width: 700px) {
+      .params-grid {
+        grid-template-columns: 1fr;
+      }
     }
 
     button {
@@ -970,6 +976,270 @@
       cursor: not-allowed;
     }
 
+    /* Video Button on Image Cards */
+    .video-btn {
+      position: absolute;
+      bottom: 5px;
+      right: 5px;
+      background: rgba(0, 0, 0, 0.7);
+      color: white;
+      border: none;
+      border-radius: 3px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 5;
+    }
+
+    .image-card:hover .video-btn {
+      opacity: 1;
+    }
+
+    .video-btn:hover {
+      background: rgba(0, 0, 0, 0.9);
+    }
+
+    /* Video Generation Panel Modal */
+    .video-panel-modal {
+      display: none;
+      position: fixed;
+      z-index: 1002;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0, 0, 0, 0.8);
+      animation: fadeIn 0.2s ease;
+    }
+
+    .video-panel-modal.active {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .video-panel-content {
+      background: white;
+      border-radius: 8px;
+      max-width: 600px;
+      width: 90%;
+      max-height: 90vh;
+      overflow-y: auto;
+      position: relative;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    }
+
+    .video-panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px;
+      border-bottom: 1px solid #eee;
+    }
+
+    .video-panel-header h2 {
+      margin: 0;
+      color: #333;
+      font-size: 20px;
+    }
+
+    .video-panel-close {
+      background: none;
+      border: none;
+      font-size: 28px;
+      cursor: pointer;
+      color: #666;
+      padding: 0;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .video-panel-close:hover {
+      color: #333;
+    }
+
+    .video-panel-body {
+      padding: 20px;
+    }
+
+    .video-tabs {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #eee;
+    }
+
+    .video-tab {
+      padding: 10px 15px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #666;
+      font-size: 14px;
+      border-bottom: 3px solid transparent;
+      transition: all 0.2s;
+    }
+
+    .video-tab.active {
+      color: #0066cc;
+      border-bottom-color: #0066cc;
+    }
+
+    .video-tab:hover:not(.active) {
+      color: #333;
+    }
+
+    .video-tab-content {
+      display: none;
+    }
+
+    .video-tab-content.active {
+      display: block;
+    }
+
+    .video-source-preview {
+      width: 100%;
+      max-width: 300px;
+      height: auto;
+      border-radius: 4px;
+      margin-bottom: 20px;
+      border: 1px solid #ddd;
+    }
+
+    .video-form-group {
+      margin-bottom: 15px;
+    }
+
+    .video-form-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+      color: #333;
+      font-size: 13px;
+    }
+
+    .video-form-group input[type="text"],
+    .video-form-group input[type="number"],
+    .video-form-group input[type="file"],
+    .video-form-group textarea {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-family: inherit;
+      font-size: 13px;
+      box-sizing: border-box;
+    }
+
+    .video-form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .video-settings-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .video-generate-btn {
+      width: 100%;
+      padding: 12px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      font-weight: bold;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .video-generate-btn:hover:not(:disabled) {
+      background: #45a049;
+    }
+
+    .video-generate-btn:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+
+    .video-progress {
+      display: none;
+      text-align: center;
+      padding: 20px;
+      background: #f0f7ff;
+      border-radius: 4px;
+      margin: 20px 0;
+    }
+
+    .video-progress.active {
+      display: block;
+    }
+
+    .video-progress-spinner {
+      display: inline-block;
+      width: 30px;
+      height: 30px;
+      border: 3px solid #f3f3f3;
+      border-top: 3px solid #0066cc;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+      margin-bottom: 10px;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+
+    .video-progress-text {
+      color: #333;
+      font-size: 14px;
+      margin-top: 10px;
+    }
+
+    .video-result {
+      display: none;
+      margin-top: 20px;
+      padding: 20px;
+      background: #f0fff0;
+      border: 2px solid #4CAF50;
+      border-radius: 4px;
+    }
+
+    .video-result.active {
+      display: block;
+    }
+
+    .video-player {
+      width: 100%;
+      border-radius: 4px;
+      margin-bottom: 15px;
+    }
+
+    .video-download-btn {
+      width: 100%;
+      padding: 10px;
+      background: #0066cc;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-size: 14px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .video-download-btn:hover {
+      background: #0052a3;
+    }
+
     /* Prompts Modal */
     .prompts-modal {
       display: none;
@@ -1420,6 +1690,7 @@
           <select id="imageProvider" onchange="updateImageProviderSettings()" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ccc; margin-bottom: 10px;">
             <option value="openai">OpenAI (DALL-E)</option>
             <option value="flux">Flux (Local GPU)</option>
+            <option value="chroma">Chroma (Local GPU)</option>
             <option value="bfl">BFL API (Cloud Flux)</option>
             <option value="modal">Modal (Cloud GPU)</option>
           </select>
@@ -1501,6 +1772,64 @@
                   </div>
                   <div id="fluxLoraList" style="max-height: 100px; overflow-y: auto;"></div>
                   <small style="display: block; color: #888; font-size: 9px;">Add LoRAs from <a href="https://civitai.com" target="_blank" style="color: #1976d2;">CivitAI</a>. Place .safetensors files in services/loras/</small>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Chroma Settings (Local) -->
+          <div id="chromaSettings" style="display: none; margin-bottom: 10px;">
+            <div style="padding: 8px; background: #fff; border-radius: 4px; border: 1px solid #ddd;">
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                <span style="font-size: 12px;">Service: <strong>chroma_service.py</strong></span>
+                <span id="chromaStatus" class="health-indicator" style="font-size: 11px; padding: 2px 6px; border-radius: 3px;">⚪</span>
+              </div>
+              <div style="display: flex; gap: 4px; margin-bottom: 10px;">
+                <button onclick="startServiceInline('chroma')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #4CAF50; color: white; border: none; border-radius: 3px; cursor: pointer;">▶ Start</button>
+                <button onclick="stopServiceInline('chroma')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #f44336; color: white; border: none; border-radius: 3px; cursor: pointer;">⏹ Stop</button>
+                <button onclick="restartServiceInline('chroma')" style="flex: 1; padding: 4px 6px; font-size: 10px; background: #FF9800; color: white; border: none; border-radius: 3px; cursor: pointer;">↻</button>
+              </div>
+              <!-- Chroma Generation Settings -->
+              <div style="font-size: 11px;">
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Steps</label>
+                    <input type="number" id="chromaSteps" value="20" min="10" max="50" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
+                    <input type="number" id="chromaGuidance" value="7.5" min="1" max="15" step="0.5" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Width</label>
+                    <input type="number" id="chromaWidth" value="768" min="512" max="1024" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Height</label>
+                    <input type="number" id="chromaHeight" value="768" min="512" max="1024" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                  </div>
+                </div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Model Source</label>
+                  <div style="display: flex; gap: 10px; margin-bottom: 4px;">
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                      <input type="radio" name="chromaModelSource" value="huggingface" checked onchange="updateChromaModelSource(this.value)" style="margin-right: 4px;">
+                      <span>HuggingFace</span>
+                    </label>
+                    <label style="display: flex; align-items: center; cursor: pointer;">
+                      <input type="radio" name="chromaModelSource" value="local" onchange="updateChromaModelSource(this.value)" style="margin-right: 4px;">
+                      <span>Local File</span>
+                    </label>
+                  </div>
+                  <!-- Local Model Path (shown when "Local File" selected) -->
+                  <div id="chromaLocalPathSection" style="display: none; margin-top: 4px;">
+                    <input type="text" id="chromaCustomPath" placeholder="/path/to/checkpoint.safetensors" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; font-size: 10px;">
+                    <small style="display: block; color: #888; font-size: 9px; margin-top: 2px;">
+                      Download Chroma checkpoints from <a href="https://civitai.com" target="_blank" style="color: #1976d2;">CivitAI</a>
+                    </small>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1601,6 +1930,11 @@
                     <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
                     <input type="number" id="modalGuidance" value="3.5" min="0" max="20" step="0.5" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
+                </div>
+                <div style="margin-bottom: 6px;">
+                  <label style="display: block; color: #666; margin-bottom: 2px;">Flow Shift <span id="modalFlowShiftVal" style="font-weight: bold;">1.0</span></label>
+                  <input type="range" id="modalFlowShift" min="0.5" max="12" step="0.1" value="1.0" onchange="document.getElementById('modalFlowShiftVal').textContent = this.value; saveModalSettings()" style="width: 100%;">
+                  <small style="color: #888; font-size: 9px;">1.0 = balanced (Beta), 6.0 = structural (Normal). Only applies to sdxl_flow models.</small>
                 </div>
                 <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
                   <strong>MODAL_ENDPOINT:</strong> <span id="modalEndpointStatus">Not configured</span>
@@ -1882,10 +2216,10 @@
           <label for="combine-descriptiveness">Combine Descriptiveness:
             <span id="descriptivityLabel" style="font-weight: normal; color: #0066cc;">Balanced</span>
           </label>
-          <div style="display: flex; align-items: center; gap: 10px;">
-            <span style="font-size: 12px; color: #999; min-width: 50px;">Concise</span>
-            <input type="range" id="combine-descriptiveness" min="1" max="3" value="2" style="flex: 1;">
-            <span style="font-size: 12px; color: #999; min-width: 80px; text-align: right;">Descriptive</span>
+          <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
+            <span style="font-size: 12px; color: #999; white-space: nowrap;">Concise</span>
+            <input type="range" id="combine-descriptiveness" min="1" max="3" value="2" style="flex: 1; width: auto; min-width: 80px;">
+            <span style="font-size: 12px; color: #999; white-space: nowrap;">Descriptive</span>
           </div>
           <small style="display: block; margin-top: 5px; color: #666;">
             Controls how detailed the WHAT+HOW prompt combination instructions are. Concise = brief merging, Balanced = default style (preserve all details), Descriptive = extensive quality guidelines.
@@ -2254,6 +2588,91 @@
         </button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Video Generation Panel Modal -->
+  <div id="videoPanelModal" class="video-panel-modal" onclick="if(event.target === this) closeVideoPanel()">
+    <div class="video-panel-content">
+      <div class="video-panel-header">
+        <h2>🎬 Generate Video</h2>
+        <button class="video-panel-close" onclick="closeVideoPanel()">&times;</button>
+      </div>
+
+      <div class="video-panel-body">
+        <!-- Source Selection Tabs -->
+        <div class="video-tabs">
+          <button class="video-tab active" onclick="switchVideoTab('grid')">From Grid Image</button>
+          <button class="video-tab" onclick="switchVideoTab('upload')">Upload Custom Image</button>
+        </div>
+
+        <!-- Grid Image Tab -->
+        <div id="videoTabGrid" class="video-tab-content active">
+          <img id="videoSourcePreview" class="video-source-preview" alt="Selected image" style="display: none;">
+          <p style="color: #666; font-size: 13px; margin-bottom: 20px;">Selected image will be converted to video</p>
+        </div>
+
+        <!-- Custom Upload Tab -->
+        <div id="videoTabUpload" class="video-tab-content">
+          <div class="video-form-group">
+            <label>Select Image</label>
+            <input type="file" id="videoCustomImage" accept="image/*" onchange="handleVideoImageUpload(event)">
+          </div>
+          <img id="videoCustomPreview" class="video-source-preview" alt="Custom image" style="display: none;">
+        </div>
+
+        <!-- Motion Prompt -->
+        <div class="video-form-group">
+          <label>Motion Prompt</label>
+          <textarea id="videoPrompt" placeholder="e.g., 'a gentle camera pan across the scene' or 'slow zoom in'"></textarea>
+        </div>
+
+        <!-- Generation Settings -->
+        <div class="video-settings-grid">
+          <div class="video-form-group">
+            <label>Steps</label>
+            <input type="number" id="videoSteps" value="30" min="10" max="50">
+          </div>
+          <div class="video-form-group">
+            <label>Guidance Scale</label>
+            <input type="number" id="videoGuidance" value="4.0" min="1" max="10" step="0.5">
+          </div>
+          <div class="video-form-group">
+            <label>Frames</label>
+            <input type="number" id="videoFrames" value="97" min="17" max="144">
+          </div>
+          <div class="video-form-group">
+            <label>FPS</label>
+            <input type="number" id="videoFps" value="24" min="12" max="30">
+          </div>
+        </div>
+
+        <div class="video-form-group">
+          <label>Seed (optional, for reproducibility)</label>
+          <input type="number" id="videoSeed" placeholder="Leave empty for random">
+        </div>
+
+        <!-- Generate Button -->
+        <button id="videoGenerateBtn" class="video-generate-btn" onclick="generateVideoFromPanel()">
+          🚀 Generate Video
+        </button>
+
+        <!-- Progress Section -->
+        <div id="videoProgress" class="video-progress">
+          <div class="video-progress-spinner"></div>
+          <div class="video-progress-text">Generating video... <span id="videoElapsedTime">0s</span></div>
+        </div>
+
+        <!-- Result Section -->
+        <div id="videoResult" class="video-result">
+          <h3 style="margin-top: 0; color: #2e7d32;">✅ Video Generated!</h3>
+          <video id="videoPlayer" class="video-player" controls></video>
+          <button id="videoDownloadBtn" class="video-download-btn" onclick="downloadGeneratedVideo()">
+            ⬇️ Download Video
+          </button>
+          <p id="videoMetadata" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
+        </div>
+      </div>
     </div>
   </div>
 

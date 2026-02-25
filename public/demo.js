@@ -203,6 +203,7 @@ function updateImageProviderSettings() {
   const bflSettings = document.getElementById('bflSettings');
   const modalSettings = document.getElementById('modalSettings');
   const fluxSettings = document.getElementById('fluxSettings');
+  const chromaSettings = document.getElementById('chromaSettings');
   const dalleSettings = document.getElementById('dalleSettings');
 
   // Toggle DALL-E settings visibility
@@ -225,10 +226,15 @@ function updateImageProviderSettings() {
     fluxSettings.style.display = provider === 'flux' ? 'block' : 'none';
   }
 
-  // Toggle Face Fixing settings visibility (supported by Modal and Flux)
+  // Toggle Chroma (local) settings visibility
+  if (chromaSettings) {
+    chromaSettings.style.display = provider === 'chroma' ? 'block' : 'none';
+  }
+
+  // Toggle Face Fixing settings visibility (supported by Modal, Flux, and Chroma)
   const faceFixingSettings = document.getElementById('faceFixingSettings');
   if (faceFixingSettings) {
-    const supportsFaceFixing = provider === 'modal' || provider === 'flux';
+    const supportsFaceFixing = provider === 'modal' || provider === 'flux' || provider === 'chroma';
     faceFixingSettings.style.display = supportsFaceFixing ? 'block' : 'none';
   }
 
@@ -677,6 +683,59 @@ function getFluxLoras() {
   return validLoras.length > 0 ? validLoras : undefined;
 }
 
+// ============================================================================
+// Chroma Settings
+// ============================================================================
+
+/**
+ * Save Chroma settings to localStorage
+ */
+function saveChromaSettings() {
+  const steps = document.getElementById('chromaSteps')?.value;
+  const guidance = document.getElementById('chromaGuidance')?.value;
+  const width = document.getElementById('chromaWidth')?.value;
+  const height = document.getElementById('chromaHeight')?.value;
+
+  if (steps) localStorage.setItem('chromaSteps', steps);
+  if (guidance) localStorage.setItem('chromaGuidance', guidance);
+  if (width) localStorage.setItem('chromaWidth', width);
+  if (height) localStorage.setItem('chromaHeight', height);
+}
+
+/**
+ * Load Chroma settings from localStorage
+ */
+function loadChromaSettings() {
+  const steps = localStorage.getItem('chromaSteps') || '20';
+  const guidance = localStorage.getItem('chromaGuidance') || '7.5';
+  const width = localStorage.getItem('chromaWidth') || '768';
+  const height = localStorage.getItem('chromaHeight') || '768';
+
+  if (document.getElementById('chromaSteps')) {
+    document.getElementById('chromaSteps').value = steps;
+  }
+  if (document.getElementById('chromaGuidance')) {
+    document.getElementById('chromaGuidance').value = guidance;
+  }
+  if (document.getElementById('chromaWidth')) {
+    document.getElementById('chromaWidth').value = width;
+  }
+  if (document.getElementById('chromaHeight')) {
+    document.getElementById('chromaHeight').value = height;
+  }
+}
+
+/**
+ * Update Chroma model source (HuggingFace vs local file)
+ */
+function updateChromaModelSource(source) {
+  const chromaLocalPathSection = document.getElementById('chromaLocalPathSection');
+  if (chromaLocalPathSection) {
+    chromaLocalPathSection.style.display = source === 'local' ? 'block' : 'none';
+  }
+  saveChromaSettings();
+}
+
 /**
  * Save Modal settings to localStorage
  * Persists model choice, dimensions, steps, guidance, GPU, and seed
@@ -689,6 +748,7 @@ function saveModalSettings() {
   const guidance = document.getElementById('modalGuidance')?.value;
   const seed = document.getElementById('modalSeed')?.value;
   const gpu = document.getElementById('modalGpu')?.value;
+  const flowShift = document.getElementById('modalFlowShift')?.value;
 
   if (model) localStorage.setItem('modalModel', model);
   if (width) localStorage.setItem('modalWidth', width);
@@ -697,6 +757,7 @@ function saveModalSettings() {
   if (guidance) localStorage.setItem('modalGuidance', guidance);
   if (seed) localStorage.setItem('modalSeed', seed);
   if (gpu) localStorage.setItem('modalGpu', gpu);
+  if (flowShift) localStorage.setItem('modalFlowShift', flowShift);
 }
 
 /**
@@ -836,6 +897,7 @@ function loadModalSettings() {
   const guidance = localStorage.getItem('modalGuidance') || '3.5';
   const seed = localStorage.getItem('modalSeed') || '';
   const gpu = localStorage.getItem('modalGpu') || 'A10G';
+  const flowShift = localStorage.getItem('modalFlowShift') || '1.0';
 
   if (document.getElementById('modalModel')) document.getElementById('modalModel').value = model;
   if (document.getElementById('modalWidth')) document.getElementById('modalWidth').value = width;
@@ -852,6 +914,11 @@ function loadModalSettings() {
   }
   if (document.getElementById('modalSeed')) document.getElementById('modalSeed').value = seed;
   if (document.getElementById('modalGpu')) document.getElementById('modalGpu').value = gpu;
+  if (document.getElementById('modalFlowShift')) {
+    document.getElementById('modalFlowShift').value = flowShift;
+    const valueDisplay = document.getElementById('modalFlowShiftVal');
+    if (valueDisplay) valueDisplay.textContent = flowShift;
+  }
 }
 
 /**
@@ -1187,6 +1254,209 @@ function closeImageModal() {
 
   document.removeEventListener('keydown', handleModalKeydown);
 }
+
+/**
+ * Video Generation Panel Functions
+ */
+let currentVideoImageData = null;
+let currentVideoImageId = null;
+let videoGenerating = false;
+let videoElapsedTimer = null;
+
+window.openVideoPanel = function(imageUrl, imageId) {
+  currentVideoImageId = imageId;
+
+  // Convert image URL to base64
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.src = imageUrl;
+  img.onload = function() {
+    const canvas = document.createElement('canvas');
+    canvas.width = img.width;
+    canvas.height = img.height;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0);
+    currentVideoImageData = canvas.toDataURL('image/png').split(',')[1]; // Get base64 part
+
+    // Show preview and open panel
+    const preview = document.getElementById('videoSourcePreview');
+    preview.src = imageUrl;
+    preview.style.display = 'block';
+
+    // Clear other tab
+    document.getElementById('videoCustomPreview').style.display = 'none';
+
+    // Show grid tab
+    switchVideoTab('grid');
+
+    // Clear form
+    document.getElementById('videoPrompt').value = '';
+    document.getElementById('videoSteps').value = '30';
+    document.getElementById('videoGuidance').value = '4.0';
+    document.getElementById('videoFrames').value = '97';
+    document.getElementById('videoFps').value = '24';
+    document.getElementById('videoSeed').value = '';
+
+    // Reset result section
+    document.getElementById('videoResult').classList.remove('active');
+    document.getElementById('videoProgress').classList.remove('active');
+
+    // Open modal
+    const modal = document.getElementById('videoPanelModal');
+    modal.classList.add('active');
+  };
+  img.onerror = function() {
+    // Try fetch as fallback
+    fetch(imageUrl)
+      .then(r => r.blob())
+      .then(blob => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          currentVideoImageData = e.target.result.split(',')[1];
+          const preview = document.getElementById('videoSourcePreview');
+          preview.src = e.target.result;
+          preview.style.display = 'block';
+          switchVideoTab('grid');
+          const modal = document.getElementById('videoPanelModal');
+          modal.classList.add('active');
+        };
+        reader.readAsDataURL(blob);
+      });
+  };
+};
+
+window.closeVideoPanel = function() {
+  const modal = document.getElementById('videoPanelModal');
+  modal.classList.remove('active');
+  if (videoElapsedTimer) clearInterval(videoElapsedTimer);
+};
+
+window.switchVideoTab = function(tab) {
+  // Update tab buttons
+  document.querySelectorAll('.video-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+
+  // Update content
+  document.querySelectorAll('.video-tab-content').forEach(c => c.classList.remove('active'));
+  document.getElementById(`videoTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
+};
+
+window.handleVideoImageUpload = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    currentVideoImageData = e.target.result.split(',')[1];
+    const preview = document.getElementById('videoCustomPreview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+};
+
+window.generateVideoFromPanel = function() {
+  if (!currentVideoImageData) {
+    alert('Please select an image first');
+    return;
+  }
+
+  const prompt = document.getElementById('videoPrompt').value.trim();
+  if (!prompt) {
+    alert('Please enter a motion prompt');
+    return;
+  }
+
+  const steps = parseInt(document.getElementById('videoSteps').value) || 30;
+  const guidance = parseFloat(document.getElementById('videoGuidance').value) || 4.0;
+  const num_frames = parseInt(document.getElementById('videoFrames').value) || 97;
+  const fps = parseInt(document.getElementById('videoFps').value) || 24;
+  const seedStr = document.getElementById('videoSeed').value.trim();
+  const seed = seedStr ? parseInt(seedStr) : undefined;
+
+  videoGenerating = true;
+  document.getElementById('videoGenerateBtn').disabled = true;
+  document.getElementById('videoProgress').classList.add('active');
+  document.getElementById('videoResult').classList.remove('active');
+
+  // Start elapsed time counter
+  let elapsedSeconds = 0;
+  if (videoElapsedTimer) clearInterval(videoElapsedTimer);
+  videoElapsedTimer = setInterval(() => {
+    elapsedSeconds++;
+    document.getElementById('videoElapsedTime').textContent = `${elapsedSeconds}s`;
+  }, 1000);
+
+  // Send request to API
+  const requestBody = {
+    imageData: currentVideoImageData,
+    prompt,
+    steps,
+    guidance,
+    num_frames,
+    fps,
+    seed,
+    sessionId: currentJobId || 'video-session'
+  };
+
+  fetch('/api/video/generate', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(requestBody)
+  })
+    .then(r => r.json())
+    .then(result => {
+      if (result.error) {
+        throw new Error(result.error);
+      }
+
+      // Display video
+      const videoPlayer = document.getElementById('videoPlayer');
+      if (result.videoData) {
+        videoPlayer.src = `data:video/mp4;base64,${result.videoData}`;
+      } else if (result.videoPath) {
+        videoPlayer.src = result.videoPath;
+      }
+
+      // Show result
+      document.getElementById('videoResult').classList.add('active');
+
+      // Display metadata
+      const metadata = result.metadata || {};
+      const metaText = `
+        Duration: ${result.duration_seconds?.toFixed(1)}s |
+        Frames: ${result.num_frames} |
+        FPS: ${fps} |
+        Seed: ${metadata.seed || 'random'}
+      `;
+      document.getElementById('videoMetadata').textContent = metaText;
+
+      console.log('[Video] Generation complete', result);
+    })
+    .catch(error => {
+      console.error('[Video] Generation failed', error);
+      alert(`Video generation failed: ${error.message}`);
+    })
+    .finally(() => {
+      videoGenerating = false;
+      document.getElementById('videoGenerateBtn').disabled = false;
+      document.getElementById('videoProgress').classList.remove('active');
+      if (videoElapsedTimer) {
+        clearInterval(videoElapsedTimer);
+        videoElapsedTimer = null;
+      }
+    });
+};
+
+window.downloadGeneratedVideo = function() {
+  const videoPlayer = document.getElementById('videoPlayer');
+  if (!videoPlayer.src) return;
+
+  const link = document.createElement('a');
+  link.href = videoPlayer.src;
+  link.download = `video-${Date.now()}.mp4`;
+  link.click();
+};
 
 /**
  * Show prompts for the currently previewed image
@@ -1613,10 +1883,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Flux model dropdown
   // initializeFluxModelDropdown(); // Function not defined
 
-  // Initialize BFL, Modal, and Flux settings on page load
+  // Initialize BFL, Modal, Flux, and Chroma settings on page load
   loadBFLSettings();
   loadModalModels().then(() => loadModalSettings()); // Load models first, then restore settings
   loadFluxSettings();
+  loadChromaSettings();
   loadFaceFixingSettings();
   fetchAvailableLoras(); // Fetch LoRAs from discovery API for dropdown
   updateImageProviderSettings();
@@ -1639,6 +1910,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
 
       loadFluxSettings();
+      loadChromaSettings();
       loadFaceFixingSettings();
     });
   }
@@ -2469,6 +2741,7 @@ function addImageThumbnail(iteration, candidateId, imageUrl, baseImageUrl = null
   const card = document.createElement('div');
   card.className = 'image-card';
   card.title = `Iteration ${iteration}, Candidate ${candidateId}`;
+  card.style.position = 'relative';
 
   const img = document.createElement('img');
   img.src = imageUrl;
@@ -2490,11 +2763,22 @@ function addImageThumbnail(iteration, candidateId, imageUrl, baseImageUrl = null
     img.style.opacity = '1';
   };
 
+  // Add video button
+  const videoBtn = document.createElement('button');
+  videoBtn.className = 'video-btn';
+  videoBtn.textContent = '🎬';
+  videoBtn.title = 'Generate video from this image';
+  videoBtn.onclick = (e) => {
+    e.stopPropagation();
+    openVideoPanel(imageUrl, `i${iteration}c${candidateId}`);
+  };
+  card.appendChild(img);
+  card.appendChild(videoBtn);
+
   const label = document.createElement('div');
   label.className = 'image-card-label';
   label.textContent = `i${iteration}c${candidateId}`;
 
-  card.appendChild(img);
   card.appendChild(label);
   imagesGrid.appendChild(card);
 }
@@ -2591,6 +2875,7 @@ async function startBeamSearch() {
       const modalGuidance = localStorage.getItem('modalGuidance');
       const modalSeed = localStorage.getItem('modalSeed');
       const modalGpu = localStorage.getItem('modalGpu');
+      const modalFlowShift = localStorage.getItem('modalFlowShift');
 
       params.modalOptions = {
         ...(modalModel && { model: modalModel }),
@@ -2599,7 +2884,8 @@ async function startBeamSearch() {
         ...(modalSteps && { steps: parseInt(modalSteps, 10) }),
         ...(modalGuidance && { guidance: parseFloat(modalGuidance) }),
         ...(modalSeed && { seed: parseInt(modalSeed, 10) }),
-        ...(modalGpu && { gpu: modalGpu })
+        ...(modalGpu && { gpu: modalGpu }),
+        ...(modalFlowShift && { flow_shift: parseFloat(modalFlowShift) })
       };
     }
 
