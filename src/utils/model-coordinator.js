@@ -22,9 +22,10 @@ const SERVICE_URLS = new Proxy({}, {
   }
 });
 
-// Delay after unloads to allow GPU memory cleanup (CUDA memory release is async)
-// 5000ms default provides buffer for VRAM deallocation when switching Flux (10GB) ↔ VLM (5GB)
-const GPU_CLEANUP_DELAY_MS = parseInt(process.env.GPU_CLEANUP_DELAY_MS || '5000', 10);
+// Delay after stopping services to allow GPU memory cleanup.
+// Process kill destroys the CUDA context immediately, so this is just a small
+// safety buffer for the kernel to reclaim the memory.  2s is plenty.
+const GPU_CLEANUP_DELAY_MS = parseInt(process.env.GPU_CLEANUP_DELAY_MS || '2000', 10);
 
 // Health check timeout - be patient with model loading/busy services
 // 30s default allows services time to respond even when busy with other requests
@@ -89,19 +90,21 @@ async function withGPULock(operation) {
 /**
  * Execute an operation that requires VLM, holding GPU lock for entire duration
  * Prepares GPU (unloads conflicting models), runs operation, then releases lock
- * Use this instead of prepareForVLM() + operation when you need the lock held during inference
+ * Use this to hold the GPU lock for the full duration of a VLM inference operation
  * @param {Function} operation - Async function to execute (e.g., VLM ranking)
  * @returns {Promise<*>} Result of the operation
  */
 async function withVLMOperation(operation) {
   return withGPULock(async () => {
     console.log('[ModelCoordinator] Preparing for VLM operation (holding lock)...');
-    // Unload conflicting models
+    // Stop conflicting services to free GPU memory
     await Promise.all([
       unloadModel('flux'),
       unloadModel('llm')
     ]);
     await waitForGPUCleanup();
+    // Ensure VLM service is running (may have been stopped by a previous prepare call)
+    await ensureServiceRunning('vlm');
     // Execute VLM operation with lock still held
     return await operation();
   });
@@ -115,12 +118,14 @@ async function withVLMOperation(operation) {
 async function withImageGenOperation(operation) {
   return withGPULock(async () => {
     console.log('[ModelCoordinator] Preparing for image gen operation (holding lock)...');
-    // Unload conflicting models
+    // Stop conflicting services to free GPU memory
     await Promise.all([
       unloadModel('llm'),
       unloadModel('vlm')
     ]);
     await waitForGPUCleanup();
+    // Ensure Flux service is running (may have been stopped by a previous prepare call)
+    await ensureServiceRunning('flux');
     // Execute image gen operation with lock still held
     return await operation();
   });
@@ -134,12 +139,14 @@ async function withImageGenOperation(operation) {
 async function withLLMOperation(operation) {
   return withGPULock(async () => {
     console.log('[ModelCoordinator] Preparing for LLM operation (holding lock)...');
-    // Unload conflicting models
+    // Stop conflicting services to free GPU memory
     await Promise.all([
       unloadModel('flux'),
       unloadModel('vlm')
     ]);
     await waitForGPUCleanup();
+    // Ensure LLM service is running (may have been stopped by a previous prepare call)
+    await ensureServiceRunning('llm');
     // Execute LLM operation with lock still held
     return await operation();
   });
@@ -349,118 +356,73 @@ function createVLMServiceRestarter() {
 }
 
 /**
- * Unload a model from a service
- * @param {string} service - 'llm', 'flux', or 'vision'
- * @returns {Promise<boolean>} True if successfully unloaded
+ * Unload a model by stopping the service process.
+ *
+ * ggml's CUDA backend maintains a memory pool that persists for the process
+ * lifetime — calling the HTTP /unload endpoint sets the Python model reference
+ * to None but the cudaMalloc'd memory stays in ggml's pool.  The only reliable
+ * way to free GPU memory is to kill the process (destroying the CUDA context).
+ *
+ * @param {string} service - 'llm', 'flux', 'vlm', or 'vision'
+ * @returns {Promise<boolean>} True if service was stopped (or was already stopped)
  */
 async function unloadModel(service) {
   try {
-    const url = `${SERVICE_URLS[service]}/unload`;
-    // Reduced timeout to 5 seconds - don't wait too long
-    const response = await axios.post(url, {}, { timeout: 5000 });
+    const result = await serviceManager.stopService(service);
     modelState[service] = false;
-    console.log(`[ModelCoordinator] Unloaded ${service}: ${response.data.status}`);
-    return true;
+    if (result.success) {
+      console.log(`[ModelCoordinator] Stopped ${service} service to free GPU memory`);
+    }
+    return result.success;
   } catch (error) {
-    // Service might not be running or model already unloaded
-    // This is non-critical - log and continue
-    console.log(`[ModelCoordinator] Could not unload ${service}: ${error.message}`);
+    console.log(`[ModelCoordinator] Could not stop ${service}: ${error.message}`);
     modelState[service] = false;
     return false;
   }
 }
 
 /**
- * Load a model in a service
- * @param {string} service - 'llm', 'flux', or 'vision'
- * @returns {Promise<boolean>} True if successfully loaded
+ * Ensure a service process is running, starting it if necessary.
+ * Call this before making requests to a service that may have been stopped
+ * by a previous unloadModel() call.
+ *
+ * @param {string} service - 'llm', 'flux', 'vlm', or 'vision'
+ * @returns {Promise<boolean>} True if service is running
  */
-async function loadModel(service) {
-  try {
-    const url = `${SERVICE_URLS[service]}/load`;
-    const response = await axios.post(url, {}, { timeout: 120000 }); // 2 min for model loading
-    modelState[service] = true;
-    console.log(`[ModelCoordinator] Loaded ${service}: ${response.data.status}`);
+async function ensureServiceRunning(service) {
+  const running = await serviceManager.isServiceRunning(service);
+  if (running) {
     return true;
-  } catch (error) {
-    console.log(`[ModelCoordinator] Could not load ${service}: ${error.message}`);
+  }
+
+  console.log(`[ModelCoordinator] Starting ${service} service...`);
+  const result = await serviceManager.startService(service);
+  if (!result.success) {
+    console.error(`[ModelCoordinator] Failed to start ${service}: ${result.error}`);
     return false;
   }
-}
 
-/**
- * Prepare for LLM operations
- * Unloads Flux and VLM to free GPU memory for LLM
- * On 12GB GPU: LLM ~4GB, need to ensure no conflicts
- */
-async function prepareForLLM() {
-  const release = await acquireGPULock();
-  try {
-    console.log('[ModelCoordinator] Preparing for LLM operations...');
-    // Unload Flux (heaviest) and VLM to free GPU memory
-    await Promise.all([
-      unloadModel('flux'),
-      unloadModel('vlm')
-    ]);
-    // Wait for GPU memory to be freed (CUDA cleanup is async)
-    await waitForGPUCleanup();
-    // LLM will load on first request
-  } finally {
-    release();
+  // Wait for service to be healthy before returning
+  const healthUrl = `${SERVICE_URLS[service]}/health`;
+  const maxWaitMs = 60000;
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < maxWaitMs) {
+    try {
+      const health = await axios.get(healthUrl, { timeout: 5000 });
+      if (health.data.status === 'ok' || health.data.status === 'healthy') {
+        console.log(`[ModelCoordinator] ${service} service is ready`);
+        markServiceIntent(service, true);
+        return true;
+      }
+    } catch {
+      // Not ready yet
+    }
+    await new Promise(resolve => setTimeout(resolve, 1000));
   }
-}
 
-/**
- * Prepare for image generation
- * Unloads LLM and VLM to free GPU memory for Flux (~10GB)
- */
-async function prepareForImageGen() {
-  const release = await acquireGPULock();
-  try {
-    console.log('[ModelCoordinator] Preparing for image generation...');
-    // Unload LLM and VLM to free GPU memory - Flux needs ~10GB
-    await Promise.all([
-      unloadModel('llm'),
-      unloadModel('vlm')
-    ]);
-    // Wait for GPU memory to be freed (CUDA cleanup is async)
-    await waitForGPUCleanup();
-    // Flux will load on first request
-  } finally {
-    release();
-  }
-}
-
-/**
- * Prepare for vision analysis
- * Vision model is small, can coexist with others
- */
-async function prepareForVision() {
-  console.log('[ModelCoordinator] Preparing for vision analysis...');
-  // Vision model is small (~1GB), usually doesn't need coordination
-  // But if we're very tight on memory, unload flux
-  // await unloadModel('flux');
-}
-
-/**
- * Prepare for VLM pairwise comparison
- * VLM is ~5-7GB, needs Flux and LLM unloaded on 12GB GPU
- */
-async function prepareForVLM() {
-  const release = await acquireGPULock();
-  try {
-    console.log('[ModelCoordinator] Preparing for VLM comparison...');
-    // VLM is ~5-7GB, requires both Flux and LLM unloaded on 12GB GPU
-    await Promise.all([
-      unloadModel('flux'),
-      unloadModel('llm')
-    ]);
-    // Wait for GPU memory to be freed (CUDA cleanup is async)
-    await waitForGPUCleanup();
-    // VLM will load on first comparison request
-  } finally {
-    release();
-  }
+  console.error(`[ModelCoordinator] ${service} service health check timed out`);
+  return false;
 }
 
 /**
@@ -485,11 +447,7 @@ function getModelStates() {
 
 module.exports = {
   unloadModel,
-  loadModel,
-  prepareForLLM,
-  prepareForImageGen,
-  prepareForVision,
-  prepareForVLM,
+  ensureServiceRunning,
   cleanupAll,
   getModelStates,
   acquireGPULock,
