@@ -725,7 +725,10 @@ class LocalVLMProvider {
         // Need actual comparison (with ensemble voting for reliability)
         try {
           const result = await this._compareWithRetry(this._getImagePath(a), this._getImagePath(b), prompt, ensembleSize);
-          this._comparisonGraph.recordComparison(a.candidateId, b.candidateId, result.choice);
+          this._comparisonGraph.recordComparison(
+            a.candidateId, b.candidateId, result.choice,
+            result.ranks?.A || null, result.ranks?.B || null
+          );
 
           // Track feedback for winner and loser
           const winnerId = result.choice === 'A' ? a.candidateId : b.candidateId;
@@ -903,7 +906,10 @@ class LocalVLMProvider {
       } else {
         try {
           const result = await this._compareWithRetry(this._getImagePath(champion), this._getImagePath(challenger), prompt, ensembleSize);
-          this._comparisonGraph.recordComparison(championId, challengerId, result.choice);
+          this._comparisonGraph.recordComparison(
+            championId, challengerId, result.choice,
+            result.ranks?.A || null, result.ranks?.B || null
+          );
 
           if (result.choice === 'B') {
             champion = challenger;

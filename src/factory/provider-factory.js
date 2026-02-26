@@ -22,12 +22,14 @@ const OpenAIVisionProvider = require('../providers/openai-vision-provider');
 // Real providers - Local
 const LocalLLMProvider = require('../providers/local-llm-provider');
 const FluxImageProvider = require('../providers/flux-image-provider');
+const ChromaImageProvider = require('../providers/chroma-image-provider');
 const LocalVisionProvider = require('../providers/local-vision-provider');
 const LocalVLMProvider = require('../providers/local-vlm-provider');
 
 // Real providers - Cloud APIs
 const BFLImageProvider = require('../providers/bfl-image-provider');
 const ModalImageProvider = require('../providers/modal-image-provider');
+const ModalVideoProvider = require('../providers/modal-video-provider');
 
 // Services
 const CritiqueGenerator = require('../services/critique-generator');
@@ -120,6 +122,15 @@ function createImageProvider(options = {}) {
         model: options.model || config.flux?.model || 'flux-dev',
         generation: options.generation || config.flux?.generation,
         serviceRestarter: options.serviceRestarter || modelCoordinator.createServiceRestarter('flux')
+      });
+    }
+
+    case 'chroma': {
+      return new ChromaImageProvider({
+        apiUrl: options.apiUrl || config.chroma?.apiUrl || serviceManager.getServiceUrl('chroma'),
+        model: options.model || config.chroma?.model || 'chroma-1-hd',
+        generation: options.generation || config.chroma?.generation,
+        serviceRestarter: options.serviceRestarter || modelCoordinator.createServiceRestarter('chroma')
       });
     }
 
@@ -217,6 +228,7 @@ function createScoringProvider(options = {}) {
 /**
  * Create a Critique Generator instance
  * @param {Object} options - Override configuration options
+ * @param {Object} [options.llmProvider] - LLM provider instance to use for critique generation
  * @returns {CritiqueGenerator} Critique generator instance
  */
 function createCritiqueGenerator(options = {}) {
@@ -226,18 +238,9 @@ function createCritiqueGenerator(options = {}) {
     return new MockCritiqueGenerator(options);
   }
 
-  // Real critique generator (uses OpenAI for LLM-based critique)
-  // Use explicit undefined check to allow passing undefined to override config
-  const apiKey = 'apiKey' in options ? options.apiKey : config.llm.apiKey;
-  const instance = new CritiqueGenerator({
-    apiKey,
-    model: options.model || 'gpt-4o-mini',
-    maxRetries: options.maxRetries || config.llm.maxRetries,
-    timeout: options.timeout || config.llm.timeout
-  });
-  // Store apiKey on instance for testing
-  instance.apiKey = apiKey;
-  return instance;
+  // Use injected llmProvider — critique uses whatever LLM service is selected
+  const llmProvider = options.llmProvider;
+  return new CritiqueGenerator({ llmProvider });
 }
 
 /**
@@ -309,6 +312,35 @@ function createVLMProvider(options = {}) {
 }
 
 /**
+ * Create a Video provider instance
+ * @param {Object} options - Override configuration options
+ * @returns {VideoProvider} Video provider instance
+ */
+function createVideoProvider(options = {}) {
+  // Video always uses real providers (no mock implementation)
+  const provider = options.provider || config.video?.provider || 'modal';
+
+  switch (provider) {
+    case 'modal': {
+      return new ModalVideoProvider({
+        apiUrl: options.apiUrl || config.modal?.videoApiUrl,
+        healthUrl: options.healthUrl || config.modal?.videoHealthUrl,
+        tokenId: options.tokenId || config.modal?.tokenId,
+        tokenSecret: options.tokenSecret || config.modal?.tokenSecret,
+        model: options.model || config.modal?.videoModel || 'wan2.2-i2v-high',
+        generation: options.generation || config.modal?.videoGeneration,
+        timeout: options.timeout || config.modal?.videoTimeout,
+        sessionId: options.sessionId,
+        outputDir: options.outputDir
+      });
+    }
+
+    default:
+      throw new Error(`Unknown video provider: ${provider}`);
+  }
+}
+
+/**
  * Create all providers at once
  * @param {Object} options - Override configuration options
  * @returns {Object} Object with all provider instances
@@ -330,5 +362,6 @@ module.exports = {
   createCritiqueGenerator,
   createImageRanker,
   createVLMProvider,
+  createVideoProvider,
   createProviders
 };

@@ -124,6 +124,19 @@ const providerConfig = {
     supportedSchedulers: ['euler', 'dpmsolver', 'ddim', 'pndm']
   },
 
+  // Chroma1-HD Image Generation Configuration (local or Modal)
+  chroma: {
+    apiUrl: process.env.CHROMA_API_URL || 'http://localhost:8004',
+    model: process.env.CHROMA_MODEL || 'chroma-1-hd',
+    // Generation settings - can be overridden per-request or via environment variables
+    generation: {
+      steps: parseInt(process.env.CHROMA_STEPS || '20', 10),       // Inference steps (recommended 15-30)
+      guidance: parseFloat(process.env.CHROMA_GUIDANCE || '7.5'),  // Guidance scale (recommended 7.0-8.5)
+      width: parseInt(process.env.CHROMA_WIDTH || '768', 10),      // Image width (512-1024 recommended)
+      height: parseInt(process.env.CHROMA_HEIGHT || '768', 10)     // Image height (512-1024 recommended)
+    }
+  },
+
   // Local Vision Configuration (CLIP + Aesthetics)
   localVision: {
     apiUrl: process.env.LOCAL_VISION_API_URL || 'http://localhost:8002',
@@ -150,19 +163,36 @@ const providerConfig = {
   // Uses Modal.com for serverless GPU inference
   modal: {
     apiUrl: process.env.MODAL_ENDPOINT_URL,  // Modal web endpoint URL (e.g., https://your-app--generate.modal.run)
+    videoApiUrl: process.env.MODAL_VIDEO_ENDPOINT_URL,  // Modal video endpoint URL (for WAN I2V)
+    videoHealthUrl: process.env.MODAL_VIDEO_HEALTH_URL,  // Modal video health check URL
     tokenId: process.env.MODAL_TOKEN_ID,      // Modal authentication token ID
     tokenSecret: process.env.MODAL_TOKEN_SECRET,  // Modal authentication token secret
-    model: process.env.MODAL_MODEL || 'flux-dev',  // Default model (flux-dev, sdxl-turbo, sd3-medium)
+    model: process.env.MODAL_MODEL || 'flux-dev',  // Default image model (flux-dev, sdxl-turbo, sd3-medium)
+    videoModel: process.env.MODAL_VIDEO_MODEL || 'wan2.2-i2v-high',  // Default video model (WAN I2V)
     gpu: process.env.MODAL_GPU || 'A10G',     // GPU type (T4, A10G, A100, H100)
-    // Generation settings for Modal
+    // Generation settings for Modal images
     generation: {
       width: parseInt(process.env.MODAL_WIDTH || '1024', 10),     // Image width
       height: parseInt(process.env.MODAL_HEIGHT || '1024', 10),   // Image height
       steps: parseInt(process.env.MODAL_STEPS || '25', 10),       // Inference steps
       guidance: parseFloat(process.env.MODAL_GUIDANCE || '3.5')   // Guidance scale
     },
-    // Extended timeout for Modal cold starts (containers can take 60-120s to spin up)
-    timeout: parseInt(process.env.MODAL_TIMEOUT || '300000', 10)  // 5 minutes default
+    // Generation settings for Modal videos (WAN I2V / T2V)
+    videoGeneration: {
+      steps: parseInt(process.env.MODAL_VIDEO_STEPS || '30', 10),       // Inference steps (recommended 20-40)
+      guidance: parseFloat(process.env.MODAL_VIDEO_GUIDANCE || '4.0'),  // Guidance scale for high-noise expert (recommended 3.0-5.6)
+      guidance_2: process.env.MODAL_VIDEO_GUIDANCE_2 ? parseFloat(process.env.MODAL_VIDEO_GUIDANCE_2) : undefined,  // Guidance scale for low-noise expert (MoE models only, recommended ~2.0)
+      fps: parseInt(process.env.MODAL_VIDEO_FPS || '24', 10),           // Frames per second (12-30)
+      num_frames: parseInt(process.env.MODAL_VIDEO_FRAMES || '97', 10)  // Total frames to generate (17-144, WAN default 97)
+    },
+    // Extended timeout for Modal cold starts and video generation
+    timeout: parseInt(process.env.MODAL_TIMEOUT || '300000', 10),  // 5 minutes for images
+    videoTimeout: parseInt(process.env.MODAL_VIDEO_TIMEOUT || '600000', 10)  // 10 minutes for videos
+  },
+
+  // Video Provider Configuration
+  video: {
+    provider: process.env.VIDEO_PROVIDER || 'modal'  // Default video provider (currently only 'modal' supported)
   }
 };
 
