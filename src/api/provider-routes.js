@@ -15,6 +15,8 @@ const __dirname = path.dirname(__filename);
 const providerConfig = require('../config/provider-config.js');
 const { getServicesToStart } = require('../config/requirements.js');
 const axios = require('axios');
+const fs = require('fs');
+const pathModule = require('path');
 
 const router = express.Router();
 
@@ -24,6 +26,77 @@ let runtimeProviders = {
   image: null,
   vision: null
 };
+
+// Modal models cache
+const MODAL_CACHE_FILE = pathModule.join(process.cwd(), '.modal-models-cache.json');
+const MODAL_CACHE_TTL = 3600000; // 1 hour
+let modalModelsCache = {
+  models: [],
+  timestamp: 0,
+  isRefreshing: false
+};
+
+// Load cached Modal models from disk on startup
+function loadModalModelsCache() {
+  try {
+    if (fs.existsSync(MODAL_CACHE_FILE)) {
+      const data = JSON.parse(fs.readFileSync(MODAL_CACHE_FILE, 'utf8'));
+      modalModelsCache = data;
+      console.log('[Modal Cache] Loaded cached models from disk:', modalModelsCache.models.length, 'models');
+    }
+  } catch (error) {
+    console.warn('[Modal Cache] Failed to load cache file:', error.message);
+  }
+}
+
+// Save Modal models cache to disk
+function saveModalModelsCache() {
+  try {
+    fs.writeFileSync(MODAL_CACHE_FILE, JSON.stringify(modalModelsCache, null, 2));
+    console.log('[Modal Cache] Saved to disk');
+  } catch (error) {
+    console.error('[Modal Cache] Failed to save cache file:', error.message);
+  }
+}
+
+// Refresh Modal models in background
+async function refreshModalModelsInBackground() {
+  if (modalModelsCache.isRefreshing || !providerConfig.modal?.apiUrl) {
+    return;
+  }
+
+  modalModelsCache.isRefreshing = true;
+
+  try {
+    console.log('[Modal Cache] Refreshing in background...');
+    const result = await fetchModalModels();
+
+    if (!result.error) {
+      modalModelsCache.models = result.models;
+      modalModelsCache.timestamp = Date.now();
+      saveModalModelsCache();
+      console.log('[Modal Cache] Refreshed with', result.models.length, 'models');
+    } else {
+      console.warn('[Modal Cache] Refresh failed:', result.error);
+    }
+  } catch (error) {
+    console.error('[Modal Cache] Refresh error:', error.message);
+  } finally {
+    modalModelsCache.isRefreshing = false;
+  }
+}
+
+// Load cache on module initialization
+loadModalModelsCache();
+
+// Refresh cache if stale (non-blocking)
+function refreshModalModelsIfStale() {
+  const age = Date.now() - modalModelsCache.timestamp;
+  if (age > MODAL_CACHE_TTL) {
+    console.log('[Modal Cache] Cache is stale (age:', Math.round(age / 1000), 's), refreshing...');
+    refreshModalModelsInBackground(); // Fire and forget
+  }
+}
 
 /**
  * GET /api/providers/status
@@ -765,69 +838,88 @@ async function downloadFluxModel(sendProgress) {
 
 /**
  * GET /api/providers/models
- * Get available models catalog
+ * Get available models catalog (returns cached Modal models immediately)
  */
 router.get('/models', (req, res) => {
-  res.json({
-    localLLM: [
-      {
-        name: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
-        displayName: 'Mistral 7B Instruct (GGUF)',
-        description: 'Mistral 7B Instruct - Fast and high quality, good for prompt refinement',
-        size: '~4.4 GB (Q4_K_M)',
-        recommended: true,
-        setupGuide: 'Automatically downloaded by Python service on first start'
-      },
-      {
-        name: 'TheBloke/Llama-2-7B-Chat-GGUF',
-        displayName: 'Llama 2 7B Chat (GGUF)',
-        description: 'Llama 2 7B Chat - Conversational model, general purpose',
-        size: '~4.1 GB (Q4_K_M)',
-        recommended: false,
-        setupGuide: 'Requires HuggingFace token for download'
-      },
-      {
-        name: 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF',
-        displayName: 'TinyLlama 1.1B (GGUF)',
-        description: 'TinyLlama 1.1B - Very fast, lower quality, good for testing',
-        size: '~0.7 GB (Q4_K_M)',
-        recommended: false,
-        setupGuide: 'Good for CPU-only systems'
-      }
-    ],
-    flux: [
-      {
-        name: 'flux-dev',
-        description: 'FLUX.1-dev: Best quality, LoRA support, 20-30 steps, ~2-3min (auto fp8)',
-        size: '~12 GB',
-        recommended: true,
-        setupGuide: 'Requires Python service setup with diffusers library'
-      },
-      {
-        name: 'flux-schnell',
-        description: 'Fast variant (4 steps, ~30s), limited LoRA ecosystem',
-        size: '~12 GB',
-        recommended: false,
-        setupGuide: 'Requires Python service setup with diffusers library'
-      }
-    ],
-    localVision: [
-      {
-        name: 'clip-vit-base-patch32',
-        description: 'CLIP model for image-text alignment',
-        size: '600 MB',
-        recommended: true,
-        setupGuide: 'Automatically downloaded by Python service on first use'
-      },
-      {
-        name: 'aesthetic_predictor_v2_5',
-        description: 'Aesthetic quality scoring model',
-        size: '300 MB',
-        recommended: true,
-        setupGuide: 'Requires manual download and placement'
-      }
-    ]
-  });
+  try {
+    const baseModels = {
+      localLLM: [
+        {
+          name: 'TheBloke/Mistral-7B-Instruct-v0.2-GGUF',
+          displayName: 'Mistral 7B Instruct (GGUF)',
+          description: 'Mistral 7B Instruct - Fast and high quality, good for prompt refinement',
+          size: '~4.4 GB (Q4_K_M)',
+          recommended: true,
+          setupGuide: 'Automatically downloaded by Python service on first start'
+        },
+        {
+          name: 'TheBloke/Llama-2-7B-Chat-GGUF',
+          displayName: 'Llama 2 7B Chat (GGUF)',
+          description: 'Llama 2 7B Chat - Conversational model, general purpose',
+          size: '~4.1 GB (Q4_K_M)',
+          recommended: false,
+          setupGuide: 'Requires HuggingFace token for download'
+        },
+        {
+          name: 'TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF',
+          displayName: 'TinyLlama 1.1B (GGUF)',
+          description: 'TinyLlama 1.1B - Very fast, lower quality, good for testing',
+          size: '~0.7 GB (Q4_K_M)',
+          recommended: false,
+          setupGuide: 'Good for CPU-only systems'
+        }
+      ],
+      flux: [
+        {
+          name: 'flux-dev',
+          description: 'FLUX.1-dev: Best quality, LoRA support, 20-30 steps, ~2-3min (auto fp8)',
+          size: '~12 GB',
+          recommended: true,
+          setupGuide: 'Requires Python service setup with diffusers library'
+        },
+        {
+          name: 'flux-schnell',
+          description: 'Fast variant (4 steps, ~30s), limited LoRA ecosystem',
+          size: '~12 GB',
+          recommended: false,
+          setupGuide: 'Requires Python service setup with diffusers library'
+        }
+      ],
+      localVision: [
+        {
+          name: 'clip-vit-base-patch32',
+          description: 'CLIP model for image-text alignment',
+          size: '600 MB',
+          recommended: true,
+          setupGuide: 'Automatically downloaded by Python service on first use'
+        },
+        {
+          name: 'aesthetic_predictor_v2_5',
+          description: 'Aesthetic quality scoring model',
+          size: '300 MB',
+          recommended: true,
+          setupGuide: 'Requires manual download and placement'
+        }
+      ]
+    };
+
+    // Return cached Modal models immediately (no blocking)
+    if (modalModelsCache.models.length > 0) {
+      baseModels.modal = modalModelsCache.models;
+      baseModels.modalCacheAge = Date.now() - modalModelsCache.timestamp;
+    }
+
+    // Refresh cache in background if stale (non-blocking)
+    refreshModalModelsIfStale();
+
+    res.json(baseModels);
+  } catch (error) {
+    console.error('[Models] Error fetching models:', error);
+    res.status(500).json({
+      error: 'Failed to fetch models',
+      message: error.message
+    });
+  }
 });
 
 /**

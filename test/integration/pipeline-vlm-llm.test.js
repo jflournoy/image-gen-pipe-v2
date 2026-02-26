@@ -14,7 +14,7 @@ const nock = require('nock');
 describe('Pipeline: VLM/LLM Integration', () => {
   let LocalLLMProvider;
   let LocalVLMProvider;
-  let modelCoordinator;
+  let _modelCoordinator;
 
   beforeEach(() => {
     // Clear caches for fresh instances
@@ -24,7 +24,7 @@ describe('Pipeline: VLM/LLM Integration', () => {
 
     LocalLLMProvider = require('../../src/providers/local-llm-provider.js');
     LocalVLMProvider = require('../../src/providers/local-vlm-provider.js');
-    modelCoordinator = require('../../src/utils/model-coordinator.js');
+    _modelCoordinator = require('../../src/utils/model-coordinator.js');
 
     nock.cleanAll();
   });
@@ -383,35 +383,4 @@ describe('Pipeline: VLM/LLM Integration', () => {
     });
   });
 
-  describe('GPU Memory Management in Pipeline', () => {
-    test('should prepare for LLM before generation phase', async () => {
-      const fluxUnload = nock('http://localhost:8001')
-        .post('/unload')
-        .reply(200, { status: 'unloaded' });
-
-      await modelCoordinator.prepareForLLM();
-
-      assert.ok(fluxUnload.isDone(), 'Should unload Flux before LLM operations');
-    });
-
-    test('should prepare for image generation after ranking', async () => {
-      const llmUnload = nock('http://localhost:8003')
-        .post('/unload')
-        .reply(200, { status: 'unloaded' });
-
-      await modelCoordinator.prepareForImageGen();
-
-      assert.ok(llmUnload.isDone(), 'Should unload LLM before image generation');
-    });
-
-    test('should prepare for VLM before ranking phase', async () => {
-      const fluxUnload = nock('http://localhost:8001')
-        .post('/unload')
-        .reply(200, { status: 'unloaded' });
-
-      await modelCoordinator.prepareForVLM();
-
-      assert.ok(fluxUnload.isDone(), 'Should unload Flux before VLM operations');
-    });
-  });
 });

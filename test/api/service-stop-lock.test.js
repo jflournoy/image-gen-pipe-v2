@@ -9,7 +9,6 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs').promises;
-const path = require('path');
 
 const ServiceManager = require('../../src/utils/service-manager');
 

@@ -15,10 +15,10 @@ describe('🔴 RED: demo-routes should use requirements module', () => {
 
   test('🔴 should import requirements module', () => {
     const hasRequirementsImport =
-      demoRoutesContent.includes("require('../config/requirements") ||
-      demoRoutesContent.includes("require('../../config/requirements") ||
-      demoRoutesContent.includes("from '../config/requirements") ||
-      demoRoutesContent.includes("from '../../config/requirements");
+      demoRoutesContent.includes('require(\'../config/requirements') ||
+      demoRoutesContent.includes('require(\'../../config/requirements') ||
+      demoRoutesContent.includes('from \'../config/requirements') ||
+      demoRoutesContent.includes('from \'../../config/requirements');
 
     assert.ok(
       hasRequirementsImport,
@@ -38,7 +38,7 @@ describe('🔴 RED: demo-routes should use requirements module', () => {
   test('🔴 should NOT have manual needsOpenAI check', () => {
     const hasOldManualCheck =
       demoRoutesContent.includes('const needsOpenAI =') &&
-      demoRoutesContent.includes("runtimeProviders.llm === 'openai'");
+      demoRoutesContent.includes('runtimeProviders.llm === \'openai\'');
 
     assert.ok(
       !hasOldManualCheck,

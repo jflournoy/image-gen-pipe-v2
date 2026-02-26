@@ -308,7 +308,7 @@ router.post('/all/start', async (req, res) => {
         ModelCoordinator.markServiceIntent(serviceName, true);
         results[serviceName] = {
           success: result.success,
-          message: result.message || `Started`,
+          message: result.message || 'Started',
           pid: result.pid,
           port: result.port,
         };
@@ -361,7 +361,7 @@ router.post('/all/stop', async (req, res) => {
         ModelCoordinator.markServiceIntent(serviceName, false);
         results[serviceName] = {
           success: result.success,
-          message: result.message || `Stopped (STOP_LOCK created)`,
+          message: result.message || 'Stopped (STOP_LOCK created)',
         };
       } catch (error) {
         results[serviceName] = {

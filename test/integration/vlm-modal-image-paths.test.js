@@ -13,7 +13,6 @@
 const { describe, test } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
-const { createRequire } = require('node:module');
 
 // Get the OUTPUT_DIR that beam-search-worker uses
 const OUTPUT_DIR = process.env.SESSION_HISTORY_DIR ||
