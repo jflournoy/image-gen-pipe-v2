@@ -573,17 +573,24 @@ class DiffusionService:
 
         elif pipeline_type == "chroma":
             # Chroma1-HD and Chroma-based model hub models
-            # Use generic DiffusionPipeline for auto-detection of architecture
-            from diffusers import DiffusionPipeline
+            from diffusers import ChromaTransformer2DModel, ChromaPipeline
+            chroma_base = model_config.get("base_model", "lodestones/Chroma1-HD")
             print(f"[Modal Diffusion] Loading chroma model: {model_path}")
             if model_path.suffix == ".safetensors":
-                self.pipeline = DiffusionPipeline.from_single_file(
+                # Load custom transformer weights, then build pipeline from base
+                transformer = ChromaTransformer2DModel.from_single_file(
                     str(model_path),
                     torch_dtype=torch.float16,
                     cache_dir=CACHE_DIR,
                 )
+                self.pipeline = ChromaPipeline.from_pretrained(
+                    chroma_base,
+                    transformer=transformer,
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
             else:
-                self.pipeline = DiffusionPipeline.from_pretrained(
+                self.pipeline = ChromaPipeline.from_pretrained(
                     str(model_path),
                     torch_dtype=torch.float16,
                     cache_dir=CACHE_DIR,

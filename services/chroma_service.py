@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
-from diffusers import DiffusionPipeline
+from diffusers import ChromaTransformer2DModel, ChromaPipeline
 from huggingface_hub import login
 
 # Service configuration
@@ -131,14 +131,20 @@ def load_pipeline():
 
         if MODEL_SOURCE == 'huggingface':
             kwargs['token'] = HF_TOKEN
-            pipeline = DiffusionPipeline.from_pretrained(
+            pipeline = ChromaPipeline.from_pretrained(
                 model_to_load,
                 **kwargs
             )
         else:
-            # Local .safetensors file
-            pipeline = DiffusionPipeline.from_single_file(
+            # Local .safetensors file - load transformer, then build pipeline from base
+            chroma_base = os.getenv('CHROMA_BASE_MODEL', 'lodestones/Chroma1-HD')
+            transformer = ChromaTransformer2DModel.from_single_file(
                 model_to_load,
+                torch_dtype=kwargs['torch_dtype'],
+            )
+            pipeline = ChromaPipeline.from_pretrained(
+                chroma_base,
+                transformer=transformer,
                 **kwargs
             )
 
