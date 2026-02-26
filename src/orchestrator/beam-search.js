@@ -9,6 +9,7 @@ const { RateLimiter } = require('../utils/rate-limiter.js');
 const rateLimitConfig = require('../config/rate-limits.js');
 const { registerLimiter } = require('../utils/rate-limiter-registry.js');
 const modelCoordinator = require('../utils/model-coordinator.js');
+const { buildCandidateComparisons, buildAggregatedFeedback } = require('../utils/comparison-aggregator.js');
 
 // Initialize rate limiters at module load time
 // This ensures metrics are always available via the API, even before jobs start
@@ -105,11 +106,8 @@ async function generateImageWithSafetyRetry(prompt, imageGenProvider, llmProvide
   }
 
   try {
-    // Unload LLM before image generation to free GPU memory
-    await modelCoordinator.prepareForImageGen();
-
-    // First attempt - generate with original prompt
-    return await generateWithProgress(prompt, false);
+    // First attempt - generate with original prompt (holds GPU lock for duration)
+    return await modelCoordinator.withImageGenOperation(() => generateWithProgress(prompt, false));
   } catch (error) {
     // Check if this is a safety violation
     if (!isSafetyViolation(error)) {
@@ -173,8 +171,8 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
         });
       }
 
-      // Second attempt - generate with rephrased prompt (with progress updates)
-      const result = await generateWithProgress(rephrasedPrompt, true);
+      // Second attempt - generate with rephrased prompt (holds GPU lock for duration)
+      const result = await modelCoordinator.withImageGenOperation(() => generateWithProgress(rephrasedPrompt, true));
 
       // Emit progress: safety retry succeeded
       if (onStepProgress) {
@@ -218,6 +216,57 @@ Rephrase this to avoid the "${violationType}" violation while keeping the artist
       throw error;
     }
   }
+}
+
+/**
+ * Apply two-stage cartoon→photoreal refinement.
+ *
+ * Stage 1 already produced `image` using the primary model (e.g. an anime/cartoon SDXL).
+ * This helper runs a second img2img pass with a photoreal model at ~0.6 denoise to shift
+ * aesthetics while preserving the stage-1 composition.
+ *
+ * @param {Object} image - Stage-1 image result (must have localPath)
+ * @param {string} prompt - Generation prompt to reuse for stage 2
+ * @param {Object} imageGenProvider - Image provider with generateImage()
+ * @param {Object} twoStageOptions - Two-stage config
+ * @param {boolean} twoStageOptions.enabled
+ * @param {string} twoStageOptions.stageTwoModel - Model name for stage 2 (e.g. 'sdxl-base')
+ * @param {number} [twoStageOptions.denoiseStrength=0.6] - img2img denoise strength
+ * @param {number} [twoStageOptions.steps] - Inference steps for stage 2
+ * @param {number} [twoStageOptions.guidance] - Guidance scale for stage 2
+ * @param {Object} progressOptions - Context forwarded to the provider (sessionId, iteration, etc.)
+ * @returns {Promise<Object>} Refined image result, or original image if two-stage is disabled/skipped
+ */
+async function applyTwoStageRefinement(image, prompt, imageGenProvider, twoStageOptions, progressOptions) {
+  if (!twoStageOptions || !twoStageOptions.enabled) return image;
+  if (!image.localPath) return image;
+
+  const fs = require('fs').promises;
+  const imageBuffer = await fs.readFile(image.localPath);
+  const inputBase64 = imageBuffer.toString('base64');
+
+  const refined = await imageGenLimiter.execute(() =>
+    imageGenProvider.generateImage(prompt, {
+      inputImage: inputBase64,
+      denoiseStrength: twoStageOptions.denoiseStrength !== undefined ? twoStageOptions.denoiseStrength : 0.6,
+      model: twoStageOptions.stageTwoModel,
+      steps: twoStageOptions.steps,
+      guidance: twoStageOptions.guidance,
+      sessionId: progressOptions.sessionId,
+      iteration: progressOptions.iteration,
+      candidateId: progressOptions.candidateId,
+      width: progressOptions.width,
+      height: progressOptions.height
+    })
+  );
+
+  refined.metadata = refined.metadata || {};
+  refined.metadata.twoStage = {
+    stageOneLocalPath: image.localPath,
+    model: twoStageOptions.stageTwoModel
+  };
+
+  return refined;
 }
 
 /**
@@ -487,7 +536,7 @@ async function processCandidateStream(
   visionProvider,
   options = {}
 ) {
-  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, onStepProgress, descriptiveness, varyDescriptivenessRandomly, promptStyle } = options;
+  const { metadataTracker, tokenTracker, iteration, candidateId, dimension, parentId, critique, onStepProgress, descriptiveness, varyDescriptivenessRandomly, promptStyle, top_p, top_k } = options;
   const candidateId_str = `i${iteration}c${candidateId}`;
 
   // Progress: Combine start
@@ -631,6 +680,7 @@ async function processCandidateStream(
     await metadataTracker.recordAttempt({
       whatPrompt,
       howPrompt,
+      critique: critique || null,
       metadata: {
         iteration,
         candidateId,
@@ -657,14 +707,14 @@ async function processCandidateStream(
   }
   // Log Modal options if present
   if (options.modalOptions) {
-    console.log(`[Beam Search] Passing modalOptions to image generator: model=${options.modalOptions.model || 'default'}, steps=${options.modalOptions.steps || 'default'}, guidance=${options.modalOptions.guidance || 'default'}, gpu=${options.modalOptions.gpu || 'default'}`);
+    console.log(`[Beam Search] Passing modalOptions to image generator: model=${options.modalOptions.model || 'default'}, steps=${options.modalOptions.steps || 'default'}, guidance=${options.modalOptions.guidance || 'default'}, gpu=${options.modalOptions.gpu || 'default'}, sampler=${options.modalOptions.sampler || 'default'}, scheduler=${options.modalOptions.scheduler || 'default'}`);
   }
   // Log LoRA options if present
   if (options.loraOptions) {
     console.log(`[Beam Search] Passing loraOptions to Flux: path=${options.loraOptions.path}, scale=${options.loraOptions.scale}`);
   }
 
-  const image = await generateImageWithSafetyRetry(
+  let image = await generateImageWithSafetyRetry(
     combined,
     imageGenProvider,
     llmProvider,
@@ -683,6 +733,7 @@ async function processCandidateStream(
       ...(options.fluxOptions && {
         steps: options.fluxOptions.steps,
         guidance: options.fluxOptions.guidance,
+        sampler: options.fluxOptions.sampler,
         scheduler: options.fluxOptions.scheduler,
         width: options.fluxOptions.width,
         height: options.fluxOptions.height,
@@ -707,7 +758,10 @@ async function processCandidateStream(
         steps: options.modalOptions.steps,
         guidance: options.modalOptions.guidance,
         seed: options.modalOptions.seed,
-        gpu: options.modalOptions.gpu
+        gpu: options.modalOptions.gpu,
+        sampler: options.modalOptions.sampler,
+        scheduler: options.modalOptions.scheduler,
+        clip_skip: options.modalOptions.clip_skip
       }),
       // Flatten loraOptions so they're available for the Flux provider
       ...(options.loraOptions && {
@@ -720,6 +774,20 @@ async function processCandidateStream(
       candidateIdStr: candidateId_str
     }
   );
+
+  // Two-stage refinement: if enabled, resample stage-1 image with photoreal model
+  if (options.twoStageOptions && options.twoStageOptions.enabled) {
+    image = await applyTwoStageRefinement(
+      image, combined, imageGenProvider, options.twoStageOptions,
+      {
+        sessionId: options.sessionId,
+        iteration: options.iteration,
+        candidateId: options.candidateId,
+        width: options.modalOptions && options.modalOptions.width,
+        height: options.modalOptions && options.modalOptions.height
+      }
+    );
+  }
 
   // Track image generation
   if (tokenTracker && image.metadata) {
@@ -837,6 +905,7 @@ async function processCandidateStream(
     image,
     evaluation,
     totalScore,
+    critique: critique || null,
     metadata: {
       iteration: options.iteration,
       candidateId: options.candidateId,
@@ -891,11 +960,8 @@ async function initialExpansion(
     console.log(`[initialExpansion] Face fixing disabled (config.fixFaces=${config.fixFaces})`);
   }
 
-  // Unload Flux before LLM operations to free GPU memory
-  await modelCoordinator.prepareForLLM();
-
   // Generate N WHAT+HOW pairs in parallel with stochastic variation and rate limiting
-  const whatHowPairs = await Promise.all(
+  const whatHowPairs = await modelCoordinator.withLLMOperation(() => Promise.all(
     Array(N).fill().map(async (_, i) => {
       const candidateId_str = `i0c${i}`;
 
@@ -972,7 +1038,7 @@ async function initialExpansion(
         how: how.refinedPrompt
       };
     })
-  );
+  ));
 
   // Check if aborted while generating prompts
   if (abortSignal?.aborted) {
@@ -992,7 +1058,7 @@ async function initialExpansion(
     console.log(`[initialExpansion] Using BATCH image generation for ${N} candidates`);
 
     // Phase 1: Combine all prompts and generate negative prompts (parallel)
-    const combineResults = await Promise.all(
+    const combineResults = await modelCoordinator.withLLMOperation(() => Promise.all(
       whatHowPairs.map(async ({ what, how }, i) => {
         const candidateId_str = `i0c${i}`;
 
@@ -1062,7 +1128,7 @@ async function initialExpansion(
           return { candidateId: i, failed: true };
         }
       })
-    );
+    ));
 
     if (abortSignal?.aborted) throw new Error('Job cancelled');
 
@@ -1096,16 +1162,27 @@ async function initialExpansion(
       }
     }
 
-    // Unload LLM before image generation to free GPU memory
-    await modelCoordinator.prepareForImageGen();
-
-    const batchImages = await imageGenProvider.generateImages(batchRequests);
+    const batchImages = await modelCoordinator.withImageGenOperation(() =>
+      imageGenProvider.generateImages(batchRequests)
+    );
 
     // Phase 3: Evaluate all images and build candidates (parallel)
     candidates = await Promise.all(
       successfulCombines.map(async (r, batchIdx) => {
         const candidateId_str = `i0c${r.candidateId}`;
-        const image = batchImages[batchIdx];
+        let image = batchImages[batchIdx];
+
+        // Two-stage refinement: resample each batch image with photoreal model if enabled
+        image = await applyTwoStageRefinement(
+          image, r.combined, imageGenProvider, config.twoStageOptions,
+          {
+            sessionId: config.sessionId,
+            iteration: 0,
+            candidateId: r.candidateId,
+            width: config.modalOptions && config.modalOptions.width,
+            height: config.modalOptions && config.modalOptions.height
+          }
+        );
 
         try {
           // Track image generation
@@ -1258,7 +1335,7 @@ async function initialExpansion(
               message: `⬆️  ${candidateId_str}: Generating image...` });
           }
 
-          const image = await generateImageWithSafetyRetry(combined, imageGenProvider, llmProvider, {
+          let image = await generateImageWithSafetyRetry(combined, imageGenProvider, llmProvider, {
             iteration: 0, candidateId: i, dimension: 'what', alpha, sessionId: config.sessionId, negativePrompt,
             ...(config.fixFaces && { fix_faces: true, restoration_strength: config.restorationStrength ?? 0.5, face_upscale: config.faceUpscale ?? 1 }),
             ...(config.return_intermediate_images && { return_intermediate_images: true }),
@@ -1267,6 +1344,8 @@ async function initialExpansion(
             ...(config.modalOptions && { model: config.modalOptions.model, width: config.modalOptions.width, height: config.modalOptions.height, steps: config.modalOptions.steps, guidance: config.modalOptions.guidance }),
             onStepProgress, candidateIdStr: candidateId_str
           });
+          image = await applyTwoStageRefinement(image, combined, imageGenProvider, config.twoStageOptions,
+            { sessionId: config.sessionId, iteration: 0, candidateId: i, width: config.modalOptions && config.modalOptions.width, height: config.modalOptions && config.modalOptions.height });
 
           if (tokenTracker && image.metadata) {
             tokenTracker.recordUsage({ provider: 'image', operation: 'generate', tokens: 1,
@@ -1461,7 +1540,7 @@ async function refinementIteration(
     console.log(`[refinementIteration] Using BATCH image generation for iteration ${iteration}`);
 
     // Phase 1: Refine + combine all prompts (parallel)
-    const refineResults = await Promise.all(
+    const refineResults = await modelCoordinator.withLLMOperation(() => Promise.all(
       parentsWithCritiques.flatMap((parent, parentIdx) =>
         Array(expansionRatio).fill().map(async (_, childIdx) => {
           const candidateId = parentIdx * expansionRatio + childIdx;
@@ -1530,10 +1609,11 @@ async function refinementIteration(
             // Record attempt before image gen
             if (metadataTracker) {
               await metadataTracker.recordAttempt({ whatPrompt, howPrompt,
+                critique: parent.critique || null,
                 metadata: { iteration, candidateId, dimension, parentId: parent.metadata.candidateId } });
             }
 
-            return { whatPrompt, howPrompt, combined, negativePrompt, candidateId, parentId: parent.metadata.candidateId, failed: false };
+            return { whatPrompt, howPrompt, combined, negativePrompt, candidateId, parentId: parent.metadata.candidateId, critique: parent.critique || null, failed: false };
           } catch (error) {
             if (error.message === 'Job cancelled') throw error;
             console.error(`[refinementIteration] Candidate ${candidateId_str} refine/combine failed: ${error.message}`);
@@ -1545,7 +1625,7 @@ async function refinementIteration(
           }
         })
       )
-    );
+    ));
 
     if (abortSignal?.aborted) throw new Error('Job cancelled');
 
@@ -1576,14 +1656,27 @@ async function refinementIteration(
       }
     }
 
-    await modelCoordinator.prepareForImageGen();
-    const batchImages = await imageGenProvider.generateImages(batchRequests);
+    const batchImages = await modelCoordinator.withImageGenOperation(() =>
+      imageGenProvider.generateImages(batchRequests)
+    );
 
     // Phase 3: Evaluate all images and build candidates (parallel)
     allChildren = await Promise.all(
       successfulRefines.map(async (r, batchIdx) => {
         const candidateId_str = `i${iteration}c${r.candidateId}`;
-        const image = batchImages[batchIdx];
+        let image = batchImages[batchIdx];
+
+        // Two-stage refinement: resample each batch image with photoreal model if enabled
+        image = await applyTwoStageRefinement(
+          image, r.combined, imageGenProvider, config.twoStageOptions,
+          {
+            sessionId: config.sessionId,
+            iteration,
+            candidateId: r.candidateId,
+            width: config.modalOptions && config.modalOptions.width,
+            height: config.modalOptions && config.modalOptions.height
+          }
+        );
 
         try {
           if (tokenTracker && image.metadata) {
@@ -1636,6 +1729,7 @@ async function refinementIteration(
             whatPrompt: r.whatPrompt, howPrompt: r.howPrompt, combined: r.combined,
             negativePrompt: r.negativePrompt,
             image, evaluation, totalScore,
+            critique: r.critique || null,
             metadata: { iteration, candidateId: r.candidateId, dimension, parentId: r.parentId }
           };
 
@@ -1684,6 +1778,7 @@ async function refinementIteration(
               {
                 iteration, candidateId, dimension,
                 parentId: parent.metadata.candidateId,
+                critique: parent.critique || null,
                 alpha, metadataTracker, tokenTracker, skipVisionAnalysis, onStepProgress,
                 descriptiveness: config.descriptiveness,
                 varyDescriptivenessRandomly: config.varyDescriptivenessRandomly,
@@ -1695,7 +1790,8 @@ async function refinementIteration(
                 ...(config.fixFaces && { fixFaces: config.fixFaces, restorationStrength: config.restorationStrength, faceUpscale: config.faceUpscale }),
                 ...(config.fluxOptions && { fluxOptions: config.fluxOptions }),
                 ...(config.bflOptions && { bflOptions: config.bflOptions }),
-                ...(config.modalOptions && { modalOptions: config.modalOptions })
+                ...(config.modalOptions && { modalOptions: config.modalOptions }),
+                ...(config.twoStageOptions && { twoStageOptions: config.twoStageOptions })
               }
             );
 
@@ -1816,14 +1912,39 @@ async function beamSearch(userPrompt, providers, config) {
           candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
           rank: c.ranking?.rank,
           wins: c.ranking?.aggregateStats?.wins || 0,
-          losses: c.ranking?.aggregateStats?.losses || 0
+          losses: c.ranking?.aggregateStats?.losses || 0,
+          reason: c.ranking?.reason || null,
+          strengths: c.ranking?.strengths || [],
+          weaknesses: c.ranking?.weaknesses || [],
+          improvementSuggestion: c.ranking?.improvementSuggestion || null,
+          aggregateStats: c.ranking?.aggregateStats || null,
         })),
         comparisons: imageRanker.getComparisonGraph().toJSON(),
         globalRanked: globalRanked.map(c => ({
           candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
-          globalRank: c.globalRank
+          globalRank: c.globalRank,
+          globalRankNote: c.globalRankNote || null,
         }))
       });
+    }
+
+    // Enrich candidates with per-comparison data from ranking
+    if (metadataTracker && imageRanker?.getComparisonGraph) {
+      const graph = imageRanker.getComparisonGraph();
+      const { directComparisons } = graph.toJSON();
+
+      await Promise.all(candidates.map(candidate => {
+        const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+        const scores = graph.candidateScores?.get(globalId) || [];
+        const comparisons = buildCandidateComparisons(globalId, directComparisons);
+        const aggregatedFeedback = buildAggregatedFeedback(candidate.ranking, scores);
+
+        return metadataTracker.enrichCandidateWithRankingData(
+          candidate.metadata.iteration,
+          candidate.metadata.candidateId,
+          { comparisons, aggregatedFeedback }
+        );
+      }));
     }
 
     // Emit ranking data with global ranks
@@ -1873,9 +1994,6 @@ async function beamSearch(userPrompt, providers, config) {
   let earlyTerminationReason = null;
 
   for (let iteration = 1; iteration < maxIterations; iteration++) {
-    // Unload VLM (from previous ranking) before LLM operations
-    await modelCoordinator.prepareForLLM();
-
     // Generate N children from M parents
     // Note: onCandidateProcessed is called inside refinementIteration as each candidate completes
     try {
@@ -1941,14 +2059,39 @@ async function beamSearch(userPrompt, providers, config) {
             candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
             rank: c.ranking?.rank,
             wins: c.ranking?.aggregateStats?.wins || 0,
-            losses: c.ranking?.aggregateStats?.losses || 0
+            losses: c.ranking?.aggregateStats?.losses || 0,
+            reason: c.ranking?.reason || null,
+            strengths: c.ranking?.strengths || [],
+            weaknesses: c.ranking?.weaknesses || [],
+            improvementSuggestion: c.ranking?.improvementSuggestion || null,
+            aggregateStats: c.ranking?.aggregateStats || null,
           })),
           comparisons: imageRanker.getComparisonGraph().toJSON(),
           globalRanked: globalRanked.map(c => ({
             candidateId: `i${c.metadata.iteration}c${c.metadata.candidateId}`,
-            globalRank: c.globalRank
+            globalRank: c.globalRank,
+            globalRankNote: c.globalRankNote || null,
           }))
         });
+      }
+
+      // Enrich candidates with per-comparison data from ranking
+      if (metadataTracker && imageRanker?.getComparisonGraph) {
+        const graph = imageRanker.getComparisonGraph();
+        const { directComparisons } = graph.toJSON();
+
+        await Promise.all(iterationRankingResults.allRanked.map(candidate => {
+          const globalId = `i${candidate.metadata.iteration}c${candidate.metadata.candidateId}`;
+          const scores = graph.candidateScores?.get(globalId) || [];
+          const comparisons = buildCandidateComparisons(globalId, directComparisons);
+          const aggregatedFeedback = buildAggregatedFeedback(candidate.ranking, scores);
+
+          return metadataTracker.enrichCandidateWithRankingData(
+            candidate.metadata.iteration,
+            candidate.metadata.candidateId,
+            { comparisons, aggregatedFeedback }
+          );
+        }));
       }
 
       // Emit ranking data with global ranks
@@ -2044,5 +2187,6 @@ module.exports = {
   initialExpansion,
   refinementIteration,
   beamSearch,
-  configureRateLimitsForProviders
+  configureRateLimitsForProviders,
+  applyTwoStageRefinement
 };

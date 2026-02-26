@@ -1814,10 +1814,8 @@ describe('Beam Search Orchestrator', () => {
       };
 
       // Mock image ranker for comparative ranking (needed to populate allGlobalRanked)
-      let rankCallCount = 0;
       const mockImageRanker = {
         rankImages: async (images) => {
-          rankCallCount++;
           // Return rankings in order they were passed
           return images.map((img, idx) => ({
             ...img,

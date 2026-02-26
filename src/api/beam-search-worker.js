@@ -80,7 +80,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
 
   // Log Modal options if provided
   if (modalOptions) {
-    console.log(`[Beam Search Worker] Received modalOptions: model=${modalOptions.model || 'default'}, steps=${modalOptions.steps || 'default'}, guidance=${modalOptions.guidance || 'default'}, gpu=${modalOptions.gpu || 'default'}`);
+    console.log(`[Beam Search Worker] Received modalOptions: model=${modalOptions.model || 'default'}, steps=${modalOptions.steps || 'default'}, guidance=${modalOptions.guidance || 'default'}, gpu=${modalOptions.gpu || 'default'}, sampler=${modalOptions.sampler || 'default'}, scheduler=${modalOptions.scheduler || 'default'}`);
   }
 
   // Log LoRA options if provided
@@ -90,7 +90,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
 
   // Log face fixing options (always log to debug)
   console.log(`[Beam Search Worker] Face fixing params: fixFaces=${fixFaces}, restorationStrength=${restorationStrength}, faceUpscale=${faceUpscale}`);
-  console.log(`[Beam Search Worker] Full params object keys:`, Object.keys(params));
+  console.log('[Beam Search Worker] Full params object keys:', Object.keys(params));
 
   // Get runtime provider selections early to check if OpenAI is needed
   const runtimeProviders = getRuntimeProviders();
@@ -122,7 +122,23 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     outputDir: OUTPUT_DIR,
     sessionId,
     userPrompt: prompt,
-    config: { beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature, top_p, top_k }
+    config: {
+      beamWidth: n, keepTop: m, maxIterations: iterations, alpha, temperature, top_p, top_k,
+      promptStyle,
+      descriptiveness,
+      varyDescriptivenessRandomly,
+      rankingMode,
+      useSeparateEvaluations,
+      autoGenerateNegativePrompts,
+      fixFaces, restorationStrength, faceUpscale,
+      return_intermediate_images,
+      providers: runtimeProviders,
+      models: models || null,
+      fluxOptions: fluxOptions || null,
+      bflOptions: bflOptions || null,
+      modalOptions: modalOptions || null,
+      loraOptions: loraOptions || null,
+    }
   });
   await metadataTracker.initialize();
 
@@ -181,11 +197,11 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
         apiKey: userApiKey,
         ...(models?.vision && { model: models.vision })
       }),
-      // CritiqueGen requires OpenAI - use real if available, otherwise use mock
-      critiqueGen: needsOpenAI ? createCritiqueGenerator({
+      // CritiqueGen uses the same LLM provider as the rest of the pipeline
+      // Use real mode whenever a real llmProvider exists (runtime providers override global mode)
+      critiqueGen: llmProvider ? createCritiqueGenerator({
         mode: 'real',
-        apiKey: userApiKey,
-        ...(models?.llm && { model: models.llm })
+        llmProvider
       }) : createCritiqueGenerator({
         mode: 'mock'
       }),
@@ -523,7 +539,7 @@ Provide ONLY the rephrased prompt, nothing else.`;
             status: 'success',
             timestamp: new Date().toISOString()
           });
-        } catch (_e) { // eslint-disable-line no-unused-vars
+        } catch (_e) {
           // If rephrase attempt fails, throw the original error
           throw error;
         }
@@ -539,6 +555,11 @@ Provide ONLY the rephrased prompt, nothing else.`;
         iteration: result.metadata?.iteration,
         candidateId: result.metadata?.candidateId
       });
+
+      // Persist token usage and cost data
+      if (tokenTracker) {
+        await metadataTracker.persistTokens(tokenTracker);
+      }
     }
 
     // Get full metadata including lineage for emission
