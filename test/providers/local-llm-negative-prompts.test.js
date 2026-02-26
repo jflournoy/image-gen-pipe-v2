@@ -17,8 +17,8 @@ describe('LocalLLMProvider - generateNegativePrompt', () => {
     it('should return negativePrompt and metadata', async () => {
       const provider = new LocalLLMProvider({ apiUrl: 'http://localhost:8003' });
 
-      // Mock the _generate method to avoid actual LLM call
-      provider._generate = async () => ({
+      // Mock the _generateChat method to avoid actual LLM call
+      provider._generateChat = async () => ({
         text: 'blurry, low quality, distorted',
         usage: { total_tokens: 100 }
       });
@@ -35,7 +35,7 @@ describe('LocalLLMProvider - generateNegativePrompt', () => {
     it('should generate intelligent negatives for "30 year old man"', async () => {
       const provider = new LocalLLMProvider({ apiUrl: 'http://localhost:8003' });
 
-      provider._generate = async () => ({
+      provider._generateChat = async () => ({
         text: 'elderly, aged, wrinkled, senior, young, child, teenager, blurry, low quality',
         usage: { total_tokens: 150 }
       });
@@ -50,7 +50,7 @@ describe('LocalLLMProvider - generateNegativePrompt', () => {
     it('should include metadata with token usage', async () => {
       const provider = new LocalLLMProvider({ apiUrl: 'http://localhost:8003' });
 
-      provider._generate = async () => ({
+      provider._generateChat = async () => ({
         text: 'test negative',
         usage: {
           total_tokens: 123,
@@ -81,7 +81,7 @@ describe('LocalLLMProvider - generateNegativePrompt', () => {
       const provider = new LocalLLMProvider({ apiUrl: 'http://localhost:8003' });
 
       // Mock failure
-      provider._generate = async () => {
+      provider._generateChat = async () => {
         throw new Error('LLM unavailable');
       };
 
@@ -95,7 +95,7 @@ describe('LocalLLMProvider - generateNegativePrompt', () => {
     it('should use default fallback when LLM fails', async () => {
       const provider = new LocalLLMProvider({ apiUrl: 'http://localhost:8003' });
 
-      provider._generate = async () => {
+      provider._generateChat = async () => {
         throw new Error('LLM service down');
       };
 

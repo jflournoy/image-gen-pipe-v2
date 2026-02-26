@@ -11,7 +11,7 @@
  * - LoRA files stored on Modal volume
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -141,7 +141,7 @@ describe('Modal Multiple LoRA Support - Structural Tests', () => {
       // Expected: loras in metadata dict returned from generate
       const hasLoraMetadata =
         serviceContent.includes('"loras"') ||
-        serviceContent.includes(''loras'') ||
+        serviceContent.includes('\'loras\'') ||
         serviceContent.match(/metadata.*lora|lora.*metadata/i);
       assert.ok(hasLoraMetadata, 'Generation metadata should include LoRA information');
     });

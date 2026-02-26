@@ -3,7 +3,7 @@
  * TDD RED phase - these tests should fail initially
  */
 
-const { describe, it, before, after } = require('node:test');
+const { describe, it, before } = require('node:test');
 const assert = require('node:assert');
 const NegativePromptGenerator = require('../../src/utils/negative-prompt-generator');
 

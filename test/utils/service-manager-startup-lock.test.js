@@ -5,7 +5,7 @@
  * only spawn ONE process (not multiple).
  */
 
-const { describe, test, beforeEach, afterEach, mock } = require('node:test');
+const { describe, test, beforeEach } = require('node:test');
 const assert = require('node:assert');
 
 describe('ServiceManager startup lock', () => {
@@ -23,10 +23,8 @@ describe('ServiceManager startup lock', () => {
     serviceManager.isServiceRunning = async () => false;
 
     // Track how many times spawn would be called by counting writePIDFile calls
-    let pidWriteCount = 0;
     const origWritePID = serviceManager.writePIDFile;
-    serviceManager.writePIDFile = async (name, pid) => {
-      pidWriteCount++;
+    serviceManager.writePIDFile = async (_name, _pid) => {
       // Don't actually write PID files in test
     };
 
@@ -42,9 +40,6 @@ describe('ServiceManager startup lock', () => {
 
     // For this test, we verify the lock exists and serializes calls.
     // After first call writes PID, second call should see service as running.
-    let startCallCount = 0;
-    const origStartService = serviceManager.startService;
-
     // Just verify that calling startService concurrently doesn't crash
     // and the lock is at least present (detailed spawn testing needs integration tests)
     try {
@@ -62,7 +57,7 @@ describe('ServiceManager startup lock', () => {
       // We can't verify spawn count easily, but we can check that all
       // resolved to the same result (the lock returns the same promise)
       const successResults = results.filter(r => r.status === 'fulfilled');
-      const failResults = results.filter(r => r.status === 'rejected');
+      const _failResults = results.filter(r => r.status === 'rejected');
 
       // All should resolve (not reject) even if spawn fails (startService catches errors)
       // The key assertion: the lock should make concurrent calls share the same promise

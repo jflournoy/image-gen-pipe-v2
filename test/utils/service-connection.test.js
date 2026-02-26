@@ -9,14 +9,13 @@ const { describe, test, beforeEach, mock } = require('node:test');
 const assert = require('node:assert');
 
 describe('ServiceConnection', () => {
-  let ServiceConnection;
   let mockServiceManager;
 
   beforeEach(() => {
     // Mock service-manager module
     mockServiceManager = {
       isServiceRunning: mock.fn(async () => false),
-      getServiceUrl: mock.fn((name) => `http://localhost:8003`),
+      getServiceUrl: mock.fn((_name) => 'http://localhost:8003'),
     };
 
     // Clear module cache
@@ -328,7 +327,7 @@ describe('ServiceConnection', () => {
       const conn = createConnection();
       await assert.rejects(
         () => conn.withRetry(async () => { throw err; }, { operationName: 'test' }),
-        (e) => {
+        (_e) => {
           // Should have checked PID (meaning it recognized this as a connection error)
           assert.strictEqual(mockServiceManager.isServiceRunning.mock.callCount(), 1);
           return true;
@@ -344,7 +343,7 @@ describe('ServiceConnection', () => {
       const conn = createConnection();
       await assert.rejects(
         () => conn.withRetry(async () => { throw err; }, { operationName: 'test' }),
-        (e) => {
+        (_e) => {
           assert.strictEqual(mockServiceManager.isServiceRunning.mock.callCount(), 1);
           return true;
         }
@@ -359,7 +358,7 @@ describe('ServiceConnection', () => {
       const conn = createConnection();
       await assert.rejects(
         () => conn.withRetry(async () => { throw err; }, { operationName: 'test' }),
-        (e) => {
+        (_e) => {
           assert.strictEqual(mockServiceManager.isServiceRunning.mock.callCount(), 1);
           return true;
         }
@@ -373,7 +372,7 @@ describe('ServiceConnection', () => {
       const conn = createConnection();
       await assert.rejects(
         () => conn.withRetry(async () => { throw err; }, { operationName: 'test' }),
-        (e) => {
+        (_e) => {
           // Should NOT have checked PID
           assert.strictEqual(mockServiceManager.isServiceRunning.mock.callCount(), 0);
           return true;

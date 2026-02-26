@@ -132,16 +132,16 @@ async function runTests() {
       const negativePrompt = await generateNegativePrompt(testCase.prompt);
       console.log(`Negative: "${negativePrompt}"`);
 
-      const eval = evaluateNegative(negativePrompt, testCase);
+      const evalResult = evaluateNegative(negativePrompt, testCase);
 
-      console.log(`\n✅ Has expected terms: ${eval.hasExpected.join(', ') || 'none'}`);
-      if (eval.missingExpected.length > 0) {
-        console.log(`❌ Missing expected: ${eval.missingExpected.join(', ')}`);
+      console.log(`\n✅ Has expected terms: ${evalResult.hasExpected.join(', ') || 'none'}`);
+      if (evalResult.missingExpected.length > 0) {
+        console.log(`❌ Missing expected: ${evalResult.missingExpected.join(', ')}`);
       }
-      if (eval.wronglyIncluded.length > 0) {
-        console.log(`⚠️  Wrongly included: ${eval.wronglyIncluded.join(', ')}`);
+      if (evalResult.wronglyIncluded.length > 0) {
+        console.log(`⚠️  Wrongly included: ${evalResult.wronglyIncluded.join(', ')}`);
       }
-      console.log(`Score: ${(eval.score * 100).toFixed(0)}%`);
+      console.log(`Score: ${(evalResult.score * 100).toFixed(0)}%`);
 
     } catch (error) {
       console.error(`❌ Test failed: ${error.message}`);

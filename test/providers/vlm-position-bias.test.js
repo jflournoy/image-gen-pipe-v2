@@ -70,7 +70,7 @@ test('VLM position bias detection - identical image comparisons', { timeout: TES
   const deviation = Math.abs(aCount - expectedPerSide);
   const deviationPercent = (deviation / expectedPerSide) * 100;
 
-  console.log(`\n[Bias Test] Statistical Analysis:`);
+  console.log('\n[Bias Test] Statistical Analysis:');
   console.log(`  Expected per side: ${expectedPerSide.toFixed(1)} (excluding TIEs)`);
   console.log(`  Deviation from expected: ${deviation.toFixed(1)} (${deviationPercent.toFixed(1)}%)`);
 
@@ -85,7 +85,7 @@ test('VLM position bias detection - identical image comparisons', { timeout: TES
   assert(
     Math.abs(aCount - bCount) <= maxDeviation,
     `Strong position bias detected! A=${aCount}, B=${bCount}, diff=${Math.abs(aCount - bCount)} (max allowed: ${maxDeviation}). ` +
-    `This suggests VLM is choosing based on position rather than image content.`
+    'This suggests VLM is choosing based on position rather than image content.'
   );
 });
 
@@ -100,7 +100,7 @@ test('VLM raw response check - single identical image comparison', { timeout: 60
 
   const result = await provider.compareImages(TEST_IMAGE, TEST_IMAGE, 'a cat photograph');
 
-  console.log(`[Raw Response Test] Result:`);
+  console.log('[Raw Response Test] Result:');
   console.log(`  Choice: ${result.choice}`);
   console.log(`  Explanation: ${result.explanation}`);
   console.log(`  Confidence: ${result.confidence}`);
@@ -110,7 +110,7 @@ test('VLM raw response check - single identical image comparison', { timeout: 60
   // Ideally, identical images should be TIE with equal ranks
   // But model may not detect they're identical
   if (result.choice === 'TIE') {
-    console.log(`  ✓ Model correctly identified identical images as TIE`);
+    console.log('  ✓ Model correctly identified identical images as TIE');
   } else {
     console.log(`  ⚠ Model chose ${result.choice} for identical images (may indicate position bias)`);
   }
@@ -120,11 +120,11 @@ test('VLM raw response check - single identical image comparison', { timeout: 60
   const bTotal = result.ranks.B.alignment + result.ranks.B.aesthetics;
 
   if (result.choice === 'A' && aTotal < bTotal) {
-    console.log(`  ✓ Ranks consistent with choice (A has lower rank total)`);
+    console.log('  ✓ Ranks consistent with choice (A has lower rank total)');
   } else if (result.choice === 'B' && bTotal < aTotal) {
-    console.log(`  ✓ Ranks consistent with choice (B has lower rank total)`);
+    console.log('  ✓ Ranks consistent with choice (B has lower rank total)');
   } else if (result.choice === 'TIE' && aTotal === bTotal) {
-    console.log(`  ✓ Ranks consistent with TIE (equal rank totals)`);
+    console.log('  ✓ Ranks consistent with TIE (equal rank totals)');
   } else {
     console.log(`  ✗ WARNING: Ranks inconsistent with choice! choice=${result.choice}, A_total=${aTotal}, B_total=${bTotal}`);
   }
