@@ -103,7 +103,8 @@ class FluxImageProvider {
             negativePrompt: options.negativePrompt || '',
             loras: options.loras || [],
             lora_scale: options.loraScale ?? this.generation.loraScale,
-            scheduler: options.scheduler ?? this.generation.scheduler  // euler, dpmsolver, ddim, pndm
+            sampler: options.sampler ?? this.generation.sampler ?? null,  // euler, euler_a, dpmpp_2m, dpmpp_2m_sde, ddim, lcm
+            scheduler: options.scheduler ?? this.generation.scheduler  // normal, karras, exponential
           };
 
           // Add face fixing parameters if provided

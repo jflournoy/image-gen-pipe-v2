@@ -101,10 +101,16 @@ class ModalImageProvider {
       payload.loras = loras;
     }
 
+    if (options.inputImage) payload.input_image = options.inputImage;
+    if (options.denoiseStrength !== undefined) payload.denoise_strength = options.denoiseStrength;
+    if (options.sampler) payload.sampler = options.sampler;
+    if (options.scheduler) payload.scheduler = options.scheduler;
+    if (options.clip_skip !== undefined) payload.clip_skip = options.clip_skip;
     if (options.fix_faces !== undefined) payload.fix_faces = options.fix_faces;
     if (options.restoration_strength !== undefined) payload.restoration_strength = options.restoration_strength;
     if (options.face_upscale !== undefined) payload.face_upscale = options.face_upscale;
     if (options.return_intermediate_images !== undefined) payload.return_intermediate_images = options.return_intermediate_images;
+    if (options.flow_shift !== undefined) payload.flow_shift = options.flow_shift;
 
     // Include diagnostic tags for Modal logging
     if (options.iteration !== undefined) payload.iteration = options.iteration;
@@ -460,7 +466,7 @@ class ModalImageProvider {
       return processedResults;
 
     } catch (error) {
-      console.error(`[Modal Provider] Error in batch generation:`, error.message);
+      console.error('[Modal Provider] Error in batch generation:', error.message);
       throw this._formatError(error, 'batch generate images', this.apiUrl);
     }
   }

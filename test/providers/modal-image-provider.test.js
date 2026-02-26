@@ -16,7 +16,7 @@ describe('ModalImageProvider', () => {
   const testTokenId = 'modal_test_token_id';
   const testTokenSecret = 'modal_test_token_secret';
   const testApiUrl = 'https://your-app--generate.modal.run';
-  const testModel = 'flux-dev';
+  const _testModel = 'flux-dev';
 
   beforeEach(() => {
     nock.cleanAll();
@@ -176,7 +176,7 @@ describe('ModalImageProvider', () => {
       let capturedHeaders = null;
 
       nock(testApiUrl)
-        .post('/generate', () => true)
+        .post('/', () => true)
         .reply(function(_uri, _body) {
           capturedHeaders = this.req.headers;
           return [200, {
@@ -204,7 +204,7 @@ describe('ModalImageProvider', () => {
       let capturedBody = null;
 
       nock(testApiUrl)
-        .post('/generate', (body) => {
+        .post('/', (body) => {
           capturedBody = body;
           return true;
         })
@@ -238,7 +238,7 @@ describe('ModalImageProvider', () => {
       const testBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(200, {
           image: testBase64,
           format: 'base64',
@@ -264,7 +264,7 @@ describe('ModalImageProvider', () => {
 
       // Modal returns a URL instead of base64
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(200, {
           image_url: 'https://modal-storage.example.com/image.png',
           format: 'url'
@@ -289,7 +289,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(200, {
           image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           format: 'base64',
@@ -347,7 +347,7 @@ describe('ModalImageProvider', () => {
       let capturedBody = null;
 
       nock(testApiUrl)
-        .post('/generate', (body) => {
+        .post('/', (body) => {
           capturedBody = body;
           return true;
         })
@@ -378,7 +378,7 @@ describe('ModalImageProvider', () => {
       let capturedBody = null;
 
       nock(testApiUrl)
-        .post('/generate', (body) => {
+        .post('/', (body) => {
           capturedBody = body;
           return true;
         })
@@ -407,7 +407,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .delay(200) // Delay longer than timeout
         .reply(200, { image: 'data' });
 
@@ -425,7 +425,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(401, { error: 'Unauthorized' });
 
       await assert.rejects(
@@ -442,7 +442,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(429, { error: 'Too Many Requests' });
 
       await assert.rejects(
@@ -460,7 +460,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(404, { error: 'Model not found: nonexistent-model' });
 
       await assert.rejects(
@@ -477,7 +477,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(500, { error: 'Internal Server Error' });
 
       await assert.rejects(
@@ -508,7 +508,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(503, { error: 'Service Unavailable' });
 
       try {
@@ -521,17 +521,22 @@ describe('ModalImageProvider', () => {
   });
 
   describe('Health Check', () => {
+    // Modal health URL is derived from generate URL by replacing 'generate-<hash>' with 'health'
+    // Use a URL with the correct hash format so getHealthUrl() resolves properly
+    const testGenerateUrl = 'https://your-app--generate-abc123.modal.run';
+    const testHealthUrl = 'https://your-app--health.modal.run';
+
     test('should call /health endpoint', async () => {
       const provider = new ModalImageProvider({
-        apiUrl: testApiUrl,
+        apiUrl: testGenerateUrl,
         tokenId: testTokenId,
         tokenSecret: testTokenSecret
       });
 
       let healthCalled = false;
 
-      nock(testApiUrl)
-        .get('/health')
+      nock(testHealthUrl)
+        .get('/')
         .reply(function() {
           healthCalled = true;
           return [200, {
@@ -548,13 +553,13 @@ describe('ModalImageProvider', () => {
 
     test('should return available=true when Modal service is up', async () => {
       const provider = new ModalImageProvider({
-        apiUrl: testApiUrl,
+        apiUrl: testGenerateUrl,
         tokenId: testTokenId,
         tokenSecret: testTokenSecret
       });
 
-      nock(testApiUrl)
-        .get('/health')
+      nock(testHealthUrl)
+        .get('/')
         .reply(200, {
           status: 'healthy',
           model: 'flux-dev',
@@ -630,7 +635,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(200, {
           image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           format: 'base64'
@@ -656,7 +661,7 @@ describe('ModalImageProvider', () => {
       });
 
       nock(testApiUrl)
-        .post('/generate')
+        .post('/')
         .reply(200, {
           image: 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
           format: 'base64'
@@ -700,7 +705,7 @@ describe('ModalImageProvider', () => {
       let capturedBody = null;
 
       nock(testApiUrl)
-        .post('/generate', (body) => {
+        .post('/', (body) => {
           capturedBody = body;
           return true;
         })
@@ -712,6 +717,120 @@ describe('ModalImageProvider', () => {
       await provider.generateImage('test model', {});
 
       assert.strictEqual(capturedBody.model, 'sdxl-turbo');
+    });
+  });
+
+  describe('Img2img (Two-Stage Refinement)', () => {
+    test('should include input_image in payload when inputImage option is provided', async () => {
+      const provider = new ModalImageProvider({
+        apiUrl: testApiUrl,
+        tokenId: testTokenId,
+        tokenSecret: testTokenSecret,
+        model: 'sdxl-base'
+      });
+
+      let capturedBody = null;
+      const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      nock(testApiUrl)
+        .post('/', (body) => {
+          capturedBody = body;
+          return true;
+        })
+        .reply(200, { image: fakeBase64, format: 'base64' });
+
+      await provider.generateImage('a photorealistic portrait', {
+        inputImage: fakeBase64
+      });
+
+      assert.ok(capturedBody, 'Body should be captured');
+      assert.strictEqual(capturedBody.input_image, fakeBase64, 'input_image should be passed through');
+    });
+
+    test('should include denoise_strength in payload when denoiseStrength option is provided', async () => {
+      const provider = new ModalImageProvider({
+        apiUrl: testApiUrl,
+        tokenId: testTokenId,
+        tokenSecret: testTokenSecret,
+        model: 'sdxl-base'
+      });
+
+      let capturedBody = null;
+      const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      nock(testApiUrl)
+        .post('/', (body) => {
+          capturedBody = body;
+          return true;
+        })
+        .reply(200, { image: fakeBase64, format: 'base64' });
+
+      await provider.generateImage('a photorealistic portrait', {
+        inputImage: fakeBase64,
+        denoiseStrength: 0.6
+      });
+
+      assert.ok(capturedBody, 'Body should be captured');
+      assert.strictEqual(capturedBody.denoise_strength, 0.6, 'denoise_strength should be passed through');
+    });
+
+    test('should not include input_image or denoise_strength in normal txt2img requests', async () => {
+      const provider = new ModalImageProvider({
+        apiUrl: testApiUrl,
+        tokenId: testTokenId,
+        tokenSecret: testTokenSecret,
+        model: 'flux-dev'
+      });
+
+      let capturedBody = null;
+      const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      nock(testApiUrl)
+        .post('/', (body) => {
+          capturedBody = body;
+          return true;
+        })
+        .reply(200, { image: fakeBase64, format: 'base64' });
+
+      await provider.generateImage('a landscape', { steps: 25 });
+
+      assert.ok(capturedBody, 'Body should be captured');
+      assert.strictEqual(capturedBody.input_image, undefined, 'input_image should not be present in normal requests');
+      assert.strictEqual(capturedBody.denoise_strength, undefined, 'denoise_strength should not be present in normal requests');
+    });
+
+    test('should send both inputImage and denoiseStrength together for img2img', async () => {
+      const provider = new ModalImageProvider({
+        apiUrl: testApiUrl,
+        tokenId: testTokenId,
+        tokenSecret: testTokenSecret,
+        model: 'sdxl-base'
+      });
+
+      let capturedBody = null;
+      const fakeBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+
+      nock(testApiUrl)
+        .post('/', (body) => {
+          capturedBody = body;
+          return true;
+        })
+        .reply(200, { image: fakeBase64, format: 'base64' });
+
+      await provider.generateImage('photorealistic woman', {
+        inputImage: fakeBase64,
+        denoiseStrength: 0.6,
+        model: 'sdxl-base',
+        steps: 20,
+        guidance: 7.5
+      });
+
+      assert.ok(capturedBody, 'Body should be captured');
+      assert.strictEqual(capturedBody.input_image, fakeBase64);
+      assert.strictEqual(capturedBody.denoise_strength, 0.6);
+      assert.strictEqual(capturedBody.model, 'sdxl-base');
+      assert.strictEqual(capturedBody.steps, 20);
+      assert.strictEqual(capturedBody.guidance, 7.5);
     });
   });
 });
