@@ -18,9 +18,6 @@ const {
   configureRateLimitsForProviders
 } = require('../../src/orchestrator/beam-search.js');
 
-// Minimal valid 1x1 PNG as base64
-const TEST_BASE64_PNG = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
-
 /**
  * Create a mock LLM provider that returns predictable prompts
  */
