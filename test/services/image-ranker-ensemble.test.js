@@ -73,7 +73,7 @@ describe('ImageRanker Ensemble', () => {
       // compareWithEnsemble swaps order randomly, so we need to check candidateId
       ranker.compareTwo = async (_imageA, _imageB) => {
         // Return 'A' if first param is candidateId 0, else 'B'
-        const winner = imageA.candidateId === 0 ? 'A' : 'B';
+        const winner = _imageA.candidateId === 0 ? 'A' : 'B';
         return {
           winner,
           reason: 'candidateId 0 is clearly better',
@@ -107,7 +107,7 @@ describe('ImageRanker Ensemble', () => {
         callCount++;
         // First 2 calls: candidateId 0 wins
         if (callCount <= 2) {
-          const winner = imageA.candidateId === 0 ? 'A' : 'B';
+          const winner = _imageA.candidateId === 0 ? 'A' : 'B';
           return {
             winner,
             reason: 'candidateId 0 wins',
@@ -115,7 +115,7 @@ describe('ImageRanker Ensemble', () => {
           };
         }
         // Last 2 calls: candidateId 1 wins
-        const winner = imageA.candidateId === 1 ? 'A' : 'B';
+        const winner = _imageA.candidateId === 1 ? 'A' : 'B';
         return {
           winner,
           reason: 'candidateId 1 wins',
