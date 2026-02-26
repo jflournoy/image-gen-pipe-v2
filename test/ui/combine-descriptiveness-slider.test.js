@@ -10,7 +10,7 @@
  * - "descriptive" (3): Highly detailed combination instructions
  */
 
-const { describe, test, beforeEach } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 const fs = require('fs');
 const path = require('path');
@@ -213,7 +213,7 @@ describe('Combine Descriptiveness Slider UI', () => {
       );
 
       // Check that descriptiveness is passed to orchestrator
-      const orchestratorImport = workerJs.includes("require('../orchestrator/beam-search");
+      const orchestratorImport = workerJs.includes('require(\'../orchestrator/beam-search');
       assert.ok(
         orchestratorImport,
         'Worker should import beam search orchestrator'

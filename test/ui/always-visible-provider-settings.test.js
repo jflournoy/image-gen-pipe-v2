@@ -225,7 +225,7 @@ describe('🔴 RED: Always-Visible Provider Settings Layout', () => {
       );
 
       // Should not have mode gating on provider settings visibility
-      const hasModeGating =
+      const _hasModeGating =
         jsContent.includes('mode === \'openai\'') &&
         jsContent.includes('fluxSettings.style.display');
 
@@ -390,8 +390,8 @@ describe('🔴 RED: LLM Settings Include Alpha/Temperature', () => {
 
       // Alpha and temp should NOT be in main content area
       // (They might be there now, but this test ensures they move to sidebar)
-      const alphaInContent = contentAreaHtml.includes('id="alpha"');
-      const tempInContent = contentAreaHtml.includes('id="temperature"');
+      const _alphaInContent = contentAreaHtml.includes('id="alpha"');
+      const _tempInContent = contentAreaHtml.includes('id="temperature"');
 
       // For now, allow either location - test passes if they exist somewhere
       // The real test is the distance check above

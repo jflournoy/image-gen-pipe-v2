@@ -1001,6 +1001,31 @@
       background: rgba(0, 0, 0, 0.9);
     }
 
+    /* Resample Button on Image Cards */
+    .resample-btn {
+      position: absolute;
+      bottom: 5px;
+      right: 35px;
+      background: rgba(25, 118, 210, 0.8);
+      color: white;
+      border: none;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 5;
+    }
+
+    .image-card:hover .resample-btn {
+      opacity: 1;
+    }
+
+    .resample-btn:hover {
+      background: rgba(25, 118, 210, 1.0);
+    }
+
     /* Video Generation Panel Modal */
     .video-panel-modal {
       display: none;
@@ -1065,6 +1090,36 @@
 
     .video-panel-body {
       padding: 20px;
+    }
+
+    .video-mode-toggle {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid #0066cc;
+    }
+
+    .video-mode-btn {
+      flex: 1;
+      padding: 10px 16px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: #0066cc;
+      font-size: 14px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .video-mode-btn.active {
+      background: #0066cc;
+      color: white;
+    }
+
+    .video-mode-btn:hover:not(.active) {
+      background: #e8f0fe;
     }
 
     .video-tabs {
@@ -1736,13 +1791,27 @@
                     <input type="number" id="fluxGuidance" value="3.5" min="1" max="10" step="0.5" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                 </div>
-                <div style="margin-bottom: 6px;">
-                  <label style="display: block; color: #666; margin-bottom: 2px;">Scheduler</label>
-                  <select id="fluxScheduler" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
-                    <option value="">Default (DPMSolver)</option>
-                    <option value="euler">Euler</option>
-                    <option value="ddim">DDIM</option>
-                  </select>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Sampler</label>
+                    <select id="fluxSampler" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="">Default</option>
+                      <option value="euler">Euler</option>
+                      <option value="euler_a">Euler Ancestral</option>
+                      <option value="dpmpp_2m">DPM++ 2M</option>
+                      <option value="dpmpp_2m_sde">DPM++ 2M SDE</option>
+                      <option value="ddim">DDIM</option>
+                      <option value="lcm">LCM</option>
+                    </select>
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Schedule</label>
+                    <select id="fluxScheduler" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="normal">Normal</option>
+                      <option value="karras">Karras</option>
+                      <option value="exponential">Exponential</option>
+                    </select>
+                  </div>
                 </div>
                 <div style="margin-bottom: 6px;">
                   <label style="display: block; color: #666; margin-bottom: 2px;">Model Source</label>
@@ -1931,14 +2000,102 @@
                     <input type="number" id="modalGuidance" value="3.5" min="0" max="20" step="0.5" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                 </div>
-                <div style="margin-bottom: 6px;">
-                  <label style="display: block; color: #666; margin-bottom: 2px;">Flow Shift <span id="modalFlowShiftVal" style="font-weight: bold;">1.0</span></label>
-                  <input type="range" id="modalFlowShift" min="0.5" max="12" step="0.1" value="1.0" onchange="document.getElementById('modalFlowShiftVal').textContent = this.value; saveModalSettings()" style="width: 100%;">
-                  <small style="color: #888; font-size: 9px;">1.0 = balanced (Beta), 6.0 = structural (Normal). Only applies to sdxl_flow models.</small>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Sampler</label>
+                    <select id="modalSampler" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="">Default</option>
+                      <option value="euler">Euler</option>
+                      <option value="euler_a">Euler Ancestral</option>
+                      <option value="heun">Heun</option>
+                      <option value="dpmpp_2m">DPM++ 2M</option>
+                      <option value="dpmpp_2m_sde">DPM++ 2M SDE</option>
+                      <option value="dpmpp_sde">DPM++ SDE</option>
+                      <option value="dpm2">DPM2</option>
+                      <option value="dpm2_a">DPM2 Ancestral</option>
+                      <option value="unipc">UniPC</option>
+                      <option value="deis">DEIS</option>
+                      <option value="lms">LMS</option>
+                      <option value="pndm">PNDM</option>
+                      <option value="ddim">DDIM</option>
+                      <option value="lcm">LCM</option>
+                    </select>
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Schedule</label>
+                    <select id="modalScheduler" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="normal">Normal</option>
+                      <option value="karras">Karras</option>
+                      <option value="exponential">Exponential</option>
+                    </select>
+                  </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Clip Skip</label>
+                    <select id="modalClipSkip" onchange="saveModalSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                      <option value="">None</option>
+                      <option value="1">1</option>
+                      <option value="2">2</option>
+                      <option value="3">3</option>
+                      <option value="4">4</option>
+                    </select>
+                  </div>
+                  <div style="flex: 1;">
+                    <label style="display: block; color: #666; margin-bottom: 2px;">Flow Shift <span id="modalFlowShiftVal" style="font-weight: bold;">1.0</span></label>
+                    <input type="range" id="modalFlowShift" min="0.5" max="12" step="0.1" value="1.0" onchange="document.getElementById('modalFlowShiftVal').textContent = this.value; saveModalSettings()" style="width: 100%;">
+                    <small style="color: #888; font-size: 9px;">sdxl_flow only</small>
+                  </div>
                 </div>
                 <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
                   <strong>MODAL_ENDPOINT:</strong> <span id="modalEndpointStatus">Not configured</span>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Two-Stage Refinement Section (shows when Modal is selected) -->
+        <section id="twoStageSettings" style="margin-bottom: 15px; padding: 12px; background: #fff3e0; border-radius: 6px; border: 1px solid #ffcc80; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              🎨 Two-Stage Refinement
+            </label>
+            <label style="font-size: 12px; color: #555; display: flex; align-items: center; gap: 5px; cursor: pointer;">
+              <input type="checkbox" id="twoStageEnabled" onchange="toggleTwoStageControls(); saveTwoStageSettings()">
+              Enable
+            </label>
+          </div>
+          <div id="twoStageControls" style="display: none; font-size: 11px;">
+            <p style="color: #666; font-size: 10px; margin: 0 0 8px 0;">
+              Stage 1 generates composition with the model above.
+              Stage 2 resamples via img2img to shift aesthetics to photorealism.
+            </p>
+            <div style="margin-bottom: 6px;">
+              <label style="display: block; color: #666; margin-bottom: 2px;">Stage 2 Model</label>
+              <select id="twoStageStageTwoModel" onchange="saveTwoStageSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                <option value="sdxl-base">SDXL Base</option>
+                <option value="flux-dev">Flux Dev</option>
+                <option value="realistic-vision-v5">Realistic Vision v5</option>
+              </select>
+            </div>
+            <div style="margin-bottom: 6px;">
+              <label style="display: block; color: #666; margin-bottom: 2px;">Denoise Strength: <span id="twoStageDenoiseVal" style="font-weight: bold;">0.60</span></label>
+              <input type="range" id="twoStageDenoiseStrength" min="0.3" max="0.9" step="0.05" value="0.60"
+                     onchange="document.getElementById('twoStageDenoiseVal').textContent = parseFloat(this.value).toFixed(2); saveTwoStageSettings()"
+                     style="width: 100%;">
+              <small style="color: #888; font-size: 9px;">0.3=preserve composition · 0.6=balanced · 0.9=full restyle</small>
+            </div>
+            <div style="display: flex; gap: 8px;">
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Stage 2 Steps</label>
+                <input type="number" id="twoStageSteps" value="20" min="5" max="50" onchange="saveTwoStageSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Stage 2 Guidance</label>
+                <input type="number" id="twoStageGuidance" value="7.5" min="1" max="20" step="0.5" onchange="saveTwoStageSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
               </div>
             </div>
           </div>
@@ -2281,6 +2438,7 @@
         <button id="startBtn" class="btn-start" style="flex: 1;">Start Beam Search</button>
         <button id="stopBtn" class="btn-stop" disabled style="flex: 1;">Stop</button>
         <button id="stopAllServicesBtn" onclick="stopAllLocalServices()" style="flex: 0 0 auto; background: #ff5252; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; font-weight: bold;" title="Stop all local services (LLM, Flux, Vision, VLM)">⏹ Stop All Services</button>
+        <button onclick="openVideoPanelStandalone()" style="flex: 0 0 auto; background: #7c4dff; color: white; border: none; padding: 10px 15px; border-radius: 4px; cursor: pointer; font-size: 13px; white-space: nowrap; font-weight: bold;" title="Open video generation panel">🎬 Video</button>
       </div>
     </div>
 
@@ -2600,31 +2758,49 @@
       </div>
 
       <div class="video-panel-body">
-        <!-- Source Selection Tabs -->
-        <div class="video-tabs">
-          <button class="video-tab active" onclick="switchVideoTab('grid')">From Grid Image</button>
-          <button class="video-tab" onclick="switchVideoTab('upload')">Upload Custom Image</button>
+        <!-- Mode Toggle (I2V / T2V) -->
+        <div class="video-mode-toggle">
+          <button id="videoModeI2V" class="video-mode-btn active" onclick="switchVideoMode('i2v')">Image → Video</button>
+          <button id="videoModeT2V" class="video-mode-btn" onclick="switchVideoMode('t2v')">Text → Video</button>
         </div>
 
-        <!-- Grid Image Tab -->
-        <div id="videoTabGrid" class="video-tab-content active">
-          <img id="videoSourcePreview" class="video-source-preview" alt="Selected image" style="display: none;">
-          <p style="color: #666; font-size: 13px; margin-bottom: 20px;">Selected image will be converted to video</p>
-        </div>
-
-        <!-- Custom Upload Tab -->
-        <div id="videoTabUpload" class="video-tab-content">
-          <div class="video-form-group">
-            <label>Select Image</label>
-            <input type="file" id="videoCustomImage" accept="image/*" onchange="handleVideoImageUpload(event)">
+        <!-- I2V: Source Selection Tabs (hidden in T2V mode) -->
+        <div id="videoImageSection">
+          <div class="video-tabs">
+            <button class="video-tab active" onclick="switchVideoTab('grid')">From Grid Image</button>
+            <button class="video-tab" onclick="switchVideoTab('upload')">Upload Custom Image</button>
           </div>
-          <img id="videoCustomPreview" class="video-source-preview" alt="Custom image" style="display: none;">
+
+          <!-- Grid Image Tab -->
+          <div id="videoTabGrid" class="video-tab-content active">
+            <img id="videoSourcePreview" class="video-source-preview" alt="Selected image" style="display: none;">
+            <p style="color: #666; font-size: 13px; margin-bottom: 20px;">Selected image will be converted to video</p>
+          </div>
+
+          <!-- Custom Upload Tab -->
+          <div id="videoTabUpload" class="video-tab-content">
+            <div class="video-form-group">
+              <label>Select Image</label>
+              <input type="file" id="videoCustomImage" accept="image/*" onchange="handleVideoImageUpload(event)">
+            </div>
+            <img id="videoCustomPreview" class="video-source-preview" alt="Custom image" style="display: none;">
+          </div>
         </div>
 
         <!-- Motion Prompt -->
         <div class="video-form-group">
-          <label>Motion Prompt</label>
+          <label id="videoPromptLabel">Motion Prompt</label>
           <textarea id="videoPrompt" placeholder="e.g., 'a gentle camera pan across the scene' or 'slow zoom in'"></textarea>
+        </div>
+
+        <!-- Model Selector -->
+        <div class="video-form-group">
+          <label>Model</label>
+          <select id="videoModel" onchange="onVideoModelChange()">
+            <option value="wan2.2-i2v-high" data-mode="i2v" data-steps="30" data-guidance="4.0" data-moe="true">WAN 2.2 I2V 14B (MoE)</option>
+            <option value="wan2.2-ti2v-5b" data-mode="both" data-steps="50" data-guidance="5.0" data-moe="false">WAN 2.2 TI2V 5B (Fast)</option>
+            <option value="wan2.2-t2v-14b" data-mode="t2v" data-steps="50" data-guidance="5.0" data-guidance2="3.0" data-moe="true">WAN 2.2 T2V 14B (MoE)</option>
+          </select>
         </div>
 
         <!-- Generation Settings -->
@@ -2634,8 +2810,12 @@
             <input type="number" id="videoSteps" value="30" min="10" max="50">
           </div>
           <div class="video-form-group">
-            <label>Guidance Scale</label>
+            <label>Guidance (High-Noise)</label>
             <input type="number" id="videoGuidance" value="4.0" min="1" max="10" step="0.5">
+          </div>
+          <div class="video-form-group" id="videoGuidance2Group">
+            <label>Guidance (Low-Noise)</label>
+            <input type="number" id="videoGuidance2" value="" min="1" max="10" step="0.5" placeholder="Auto">
           </div>
           <div class="video-form-group">
             <label>Frames</label>
@@ -2644,6 +2824,18 @@
           <div class="video-form-group">
             <label>FPS</label>
             <input type="number" id="videoFps" value="24" min="12" max="30">
+          </div>
+        </div>
+
+        <!-- T2V Resolution (hidden in I2V mode) -->
+        <div id="videoResolutionGroup" class="video-settings-grid" style="display: none;">
+          <div class="video-form-group">
+            <label>Height</label>
+            <input type="number" id="videoHeight" value="480" min="256" max="720" step="16">
+          </div>
+          <div class="video-form-group">
+            <label>Width</label>
+            <input type="number" id="videoWidth" value="832" min="256" max="1280" step="16">
           </div>
         </div>
 
@@ -2671,6 +2863,94 @@
             ⬇️ Download Video
           </button>
           <p id="videoMetadata" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Resample Panel Modal -->
+  <div id="resamplePanelModal" class="video-panel-modal" onclick="if(event.target === this) closeResamplePanel()">
+    <div class="video-panel-content">
+      <div class="video-panel-header">
+        <h2>🔄 Resample Image</h2>
+        <button class="video-panel-close" onclick="closeResamplePanel()">&times;</button>
+      </div>
+
+      <div class="video-panel-body">
+        <!-- Source Selection Tabs -->
+        <div class="video-tabs">
+          <button id="resampleTabGridBtn" class="video-tab active" onclick="switchResampleTab('grid')">From Grid Image</button>
+          <button id="resampleTabUploadBtn" class="video-tab" onclick="switchResampleTab('upload')">Upload Custom Image</button>
+        </div>
+
+        <!-- Grid Image Tab -->
+        <div id="resampleTabGrid" class="video-tab-content active">
+          <img id="resampleSourcePreview" class="video-source-preview" alt="Selected image" style="display: none;">
+          <p style="color: #666; font-size: 13px; margin-bottom: 20px;">Selected image will be resampled with the target model</p>
+        </div>
+
+        <!-- Custom Upload Tab -->
+        <div id="resampleTabUpload" class="video-tab-content">
+          <div class="video-form-group">
+            <label>Select Image</label>
+            <input type="file" id="resampleCustomImage" accept="image/*" onchange="handleResampleImageUpload(event)">
+          </div>
+          <img id="resampleCustomPreview" class="video-source-preview" alt="Custom image" style="display: none;">
+        </div>
+
+        <!-- Prompt -->
+        <div class="video-form-group">
+          <label>Prompt</label>
+          <textarea id="resamplePrompt" placeholder="Describe the target style, e.g. 'photorealistic portrait, studio lighting, bokeh'"></textarea>
+        </div>
+
+        <!-- Target Model -->
+        <div class="video-form-group">
+          <label>Target Model (Stage 2)</label>
+          <select id="resampleModel" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 14px;">
+            <option value="sdxl-base">SDXL Base (Photorealistic)</option>
+            <option value="flux-dev">FLUX Dev</option>
+            <option value="flux-schnell">FLUX Schnell (Fast)</option>
+          </select>
+        </div>
+
+        <!-- Settings Grid -->
+        <div class="video-settings-grid">
+          <div class="video-form-group">
+            <label>Denoise Strength: <span id="resampleDenoiseVal" style="font-weight: bold;">0.60</span></label>
+            <input type="range" id="resampleDenoiseStrength" min="0.3" max="0.9" step="0.05" value="0.60"
+                   oninput="document.getElementById('resampleDenoiseVal').textContent = parseFloat(this.value).toFixed(2)"
+                   style="width: 100%;">
+          </div>
+          <div class="video-form-group">
+            <label>Steps</label>
+            <input type="number" id="resampleSteps" value="20" min="5" max="50" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ddd;">
+          </div>
+          <div class="video-form-group">
+            <label>Guidance</label>
+            <input type="number" id="resampleGuidance" value="7.5" min="1" max="20" step="0.5" style="width: 100%; padding: 6px; border-radius: 4px; border: 1px solid #ddd;">
+          </div>
+        </div>
+
+        <!-- Generate Button -->
+        <button id="resampleGenerateBtn" class="video-generate-btn" onclick="submitResample()">
+          🔄 Resample Image
+        </button>
+
+        <!-- Progress Section -->
+        <div id="resampleProgress" class="video-progress">
+          <div class="video-progress-spinner"></div>
+          <div class="video-progress-text">Resampling image... <span id="resampleElapsedTime">0s</span></div>
+        </div>
+
+        <!-- Result Section -->
+        <div id="resampleResult" class="video-result">
+          <h3 style="margin-top: 0; color: #2e7d32;">✅ Image Resampled!</h3>
+          <img id="resampleResultImg" style="max-width: 100%; border-radius: 4px; display: block; margin: 0 auto 12px;" alt="Resampled image">
+          <button id="resampleDownloadBtn" class="video-download-btn" onclick="downloadResampledImage()">
+            ⬇️ Download Image
+          </button>
+          <p id="resampleMetadata" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
         </div>
       </div>
     </div>
