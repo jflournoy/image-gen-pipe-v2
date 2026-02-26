@@ -7,6 +7,7 @@
 
 const OpenAI = require('openai');
 const providerConfig = require('../config/provider-config.js');
+const { getCombineSystemPrompt, getExpandSystemPrompt, getRefineSystemPrompt } = require('../prompts');
 
 class OpenAILLMProvider {
   constructor(apiKey, options = {}) {
@@ -230,61 +231,7 @@ ${dimension === 'what' ? 'CRITICAL CONSTRAINT: Ensure refined WHAT prompt stays 
     const descriptiveness = options.descriptiveness || 2;
     const isBooru = options.promptStyle === 'booru';
 
-    // Build system prompt based on descriptiveness level and prompt style
-    let systemPrompt;
-    if (isBooru) {
-      // Hybrid booru mode: tags + natural language
-      if (descriptiveness === 1) {
-        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a single MINIMAL prompt. Use HYBRID format: booru tags for key attributes and quality, short natural language phrases for descriptions. Keep it concise - remove redundancies. Start with quality tags, then subject, then style. Output ONLY the combined prompt, no explanations.`;
-      } else if (descriptiveness === 3) {
-        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a COMPREHENSIVE prompt. Use HYBRID format: booru tags for categorical attributes (1girl, blue_eyes, masterpiece, best_quality, depth_of_field) combined with natural language descriptions for scenes, actions, and atmosphere. Include ALL relevant details from both dimensions. Be THOROUGH. Output ONLY the combined prompt, no explanations.`;
-      } else {
-        systemPrompt = `You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a BALANCED prompt. Use HYBRID format: booru tags for categorical attributes and quality markers, natural language phrases for descriptions and atmosphere. Remove duplicates, preserve all meaningful content. Output ONLY the combined prompt, no explanations.`;
-      }
-    } else if (descriptiveness === 1) {
-      // Concise: FORCE brevity and minimalism
-      systemPrompt = `You are an image prompt combiner. Your output MUST be BRIEF and MINIMAL.
-
-CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible.
-
-Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual.
-
-Output ONLY the combined prompt - NO explanations. Keep it SHORT.`;
-    } else if (descriptiveness === 3) {
-      // Descriptive: FORCE comprehensiveness and detail
-      systemPrompt = `You are an image prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED.
-
-CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout. Describe what is literally visible in the image.
-
-Create an EXTENSIVE, DETAILED prompt combining WHAT (content) and HOW (style):
-- Describe physical appearances: shapes, colors, textures, materials, spatial relationships
-- Describe subjects: posture, expression, clothing, positioning
-- Describe environment: concrete spatial details, depth, scale
-- Describe style: lighting direction and quality, color palette, composition, visual techniques
-- Use specific visual descriptors rather than abstract concepts
-- If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy")
-- Avoid vague qualifiers like "beautiful," "amazing" - describe HOW things look
-- Write a description that a viewer could verify against the actual image
-- Make it LONG and DETAILED - comprehensive visual coverage is essential
-
-Output only the combined prompt with NO preamble or commentary.`;
-    } else {
-      // Balanced (default): moderate detail with focus
-      systemPrompt = `You are an image prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED.
-
-CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible in the image.
-
-Important guidelines:
-- Combine WHAT (content) and HOW (style) into a unified description
-- Describe physical appearances: shapes, colors, textures, spatial relationships
-- Use specific visual descriptors rather than abstract concepts
-- If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling")
-- Avoid vague qualifiers like "beautiful," "amazing" - describe HOW things look
-- Preserve ALL meaningful details from both dimensions
-- Write a description that a viewer could verify against the actual image
-
-Output only the combined prompt with NO preamble or commentary.`;
-    }
+    const systemPrompt = getCombineSystemPrompt({ promptStyle: options.promptStyle, descriptiveness });
 
     const userPrompt = isBooru
       ? `WHAT tags: ${whatPrompt}
@@ -349,6 +296,32 @@ Combined prompt:`;
       // Wrap OpenAI errors with more context
       throw new Error(`OpenAI API error: ${error.message}`);
     }
+  }
+
+  /**
+   * Generic chat completion — accepts a messages array and returns { text, usage }
+   * Supports responseFormat option for JSON mode.
+   * @param {Array<{role: string, content: string}>} messages - Chat messages
+   * @param {Object} options - Generation options
+   * @param {number} [options.maxTokens] - Max tokens
+   * @param {number} [options.temperature=0.5] - Temperature
+   * @param {Object} [options.responseFormat] - e.g. { type: 'json_object' }
+   * @returns {Promise<{text: string, usage: Object}>}
+   */
+  async chat(messages, options = {}) {
+    const { maxTokens, temperature = 0.5, responseFormat } = options;
+    const selectedModel = this.model;
+    const capabilities = this._getModelCapabilities(selectedModel);
+    const effectiveMaxTokens = maxTokens ?? capabilities.recommendedMaxTokens;
+
+    const apiParams = this._buildChatParams(selectedModel, messages, temperature, effectiveMaxTokens);
+    if (responseFormat) {
+      apiParams.response_format = responseFormat;
+    }
+
+    const completion = await this.client.chat.completions.create(apiParams);
+    const text = completion.choices[0]?.message?.content || '';
+    return { text, usage: completion.usage };
   }
 
   /**
@@ -489,165 +462,10 @@ Combined prompt:`;
    * @private
    */
   _buildSystemPrompt(dimension, operation = 'expand', promptStyle = 'natural') {
-    const isBooru = promptStyle === 'booru';
-
     if (operation === 'expand') {
-      // Initial expansion from terse to detailed
-      if (dimension === 'what') {
-        if (isBooru) {
-          return `You are an expert at generating prompts for booru-trained SDXL models describing CONTENT.
-
-Your task: Take a terse prompt and generate a SINGLE HYBRID prompt mixing booru tags with natural language.
-
-CRITICAL: Generate a prompt for the EXACT subject given — do not change the topic or invent a different scenario.
-
-Use booru tags for categorical attributes:
-- Character count (1girl, 2boys, solo)
-- Physical attributes (blue_eyes, long_hair, red_hair)
-- Clothing tags (school_uniform, hat, glasses)
-
-Use natural language for descriptions and actions:
-- "standing in a sunlit meadow" not "standing, sunlit, meadow"
-- "looking over her shoulder with a gentle smile" not "looking_back, smile"
-- Scene descriptions and spatial relationships
-
-Important guidelines:
-- Start with character count tags, then mix attributes and descriptions naturally
-- Be specific with booru attributes (long_hair, blue_eyes, not just "hair, eyes")
-- Output ONLY the prompt, no sentences of commentary or explanation.`;
-        }
-        return `You are an expert at expanding image generation prompts with rich CONTENT details.
-
-Your task: Take a terse prompt and expand it into a detailed description of WHAT is in the scene.
-
-CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe what is literally visible.
-CRITICAL: Stay focused on the EXACT subject given — do not change the topic or invent a different scenario.
-
-Focus on:
-- Subjects and characters - their appearance, posture, expression, clothing
-- Objects and elements - shape, color, texture, material, condition
-- Actions and activities - visible motion, gestures, interactions
-- Setting and environment - concrete spatial details
-- Spatial relationships - where things are positioned relative to each other
-
-Important guidelines:
-- Describe physical appearances rather than abstract qualities
-- If evoking mood, anchor it to specific visual elements (lighting, color, composition)
-- Be specific about what things LOOK LIKE, not just what they ARE
-
-Output ONLY the expanded prompt, no preamble or commentary.`;
-      } else {
-        if (isBooru) {
-          return `You are an expert at generating style prompts for booru-trained SDXL models.
-
-Your task: Take a terse prompt and generate a SINGLE HYBRID style prompt mixing booru tags with natural language.
-
-CRITICAL: Do NOT include subject/content tags in the style prompt — focus purely on how the image looks.
-
-Use booru tags for:
-- Quality tags (masterpiece, best_quality, absurdres, highres)
-- Technical terms (depth_of_field, bokeh, chromatic_aberration)
-- Composition tags (wide_shot, close-up, from_above)
-
-Use natural language for:
-- Lighting descriptions ("warm golden hour lighting with long shadows")
-- Atmosphere ("soft ethereal glow filtering through mist")
-- Color palette descriptions ("rich warm tones with deep amber highlights")
-
-Important guidelines:
-- Always start with quality tags (masterpiece, best_quality)
-- Mix technical booru tags with descriptive natural language naturally
-- Output ONLY the prompt, no sentences of commentary or explanation.`;
-        }
-        return `You are an expert at expanding image generation prompts with rich STYLE details.
-
-Your task: Take a terse prompt and expand it into a detailed description of HOW the image should look.
-
-CRITICAL: Use CONCRETE VISUAL LANGUAGE. Describe the visual effects, not just name the techniques.
-CRITICAL: Do NOT include subject/content details — focus purely on visual style.
-
-Focus on:
-- Lighting (direction, quality, color temperature, shadow characteristics)
-- Composition (framing, perspective, depth, visual flow)
-- Atmosphere (haze, weather effects, time of day)
-- Artistic style (photography, painting, digital art)
-- Color palette (specific hues, saturation, contrast)
-- Visual techniques and their visible effects
-
-Important guidelines:
-- Describe what the visual effect LOOKS LIKE, not just the technique name
-  (e.g., "soft diffused shadows with gentle falloff" not just "soft lighting")
-- Derive style cues from the user's request (mood, setting, and subject inform the aesthetic)
-- Be specific about technical choices rather than using vague terms
-
-Output ONLY the expanded prompt, no preamble or commentary.`;
-      }
-    } else {
-      // Iterative refinement based on critique
-      if (dimension === 'what') {
-        if (isBooru) {
-          return `You are an expert at refining prompts for booru-trained SDXL models based on feedback about CONTENT.
-
-Your task: Given a current prompt and critique, produce an improved HYBRID prompt (booru tags + natural language) that addresses the feedback.
-
-Important guidelines:
-- DIRECTLY ADDRESS the specific issues raised in the critique
-- Focus on content (WHAT), not style (HOW)
-- Use booru tags for attributes, natural language for descriptions
-- Preserve effective elements from the original prompt
-- Output ONLY the refined prompt, no commentary.`;
-        }
-        return `You are an expert at refining image generation prompts based on feedback about CONTENT.
-
-Your task: Given a current prompt and a critique about its content, produce an improved version that addresses the feedback.
-
-The critique may suggest:
-- Missing or unclear content elements
-- Subjects that need better description
-- Actions or settings that need clarification
-- Elements to emphasize or de-emphasize
-
-Important guidelines:
-- DIRECTLY ADDRESS the specific issues raised in the critique
-- Focus on content (WHAT) not style (HOW)
-- Make measurable improvements that would increase alignment scores
-- Preserve effective elements from the original prompt
-- Be specific about what changed and why it addresses the critique
-
-Output ONLY the refined prompt, no preamble or commentary.`;
-      } else {
-        if (isBooru) {
-          return `You are an expert at refining style prompts for booru-trained SDXL models based on feedback about STYLE.
-
-Your task: Given a current prompt and critique, produce an improved HYBRID style prompt (booru tags + natural language) that addresses the feedback.
-
-Important guidelines:
-- DIRECTLY ADDRESS the specific issues raised in the critique
-- Focus on style (HOW), not content (WHAT)
-- Use booru tags for quality/technical terms, natural language for atmosphere
-- Preserve effective style elements from the original prompt
-- Output ONLY the refined prompt, no commentary.`;
-        }
-        return `You are an expert at refining image generation prompts based on feedback about STYLE.
-
-Your task: Given a current prompt and a critique about its visual style, produce an improved version that addresses the feedback.
-
-The critique may suggest:
-- Lighting or composition adjustments
-- Changes to artistic style or techniques
-- Color palette modifications
-- Atmosphere or mood enhancements
-
-Important guidelines:
-- DIRECTLY ADDRESS the specific issues raised in the critique
-- Focus on style (HOW) not content (WHAT)
-- Make measurable improvements that would increase aesthetic scores
-- Preserve effective style elements from the original prompt
-- Be specific about technical changes (e.g., "golden hour lighting" not just "better lighting")
-
-Output ONLY the refined prompt, no preamble or commentary.`;
-      }
+      return getExpandSystemPrompt({ dimension, promptStyle, variant: 'openai' });
     }
+    return getRefineSystemPrompt({ dimension, promptStyle, variant: 'openai' });
   }
 
   /**

@@ -7,6 +7,7 @@
 const axios = require('axios');
 const ServiceConnection = require('../utils/service-connection');
 const serviceManager = require('../utils/service-manager');
+const { getNegativeSystemPrompt, getCombineSystemPrompt, getExpandSystemPrompt, getRefineSystemPrompt } = require('../prompts');
 
 // Health check timeout - be patient with model loading/busy service
 const HEALTH_CHECK_TIMEOUT_MS = parseInt(process.env.LLM_HEALTH_CHECK_TIMEOUT_MS || '30000', 10);
@@ -70,15 +71,7 @@ class LocalLLMProvider {
         const { critique, recommendation, reason } = options.critique;
         const originalUserPrompt = options.userPrompt || prompt;
 
-        if (isBooru) {
-          systemPrompt = dimension === 'what' ?
-            'You are a prompt refiner for booru-trained SDXL models, focused on CONTENT (WHAT). Based on the critique, improve the prompt to better match user intent. Use a HYBRID format: booru tags for attributes (hair_color, eye_color, 1girl) mixed with natural language for descriptions and actions. Output ONLY the improved prompt, no explanations.' :
-            'You are a prompt refiner for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Based on the critique, improve the style prompt. Use a HYBRID format: booru tags for quality (masterpiece, best_quality) and technical terms (depth_of_field) mixed with natural language for describing lighting and atmosphere. Output ONLY the improved prompt, no explanations.';
-        } else {
-          systemPrompt = dimension === 'what' ?
-            'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on the critique and recommendation, improve the prompt to better match user intent while maintaining alignment with the original request.' :
-            'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on the critique and recommendation, improve the prompt to enhance aesthetic quality and visual appeal.';
-        }
+        systemPrompt = getRefineSystemPrompt({ dimension, promptStyle: options.promptStyle, variant: 'local' });
 
         userPromptText = `Original user request: "${originalUserPrompt}"
 Current ${dimension.toUpperCase()} prompt: "${prompt}"
@@ -87,7 +80,7 @@ Critique: ${critique}
 Recommendation: ${recommendation}
 Reason: ${reason}
 
-Provide an improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'} that addresses the critique while staying aligned with the original user request.`;
+Improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'}:`;
       } else if (options.previousResult) {
         // Test interface: previousResult with scores
         const { prompt: prevPrompt, clipScore, aestheticScore, caption } = options.previousResult;
@@ -95,41 +88,19 @@ Provide an improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'} th
           `CLIP score: ${clipScore}` :
           `Aesthetic score: ${aestheticScore}`;
 
-        if (isBooru) {
-          systemPrompt = dimension === 'what' ?
-            'You are a prompt refiner for booru-trained SDXL models, focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score. Use a HYBRID format: booru tags for attributes (hair_color, 1girl) mixed with natural language for descriptions. Output ONLY the improved prompt, no explanations.' :
-            'You are a prompt refiner for booru-trained SDXL models, focused on VISUAL STYLE (HOW). Based on critique, improve the style prompt to enhance aesthetic quality. Use a HYBRID format: booru tags for quality/technical terms mixed with natural language for describing visual effects. Output ONLY the improved prompt, no explanations.';
-        } else {
-          systemPrompt = dimension === 'what' ?
-            'You are an SDXL prompt refiner focused on CONTENT (WHAT). Based on critique, improve the prompt to better match user intent and boost CLIP score.' :
-            'You are an SDXL prompt refiner focused on VISUAL STYLE (HOW). Based on critique, improve the prompt to enhance aesthetic quality and visual appeal.';
-        }
+        systemPrompt = getRefineSystemPrompt({ dimension, promptStyle: options.promptStyle, variant: 'local' });
 
         userPromptText = `Original prompt: "${prompt}"
 Previous result: "${prevPrompt}"
 Image caption: "${caption}"
 Current ${focusMetric}
 
-Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'what' ? 'content alignment' : 'visual style'}.`;
+Improved ${dimension.toUpperCase()} ${isBooru ? 'tags' : 'prompt'}:`;
       } else {
         // Dimension-aware expansion: expand the user's prompt into what/how details
-        if (dimension === 'what') {
-          if (isBooru) {
-            systemPrompt = 'You are a prompt generator for booru-trained SDXL models describing CONTENT (WHAT). CRITICAL: Generate a prompt for the EXACT subject given — do not change the topic or invent a different scenario. Generate a HYBRID prompt mixing booru tags with natural language. Use booru tags for categorical attributes (1girl, blue_eyes, long_hair, school_uniform) and natural language phrases for descriptions and actions. Do NOT add section labels, category prefixes, or numbering. Output ONLY the prompt, nothing else.';
-            userPromptText = `User request: "${prompt}"\n\nWHAT (content):`;
-          } else {
-            systemPrompt = 'You are an SDXL prompt expander for CONTENT (WHAT). CRITICAL: Expand the EXACT subject given — do not change the topic or invent a different scenario. Use CONCRETE VISUAL LANGUAGE — describe what is literally visible. Write 2-4 sentences describing subjects (appearance, posture, expression), objects (shape, color, texture), actions (visible motion, gestures), and spatial relationships. Output ONLY the expanded description, no labels or commentary.';
-            userPromptText = `User request: "${prompt}"\n\nWHAT (content):`;
-          }
-        } else {
-          if (isBooru) {
-            systemPrompt = 'You are a prompt generator for booru-trained SDXL models describing VISUAL STYLE (HOW). Generate a HYBRID style prompt mixing booru tags with natural language. Start with quality tags (masterpiece, best_quality, absurdres, highres), then add technical terms (depth_of_field, bokeh, chromatic_aberration) and natural language for lighting and atmosphere. Do NOT copy subject/content tags from the user request into the style prompt. Do NOT add section labels. Output ONLY the style prompt as a flat list, nothing else.';
-            userPromptText = `User request: "${prompt}"\n\nHOW (style):`;
-          } else {
-            systemPrompt = 'You are an SDXL prompt expander for VISUAL STYLE (HOW). Use CONCRETE VISUAL LANGUAGE — describe what the visual effects look like, not just technique names. Write 2-4 sentences describing lighting (direction, quality, shadow characteristics), composition, color palette (specific hues), and atmosphere. Derive style cues from the user\'s request (mood, setting, and subject inform the style). Output ONLY the style description, no labels or commentary.';
-            userPromptText = `User request: "${prompt}"\n\nHOW (style):`;
-          }
-        }
+        systemPrompt = getExpandSystemPrompt({ dimension, promptStyle: options.promptStyle, variant: 'local' });
+        const dimLabel = dimension === 'what' ? 'WHAT (content)' : 'HOW (style)';
+        userPromptText = `User request: "${prompt}"\n\n${dimLabel}:`;
       }
 
       const { text, usage } = await this._generateChat(systemPrompt, userPromptText, options);
@@ -162,27 +133,7 @@ Provide improved ${isBooru ? 'tags' : 'a prompt'} focusing on ${dimension === 'w
       const descriptiveness = options.descriptiveness || 2;
       const isBooru = options.promptStyle === 'booru';
 
-      // Build system prompt based on descriptiveness level and prompt style
-      let systemPrompt;
-      if (isBooru) {
-        // Hybrid booru mode: combine tags with natural language descriptions
-        if (descriptiveness === 1) {
-          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a single MINIMAL prompt. Use HYBRID format: booru tags for key attributes and quality, short natural language phrases for descriptions. Keep it concise - remove redundancies. Start with quality tags, then subject, then style. Output ONLY the combined prompt, no explanations.';
-        } else if (descriptiveness === 3) {
-          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a COMPREHENSIVE prompt. Use HYBRID format: booru tags for categorical attributes (1girl, blue_eyes, masterpiece, best_quality, depth_of_field) combined with natural language descriptions for scenes, actions, and atmosphere. Include ALL relevant details from both dimensions. Be THOROUGH. Output ONLY the combined prompt, no explanations.';
-        } else {
-          systemPrompt = 'You are a prompt combiner for booru-trained SDXL models. Merge WHAT and HOW into a BALANCED prompt. Use HYBRID format: booru tags for categorical attributes and quality markers, natural language phrases for descriptions and atmosphere. Remove duplicates, preserve all meaningful content from both dimensions. Output ONLY the combined prompt, no explanations.';
-        }
-      } else {
-        // Natural language mode (existing behavior)
-        if (descriptiveness === 1) {
-          systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be BRIEF and MINIMAL. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible. Produce a SHORT, TERSE prompt by merging WHAT (content) and HOW (style). Strip unnecessary words. Describe physical appearances, not abstract concepts. Be direct and visual. Output ONLY the combined prompt - NO explanations. Keep it SHORT.';
-        } else if (descriptiveness === 3) {
-          systemPrompt = 'You are an SDXL prompt combiner. Your output MUST be COMPREHENSIVE and RICHLY DETAILED. CRITICAL: Use CONCRETE VISUAL LANGUAGE throughout - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, materials, spatial relationships. Describe subjects: posture, expression, clothing, positioning. Describe environment: concrete spatial details, depth, scale. Describe style: lighting direction and quality, color palette, composition, visual techniques. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy"). Avoid vague qualifiers like "beautiful" or "amazing" - describe HOW things look. Write a description that a viewer could verify against the actual image. Make it LONG and DETAILED.';
-        } else {
-          systemPrompt = 'You are an SDXL prompt combiner. Create a BALANCED prompt that is DETAILED yet FOCUSED. CRITICAL: Use CONCRETE VISUAL LANGUAGE - describe what is literally visible in the image. Describe physical appearances: shapes, colors, textures, spatial relationships. Use specific visual descriptors rather than abstract concepts. If conveying mood, ground it in visual choices (e.g., "warm golden light" not just "cozy feeling"). Avoid vague qualifiers like "beautiful" - describe HOW things look. Preserve ALL meaningful details from both WHAT and HOW dimensions. Write a description that a viewer could verify against the actual image.';
-        }
-      }
+      const systemPrompt = getCombineSystemPrompt({ promptStyle: options.promptStyle, descriptiveness });
 
       const userPrompt = isBooru
         ? `WHAT tags: ${whatPrompt || '(none)'}
@@ -251,43 +202,13 @@ Combined SDXL prompt:`;
     }
 
     try {
-      const isBooru = options.promptStyle === 'booru';
-
-      const systemPrompt = isBooru
-        ? `You are an expert at generating negative prompt tags for SDXL anime/booru-style image generation.
-
-Generate comma-separated negative tags. Always include these standard quality negatives:
-lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry
-
-Add context-specific negative tags based on the positive prompt to prevent unwanted elements.
-Output ONLY comma-separated tags, nothing else.`
-        : `You are an expert at generating negative prompts for SDXL image generation.
-
-Your task: Given a positive prompt, generate a negative prompt that:
-1. Prevents common artifacts (blurry, low quality, distorted, deformed, etc.)
-2. Disambiguates ambiguous terms (e.g., "old" in "30 year old" should be negated as "elderly, aged")
-3. Prevents opposite characteristics from the desired result
-4. Reinforces desired elements by excluding their absence (e.g., "no mountains" if mountains are wanted)
-5. Does NOT negate the core subject or desired attributes
-
-Examples:
-
-Positive: "30 year old man"
-Negative: "elderly, aged, wrinkled, senior, young, child, teenager, blurry, low quality, distorted"
-
-Positive: "old wooden barn"
-Negative: "modern, new, metal, glass, blurry, low quality, distorted, people, cars"
-
-Positive: "beautiful sunset over mountains"
-Negative: "blurry, low quality, no mountains, flat, urban, city, text, watermark"
-
-Now generate a negative prompt for the following positive prompt. Output ONLY the negative prompt, nothing else.`;
+      const systemPrompt = getNegativeSystemPrompt({ promptStyle: options.promptStyle });
 
       const userPrompt = `Positive prompt: "${positivePrompt}"`;
 
       const { text, usage } = await this._generateChat(systemPrompt, userPrompt, {
         temperature: 0.3,  // Lower temp for consistency
-        max_tokens: 150,
+        max_tokens: 200,   // Enough for 25-30 items without truncation
       });
 
       const negativePrompt = this._cleanLLMResponse(text);
@@ -365,6 +286,17 @@ Now generate a negative prompt for the following positive prompt. Output ONLY th
       cleaned = cleaned.replace(/"\s+"/g, ', ').replace(/^"|"$/g, '').replace(/,\s*,/g, ',').trim();
     }
 
+    // 0c. Strip markdown bold header blocks with bullet lists (meta-commentary from refine)
+    //     e.g., "**Key Improvements:**\n- Added X\n- Changed Y\n- Maintained Z"
+    cleaned = cleaned.replace(/\*\*[^*]+\*\*\s*:?\s*(?:\n\s*[-•]\s+[^\n]+)+/g, '').trim();
+
+    // 0d. Strip meta-commentary sentences that describe changes rather than being prompts
+    //     e.g., "This refined version strengthens...", "This refined HOW prompt enhances..."
+    //     "Key improvements include...", "The changes focus on..."
+    cleaned = cleaned.replace(/^(?:This\s+(?:refined|improved|updated|revised)\s+(?:version|prompt|HOW prompt|WHAT prompt|HOW|WHAT)\b[^.]*\.)\s*/im, '');
+    cleaned = cleaned.replace(/^(?:Key\s+improvements?\s+(?:include|are|focus)[^.]*\.)\s*/im, '');
+    cleaned = cleaned.replace(/^(?:The\s+(?:changes?|modifications?|updates?|revisions?)\s+(?:focus|include|are|address)[^.]*\.)\s*/im, '');
+
     // 1. Remove trailing explanation/note blocks (everything after double-newline + marker)
     cleaned = cleaned.replace(/\n\n\s*(Explanation|Note|The combined|The revised|The improved|Additionally|Furthermore|These are|In summary|To summarize|I (?:also |have )?(?:removed|replaced|adjusted|added|simplified|restructured))[\s\S]*/i, '');
 
@@ -375,11 +307,21 @@ Now generate a negative prompt for the following positive prompt. Output ONLY th
       cleaned = numberedListMatch[1];
     }
 
-    // 3. If multiple paragraphs remain, take the last substantial one
-    //    (model sometimes outputs raw tags, then a "deduplicated" version)
+    // 3. If multiple paragraphs remain, select the best one
+    //    For booru: model outputs raw tags then "deduplicated" version → last is fine
+    //    For natural language: last may be a truncated fragment → prefer longest
     const paragraphs = cleaned.split(/\n\n+/).filter(p => p.trim().length > 0);
     if (paragraphs.length > 1) {
-      cleaned = paragraphs[paragraphs.length - 1];
+      const lastParagraph = paragraphs[paragraphs.length - 1];
+      const MIN_PROMPT_LENGTH = 80; // Shorter than this is likely a truncated fragment
+      if (lastParagraph.trim().length < MIN_PROMPT_LENGTH) {
+        // Last paragraph is suspiciously short — use the longest one instead
+        const longestIdx = paragraphs.reduce((maxIdx, p, i) =>
+          p.trim().length > paragraphs[maxIdx].trim().length ? i : maxIdx, 0);
+        cleaned = paragraphs[longestIdx];
+      } else {
+        cleaned = lastParagraph;
+      }
     }
 
     // 3b. Handle labeled multi-line sections (quality: ...\nartistic_style: ...)
@@ -514,6 +456,11 @@ Now generate a negative prompt for the following positive prompt. Output ONLY th
             payload.stop = options.stop;
           }
 
+          // Add response format if provided (e.g. JSON mode)
+          if (options.response_format) {
+            payload.response_format = options.response_format;
+          }
+
           const response = await axios.post(
             `${this.apiUrl}/v1/chat/completions`,
             payload,
@@ -551,6 +498,24 @@ Now generate a negative prompt for the following positive prompt. Output ONLY th
         attemptRestart: true
       }
     );
+  }
+
+  /**
+   * Generic chat completion — accepts a messages array and returns { text, usage }
+   * Supports responseFormat option for JSON mode.
+   * @param {Array<{role: string, content: string}>} messages - Chat messages
+   * @param {Object} options - Generation options
+   * @param {Object} [options.responseFormat] - e.g. { type: 'json_object' }
+   * @returns {Promise<{text: string, usage: Object}>}
+   */
+  async chat(messages, options = {}) {
+    const systemMsg = messages.find(m => m.role === 'system')?.content || '';
+    const userMsg = [...messages].reverse().find(m => m.role === 'user')?.content || '';
+    const chatOptions = { ...options };
+    if (options.responseFormat) {
+      chatOptions.response_format = options.responseFormat;
+    }
+    return this._generateChat(systemMsg, userMsg, chatOptions);
   }
 
   /**

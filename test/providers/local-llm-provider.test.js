@@ -663,6 +663,36 @@ describe('LocalLLMProvider', () => {
       assert.strictEqual(provider._cleanLLMResponse(input), 'clean_tag1, clean_tag2, clean_tag3');
     });
 
+    test('should prefer longest paragraph when last paragraph is truncated fragment', () => {
+      const provider = new LocalLLMProvider();
+      // Simulates the combined prompt issue: LLM outputs a full description then a truncated fragment
+      const fullPrompt = 'A young woman with porcelain skin gazes forward in a neoclassical setting, wearing a white dress with intricate embroidery, soft diffused light casting gentle shadows';
+      const truncatedFragment = 'Her posture is';
+      const input = `${fullPrompt}\n\n${truncatedFragment}`;
+      assert.strictEqual(provider._cleanLLMResponse(input), fullPrompt);
+    });
+
+    test('should strip markdown bold header blocks with bullet lists', () => {
+      const provider = new LocalLLMProvider();
+      const input = '**Key Improvements:**\n- Explicitly included "panty-peak" as requested\n- Emphasized neoclassical style\n- Enhanced description of setting';
+      // After stripping the meta-commentary block, nothing meaningful remains
+      assert.strictEqual(provider._cleanLLMResponse(input), '');
+    });
+
+    test('should strip meta-commentary followed by actual prompt', () => {
+      const provider = new LocalLLMProvider();
+      const metaComment = '**Key Improvements:**\n- Added detail\n- Changed style';
+      const actualPrompt = 'A young woman stands in a neoclassical hall, soft light filtering through marble archways, her dress flowing with intricate embroidery details';
+      const input = `${metaComment}\n\n${actualPrompt}`;
+      assert.strictEqual(provider._cleanLLMResponse(input), actualPrompt);
+    });
+
+    test('should strip "This refined version..." meta-commentary sentences', () => {
+      const provider = new LocalLLMProvider();
+      const input = 'This refined version strengthens visual clarity and depth. Soft golden-hour light filters through an ornate neoclassical archway, casting subtle highlights on the figure';
+      assert.strictEqual(provider._cleanLLMResponse(input), 'Soft golden-hour light filters through an ornate neoclassical archway, casting subtle highlights on the figure');
+    });
+
     test('should apply cleanup in refinePrompt responses', async () => {
       const provider = new LocalLLMProvider();
 
