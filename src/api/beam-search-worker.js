@@ -14,6 +14,7 @@ const TokenTracker = require('../utils/token-tracker.js');
 const { MODEL_PRICING } = require('../config/model-pricing.js');
 const { getDateString } = require('../utils/timezone.js');
 const providerConfig = require('../config/provider-config.js');
+const ServiceManager = require('../utils/service-manager.js');
 const path = require('path');
 
 // Read output directory from environment (set in .env on production)
@@ -159,6 +160,15 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
   activeJobs.set(jobId, { status: 'running', startTime: Date.now(), sessionId, tokenTracker });
 
   try {
+    // Clear all STOP_LOCKs before starting — user clicked Go, they want services to run
+    const services = ['llm', 'flux', 'vision', 'vlm'];
+    for (const svc of services) {
+      if (await ServiceManager.hasStopLock(svc)) {
+        await ServiceManager.deleteStopLock(svc);
+        console.log(`[Beam Search Worker] Cleared STOP_LOCK for ${svc} (beam search starting)`);
+      }
+    }
+
     // Create providers using factory (CommonJS module)
     const {
       createLLMProvider,
@@ -223,7 +233,7 @@ export async function startBeamSearchJob(jobId, params, userApiKey) {
     // Configure rate limiters based on provider types
     // Local providers process sequentially, so use concurrency=1
     const isLocalLLM = runtimeProviders.llm === 'local-llm' || runtimeProviders.llm === 'ollama';
-    const isLocalImage = runtimeProviders.image === 'flux' || runtimeProviders.image === 'local';
+    const isLocalImage = runtimeProviders.image === 'flux' || runtimeProviders.image === 'local' || runtimeProviders.image === 'modal';
     const isLocalVision = runtimeProviders.vision === 'local';
     configureRateLimitsForProviders({
       llmIsLocal: isLocalLLM,

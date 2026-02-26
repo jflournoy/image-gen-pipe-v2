@@ -27,6 +27,14 @@ let runtimeProviders = {
   vision: null
 };
 
+// Modal health check cache (in-memory, short TTL to avoid redundant container wake-ups)
+const MODAL_HEALTH_CACHE_TTL = 60000; // 60 seconds
+let modalHealthCache = {
+  result: null,
+  timestamp: 0,
+  pendingRequest: null // Dedup: reuse in-flight request
+};
+
 // Modal models cache
 const MODAL_CACHE_FILE = pathModule.join(process.cwd(), '.modal-models-cache.json');
 const MODAL_CACHE_TTL = 3600000; // 1 hour
@@ -391,9 +399,39 @@ async function checkBFLHealth() {
 }
 
 /**
- * Helper: Check Modal API health
+ * Helper: Check Modal API health (cached with TTL + in-flight dedup)
+ * Prevents redundant container wake-ups from repeated /api/providers/status calls.
  */
 async function checkModalHealth() {
+  // Return cached result if still fresh
+  const age = Date.now() - modalHealthCache.timestamp;
+  if (modalHealthCache.result && age < MODAL_HEALTH_CACHE_TTL) {
+    console.log('[Modal Health] Returning cached result (age:', Math.round(age / 1000), 's)');
+    return modalHealthCache.result;
+  }
+
+  // Dedup: if a request is already in-flight, reuse it
+  if (modalHealthCache.pendingRequest) {
+    console.log('[Modal Health] Reusing in-flight request');
+    return modalHealthCache.pendingRequest;
+  }
+
+  modalHealthCache.pendingRequest = _doModalHealthCheck();
+  try {
+    const result = await modalHealthCache.pendingRequest;
+    modalHealthCache.result = result;
+    modalHealthCache.timestamp = Date.now();
+    return result;
+  } finally {
+    modalHealthCache.pendingRequest = null;
+  }
+}
+
+/**
+ * Actual Modal health check (uncached). Called by checkModalHealth().
+ * @private
+ */
+async function _doModalHealthCheck() {
   try {
     console.log('[Modal Health] Checking with config:', {
       apiUrl: providerConfig.modal?.apiUrl ? '(set)' : '(not set)',
@@ -427,6 +465,15 @@ async function checkModalHealth() {
       url: providerConfig.modal?.apiUrl
     };
   }
+}
+
+/**
+ * Invalidate Modal health cache (call after service start/stop)
+ */
+export function invalidateModalHealthCache() {
+  modalHealthCache.result = null;
+  modalHealthCache.timestamp = 0;
+  console.log('[Modal Health] Cache invalidated');
 }
 
 /**
