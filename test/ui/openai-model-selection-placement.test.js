@@ -32,7 +32,7 @@ describe('🔄 REFACTOR: OpenAI Model Selection Placement', () => {
 
       const hasLlmModelSelect =
         sectionContent.includes('id="llmModel"') ||
-        sectionContent.includes("id='llmModel'");
+        sectionContent.includes('id=\'llmModel\'');
 
       assert.ok(
         hasLlmModelSelect,
@@ -86,7 +86,7 @@ describe('🔄 REFACTOR: OpenAI Model Selection Placement', () => {
 
       const hasVisionModelSelect =
         sectionContent.includes('id="visionModel"') ||
-        sectionContent.includes("id='visionModel'");
+        sectionContent.includes('id=\'visionModel\'');
 
       assert.ok(
         hasVisionModelSelect,
@@ -123,7 +123,7 @@ describe('🔄 REFACTOR: OpenAI Model Selection Placement', () => {
 
       const hasImageModelSelect =
         sectionContent.includes('id="imageModel"') ||
-        sectionContent.includes("id='imageModel'");
+        sectionContent.includes('id=\'imageModel\'');
 
       assert.ok(
         hasImageModelSelect,
@@ -198,7 +198,7 @@ describe('🔄 REFACTOR: OpenAI Model Selection Placement', () => {
       const htmlContent = fs.readFileSync(demoHtmlPath, 'utf8');
 
       // Should have event listener for llmModel changes in JS or inline onchange in HTML
-      const hasJsListener = jsContent.includes("llmModel") && jsContent.includes('updateCostEstimate');
+      const hasJsListener = jsContent.includes('llmModel') && jsContent.includes('updateCostEstimate');
       const hasInlineListener = htmlContent.includes('id="llmModel"') && htmlContent.includes('onchange="updateCostEstimate');
 
       assert.ok(

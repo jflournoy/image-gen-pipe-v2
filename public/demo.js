@@ -238,6 +238,12 @@ function updateImageProviderSettings() {
     faceFixingSettings.style.display = supportsFaceFixing ? 'block' : 'none';
   }
 
+  // Toggle Two-Stage settings visibility (Modal only — requires img2img support)
+  const twoStageSettings = document.getElementById('twoStageSettings');
+  if (twoStageSettings) {
+    twoStageSettings.style.display = provider === 'modal' ? 'block' : 'none';
+  }
+
   // Update service visibility
   updateServiceVisibility();
 }
@@ -440,12 +446,14 @@ function loadBFLSettings() {
  * Persists scheduler, steps, guidance, dimensions, and fluxLoras
  */
 function saveFluxSettings() {
+  const sampler = document.getElementById('fluxSampler')?.value;
   const scheduler = document.getElementById('fluxScheduler')?.value;
   const steps = document.getElementById('fluxSteps')?.value;
   const guidance = document.getElementById('fluxGuidance')?.value;
   const width = document.getElementById('fluxWidth')?.value;
   const height = document.getElementById('fluxHeight')?.value;
 
+  if (sampler !== undefined) localStorage.setItem('fluxSampler', sampler);
   if (scheduler !== undefined) localStorage.setItem('fluxScheduler', scheduler);
   if (steps) localStorage.setItem('fluxSteps', steps);
   if (guidance) localStorage.setItem('fluxGuidance', guidance);
@@ -461,12 +469,16 @@ function saveFluxSettings() {
  * Restores previous Flux configuration including fluxLoras
  */
 function loadFluxSettings() {
-  const scheduler = localStorage.getItem('fluxScheduler') || '';
+  const sampler = localStorage.getItem('fluxSampler') || '';
+  const scheduler = localStorage.getItem('fluxScheduler') || 'normal';
   const steps = localStorage.getItem('fluxSteps') || '25';
   const guidance = localStorage.getItem('fluxGuidance') || '3.5';
   const width = localStorage.getItem('fluxWidth') || '1024';
   const height = localStorage.getItem('fluxHeight') || '1024';
 
+  if (document.getElementById('fluxSampler')) {
+    document.getElementById('fluxSampler').value = sampler;
+  }
   if (document.getElementById('fluxScheduler')) {
     document.getElementById('fluxScheduler').value = scheduler;
   }
@@ -749,6 +761,9 @@ function saveModalSettings() {
   const seed = document.getElementById('modalSeed')?.value;
   const gpu = document.getElementById('modalGpu')?.value;
   const flowShift = document.getElementById('modalFlowShift')?.value;
+  const sampler = document.getElementById('modalSampler')?.value;
+  const scheduler = document.getElementById('modalScheduler')?.value;
+  const clipSkip = document.getElementById('modalClipSkip')?.value;
 
   if (model) localStorage.setItem('modalModel', model);
   if (width) localStorage.setItem('modalWidth', width);
@@ -758,6 +773,9 @@ function saveModalSettings() {
   if (seed) localStorage.setItem('modalSeed', seed);
   if (gpu) localStorage.setItem('modalGpu', gpu);
   if (flowShift) localStorage.setItem('modalFlowShift', flowShift);
+  if (sampler !== undefined) localStorage.setItem('modalSampler', sampler);
+  if (scheduler !== undefined) localStorage.setItem('modalScheduler', scheduler);
+  if (clipSkip !== undefined) localStorage.setItem('modalClipSkip', clipSkip);
 }
 
 /**
@@ -898,6 +916,8 @@ function loadModalSettings() {
   const seed = localStorage.getItem('modalSeed') || '';
   const gpu = localStorage.getItem('modalGpu') || 'A10G';
   const flowShift = localStorage.getItem('modalFlowShift') || '1.0';
+  const sampler = localStorage.getItem('modalSampler') || '';
+  const scheduler = localStorage.getItem('modalScheduler') || 'normal';
 
   if (document.getElementById('modalModel')) document.getElementById('modalModel').value = model;
   if (document.getElementById('modalWidth')) document.getElementById('modalWidth').value = width;
@@ -919,6 +939,11 @@ function loadModalSettings() {
     const valueDisplay = document.getElementById('modalFlowShiftVal');
     if (valueDisplay) valueDisplay.textContent = flowShift;
   }
+  if (document.getElementById('modalSampler')) document.getElementById('modalSampler').value = sampler;
+  if (document.getElementById('modalScheduler')) document.getElementById('modalScheduler').value = scheduler;
+
+  const clipSkip = localStorage.getItem('modalClipSkip') || '';
+  if (document.getElementById('modalClipSkip')) document.getElementById('modalClipSkip').value = clipSkip;
 }
 
 /**
@@ -1262,9 +1287,108 @@ let currentVideoImageData = null;
 let currentVideoImageId = null;
 let videoGenerating = false;
 let videoElapsedTimer = null;
+let currentVideoMode = 'i2v'; // 'i2v' or 't2v'
+
+/**
+ * Resample Panel State
+ */
+let currentResampleImageData = null;
+let currentResampleImageId = null;
+let resampleGenerating = false;
+let resampleElapsedTimer = null;
+
+// Model metadata for defaults and capabilities
+const VIDEO_MODEL_DEFAULTS = {
+  'wan2.2-i2v-high': { steps: 30, guidance: 4.0, frames: 97, isMoE: true, modes: ['i2v'] },
+  'wan2.2-ti2v-5b':  { steps: 50, guidance: 5.0, frames: 97, isMoE: false, modes: ['i2v', 't2v'] },
+  'wan2.2-t2v-14b':  { steps: 50, guidance: 5.0, guidance_2: 3.0, frames: 97, isMoE: true, modes: ['t2v'] },
+};
+
+function _resetVideoForm(defaults = {}) {
+  const model = defaults.model || 'wan2.2-i2v-high';
+  const meta = VIDEO_MODEL_DEFAULTS[model] || VIDEO_MODEL_DEFAULTS['wan2.2-i2v-high'];
+  document.getElementById('videoPrompt').value = '';
+  document.getElementById('videoModel').value = model;
+  document.getElementById('videoSteps').value = String(defaults.steps || meta.steps);
+  document.getElementById('videoGuidance').value = String(defaults.guidance || meta.guidance);
+  document.getElementById('videoGuidance2').value = '';
+  document.getElementById('videoFrames').value = String(defaults.frames || meta.frames);
+  document.getElementById('videoFps').value = '24';
+  document.getElementById('videoSeed').value = '';
+  document.getElementById('videoResult').classList.remove('active');
+  document.getElementById('videoProgress').classList.remove('active');
+  _updateGuidance2Visibility(model);
+  _filterModelsByMode(currentVideoMode);
+}
+
+function _updateGuidance2Visibility(modelId) {
+  const meta = VIDEO_MODEL_DEFAULTS[modelId];
+  const group = document.getElementById('videoGuidance2Group');
+  if (group) group.style.display = (meta && meta.isMoE) ? '' : 'none';
+}
+
+function _filterModelsByMode(mode) {
+  const select = document.getElementById('videoModel');
+  if (!select) return;
+  const options = select.options;
+  let firstVisible = null;
+  for (let i = 0; i < options.length; i++) {
+    const opt = options[i];
+    const modelModes = VIDEO_MODEL_DEFAULTS[opt.value]?.modes || ['i2v'];
+    const show = mode === 'i2v' ? modelModes.includes('i2v') : modelModes.includes('t2v');
+    opt.style.display = show ? '' : 'none';
+    if (show && !firstVisible) firstVisible = opt.value;
+  }
+  // If current selection hidden, switch to first visible
+  const current = select.value;
+  const currentModes = VIDEO_MODEL_DEFAULTS[current]?.modes || ['i2v'];
+  if (!(mode === 'i2v' ? currentModes.includes('i2v') : currentModes.includes('t2v'))) {
+    if (firstVisible) {
+      select.value = firstVisible;
+      _applyModelDefaults(firstVisible);
+    }
+  }
+}
+
+function _applyModelDefaults(modelId) {
+  const meta = VIDEO_MODEL_DEFAULTS[modelId];
+  if (!meta) return;
+  document.getElementById('videoSteps').value = String(meta.steps);
+  document.getElementById('videoGuidance').value = String(meta.guidance);
+  document.getElementById('videoGuidance2').value = meta.guidance_2 ? String(meta.guidance_2) : '';
+  _updateGuidance2Visibility(modelId);
+}
+
+window.switchVideoMode = function(mode) {
+  currentVideoMode = mode;
+
+  // Update toggle buttons
+  document.getElementById('videoModeI2V').classList.toggle('active', mode === 'i2v');
+  document.getElementById('videoModeT2V').classList.toggle('active', mode === 't2v');
+
+  // Show/hide image section and resolution section
+  const imageSection = document.getElementById('videoImageSection');
+  const resolutionGroup = document.getElementById('videoResolutionGroup');
+  const promptLabel = document.getElementById('videoPromptLabel');
+  if (imageSection) imageSection.style.display = mode === 'i2v' ? '' : 'none';
+  if (resolutionGroup) resolutionGroup.style.display = mode === 't2v' ? '' : 'none';
+  if (promptLabel) promptLabel.textContent = mode === 't2v' ? 'Video Prompt' : 'Motion Prompt';
+
+  // Filter model selector
+  _filterModelsByMode(mode);
+};
+
+window.onVideoModelChange = function() {
+  const modelId = document.getElementById('videoModel').value;
+  _applyModelDefaults(modelId);
+};
 
 window.openVideoPanel = function(imageUrl, imageId) {
   currentVideoImageId = imageId;
+  currentVideoMode = 'i2v';
+
+  // Ensure I2V mode UI
+  window.switchVideoMode('i2v');
 
   // Convert image URL to base64
   const img = new Image();
@@ -1276,37 +1400,17 @@ window.openVideoPanel = function(imageUrl, imageId) {
     canvas.height = img.height;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(img, 0, 0);
-    currentVideoImageData = canvas.toDataURL('image/png').split(',')[1]; // Get base64 part
+    currentVideoImageData = canvas.toDataURL('image/png').split(',')[1];
 
-    // Show preview and open panel
     const preview = document.getElementById('videoSourcePreview');
     preview.src = imageUrl;
     preview.style.display = 'block';
-
-    // Clear other tab
     document.getElementById('videoCustomPreview').style.display = 'none';
-
-    // Show grid tab
-    switchVideoTab('grid');
-
-    // Clear form
-    document.getElementById('videoPrompt').value = '';
-    document.getElementById('videoSteps').value = '30';
-    document.getElementById('videoGuidance').value = '4.0';
-    document.getElementById('videoFrames').value = '97';
-    document.getElementById('videoFps').value = '24';
-    document.getElementById('videoSeed').value = '';
-
-    // Reset result section
-    document.getElementById('videoResult').classList.remove('active');
-    document.getElementById('videoProgress').classList.remove('active');
-
-    // Open modal
-    const modal = document.getElementById('videoPanelModal');
-    modal.classList.add('active');
+    window.switchVideoTab('grid');
+    _resetVideoForm();
+    document.getElementById('videoPanelModal').classList.add('active');
   };
   img.onerror = function() {
-    // Try fetch as fallback
     fetch(imageUrl)
       .then(r => r.blob())
       .then(blob => {
@@ -1316,27 +1420,46 @@ window.openVideoPanel = function(imageUrl, imageId) {
           const preview = document.getElementById('videoSourcePreview');
           preview.src = e.target.result;
           preview.style.display = 'block';
-          switchVideoTab('grid');
-          const modal = document.getElementById('videoPanelModal');
-          modal.classList.add('active');
+          window.switchVideoTab('grid');
+          _resetVideoForm();
+          document.getElementById('videoPanelModal').classList.add('active');
         };
         reader.readAsDataURL(blob);
       });
   };
 };
 
+window.openVideoPanelStandalone = function() {
+  currentVideoImageData = null;
+  currentVideoImageId = null;
+  currentVideoMode = 'i2v';
+
+  document.getElementById('videoSourcePreview').style.display = 'none';
+  document.getElementById('videoSourcePreview').src = '';
+  document.getElementById('videoCustomPreview').style.display = 'none';
+  document.getElementById('videoCustomImage').value = '';
+
+  window.switchVideoMode('i2v');
+  _resetVideoForm();
+
+  // Switch to upload tab
+  document.querySelectorAll('.video-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.video-tab-content').forEach(c => c.classList.remove('active'));
+  document.querySelectorAll('.video-tab')[1].classList.add('active');
+  document.getElementById('videoTabUpload').classList.add('active');
+
+  document.getElementById('videoPanelModal').classList.add('active');
+};
+
 window.closeVideoPanel = function() {
-  const modal = document.getElementById('videoPanelModal');
-  modal.classList.remove('active');
+  document.getElementById('videoPanelModal').classList.remove('active');
   if (videoElapsedTimer) clearInterval(videoElapsedTimer);
 };
 
 window.switchVideoTab = function(tab) {
-  // Update tab buttons
   document.querySelectorAll('.video-tab').forEach(t => t.classList.remove('active'));
-  event.target.classList.add('active');
-
-  // Update content
+  const _evt = window.event;
+  if (_evt && _evt.target) _evt.target.classList.add('active');
   document.querySelectorAll('.video-tab-content').forEach(c => c.classList.remove('active'));
   document.getElementById(`videoTab${tab.charAt(0).toUpperCase() + tab.slice(1)}`).classList.add('active');
 };
@@ -1344,7 +1467,6 @@ window.switchVideoTab = function(tab) {
 window.handleVideoImageUpload = function(event) {
   const file = event.target.files[0];
   if (!file) return;
-
   const reader = new FileReader();
   reader.onload = (e) => {
     currentVideoImageData = e.target.result.split(',')[1];
@@ -1356,30 +1478,37 @@ window.handleVideoImageUpload = function(event) {
 };
 
 window.generateVideoFromPanel = function() {
-  if (!currentVideoImageData) {
+  const mode = currentVideoMode;
+
+  // Validate image only for I2V mode
+  if (mode === 'i2v' && !currentVideoImageData) {
     alert('Please select an image first');
     return;
   }
 
   const prompt = document.getElementById('videoPrompt').value.trim();
   if (!prompt) {
-    alert('Please enter a motion prompt');
+    alert('Please enter a prompt');
     return;
   }
 
+  const model = document.getElementById('videoModel').value;
   const steps = parseInt(document.getElementById('videoSteps').value) || 30;
   const guidance = parseFloat(document.getElementById('videoGuidance').value) || 4.0;
+  const guidance2Str = document.getElementById('videoGuidance2').value.trim();
+  const guidance_2 = guidance2Str ? parseFloat(guidance2Str) : undefined;
   const num_frames = parseInt(document.getElementById('videoFrames').value) || 97;
   const fps = parseInt(document.getElementById('videoFps').value) || 24;
   const seedStr = document.getElementById('videoSeed').value.trim();
   const seed = seedStr ? parseInt(seedStr) : undefined;
+  const height = mode === 't2v' ? (parseInt(document.getElementById('videoHeight').value) || 480) : undefined;
+  const width = mode === 't2v' ? (parseInt(document.getElementById('videoWidth').value) || 832) : undefined;
 
   videoGenerating = true;
   document.getElementById('videoGenerateBtn').disabled = true;
   document.getElementById('videoProgress').classList.add('active');
   document.getElementById('videoResult').classList.remove('active');
 
-  // Start elapsed time counter
   let elapsedSeconds = 0;
   if (videoElapsedTimer) clearInterval(videoElapsedTimer);
   videoElapsedTimer = setInterval(() => {
@@ -1387,10 +1516,10 @@ window.generateVideoFromPanel = function() {
     document.getElementById('videoElapsedTime').textContent = `${elapsedSeconds}s`;
   }, 1000);
 
-  // Send request to API
   const requestBody = {
-    imageData: currentVideoImageData,
+    mode,
     prompt,
+    model,
     steps,
     guidance,
     num_frames,
@@ -1399,6 +1528,11 @@ window.generateVideoFromPanel = function() {
     sessionId: currentJobId || 'video-session'
   };
 
+  if (mode === 'i2v') requestBody.imageData = currentVideoImageData;
+  if (guidance_2 !== undefined) requestBody.guidance_2 = guidance_2;
+  if (height !== undefined) requestBody.height = height;
+  if (width !== undefined) requestBody.width = width;
+
   fetch('/api/video/generate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -1406,11 +1540,8 @@ window.generateVideoFromPanel = function() {
   })
     .then(r => r.json())
     .then(result => {
-      if (result.error) {
-        throw new Error(result.error);
-      }
+      if (result.error) throw new Error(result.error);
 
-      // Display video
       const videoPlayer = document.getElementById('videoPlayer');
       if (result.videoData) {
         videoPlayer.src = `data:video/mp4;base64,${result.videoData}`;
@@ -1418,18 +1549,13 @@ window.generateVideoFromPanel = function() {
         videoPlayer.src = result.videoPath;
       }
 
-      // Show result
       document.getElementById('videoResult').classList.add('active');
 
-      // Display metadata
       const metadata = result.metadata || {};
-      const metaText = `
-        Duration: ${result.duration_seconds?.toFixed(1)}s |
-        Frames: ${result.num_frames} |
-        FPS: ${fps} |
-        Seed: ${metadata.seed || 'random'}
-      `;
-      document.getElementById('videoMetadata').textContent = metaText;
+      const modeLabel = mode === 't2v' ? 'T2V' : 'I2V';
+      const g2info = metadata.guidance_2 ? ` | G2: ${metadata.guidance_2}` : '';
+      document.getElementById('videoMetadata').textContent =
+        `${modeLabel} | Duration: ${result.duration_seconds?.toFixed(1)}s | Frames: ${num_frames} | FPS: ${fps}${g2info} | Seed: ${metadata.seed || 'random'}`;
 
       console.log('[Video] Generation complete', result);
     })
@@ -1441,21 +1567,228 @@ window.generateVideoFromPanel = function() {
       videoGenerating = false;
       document.getElementById('videoGenerateBtn').disabled = false;
       document.getElementById('videoProgress').classList.remove('active');
-      if (videoElapsedTimer) {
-        clearInterval(videoElapsedTimer);
-        videoElapsedTimer = null;
-      }
+      if (videoElapsedTimer) { clearInterval(videoElapsedTimer); videoElapsedTimer = null; }
     });
 };
 
 window.downloadGeneratedVideo = function() {
   const videoPlayer = document.getElementById('videoPlayer');
   if (!videoPlayer.src) return;
-
   const link = document.createElement('a');
   link.href = videoPlayer.src;
   link.download = `video-${Date.now()}.mp4`;
   link.click();
+};
+
+/**
+ * Resample Panel Functions
+ */
+window.openResamplePanel = function(imageUrl, imageId) {
+  currentResampleImageId = imageId;
+
+  const modal = document.getElementById('resamplePanelModal');
+  const preview = document.getElementById('resampleSourcePreview');
+  const progress = document.getElementById('resampleProgress');
+  const result = document.getElementById('resampleResult');
+
+  // Reset state
+  progress.classList.remove('active');
+  result.classList.remove('active');
+  document.getElementById('resampleGenerateBtn').disabled = false;
+  document.getElementById('resampleGenerateBtn').textContent = '🔄 Resample Image';
+  document.getElementById('resampleElapsedTime').textContent = '0s';
+  document.getElementById('resampleMetadata').textContent = '';
+  if (resampleElapsedTimer) { clearInterval(resampleElapsedTimer); resampleElapsedTimer = null; }
+  resampleGenerating = false;
+
+  // Show grid tab by default
+  window.switchResampleTab('grid');
+
+  if (imageUrl) {
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      try {
+        currentResampleImageData = canvas.toDataURL('image/png').split(',')[1];
+      } catch (_e) {
+        // Cross-origin fallback: fetch via server proxy
+        fetch(imageUrl)
+          .then(r => r.blob())
+          .then(blob => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              currentResampleImageData = reader.result.split(',')[1];
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch(() => { currentResampleImageData = null; });
+      }
+      preview.src = imageUrl;
+      preview.style.display = 'block';
+    };
+    img.src = imageUrl;
+  } else {
+    currentResampleImageData = null;
+    preview.style.display = 'none';
+  }
+
+  modal.classList.add('active');
+};
+
+window.closeResamplePanel = function() {
+  document.getElementById('resamplePanelModal').classList.remove('active');
+  if (resampleElapsedTimer) { clearInterval(resampleElapsedTimer); resampleElapsedTimer = null; }
+  resampleGenerating = false;
+};
+
+window.switchResampleTab = function(tab) {
+  const gridContent = document.getElementById('resampleTabGrid');
+  const uploadContent = document.getElementById('resampleTabUpload');
+  const gridBtn = document.getElementById('resampleTabGridBtn');
+  const uploadBtn = document.getElementById('resampleTabUploadBtn');
+
+  if (tab === 'grid') {
+    gridContent.classList.add('active');
+    uploadContent.classList.remove('active');
+    gridBtn.classList.add('active');
+    uploadBtn.classList.remove('active');
+  } else {
+    gridContent.classList.remove('active');
+    uploadContent.classList.add('active');
+    gridBtn.classList.remove('active');
+    uploadBtn.classList.add('active');
+  }
+};
+
+window.handleResampleImageUpload = function(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    currentResampleImageData = e.target.result.split(',')[1];
+    const preview = document.getElementById('resampleCustomPreview');
+    preview.src = e.target.result;
+    preview.style.display = 'block';
+  };
+  reader.readAsDataURL(file);
+};
+
+window.submitResample = async function() {
+  if (resampleGenerating) return;
+
+  const imageData = currentResampleImageData;
+  if (!imageData) {
+    alert('Please select an image first.');
+    return;
+  }
+
+  const prompt = document.getElementById('resamplePrompt').value.trim();
+  if (!prompt) {
+    alert('Please enter a prompt.');
+    return;
+  }
+
+  const model = document.getElementById('resampleModel').value;
+  const denoiseStrength = parseFloat(document.getElementById('resampleDenoiseStrength').value);
+  const steps = parseInt(document.getElementById('resampleSteps').value, 10);
+  const guidance = parseFloat(document.getElementById('resampleGuidance').value);
+
+  resampleGenerating = true;
+  document.getElementById('resampleGenerateBtn').disabled = true;
+  document.getElementById('resampleGenerateBtn').textContent = 'Resampling...';
+  document.getElementById('resampleProgress').classList.add('active');
+  document.getElementById('resampleResult').classList.remove('active');
+  document.getElementById('resampleElapsedTime').textContent = '0s';
+
+  const startTime = Date.now();
+  if (resampleElapsedTimer) clearInterval(resampleElapsedTimer);
+  resampleElapsedTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('resampleElapsedTime').textContent = `${elapsed}s`;
+  }, 1000);
+
+  try {
+    const response = await fetch('/api/resample', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: imageData,
+        model,
+        prompt,
+        denoiseStrength,
+        steps,
+        guidance
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `Server error ${response.status}`);
+    }
+
+    if (data.success && data.imageData) {
+      const resultImg = document.getElementById('resampleResultImg');
+      resultImg.src = `data:image/png;base64,${data.imageData}`;
+      resultImg.style.display = 'block';
+
+      const meta = data.metadata || {};
+      const metaParts = [];
+      if (meta.model) metaParts.push(`Model: ${meta.model}`);
+      if (meta.seed !== undefined) metaParts.push(`Seed: ${meta.seed}`);
+      if (meta.generation_time) metaParts.push(`Time: ${meta.generation_time.toFixed(1)}s`);
+      document.getElementById('resampleMetadata').textContent = metaParts.join(' · ');
+
+      document.getElementById('resampleResult').classList.add('active');
+    } else {
+      throw new Error(data.error || 'Resample failed');
+    }
+  } catch (err) {
+    alert(`Resample failed: ${err.message}`);
+  } finally {
+    resampleGenerating = false;
+    document.getElementById('resampleGenerateBtn').disabled = false;
+    document.getElementById('resampleGenerateBtn').textContent = '🔄 Resample Image';
+    document.getElementById('resampleProgress').classList.remove('active');
+    if (resampleElapsedTimer) { clearInterval(resampleElapsedTimer); resampleElapsedTimer = null; }
+  }
+};
+
+window.downloadResampledImage = function() {
+  const img = document.getElementById('resampleResultImg');
+  if (!img.src) return;
+  const link = document.createElement('a');
+  link.href = img.src;
+  link.download = `resampled-${Date.now()}.png`;
+  link.click();
+};
+
+/**
+ * Two-Stage Settings Helpers
+ */
+window.toggleTwoStageControls = function() {
+  const enabled = document.getElementById('twoStageEnabled').checked;
+  const controls = document.getElementById('twoStageControls');
+  if (controls) controls.style.display = enabled ? 'block' : 'none';
+};
+
+window.saveTwoStageSettings = function() {
+  const enabled = document.getElementById('twoStageEnabled')?.checked || false;
+  const stageTwoModel = document.getElementById('twoStageStageTwoModel')?.value || 'sdxl-base';
+  const denoiseStrength = parseFloat(document.getElementById('twoStageDenoiseStrength')?.value || '0.6');
+  const steps = parseInt(document.getElementById('twoStageSteps')?.value || '20', 10);
+  const guidance = parseFloat(document.getElementById('twoStageGuidance')?.value || '7.5');
+
+  localStorage.setItem('twoStageEnabled', String(enabled));
+  localStorage.setItem('twoStageStageTwoModel', stageTwoModel);
+  localStorage.setItem('twoStageDenoiseStrength', String(denoiseStrength));
+  localStorage.setItem('twoStageSteps', String(steps));
+  localStorage.setItem('twoStageGuidance', String(guidance));
 };
 
 /**
@@ -2770,10 +3103,22 @@ function addImageThumbnail(iteration, candidateId, imageUrl, baseImageUrl = null
   videoBtn.title = 'Generate video from this image';
   videoBtn.onclick = (e) => {
     e.stopPropagation();
-    openVideoPanel(imageUrl, `i${iteration}c${candidateId}`);
+    window.openVideoPanel(imageUrl, `i${iteration}c${candidateId}`);
   };
+
+  // Add resample button
+  const resampleBtn = document.createElement('button');
+  resampleBtn.className = 'resample-btn';
+  resampleBtn.textContent = '🔄';
+  resampleBtn.title = 'Resample with different model (img2img)';
+  resampleBtn.onclick = (e) => {
+    e.stopPropagation();
+    window.openResamplePanel(imageUrl, `i${iteration}c${candidateId}`);
+  };
+
   card.appendChild(img);
   card.appendChild(videoBtn);
+  card.appendChild(resampleBtn);
 
   const label = document.createElement('div');
   label.className = 'image-card-label';
@@ -2876,6 +3221,9 @@ async function startBeamSearch() {
       const modalSeed = localStorage.getItem('modalSeed');
       const modalGpu = localStorage.getItem('modalGpu');
       const modalFlowShift = localStorage.getItem('modalFlowShift');
+      const modalSampler = localStorage.getItem('modalSampler');
+      const modalScheduler = localStorage.getItem('modalScheduler');
+      const modalClipSkip = localStorage.getItem('modalClipSkip');
 
       params.modalOptions = {
         ...(modalModel && { model: modalModel }),
@@ -2885,12 +3233,16 @@ async function startBeamSearch() {
         ...(modalGuidance && { guidance: parseFloat(modalGuidance) }),
         ...(modalSeed && { seed: parseInt(modalSeed, 10) }),
         ...(modalGpu && { gpu: modalGpu }),
-        ...(modalFlowShift && { flow_shift: parseFloat(modalFlowShift) })
+        ...(modalFlowShift && { flow_shift: parseFloat(modalFlowShift) }),
+        ...(modalSampler && { sampler: modalSampler }),
+        ...(modalScheduler && modalScheduler !== 'normal' && { scheduler: modalScheduler }),
+        ...(modalClipSkip && { clip_skip: parseInt(modalClipSkip, 10) })
       };
     }
 
     // Add Flux options if using local Flux provider
     if (imageProvider === 'flux' || imageProvider === 'local') {
+      const fluxSampler = localStorage.getItem('fluxSampler');
       const fluxScheduler = localStorage.getItem('fluxScheduler');
       const fluxSteps = localStorage.getItem('fluxSteps');
       const fluxGuidance = localStorage.getItem('fluxGuidance');
@@ -2903,7 +3255,8 @@ async function startBeamSearch() {
       const configuredLoras = getFluxLoras();
 
       params.fluxOptions = {
-        ...(fluxScheduler && { scheduler: fluxScheduler }),
+        ...(fluxSampler && { sampler: fluxSampler }),
+        ...(fluxScheduler && fluxScheduler !== 'normal' && { scheduler: fluxScheduler }),
         ...(fluxSteps && { steps: parseInt(fluxSteps, 10) }),
         ...(fluxGuidance && { guidance: parseFloat(fluxGuidance) }),
         ...(fluxWidth && { width: parseInt(fluxWidth, 10) }),
@@ -2969,6 +3322,24 @@ async function startBeamSearch() {
       }
     } else {
       console.log('[Face Fixing] Provider does not support face fixing, skipping');
+    }
+
+    // Add two-stage refinement options if enabled (Modal only)
+    if (imageProvider === 'modal') {
+      const twoStageEnabled = localStorage.getItem('twoStageEnabled') === 'true';
+      if (twoStageEnabled) {
+        const stageTwoModel = localStorage.getItem('twoStageStageTwoModel') || 'sdxl-base';
+        const denoiseStrength = parseFloat(localStorage.getItem('twoStageDenoiseStrength') || '0.6');
+        const twoStageSteps = parseInt(localStorage.getItem('twoStageSteps') || '20', 10);
+        const twoStageGuidance = parseFloat(localStorage.getItem('twoStageGuidance') || '7.5');
+        params.twoStageOptions = {
+          enabled: true,
+          stageTwoModel,
+          denoiseStrength,
+          steps: twoStageSteps,
+          guidance: twoStageGuidance
+        };
+      }
     }
 
     // Reset all tracking for new job

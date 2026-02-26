@@ -13,7 +13,7 @@ describe('🔴 RED: Local Model Settings - Guidance & Steps UI', () => {
   describe('Guidance Settings Component', () => {
     it('should render GuidanceSettings component when local Flux is configured', async () => {
       try {
-        const response = await axios.get(`${baseUrl}/api/providers/config`, {
+        const _response = await axios.get(`${baseUrl}/api/providers/config`, {
           validateStatus: () => true
         });
 
@@ -88,7 +88,7 @@ describe('🔴 RED: Local Model Settings - Guidance & Steps UI', () => {
   describe('Steps Settings Component', () => {
     it('should render StepsSettings component when local Flux is configured', async () => {
       try {
-        const response = await axios.get(`${baseUrl}/api/providers/config`, {
+        const _response = await axios.get(`${baseUrl}/api/providers/config`, {
           validateStatus: () => true
         });
 
