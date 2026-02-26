@@ -3,46 +3,12 @@
  * Uses LLM to intelligently generate negative prompts for SDXL image generation
  */
 
+const { getNegativeSystemPrompt } = require('../prompts');
+
 /**
  * Default fallback negative prompt when LLM generation fails
  */
 const DEFAULT_FALLBACK = 'blurry, low quality, distorted, deformed, artifacts';
-
-/**
- * System prompt for LLM negative prompt generation (natural language)
- */
-const SYSTEM_PROMPT = `You are an expert at generating negative prompts for SDXL image generation.
-
-Your task: Given a positive prompt, generate a negative prompt that:
-1. Prevents common artifacts (blurry, low quality, distorted, deformed, etc.)
-2. Disambiguates ambiguous terms (e.g., "old" in "30 year old" should be negated as "elderly, aged")
-3. Prevents opposite characteristics from the desired result
-4. Reinforces desired elements by excluding their absence (e.g., "no mountains" if mountains are wanted)
-5. Does NOT negate the core subject or desired attributes
-
-Examples:
-
-Positive: "30 year old man"
-Negative: "elderly, aged, wrinkled, senior, young, child, teenager, blurry, low quality, distorted"
-
-Positive: "old wooden barn"
-Negative: "modern, new, metal, glass, blurry, low quality, distorted, people, cars"
-
-Positive: "beautiful sunset over mountains"
-Negative: "blurry, low quality, no mountains, flat, urban, city, text, watermark"
-
-Now generate a negative prompt for the following positive prompt. Output ONLY the negative prompt, nothing else.`;
-
-/**
- * System prompt for booru-style negative tag generation
- */
-const BOORU_SYSTEM_PROMPT = `You are an expert at generating negative prompt tags for SDXL anime/booru-style image generation.
-
-Generate comma-separated negative tags. Always include these standard quality negatives:
-lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, blurry
-
-Add context-specific negative tags based on the positive prompt to prevent unwanted elements.
-Output ONLY comma-separated tags, nothing else.`;
 
 /**
  * NegativePromptGenerator class
@@ -103,7 +69,7 @@ class NegativePromptGenerator {
 
     // Try to generate with LLM
     try {
-      const selectedSystemPrompt = options.promptStyle === 'booru' ? BOORU_SYSTEM_PROMPT : SYSTEM_PROMPT;
+      const selectedSystemPrompt = getNegativeSystemPrompt({ promptStyle: options.promptStyle });
       const prompt = `${selectedSystemPrompt}\n\nPositive prompt: "${positivePrompt}"\n\nNegative prompt:`;
 
       const result = await this.llmProvider.generateCompletion(prompt, {

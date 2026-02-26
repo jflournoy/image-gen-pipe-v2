@@ -8,7 +8,7 @@
  * descriptiveness levels for each prompt combination.
  */
 
-const { describe, test, beforeEach } = require('node:test');
+const { describe, test } = require('node:test');
 const assert = require('node:assert');
 
 // Mock OpenAI client to capture system prompts

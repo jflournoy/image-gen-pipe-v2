@@ -10,7 +10,7 @@
  * - Multiple LoRAs need to be implemented
  */
 
-import { describe, it, before, after } from 'node:test';
+import { describe, it, before } from 'node:test';
 import assert from 'node:assert';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -110,7 +110,7 @@ describe('Local Flux Multiple LoRA Support - Structural Tests', () => {
     it('should include LoRA info in response metadata', () => {
       // Expected: 'loras': ... in metadata dict
       const hasLorasInMetadata =
-        serviceContent.includes(''loras':') ||
+        serviceContent.includes('\'loras\':') ||
         serviceContent.includes('"loras":');
       assert.ok(hasLorasInMetadata, 'Response metadata should include loras info');
     });
@@ -139,7 +139,7 @@ describe('Local Flux Multiple LoRA Support - Structural Tests', () => {
     it('should have endpoint to list available LoRA files', () => {
       // Expected: /loras endpoint or similar
       const hasLorasEndpoint =
-        serviceContent.includes(''/loras'') ||
+        serviceContent.includes('\'/loras\'') ||
         serviceContent.includes('"/loras"') ||
         serviceContent.includes('/loras/list');
       assert.ok(hasLorasEndpoint, 'Should have endpoint to list available LoRAs');

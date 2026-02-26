@@ -106,7 +106,7 @@ class ServiceConnection {
     if (!attemptRestart || !this._serviceRestarter) {
       throw new Error(
         `[${this.serviceName}] Service is not running and no restarter available. ` +
-        `Start the service manually or check configuration.`
+        'Start the service manually or check configuration.'
       );
     }
 
@@ -118,7 +118,7 @@ class ServiceConnection {
       );
       throw new Error(
         `[${this.serviceName}] Service is stopped by user (STOP_LOCK exists). ` +
-        `Restart manually or remove STOP_LOCK to allow auto-restart.`
+        'Restart manually or remove STOP_LOCK to allow auto-restart.'
       );
     }
 

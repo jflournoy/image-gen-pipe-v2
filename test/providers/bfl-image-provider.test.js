@@ -1243,7 +1243,7 @@ describe('BFLImageProvider', () => {
     test('🔴 should throw error if flex-only params are sent to non-flex model', () => {
       // This test documents expected behavior
       // Currently ignored, but could be enhanced to validate
-      const provider = new BFLImageProvider({
+      const _provider = new BFLImageProvider({
         apiKey: testApiKey,
         model: 'flux-2-pro'
       });
