@@ -15,10 +15,10 @@ describe('🔴 RED: provider-routes should use requirements module', () => {
 
   test('🔴 should import requirements module', () => {
     const hasRequirementsImport =
-      providerRoutesContent.includes("require('../config/requirements") ||
-      providerRoutesContent.includes("require('../../config/requirements") ||
-      providerRoutesContent.includes("from '../config/requirements") ||
-      providerRoutesContent.includes("from '../../config/requirements");
+      providerRoutesContent.includes('require(\'../config/requirements') ||
+      providerRoutesContent.includes('require(\'../../config/requirements') ||
+      providerRoutesContent.includes('from \'../config/requirements') ||
+      providerRoutesContent.includes('from \'../../config/requirements');
 
     assert.ok(
       hasRequirementsImport,
@@ -38,8 +38,8 @@ describe('🔴 RED: provider-routes should use requirements module', () => {
   test('🔴 should NOT have hardcoded services list in quick-start', () => {
     // Check for the old hardcoded default: ['flux', 'vision', 'local-llm', 'vlm']
     const hasHardcodedList =
-      providerRoutesContent.includes("['flux', 'vision', 'local-llm', 'vlm']") ||
-      providerRoutesContent.includes("['flux','vision','local-llm','vlm']");
+      providerRoutesContent.includes('[\'flux\', \'vision\', \'local-llm\', \'vlm\']') ||
+      providerRoutesContent.includes('[\'flux\',\'vision\',\'local-llm\',\'vlm\']');
 
     assert.ok(
       !hasHardcodedList,

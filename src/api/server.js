@@ -16,6 +16,7 @@ import providerRouter, { getRuntimeProviders } from './provider-routes.js';
 import serviceRouter from './service-routes.js';
 import configRouter from './config-routes.js';
 import videoRouter from './video-routes.js';
+import resampleRouter from './resample-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -50,7 +51,7 @@ export function createApp() {
   const app = express();
 
   // Middleware
-  app.use(express.json());
+  app.use(express.json({ limit: '50mb' }));
   app.use(express.static('public'));
 
   // Health check endpoint
@@ -549,6 +550,9 @@ export function createApp() {
 
   // Register video generation routes (image-to-video via WAN Modal)
   app.use('/api/video', videoRouter);
+
+  // Register resample routes (img2img two-stage cartoon→photoreal)
+  app.use('/api/resample', resampleRouter);
 
   return app;
 }

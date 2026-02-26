@@ -9,13 +9,6 @@ const { describe, test, before, after } = require('node:test');
 const assert = require('node:assert');
 const http = require('http');
 
-// We'll mock the requirements module to verify it's being called
-const originalRequire = require;
-let requirementsCalls = [];
-
-// Track if requirements module is imported and used
-let requirementsModuleUsed = false;
-
 describe('🔴 TDD RED: demo-routes should use requirements module', () => {
   let server;
   let serverUrl;
@@ -49,10 +42,10 @@ describe('🔴 TDD RED: demo-routes should use requirements module', () => {
 
     // Check if requirements module is imported
     const hasRequirementsImport =
-      demoRoutesContent.includes("require('../config/requirements") ||
-      demoRoutesContent.includes("require('./config/requirements") ||
-      demoRoutesContent.includes("from '../config/requirements") ||
-      demoRoutesContent.includes("from './config/requirements");
+      demoRoutesContent.includes('require(\'../config/requirements') ||
+      demoRoutesContent.includes('require(\'./config/requirements') ||
+      demoRoutesContent.includes('from \'../config/requirements') ||
+      demoRoutesContent.includes('from \'./config/requirements');
 
     assert.ok(
       hasRequirementsImport,

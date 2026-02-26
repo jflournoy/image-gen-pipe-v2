@@ -70,7 +70,7 @@ describe('Modal SDXL with Auto-Generated Negative Prompts', () => {
 
     it('should allow manual negative prompt override', async () => {
       const positivePrompt = 'a sunset';
-      const manualNegative = 'custom manual negative prompt';
+      const _manualNegative = 'custom manual negative prompt';
 
       // When user provides manual negative, should not auto-generate
       const result = await generator.generateNegativePrompt(positivePrompt, {
@@ -104,7 +104,7 @@ describe('Modal SDXL with Auto-Generated Negative Prompts', () => {
       };
 
       // Generate negative prompt
-      const { negativePrompt, metadata } = await generator.generateNegativePrompt(modalRequest.prompt);
+      const { negativePrompt, metadata: _metadata } = await generator.generateNegativePrompt(modalRequest.prompt);
 
       // Should be able to add to Modal request
       const enhancedRequest = {
