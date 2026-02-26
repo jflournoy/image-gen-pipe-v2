@@ -14,7 +14,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import torch
-from diffusers import FluxPipeline, AutoencoderKL, EulerDiscreteScheduler, DDIMScheduler, PNDMScheduler, DPMSolverMultistepScheduler
+from diffusers import FluxPipeline, AutoencoderKL, EulerDiscreteScheduler, EulerAncestralDiscreteScheduler, DDIMScheduler, PNDMScheduler, DPMSolverMultistepScheduler
 from diffusers.utils import load_image
 from huggingface_hub import login
 from safetensors.torch import load_file
@@ -42,14 +42,22 @@ LORA_DEFAULT_SCALE = float(os.getenv('FLUX_LORA_SCALE', '1.0'))  # Default LoRA 
 LORAS_DIR = Path(os.getenv('FLUX_LORAS_DIR', 'services/loras'))  # Directory for LoRA files
 MAX_LORAS = 4  # Maximum number of simultaneous LoRAs
 
-# Scheduler configuration
-# Supported schedulers for Flux fine-tunes (e.g., CustomFluxModel recommends Euler)
-SUPPORTED_SCHEDULERS = {
+# Sampler configuration (solver algorithms)
+SUPPORTED_SAMPLERS = {
     'euler': EulerDiscreteScheduler,
-    'dpmsolver': DPMSolverMultistepScheduler,  # default for Flux
+    'euler_a': EulerAncestralDiscreteScheduler,
+    'dpmpp_2m': DPMSolverMultistepScheduler,
+    'dpmpp_2m_sde': DPMSolverMultistepScheduler,  # uses algorithm_type="sde-dpmsolver++"
     'ddim': DDIMScheduler,
     'pndm': PNDMScheduler,
+    'dpmsolver': DPMSolverMultistepScheduler,  # legacy alias
 }
+
+# Noise schedule modifiers
+SUPPORTED_SCHEDULES = ['normal', 'karras', 'exponential']
+
+# Legacy alias
+SUPPORTED_SCHEDULERS = SUPPORTED_SAMPLERS
 DEFAULT_SCHEDULER = os.getenv('FLUX_SCHEDULER')  # Optional default scheduler override
 
 # Custom encoder paths (for models like pixelwave that require specific encoders)
@@ -182,7 +190,8 @@ class GenerationRequest(BaseModel):
     negativePrompt: Optional[str] = None
     loras: List[dict] = []
     lora_scale: Optional[float] = None  # Per-request LoRA strength override
-    scheduler: Optional[str] = None  # euler, dpmsolver, ddim, pndm (per-request override)
+    sampler: Optional[str] = None  # euler, euler_a, dpmpp_2m, dpmpp_2m_sde, ddim, pndm (per-request override)
+    scheduler: Optional[str] = None  # normal, karras, exponential (noise schedule)
     fix_faces: bool = False  # Enable face fixing via GFPGAN
     restoration_strength: float = 0.5  # GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)
     face_upscale: Optional[int] = None  # Optional upscaling factor (1=none, 2=2x)
@@ -336,7 +345,11 @@ def load_pipeline():
 
 
 def unload_pipeline():
-    """Unload the pipeline to free GPU memory"""
+    """Unload the pipeline to free GPU memory.
+
+    Uses aggressive cleanup to release CUDA memory from sequential_cpu_offload
+    hooks, which hold references to CUDA buffers even after del pipeline.
+    """
     global pipeline
     import gc
 
@@ -345,9 +358,16 @@ def unload_pipeline():
         del pipeline
         pipeline = None
         gc.collect()
+        gc.collect()  # Run twice to catch circular references in offload hooks
         if torch.cuda.is_available():
+            torch.cuda.synchronize()  # Wait for any pending CUDA ops from offload hooks
             torch.cuda.empty_cache()
-        print('[Flux Service] Model unloaded, GPU memory freed')
+            torch.cuda.synchronize()  # Confirm cleanup
+            torch.cuda.empty_cache()  # Clear again after sync
+            free_mem = torch.cuda.get_device_properties(0).total_memory - torch.cuda.memory_allocated(0)
+            print(f'[Flux Service] Model unloaded. Free GPU memory: {free_mem / 1024**3:.1f} GB')
+        else:
+            print('[Flux Service] Model unloaded, GPU memory freed')
         return True
     return False
 
@@ -740,14 +760,35 @@ async def generate_image(request: GenerationRequest):
                 except Exception as e:
                     print(f'[Flux Service] Warning: Failed to adjust LoRA scale: {e}')
 
-        # Handle scheduler override (for fine-tunes that recommend specific samplers)
-        scheduler_to_use = request.scheduler or DEFAULT_SCHEDULER
+        # Handle sampler + schedule override
+        import inspect
+        sampler_to_use = request.sampler or DEFAULT_SCHEDULER
+        schedule_to_use = request.scheduler  # 'normal', 'karras', 'exponential'
         original_scheduler = None
-        if scheduler_to_use and scheduler_to_use in SUPPORTED_SCHEDULERS:
+
+        # Backward compat: if sampler not set but legacy scheduler field has a sampler name
+        if not sampler_to_use and schedule_to_use and schedule_to_use in SUPPORTED_SAMPLERS:
+            sampler_to_use = schedule_to_use
+            schedule_to_use = None
+
+        if sampler_to_use and sampler_to_use in SUPPORTED_SAMPLERS:
             original_scheduler = pipe.scheduler
-            scheduler_class = SUPPORTED_SCHEDULERS[scheduler_to_use]
-            pipe.scheduler = scheduler_class.from_config(pipe.scheduler.config)
-            print(f'[Flux Service] Using scheduler: {scheduler_to_use} ({scheduler_class.__name__})')
+            scheduler_class = SUPPORTED_SAMPLERS[sampler_to_use]
+
+            def _filtered_config(cls):
+                valid = set(inspect.signature(cls.__init__).parameters) - {"self"}
+                return {k: v for k, v in pipe.scheduler.config.items() if k in valid}
+
+            extra_kwargs = {}
+            if sampler_to_use == 'dpmpp_2m_sde':
+                extra_kwargs['algorithm_type'] = 'sde-dpmsolver++'
+            if schedule_to_use == 'karras':
+                extra_kwargs['use_karras_sigmas'] = True
+            elif schedule_to_use == 'exponential':
+                extra_kwargs['use_exponential_sigmas'] = True
+
+            pipe.scheduler = scheduler_class.from_config(_filtered_config(scheduler_class), **extra_kwargs)
+            print(f'[Flux Service] Using sampler={sampler_to_use}, schedule={schedule_to_use or "normal"} ({scheduler_class.__name__})')
 
         # Generate image
         print(f'[Flux Service] Generating: {prompt[:50]}...')
@@ -843,7 +884,8 @@ async def generate_image(request: GenerationRequest):
                 'steps': request.steps,
                 'guidance': request.guidance,
                 'seed': request.seed,
-                'scheduler': scheduler_to_use,
+                'sampler': sampler_to_use,
+                'scheduler': schedule_to_use,
                 'loras': lora_info if lora_info else current_loras if current_loras else None,
                 'face_fixing': face_fix_info,
             },

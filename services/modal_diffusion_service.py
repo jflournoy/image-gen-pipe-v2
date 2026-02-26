@@ -47,15 +47,35 @@ FACE_FIXING_DIR = f"{MODELS_DIR}/face_fixing"
 # LoRA configuration
 MAX_LORAS = 4  # Maximum number of simultaneous LoRAs
 
-# Supported schedulers for DMD/LCM and other distilled models
-SUPPORTED_SCHEDULERS = [
-    "lcm",       # Latent Consistency Model - for DMD models (1-8 steps)
-    "euler",     # Euler - fast, general purpose
-    "euler_a",   # Euler Ancestral - more variation
-    "dpm++",     # DPM++ 2M - high quality
-    "ddim",      # DDIM - deterministic
-    "karras",    # Karras sigmas variant
+# Supported samplers (solver algorithms)
+SUPPORTED_SAMPLERS = [
+    "euler",        # Euler Discrete - fast, general purpose
+    "euler_a",      # Euler Ancestral - more variation/stochasticity
+    "heun",         # Heun - 2nd-order, excellent quality (2x NFE per step)
+    "dpmpp_2m",     # DPM++ 2M Multistep - high quality
+    "dpmpp_2m_sde", # DPM++ 2M SDE - stochastic variant, excellent quality
+    "dpmpp_sde",    # DPM++ SDE - single-step SDE variant
+    "dpm2",         # DPM2 - 2nd-order DPM solver
+    "dpm2_a",       # DPM2 Ancestral - 2nd-order with stochasticity
+    "unipc",        # UniPC - Unified Predictor-Corrector, fast + high quality
+    "deis",         # DEIS - Diffusion Exponential Integrator, fast convergence
+    "lms",          # LMS - Linear Multi-Step, classic
+    "pndm",         # PNDM - Pseudo Numerical Diffusion Model, classic
+    "ddim",         # DDIM - deterministic
+    "lcm",          # Latent Consistency Model - for distilled models (1-8 steps)
 ]
+
+# Supported noise schedules (applied on top of sampler)
+SUPPORTED_SCHEDULES = [
+    "normal",       # Default sigma schedule
+    "karras",       # Karras sigmas - smoother noise reduction
+    "exponential",  # Exponential sigmas
+    "beta",         # Beta distribution CDF - concentrates steps at key noise levels
+    "lu_lambdas",   # Lu lambdas (DPM-Solver-v3) - optimized lambda spacing
+]
+
+# Legacy combined scheduler names (backward compatibility)
+SUPPORTED_SCHEDULERS = SUPPORTED_SAMPLERS + ["karras", "dpm++"]
 
 # Supported models with their configurations
 SUPPORTED_MODELS: Dict[str, Dict[str, Any]] = {
@@ -145,8 +165,9 @@ class GenerateRequest(BaseModel):
     guidance: float = Field(default=3.5, ge=0.0, le=20.0, description="Guidance scale")
     seed: Optional[int] = Field(default=None, description="Random seed for reproducibility")
     loras: Optional[List[LoraConfig]] = Field(default=None, max_length=4, description="LoRA adapters to apply (max 4)")
-    # DMD/LCM scheduler support
-    scheduler: Optional[str] = Field(default=None, description="Scheduler type (lcm, euler, euler_a, dpm++, ddim, karras)")
+    # Sampler and scheduler support (ComfyUI/A1111 convention)
+    sampler: Optional[str] = Field(default=None, description="Sampler/solver algorithm (euler, euler_a, dpmpp_2m, dpmpp_2m_sde, ddim, lcm)")
+    scheduler: Optional[str] = Field(default=None, description="Noise schedule (normal, karras, exponential). Also accepts legacy sampler names for backward compat.")
     # SDXL refiner support
     use_refiner: bool = Field(default=False, description="Enable SDXL refiner pass")
     refiner_switch: float = Field(default=0.8, ge=0.0, le=1.0, description="Denoising point to switch to refiner (0.0-1.0)")
@@ -156,12 +177,17 @@ class GenerateRequest(BaseModel):
     touchup_strength: float = Field(default=0.0, ge=0.0, le=1.0, description="Img2img touchup strength (0=disabled, 0.1-0.5=light cleanup)")
     # Negative prompt support (for SDXL and other models)
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (things to avoid in generation)")
+    # Flow matching shift parameter (for sdxl_flow models with Flow Matching schedule)
+    flow_shift: Optional[float] = Field(default=None, ge=0.1, le=20.0, description="Flow matching shift parameter (1.0=balanced/Beta, 6.0=structural/Normal). Only used for sdxl_flow models.")
     # Face fixing support (CodeFormer enhancement)
     fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
     restoration_strength: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
     face_upscale: Optional[int] = Field(default=None, ge=1, le=4, description="Optional face upscaling factor (1=none, 2=2x, 4=4x via Real-ESRGAN integrated with GFPGAN)")
     # Debug/comparison support
     return_intermediate_images: bool = Field(default=False, description="Return base image before face fixing/upscaling for debugging (useful for comparing before/after face enhancement)")
+    # Two-stage cartoon→photoreal img2img support
+    input_image: Optional[str] = Field(default=None, description="Base64-encoded input image for img2img (triggers img2img pipeline when provided)")
+    denoise_strength: float = Field(default=0.6, ge=0.0, le=1.0, description="Img2img denoising strength (0=no change, 1=fully regenerate; ~0.6 for cartoon→photoreal)")
     # Diagnostic tagging for batch image tracking
     iteration: Optional[int] = Field(default=None, description="Iteration number (for logging/diagnostics)")
     candidateId: Optional[int] = Field(default=None, description="Candidate ID (for logging/diagnostics)")
@@ -276,6 +302,7 @@ class DiffusionService:
     # Class-level state (initialized in @modal.enter)
     pipeline: Any = None
     refiner_pipeline: Any = None  # For SDXL refiner pass (DMD models)
+    img2img_pipeline: Any = None  # For two-stage cartoon→photoreal img2img refinement
     compel: Any = None  # For long prompt handling in SDXL
     face_fixer: Any = None  # For face fixing via CodeFormer (lazy-loaded)
     current_model: str = None
@@ -373,6 +400,27 @@ class DiffusionService:
 
         print(f"[Modal Diffusion] Using Compel for negative prompt ({len(negative_prompt.split())} words)")
         return self.compel(negative_prompt)
+
+    def _apply_flow_matching_scheduler(self, shift: float):
+        """
+        Apply Flow Matching scheduler to pipeline for models trained with Flow Matching objective.
+
+        Args:
+            shift: Shift parameter for noise schedule (1.0=balanced/Beta, 6.0=structural/Normal)
+        """
+        from diffusers import FlowMatchEulerDiscreteScheduler
+
+        self.pipeline.scheduler = FlowMatchEulerDiscreteScheduler(
+            num_train_timesteps=1000,
+            shift=shift,
+        )
+        # Compatibility: StableDiffusionXLPipeline.prepare_latents() calls
+        # scheduler.init_noise_sigma, which older diffusers versions of
+        # FlowMatchEulerDiscreteScheduler lack. For flow matching, the value
+        # is 1.0 (no-op multiplication on initial noise).
+        if not hasattr(self.pipeline.scheduler, 'init_noise_sigma'):
+            self.pipeline.scheduler.init_noise_sigma = 1.0
+        print(f"[Modal Diffusion] Applied FlowMatchEulerDiscreteScheduler(shift={shift})")
 
     def _load_pipeline(self, model_name: str):
         """Load a diffusion pipeline for the specified model"""
@@ -500,9 +548,58 @@ class DiffusionService:
             # Initialize Compel for long prompt support
             self._init_compel_for_sdxl()
 
+        elif pipeline_type == "sdxl_flow":
+            # SDXL architecture + Flow Matching schedule (e.g., bigASP v2.5)
+            # Load as standard SDXL, then swap scheduler for Flow Matching
+            print(f"[Modal Diffusion] Loading sdxl_flow model: {model_path}")
+            if model_path.suffix == ".safetensors":
+                self.pipeline = StableDiffusionXLPipeline.from_single_file(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+            else:
+                self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+            # Apply flow matching scheduler (default shift=1.0 at load time)
+            default_shift = model_config.get("default_flow_shift", 1.0)
+            self._apply_flow_matching_scheduler(default_shift)
+            self.pipeline.to(self.device)
+            # Initialize Compel for long prompt support (same as standard SDXL)
+            self._init_compel_for_sdxl()
+
+        elif pipeline_type == "chroma":
+            # Chroma1-HD and Chroma-based CivitAI models
+            # Use generic DiffusionPipeline for auto-detection of architecture
+            from diffusers import DiffusionPipeline
+            print(f"[Modal Diffusion] Loading chroma model: {model_path}")
+            if model_path.suffix == ".safetensors":
+                self.pipeline = DiffusionPipeline.from_single_file(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+            else:
+                self.pipeline = DiffusionPipeline.from_pretrained(
+                    str(model_path),
+                    torch_dtype=torch.float16,
+                    cache_dir=CACHE_DIR,
+                )
+            self.pipeline.to(self.device)
+
+        else:
+            raise ValueError(
+                f"Unknown pipeline type '{pipeline_type}' for custom model. "
+                f"Supported: flux, sdxl, sdxl_flow, chroma"
+            )
+
     def _set_scheduler(self, scheduler_name: Optional[str]):
         """
-        Set the pipeline scheduler for DMD/LCM models.
+        Legacy method: Set the pipeline scheduler from a combined name.
+        Kept for backward compatibility. Prefer _apply_sampler_and_schedule().
 
         Args:
             scheduler_name: One of SUPPORTED_SCHEDULERS or None to keep default
@@ -510,11 +607,37 @@ class DiffusionService:
         if scheduler_name is None or self.pipeline is None:
             return
 
-        if scheduler_name not in SUPPORTED_SCHEDULERS:
+        # Map legacy combined names to sampler + schedule
+        if scheduler_name == "karras":
+            self._apply_sampler_and_schedule("dpmpp_2m", "karras")
+        elif scheduler_name == "dpm++":
+            self._apply_sampler_and_schedule("dpmpp_2m", "normal")
+        elif scheduler_name in SUPPORTED_SAMPLERS:
+            self._apply_sampler_and_schedule(scheduler_name, "normal")
+        else:
             print(f"[Modal Diffusion] Warning: Unknown scheduler '{scheduler_name}', using default")
+
+    def _apply_sampler_and_schedule(self, sampler_name: Optional[str], schedule_name: Optional[str] = None):
+        """
+        Apply sampler (solver algorithm) and schedule (noise schedule) to the pipeline.
+
+        Args:
+            sampler_name: Solver algorithm (euler, euler_a, dpmpp_2m, dpmpp_2m_sde, ddim, lcm)
+            schedule_name: Noise schedule (normal, karras, exponential). None = normal.
+        """
+        if sampler_name is None or self.pipeline is None:
             return
 
-        print(f"[Modal Diffusion] Setting scheduler to: {scheduler_name}")
+        if sampler_name not in SUPPORTED_SAMPLERS:
+            print(f"[Modal Diffusion] Warning: Unknown sampler '{sampler_name}', using default")
+            return
+
+        schedule_name = schedule_name or "normal"
+        if schedule_name not in SUPPORTED_SCHEDULES:
+            print(f"[Modal Diffusion] Warning: Unknown schedule '{schedule_name}', using normal")
+            schedule_name = "normal"
+
+        print(f"[Modal Diffusion] Setting sampler={sampler_name}, schedule={schedule_name}")
 
         import inspect
 
@@ -523,29 +646,88 @@ class DiffusionService:
             valid = set(inspect.signature(scheduler_class.__init__).parameters) - {"self"}
             return {k: v for k, v in self.pipeline.scheduler.config.items() if k in valid}
 
-        if scheduler_name == "lcm":
+        # Build schedule kwargs
+        schedule_kwargs = {}
+        if schedule_name == "karras":
+            schedule_kwargs["use_karras_sigmas"] = True
+        elif schedule_name == "exponential":
+            schedule_kwargs["use_exponential_sigmas"] = True
+
+        # Apply sampler
+        if sampler_name == "lcm":
             from diffusers import LCMScheduler
-            self.pipeline.scheduler = LCMScheduler.from_config(_filtered_config(LCMScheduler))
-        elif scheduler_name == "euler":
+            self.pipeline.scheduler = LCMScheduler.from_config(
+                _filtered_config(LCMScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "euler":
             from diffusers import EulerDiscreteScheduler
-            self.pipeline.scheduler = EulerDiscreteScheduler.from_config(_filtered_config(EulerDiscreteScheduler))
-        elif scheduler_name == "euler_a":
+            self.pipeline.scheduler = EulerDiscreteScheduler.from_config(
+                _filtered_config(EulerDiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "euler_a":
             from diffusers import EulerAncestralDiscreteScheduler
-            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(_filtered_config(EulerAncestralDiscreteScheduler))
-        elif scheduler_name == "dpm++":
+            self.pipeline.scheduler = EulerAncestralDiscreteScheduler.from_config(
+                _filtered_config(EulerAncestralDiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "heun":
+            from diffusers import HeunDiscreteScheduler
+            self.pipeline.scheduler = HeunDiscreteScheduler.from_config(
+                _filtered_config(HeunDiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "dpmpp_2m":
             from diffusers import DPMSolverMultistepScheduler
-            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(_filtered_config(DPMSolverMultistepScheduler))
-        elif scheduler_name == "ddim":
-            from diffusers import DDIMScheduler
-            self.pipeline.scheduler = DDIMScheduler.from_config(_filtered_config(DDIMScheduler))
-        elif scheduler_name == "karras":
+            self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
+                _filtered_config(DPMSolverMultistepScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "dpmpp_2m_sde":
             from diffusers import DPMSolverMultistepScheduler
             self.pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
                 _filtered_config(DPMSolverMultistepScheduler),
-                use_karras_sigmas=True
+                algorithm_type="sde-dpmsolver++",
+                **schedule_kwargs
+            )
+        elif sampler_name == "dpmpp_sde":
+            from diffusers import DPMSolverSinglestepScheduler
+            self.pipeline.scheduler = DPMSolverSinglestepScheduler.from_config(
+                _filtered_config(DPMSolverSinglestepScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "dpm2":
+            from diffusers import KDPM2DiscreteScheduler
+            self.pipeline.scheduler = KDPM2DiscreteScheduler.from_config(
+                _filtered_config(KDPM2DiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "dpm2_a":
+            from diffusers import KDPM2AncestralDiscreteScheduler
+            self.pipeline.scheduler = KDPM2AncestralDiscreteScheduler.from_config(
+                _filtered_config(KDPM2AncestralDiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "unipc":
+            from diffusers import UniPCMultistepScheduler
+            self.pipeline.scheduler = UniPCMultistepScheduler.from_config(
+                _filtered_config(UniPCMultistepScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "deis":
+            from diffusers import DEISMultistepScheduler
+            self.pipeline.scheduler = DEISMultistepScheduler.from_config(
+                _filtered_config(DEISMultistepScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "lms":
+            from diffusers import LMSDiscreteScheduler
+            self.pipeline.scheduler = LMSDiscreteScheduler.from_config(
+                _filtered_config(LMSDiscreteScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "pndm":
+            from diffusers import PNDMScheduler
+            self.pipeline.scheduler = PNDMScheduler.from_config(
+                _filtered_config(PNDMScheduler), **schedule_kwargs
+            )
+        elif sampler_name == "ddim":
+            from diffusers import DDIMScheduler
+            self.pipeline.scheduler = DDIMScheduler.from_config(
+                _filtered_config(DDIMScheduler), **schedule_kwargs
             )
 
-        print(f"[Modal Diffusion] Scheduler set: {type(self.pipeline.scheduler).__name__}")
+        print(f"[Modal Diffusion] Scheduler set: {type(self.pipeline.scheduler).__name__} (sampler={sampler_name}, schedule={schedule_name})")
 
     def _load_refiner_pipeline(self, model_config: Dict[str, Any]):
         """
@@ -603,6 +785,56 @@ class DiffusionService:
         self.refiner_pipeline.to(self.device)
         print("[Modal Diffusion] Refiner pipeline loaded")
 
+    def _load_img2img_pipeline(self, model_config: Dict[str, Any]):
+        """
+        Load the img2img pipeline for two-stage cartoon→photoreal refinement.
+
+        Supports SDXL, sdxl_flow, Flux (>=0.29), and SD3 pipeline types.
+        For SDXL/sdxl_flow, reuses _load_refiner_pipeline()
+        (StableDiffusionXLImg2ImgPipeline). For Flux, loads FluxImg2ImgPipeline.
+        For SD3, loads StableDiffusion3Img2ImgPipeline. All other pipeline
+        types leave img2img_pipeline as None (caller raises a clear error).
+
+        Args:
+            model_config: Model configuration dict from _get_model_config()
+        """
+        if self.img2img_pipeline is not None:
+            return
+
+        import torch
+        pipeline_type = model_config.get("pipeline", "flux")
+
+        if pipeline_type in ("sdxl", "sdxl_flow"):
+            # Reuse the SDXL img2img pipeline (StableDiffusionXLImg2ImgPipeline)
+            self._load_refiner_pipeline(model_config)
+            self.img2img_pipeline = self.refiner_pipeline
+
+        elif pipeline_type == "flux":
+            from diffusers import FluxImg2ImgPipeline
+            model_id = model_config.get("repo_id") or model_config.get("path") or "black-forest-labs/FLUX.1-dev"
+            print(f"[Modal Diffusion] Loading FluxImg2ImgPipeline: {model_id}")
+            self.img2img_pipeline = FluxImg2ImgPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.bfloat16,
+                cache_dir=CACHE_DIR,
+            )
+            self.img2img_pipeline.enable_sequential_cpu_offload()
+
+        elif pipeline_type == "sd3":
+            from diffusers import StableDiffusion3Img2ImgPipeline
+            model_id = model_config.get("repo_id") or model_config.get("path") or "stabilityai/stable-diffusion-3-medium-diffusers"
+            print(f"[Modal Diffusion] Loading StableDiffusion3Img2ImgPipeline: {model_id}")
+            self.img2img_pipeline = StableDiffusion3Img2ImgPipeline.from_pretrained(
+                model_id,
+                torch_dtype=torch.float16,
+                cache_dir=CACHE_DIR,
+            )
+            self.img2img_pipeline.to(self.device)
+
+        else:
+            print(f"[Modal Diffusion] Img2img not supported for pipeline type: {pipeline_type}")
+            # Leave as None; generate() will raise a clear error
+
     def _load_loras(self, loras: Optional[List[LoraConfig]]) -> List[Dict[str, Any]]:
         """
         Load multiple LoRA weights into the pipeline with weighted blending.
@@ -615,6 +847,15 @@ class DiffusionService:
         """
         if self.pipeline is None:
             raise RuntimeError("Pipeline must be loaded before adding LoRAs")
+
+        # Reject LoRAs for sdxl_flow models (Flow Matching incompatible)
+        if self.current_model and loras:
+            model_cfg = self._get_model_config(self.current_model)
+            if model_cfg.get("pipeline") in ("sdxl_flow", "chroma"):
+                pipeline_type_lora = model_cfg.get("pipeline")
+                print(f"[Modal Diffusion] WARNING: LoRAs not supported for {pipeline_type_lora} models. Ignoring LoRAs.")
+                self.current_loras = []
+                return []
 
         # Handle empty/None loras
         if not loras:
@@ -705,19 +946,23 @@ class DiffusionService:
         guidance: Optional[float] = None,
         seed: Optional[int] = None,
         loras: Optional[List[LoraConfig]] = None,
+        sampler: Optional[str] = None,
         scheduler: Optional[str] = None,
         use_refiner: bool = False,
         refiner_switch: float = 0.8,
         clip_skip: Optional[int] = None,
         touchup_strength: float = 0.0,
         negative_prompt: Optional[str] = None,
+        flow_shift: Optional[float] = None,
         fix_faces: bool = False,
         restoration_strength: float = 0.5,
         face_upscale: Optional[int] = None,
         return_intermediate_images: bool = False,
+        input_image: Optional[str] = None,
+        denoise_strength: float = 0.6,
         clear_cache: bool = True,
     ) -> Dict[str, Any]:
-        """Generate an image from a text prompt"""
+        """Generate an image from a text prompt (or resample via img2img when input_image is provided)"""
         import torch
 
         # Load model if different from current
@@ -734,10 +979,21 @@ class DiffusionService:
         if guidance is None:
             guidance = model_config.get("default_guidance", 3.5)
 
-        # Apply scheduler (from request or model config)
-        effective_scheduler = scheduler or model_config.get("scheduler")
-        if effective_scheduler:
-            self._set_scheduler(effective_scheduler)
+        # Apply sampler + schedule (new split approach) or legacy scheduler
+        effective_sampler = sampler or model_config.get("sampler")
+        effective_schedule = scheduler or model_config.get("schedule")
+        if effective_sampler:
+            # New approach: separate sampler and schedule
+            self._apply_sampler_and_schedule(effective_sampler, effective_schedule)
+        elif effective_schedule and effective_schedule in SUPPORTED_SCHEDULERS:
+            # Legacy: scheduler field contains a sampler name or combined name
+            self._set_scheduler(effective_schedule)
+
+        # Apply flow matching shift for sdxl_flow models
+        pipeline_type = model_config.get("pipeline", "flux")
+        if pipeline_type == "sdxl_flow":
+            effective_shift = flow_shift or model_config.get("default_flow_shift", 1.0)
+            self._apply_flow_matching_scheduler(effective_shift)
 
         # Apply clip_skip if specified
         effective_clip_skip = clip_skip or model_config.get("clip_skip")
@@ -755,7 +1011,7 @@ class DiffusionService:
             generator = torch.Generator(device="cuda").manual_seed(seed)
 
         neg_info = f'negative_prompt="{negative_prompt[:80]}..."' if negative_prompt else "negative_prompt=None"
-        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}, scheduler={effective_scheduler}, {neg_info}")
+        print(f"[Modal Diffusion] Generating: model={model}, steps={steps}, guidance={guidance}, seed={seed}, sampler={effective_sampler}, schedule={effective_schedule}, {neg_info}")
         start_time = time.time()
 
         # Determine if we should use refiner (from request or model config)
@@ -765,8 +1021,41 @@ class DiffusionService:
         # Generate image
         pipeline_type = model_config.get("pipeline", "flux")
         refiner_info = None
+        result = None  # Set by txt2img branch; None when img2img branch runs
 
-        if pipeline_type == "sdxl" and effective_use_refiner:
+        if input_image is not None:
+            # Img2img branch: two-stage cartoon→photoreal refinement.
+            # Load the input image from base64, run img2img pipeline, then fall
+            # through to face-fixing / encoding code below (result stays None).
+            import base64 as _b64
+            import io as _io
+            from PIL import Image as _PilImage
+
+            _img_bytes = _b64.b64decode(input_image)
+            _pil_image = _PilImage.open(_io.BytesIO(_img_bytes)).convert("RGB")
+            if _pil_image.size != (width, height):
+                _pil_image = _pil_image.resize((width, height), _PilImage.LANCZOS)
+
+            self._load_img2img_pipeline(model_config)
+            if self.img2img_pipeline is None:
+                raise ValueError(
+                    f"Img2img not supported for pipeline type: {pipeline_type}. "
+                    "Supported types: sdxl, sdxl_flow, flux, sd3"
+                )
+
+            print(f"[Modal Diffusion] Img2img: strength={denoise_strength}, steps={steps}, guidance={guidance}")
+            _img2img_result = self.img2img_pipeline(
+                prompt=prompt,
+                negative_prompt=negative_prompt,
+                image=_pil_image,
+                strength=denoise_strength,
+                num_inference_steps=steps,
+                guidance_scale=guidance,
+                generator=generator,
+            )
+            image = _img2img_result.images[0]
+
+        elif (pipeline_type == "sdxl" or pipeline_type == "sdxl_flow") and effective_use_refiner:
             # SDXL with refiner: use denoising_end for base-to-refiner handoff
             print(f"[Modal Diffusion] Using refiner with switch at {effective_refiner_switch}")
 
@@ -831,8 +1120,8 @@ class DiffusionService:
                 "model": "same_as_base" if model_config.get("custom") else "sdxl-refiner-1.0"
             }
 
-        elif pipeline_type == "sdxl" and self.compel is not None:
-            # Use Compel for long prompt handling in SDXL (no refiner)
+        elif (pipeline_type == "sdxl" or pipeline_type == "sdxl_flow") and self.compel is not None:
+            # Use Compel for long prompt handling in SDXL/sdxl_flow (no refiner)
             print(f"[Modal Diffusion] Using Compel for long prompt support ({len(prompt.split())} words)")
             conditioning, pooled = self.compel(prompt)
             # Process negative prompt with Compel if provided
@@ -860,23 +1149,24 @@ class DiffusionService:
                 "guidance_scale": guidance,
                 "generator": generator,
             }
-            if negative_prompt and pipeline_type == "sdxl":
+            if negative_prompt and pipeline_type in ("sdxl", "sdxl_flow", "chroma"):
                 pipeline_kwargs["negative_prompt"] = negative_prompt
-                print(f"[Modal Diffusion] Applied negative_prompt to SDXL pipeline")
+                print(f"[Modal Diffusion] Applied negative_prompt to {pipeline_type} pipeline")
             elif negative_prompt:
-                print(f"[Modal Diffusion] WARNING: negative_prompt provided but pipeline_type={pipeline_type} - NOT applied (only SDXL supports negative prompts)")
+                print(f"[Modal Diffusion] WARNING: negative_prompt provided but pipeline_type={pipeline_type} - NOT applied (only sdxl/sdxl_flow/chroma support negative prompts)")
             result = self.pipeline(**pipeline_kwargs)
 
         inference_time = time.time() - start_time
         print(f"[Modal Diffusion] Generated in {inference_time:.1f}s")
 
-        # Get the generated image
-        image = result.images[0]
+        # Get the generated image (already set for img2img branch; extract from result for txt2img)
+        if result is not None:
+            image = result.images[0]
 
         # Apply img2img touchup if requested (for artifact cleanup)
         touchup_info = None
         effective_touchup = touchup_strength or model_config.get("touchup_strength", 0.0)
-        if effective_touchup > 0 and pipeline_type == "sdxl":
+        if effective_touchup > 0 and (pipeline_type == "sdxl" or pipeline_type == "sdxl_flow"):
             print(f"[Modal Diffusion] Applying img2img touchup with strength {effective_touchup}")
             touchup_start = time.time()
 
@@ -975,8 +1265,10 @@ class DiffusionService:
                 "width": width,
                 "height": height,
                 "negative_prompt": negative_prompt,
+                "flow_shift": flow_shift if pipeline_type == "sdxl_flow" else None,
                 "loras": lora_info if lora_info else None,
-                "scheduler": effective_scheduler,
+                "sampler": effective_sampler,
+                "scheduler": effective_schedule,
                 "clip_skip": effective_clip_skip,
                 "refiner": refiner_info,
                 "touchup": touchup_info,
@@ -1053,16 +1345,20 @@ class DiffusionService:
             guidance=request.guidance,
             seed=request.seed,
             loras=request.loras,
+            sampler=request.sampler,
             scheduler=request.scheduler,
             use_refiner=request.use_refiner,
             refiner_switch=request.refiner_switch,
             clip_skip=request.clip_skip,
             touchup_strength=request.touchup_strength,
             negative_prompt=request.negative_prompt,
+            flow_shift=request.flow_shift,
             fix_faces=request.fix_faces,
             restoration_strength=request.restoration_strength,
             face_upscale=request.face_upscale,
             return_intermediate_images=request.return_intermediate_images,
+            input_image=request.input_image,
+            denoise_strength=request.denoise_strength,
             clear_cache=clear_cache,
         )
         response = {

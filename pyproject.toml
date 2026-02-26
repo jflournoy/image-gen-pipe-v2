@@ -8,33 +8,30 @@ dependencies = [
     "fastapi>=0.104.0",
     "uvicorn[standard]>=0.24.0",
     "pydantic>=2.4.0",
-
     # LLM service (llama.cpp)
     "llama-cpp-python>=0.2.0",
-
     # ML dependencies for Vision and Image services
     "torch>=2.1.0",
     "torchvision>=0.16.0",
     "transformers>=4.35.0",
-    "diffusers>=0.24.0",
+    "diffusers>=0.34.0",  # 0.33.0+ required for WAN2.2-I2V support
     "accelerate>=0.24.0",
     "peft>=0.7.0",
     "huggingface_hub>=0.20.0",
     "protobuf>=4.25.0",
     "sentencepiece>=0.1.99",
-    "compel>=2.0.0",  # Long prompt support for diffusers
-    "safetensors>=0.4.0",  # Model loading
-
+    "compel>=2.0.0", # Long prompt support for diffusers
+    "safetensors>=0.4.0", # Model loading
     # Image processing
     "Pillow>=10.1.0",
     "requests>=2.31.0",
-
     # Face fixing dependencies (GFPGAN + Real-ESRGAN, CodeFormer optional)
-    "opencv-python-headless>=4.8.0",  # Headless OpenCV for face detection (replaces mediapipe)
+    "opencv-python-headless>=4.8.0", # Headless OpenCV for face detection (replaces mediapipe)
     "gfpgan>=0.3.0",
-    "basicsr-fixed>=1.4.2",  # Fixes torchvision compatibility issues in basicsr
+    "basicsr-fixed>=1.4.2", # Fixes torchvision compatibility issues in basicsr
     "realesrgan>=0.3.0",
     # CodeFormer optional upgrade: requires manual setup from https://github.com/sczhou/CodeFormer
+    "modal>=1.3.4",
 ]
 
 [tool.uv.workspace]

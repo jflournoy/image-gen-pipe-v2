@@ -3,14 +3,23 @@
 Modal Model Manager
 Upload and manage custom diffusion models on Modal volumes.
 
+Supports: Flux, SDXL, SD3, Chroma (images), WAN (video)
+
 Usage:
-    # Upload a local model
-    python modal_model_manager.py upload /path/to/model.safetensors --name my-model --pipeline sdxl
+    # Upload a local image model (Chroma, SDXL, Flux, etc)
+    python modal_model_manager.py upload /path/to/chroma-model.safetensors \
+        --name my-chroma --pipeline chroma --steps 20 --guidance 7.5
 
-    # Upload from CivitAI URL
-    python modal_model_manager.py download-civitai https://civitai.com/api/download/models/12345 --name civitai-model
+    # Upload a custom video model (WAN I2V)
+    python modal_model_manager.py upload /path/to/wan-custom.safetensors \
+        --name my-custom-video --pipeline wan_i2v --steps 30 --guidance 4.0
 
-    # List models in volume
+    # Download from CivitAI (specify pipeline type)
+    python modal_model_manager.py download-civitai \
+        https://civitai.com/api/download/models/12345 \
+        --name civitai-chroma --pipeline chroma
+
+    # List all models
     python modal_model_manager.py list
 
     # Delete a model
@@ -18,6 +27,17 @@ Usage:
 
     # Show volume usage
     python modal_model_manager.py usage
+
+Pipeline types:
+    Image generation:
+        - flux: Flux.1 (dev/schnell)
+        - sdxl: Stable Diffusion XL
+        - sdxl_flow: SDXL with Flow Matching (e.g., BigASP)
+        - sd3: Stable Diffusion 3
+        - chroma: Chroma1-HD
+
+    Video generation:
+        - wan_i2v: WAN2.2 image-to-video
 """
 
 import argparse
@@ -359,7 +379,12 @@ def main():
     upload_parser = subparsers.add_parser("upload", help="Upload a local model")
     upload_parser.add_argument("path", help="Path to model file")
     upload_parser.add_argument("--name", required=True, help="Name for the model")
-    upload_parser.add_argument("--pipeline", default="sdxl", choices=["flux", "sdxl", "sd3"], help="Pipeline type")
+    upload_parser.add_argument(
+        "--pipeline",
+        default="sdxl",
+        choices=["flux", "sdxl", "sdxl_flow", "sd3", "chroma", "wan_i2v"],
+        help="Pipeline type (image: flux/sdxl/sdxl_flow/sd3/chroma, video: wan_i2v)"
+    )
     upload_parser.add_argument("--base-model", help="Base model for custom weights")
     upload_parser.add_argument("--steps", type=int, default=25, help="Default inference steps")
     upload_parser.add_argument("--guidance", type=float, default=7.5, help="Default guidance scale")
@@ -368,7 +393,12 @@ def main():
     civitai_parser = subparsers.add_parser("download-civitai", help="Download from CivitAI")
     civitai_parser.add_argument("url", help="CivitAI model URL or download URL")
     civitai_parser.add_argument("--name", required=True, help="Name for the model")
-    civitai_parser.add_argument("--pipeline", default="sdxl", choices=["flux", "sdxl", "sd3"], help="Pipeline type")
+    civitai_parser.add_argument(
+        "--pipeline",
+        default="sdxl",
+        choices=["flux", "sdxl", "sdxl_flow", "sd3", "chroma", "wan_i2v"],
+        help="Pipeline type (image: flux/sdxl/sdxl_flow/sd3/chroma, video: wan_i2v)"
+    )
     civitai_parser.add_argument("--base-model", help="Base model for custom weights")
     civitai_parser.add_argument("--steps", type=int, default=25, help="Default inference steps")
     civitai_parser.add_argument("--guidance", type=float, default=7.5, help="Default guidance scale")
