@@ -5541,33 +5541,54 @@ function selectMode(mode) {
  */
 async function updateServiceStatuses() {
   try {
-    const response = await fetch('/api/services/status');
-    const services = await response.json();
+    // Fetch service status and stop-lock status in parallel
+    const [statusResp, locksResp] = await Promise.all([
+      fetch('/api/services/status'),
+      fetch('/api/services/stop-locks').catch(() => null)
+    ]);
+    const services = await statusResp.json();
+    const lockData = locksResp ? await locksResp.json() : { lockedServices: [] };
+    const lockedSet = new Set(lockData.lockedServices || []);
 
-    // Update status indicators based on actual service process status
-    const llmStatus = document.getElementById('llmStatus');
-    const fluxStatus = document.getElementById('fluxStatus');
-    const visionStatus = document.getElementById('visionStatus');
-    const vlmStatus = document.getElementById('vlmStatus');
+    // Update status indicators based on actual service process status + lock state
+    for (const svc of ['llm', 'flux', 'vision', 'vlm']) {
+      const el = document.getElementById(`${svc}Status`);
+      if (!el) continue;
+      const running = services[svc]?.running;
+      const locked = lockedSet.has(svc);
+      if (running) {
+        el.textContent = '🟢';
+        el.title = `Running (PID: ${services[svc].pid})`;
+      } else if (locked) {
+        el.textContent = '🔒';
+        el.title = 'Stopped (locked — auto-restart blocked)';
+      } else {
+        el.textContent = '⚪';
+        el.title = 'Stopped';
+      }
+    }
 
-    if (llmStatus) {
-      llmStatus.textContent = services.llm?.running ? '🟢' : '⚪';
-      llmStatus.title = services.llm?.running ? `Running (PID: ${services.llm.pid})` : 'Stopped';
-    }
-    if (fluxStatus) {
-      fluxStatus.textContent = services.flux?.running ? '🟢' : '⚪';
-      fluxStatus.title = services.flux?.running ? `Running (PID: ${services.flux.pid})` : 'Stopped';
-    }
-    if (visionStatus) {
-      visionStatus.textContent = services.vision?.running ? '🟢' : '⚪';
-      visionStatus.title = services.vision?.running ? `Running (PID: ${services.vision.pid})` : 'Stopped';
-    }
-    if (vlmStatus) {
-      vlmStatus.textContent = services.vlm?.running ? '🟢' : '⚪';
-      vlmStatus.title = services.vlm?.running ? `Running (PID: ${services.vlm.pid})` : 'Stopped';
+    // Show/hide the "Clear Locks" button
+    const clearLocksBtn = document.getElementById('clearStopLocksBtn');
+    if (clearLocksBtn) {
+      clearLocksBtn.style.display = lockedSet.size > 0 ? '' : 'none';
     }
   } catch (error) {
     console.error('[UI] Error updating service statuses:', error);
+  }
+}
+
+/**
+ * Clear all STOP_LOCKs to re-enable auto-restart
+ */
+async function clearAllStopLocks() {
+  try {
+    const response = await fetch('/api/services/all/stop-locks', { method: 'DELETE' });
+    const result = await response.json();
+    console.log('[UI] Cleared stop locks:', result);
+    await updateServiceStatuses();
+  } catch (error) {
+    console.error('[UI] Error clearing stop locks:', error);
   }
 }
 
@@ -6509,12 +6530,8 @@ checkForPendingJob();
 // Update My Jobs count on page load
 updateMyJobsCount();
 
-// Load provider status on page load (don't show modal, just update indicator)
-loadProviderStatus().catch(err => {
-  console.warn('[Provider Settings] Failed to load initial status:', err);
-});
-
 // Initial message
+// Note: loadProviderStatus() is called in initializeSidebarLayout() below
 addMessage('Ready. Configure parameters and click "Start Beam Search"', 'event');
 
 /**
