@@ -11,6 +11,7 @@ import time
 import random
 import json
 import asyncio
+import threading
 from pathlib import Path
 from typing import Optional, List
 from contextlib import asynccontextmanager
@@ -31,12 +32,14 @@ MODEL_FILE = os.getenv('LLM_MODEL_FILE', '*q6_k_m.gguf')  # Glob pattern for mod
 MODEL_PATH = os.getenv('LLM_MODEL_PATH', None)  # Override for local file path
 
 # GPU layers: -1 = all layers on GPU, 0 = CPU only, N = N layers on GPU
-# With 12GB VRAM: 32 layers leaves room for other models
-N_GPU_LAYERS = int(os.getenv('LLM_GPU_LAYERS', '32'))
+# With 12GB VRAM: 28 layers leaves ~1.5GB headroom vs 32 layers to absorb
+# CUDA memory fragmentation from repeated Flux↔VLM↔LLM model swaps
+N_GPU_LAYERS = int(os.getenv('LLM_GPU_LAYERS', '28'))
 N_CTX = int(os.getenv('LLM_CONTEXT_SIZE', '2048'))
 
-# Global model reference
+# Global model reference and load lock (prevents parallel load races)
 llm = None
+_load_lock = threading.Lock()
 
 
 @asynccontextmanager
@@ -125,44 +128,123 @@ class DownloadRequest(BaseModel):
     filename: str = MODEL_FILE
 
 
+def _cuda_cleanup():
+    """Force CUDA memory cleanup - call between retry attempts."""
+    gc.collect()
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
+def _try_load(gpu_layers):
+    """Attempt a single model load with the given number of GPU layers."""
+    from llama_cpp import Llama
+
+    print(f'[LLM Service] Loading model...')
+    print(f'[LLM Service] GPU layers: {gpu_layers}')
+
+    if MODEL_PATH and Path(MODEL_PATH).exists():
+        print(f'[LLM Service] Loading from local path: {MODEL_PATH}')
+        return Llama(
+            model_path=MODEL_PATH,
+            n_ctx=N_CTX,
+            n_gpu_layers=gpu_layers,
+            verbose=False
+        )
+    else:
+        print(f'[LLM Service] Loading from HuggingFace: {MODEL_REPO} / {MODEL_FILE}')
+        return Llama.from_pretrained(
+            repo_id=MODEL_REPO,
+            filename=MODEL_FILE,
+            n_ctx=N_CTX,
+            n_gpu_layers=gpu_layers,
+            verbose=False
+        )
+
+
 def load_model():
-    """Load the LLM model using llama-cpp-python"""
+    """Load the LLM model using llama-cpp-python.
+
+    Serializes concurrent load attempts with a lock (prevents races when
+    multiple requests arrive simultaneously while llm is None).
+
+    Retries with CUDA cleanup on context creation failure (caused by GPU
+    memory fragmentation after repeated Flux↔VLM↔LLM swaps). Falls back to
+    fewer GPU layers on second retry.
+    """
     global llm
 
+    # Fast path: already loaded (checked outside lock for performance)
     if llm is not None:
         return llm
 
-    try:
-        from llama_cpp import Llama
-    except ImportError:
-        raise RuntimeError(
-            "llama-cpp-python not installed. Install with: "
-            "pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121"
-        )
+    with _load_lock:
+        # Re-check inside lock - another thread may have loaded while we waited
+        if llm is not None:
+            return llm
 
-    print(f'[LLM Service] Loading model...')
-    print(f'[LLM Service] GPU layers: {N_GPU_LAYERS}')
+        try:
+            from llama_cpp import Llama  # noqa: F401 (validates import once)
+        except ImportError:
+            raise RuntimeError(
+                "llama-cpp-python not installed. Install with: "
+                "pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121"
+            )
 
-    try:
-        if MODEL_PATH and Path(MODEL_PATH).exists():
-            # Load from local file
-            print(f'[LLM Service] Loading from local path: {MODEL_PATH}')
-            llm = Llama(
-                model_path=MODEL_PATH,
-                n_ctx=N_CTX,
-                n_gpu_layers=N_GPU_LAYERS,
-                verbose=False
+        last_error = None
+
+        # Attempt 1: configured GPU layers
+        try:
+            llm = _try_load(N_GPU_LAYERS)
+        except Exception as e:
+            last_error = e
+            print(f'[LLM Service] Failed to load model: {e}')
+
+            err_str = str(e).lower()
+            is_memory_error = (
+                'llama_context' in err_str or
+                'context' in err_str or
+                'failed to load model from file' in err_str or
+                'out of memory' in err_str or
+                'oom' in err_str
             )
-        else:
-            # Load from HuggingFace Hub
-            print(f'[LLM Service] Loading from HuggingFace: {MODEL_REPO} / {MODEL_FILE}')
-            llm = Llama.from_pretrained(
-                repo_id=MODEL_REPO,
-                filename=MODEL_FILE,
-                n_ctx=N_CTX,
-                n_gpu_layers=N_GPU_LAYERS,
-                verbose=False
-            )
+            if not is_memory_error:
+                raise  # Not a memory/GPU issue - don't retry
+
+            # CUDA memory fragmentation: clean up and wait before retry
+            print('[LLM Service] Context creation failed - cleaning CUDA memory, retrying in 3s...')
+            _cuda_cleanup()
+            time.sleep(3.0)
+
+            # Attempt 2: same GPU layers after cleanup
+            try:
+                llm = _try_load(N_GPU_LAYERS)
+                last_error = None
+            except Exception as e2:
+                last_error = e2
+                print(f'[LLM Service] Retry 1 failed: {e2}')
+
+                # Attempt 3: fewer GPU layers as fallback
+                fallback_layers = max(1, N_GPU_LAYERS - 8)
+                print(f'[LLM Service] Retrying with {fallback_layers} GPU layers (fallback)...')
+                _cuda_cleanup()
+                time.sleep(2.0)
+                try:
+                    llm = _try_load(fallback_layers)
+                    last_error = None
+                    print(f'[LLM Service] Loaded with fallback {fallback_layers} GPU layers')
+                except Exception as e3:
+                    last_error = e3
+                    print(f'[LLM Service] All load attempts failed: {e3}')
+
+        if last_error is not None:
+            raise last_error
 
         # Get model info
         meta = getattr(llm, 'metadata', {}) or {}
@@ -175,24 +257,27 @@ def load_model():
         print(f'[LLM Service] Total layers: {total_layers}, GPU layers: {N_GPU_LAYERS}')
         return llm
 
-    except Exception as e:
-        print(f'[LLM Service] Failed to load model: {e}')
-        raise
-
 
 def unload_model():
-    """Unload the model to free GPU memory"""
+    """Unload the model to free GPU memory.
+
+    Aggressively cleans up GGML/CUDA resources to prevent fragmentation
+    during repeated LLM↔Flux↔VLM model swaps (mirrors VLM service cleanup).
+    """
     global llm
     if llm is not None:
         print('[LLM Service] Unloading model...')
         llm.close()
         llm = None
         gc.collect()
-        # Try to clear CUDA cache if available
+        gc.collect()  # Run twice to catch circular references
+        # Synchronize CUDA to ensure cleanup completes before next model load
         try:
             import torch
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
+                torch.cuda.synchronize()  # Wait for all CUDA ops to complete
+                torch.cuda.empty_cache()  # Clear again after sync
         except ImportError:
             pass
         print('[LLM Service] Model unloaded, GPU memory freed')
