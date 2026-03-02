@@ -141,3 +141,4 @@ test/flux-local-encoders.test.js
 test/flux-custom-model-encoders.test.js
 test-output
 test-stroage-output
+.local

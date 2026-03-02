@@ -178,6 +178,31 @@ def load_face_fixer():
         return None
 
 
+# Global upscaler (lazy-loaded on first use)
+upscaler_pipeline = None
+
+
+def load_upscaler():
+    """Load standalone upscaler pipeline"""
+    global upscaler_pipeline
+
+    if upscaler_pipeline is not None:
+        return upscaler_pipeline
+
+    try:
+        print('[Flux Service] Loading upscaler...')
+        from upscaler import UpscalerPipeline
+        upscaler_pipeline = UpscalerPipeline(device=DEVICE)
+        print('[Flux Service] Upscaler ready (lazy model loading)')
+        return upscaler_pipeline
+    except ImportError:
+        print('[Flux Service] Warning: Upscaler not available (upscaler module not found)')
+        return None
+    except Exception as e:
+        print(f'[Flux Service] Warning: Failed to load upscaler: {e}')
+        return None
+
+
 class GenerationRequest(BaseModel):
     """Image generation request"""
     model: str
@@ -895,6 +920,72 @@ async def generate_image(request: GenerationRequest):
     except Exception as e:
         print(f'[Flux Service] Generation error: {e}')
         raise HTTPException(status_code=500, detail=str(e))
+
+
+class UpscaleRequest(BaseModel):
+    """Standalone image upscale request"""
+    imageBase64: str  # Base64-encoded input image
+    model: str = 'remacri'  # Upscaler model name
+    tile_size: int = 512  # Tile size for processing
+
+
+@app.post('/upscale')
+async def upscale_image(request: UpscaleRequest):
+    """Upscale an image using standalone upscaler (Remacri, RealESRGAN, etc.)"""
+    import base64
+    from io import BytesIO
+    from PIL import Image
+
+    try:
+        # Decode input image
+        image_data = base64.b64decode(request.imageBase64)
+        input_image = Image.open(BytesIO(image_data)).convert('RGB')
+
+        # Load upscaler
+        pipeline = load_upscaler()
+        if pipeline is None:
+            raise HTTPException(status_code=503, detail='Upscaler not available')
+
+        # Upscale
+        result_image, metadata = pipeline.upscale(
+            input_image,
+            model_name=request.model,
+        )
+
+        # Encode result to PNG base64
+        buffer = BytesIO()
+        result_image.save(buffer, format='PNG')
+        result_base64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+        return {
+            'imageBase64': result_base64,
+            'width': metadata['output_size'][0],
+            'height': metadata['output_size'][1],
+            'metadata': metadata,
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        print(f'[Flux Service] Upscale error: {e}')
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get('/upscale/models')
+async def list_upscale_models():
+    """List available upscaler models"""
+    from upscaler import UpscalerPipeline, _DEFAULT_MODELS_DIR
+    models_dir = _DEFAULT_MODELS_DIR
+    models = {}
+    for name, config in UpscalerPipeline.MODELS.items():
+        model_path = os.path.join(models_dir, config['filename'])
+        models[name] = {
+            'scale': config['scale'],
+            'filename': config['filename'],
+            'available': os.path.exists(model_path),
+        }
+    return {'models': models, 'default': UpscalerPipeline.DEFAULT_MODEL}
 
 
 @app.get('/download/status')

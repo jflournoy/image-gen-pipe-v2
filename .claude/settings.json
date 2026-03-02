@@ -1,7 +1,12 @@
 {
   "permissions": {
     "allow": [
-      "Bash(npx node:*)"
+      "Bash(npx node:*)",
+      "WebFetch(domain:novita.ai)",
+      "Bash(modal --version)"
+    ],
+    "additionalDirectories": [
+      "/tmp"
     ]
   }
 }
