@@ -103,7 +103,7 @@ class ModalImageProvider {
 
     if (options.inputImage) payload.input_image = options.inputImage;
     if (options.denoiseStrength !== undefined) payload.denoise_strength = options.denoiseStrength;
-    // Chroma two-pass refiner controls (custom workflow workflow stage 2)
+    // Chroma two-pass refiner controls (custom workflow stage 2)
     if (options.use_refiner !== undefined) payload.use_refiner = options.use_refiner;
     if (options.refiner_switch !== undefined) payload.refiner_switch = options.refiner_switch;
     if (options.sampler) payload.sampler = options.sampler;
@@ -384,15 +384,19 @@ class ModalImageProvider {
   }
 
   /**
-   * Derive the health endpoint URL from the generate endpoint URL
+   * Derive the health/models endpoint URL from the generate endpoint URL
    * Modal exposes each method as a separate URL, not as paths
    * Generate: https://user--app-class-generate-HASH.modal.run
-   * Health:   https://user--app-class-health.modal.run
+   * Health+Models: https://user--models.modal.run  (merged endpoint)
    * @returns {string} Health endpoint URL
    */
   getHealthUrl() {
-    // Replace generate-HASH with health (no hash on health endpoint)
-    return this.apiUrl.replace(/generate-[a-f0-9]+/, 'health');
+    // Replace app-class-generate-HASH with models (merged health+models endpoint)
+    const userMatch = this.apiUrl.match(/^https?:\/\/([^-]+)--/);
+    if (userMatch) {
+      return `https://${userMatch[1]}--models.modal.run/`;
+    }
+    return this.apiUrl.replace(/generate-[a-f0-9]+/, 'models');
   }
 
   /**

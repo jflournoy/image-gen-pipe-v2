@@ -125,7 +125,7 @@ const providerConfig = {
   },
 
   // Chroma Image Generation Configuration (local or Modal)
-  // Defaults tuned for custom workflow Chroma Refiner v11 workflow:
+  // Defaults tuned for Chroma custom two-pass refiner workflow:
   //   Stage 1: Euler/Beta, 10 steps, CFG 1.0, 1024x1536
   //   Stage 2: LCM/Karras refiner, 4-12 steps, denoise 0.25-0.40 (auto via model config)
   chroma: {

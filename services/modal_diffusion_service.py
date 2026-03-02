@@ -114,11 +114,11 @@ SUPPORTED_MODELS: Dict[str, Dict[str, Any]] = {
         "default_guidance": 7.0,
         "requires_auth": True,
     },
-    # custom workflow Chroma Refiner v11 workflow settings
+    # Chroma custom model with two-pass refiner workflow settings
     # Two-pass: Euler/Beta base (10 steps, CFG 1.0) + LCM/Karras refiner (4-12 steps, denoise 0.25-0.40)
     "chroma-custom": {
         "custom": True,
-        "path": "custom-model-v60.safetensors",
+        "path": "chroma-custom.safetensors",
         "pipeline": "chroma",
         "base_model": "lodestones/Chroma1-HD",
         "default_steps": 10,
@@ -258,30 +258,17 @@ class BatchGenerateResponse(BaseModel):
     metadata: Optional[Dict[str, Any]] = Field(default=None, description="Batch-level metadata")
 
 
-class HealthResponse(BaseModel):
-    """Health check response"""
+class InfoResponse(BaseModel):
+    """Combined info endpoint: health + models + loras (single non-GPU endpoint)"""
     status: str = Field(..., description="Service status")
     model: str = Field(..., description="Current/default model")
     gpu: Optional[str] = Field(default=None, description="GPU type")
     container_ready: Optional[bool] = Field(default=None, description="Whether container is warmed up")
-    available_models: Optional[List[str]] = Field(default=None, description="List of available models")
+    available_models: Optional[List[str]] = Field(default=None, description="List of available model names")
+    models: Optional[List[Dict[str, Any]]] = Field(default=None, description="Full model details list")
     current_loras: Optional[List[Dict[str, Any]]] = Field(default=None, description="Currently loaded LoRAs")
-
-
-class ModelsResponse(BaseModel):
-    """List of available models"""
-    models: List[Dict[str, Any]] = Field(..., description="Available models")
-
-
-class LorasResponse(BaseModel):
-    """List of available LoRAs"""
-    loras: List[Dict[str, Any]] = Field(..., description="Available LoRA files")
-
-
-class LoraStatusResponse(BaseModel):
-    """Current LoRA status"""
-    loaded: bool = Field(..., description="Whether any LoRAs are loaded")
-    current_loras: List[Dict[str, Any]] = Field(default_factory=list, description="Currently loaded LoRAs")
+    loras: List[Dict[str, Any]] = Field(default_factory=list, description="Available LoRA files")
+    loras_loaded: bool = Field(default=False, description="Whether any LoRAs are currently loaded")
 
 
 def image_to_base64(image) -> str:
@@ -618,9 +605,13 @@ class DiffusionService:
             chroma_base = model_config.get("base_model", "lodestones/Chroma1-HD")
             print(f"[Modal Diffusion] Loading chroma model: {model_path}")
             if model_path.suffix == ".safetensors":
-                # Load custom transformer weights, then build pipeline from base
+                # Load custom transformer weights using the chroma base config.
+                # from_single_file requires config to be a repo ID string or local path,
+                # not a dict — pass the base model repo ID with subfolder directly.
                 transformer = ChromaTransformer2DModel.from_single_file(
                     str(model_path),
+                    config=chroma_base,
+                    subfolder="transformer",
                     torch_dtype=torch.float16,
                     cache_dir=CACHE_DIR,
                 )
@@ -1217,7 +1208,7 @@ class DiffusionService:
         if result is not None:
             image = result.images[0]
 
-        # Chroma two-pass refiner (custom workflow workflow stage 2)
+        # Chroma two-pass refiner (custom workflow stage 2)
         # Runs a light img2img pass with LCM sampler + Karras schedule for detail refinement.
         # Mirrors ComfyUI: base Euler/Beta → refiner LCM/Karras at low denoise (0.25-0.40).
         chroma_refiner_info = None
@@ -1523,26 +1514,6 @@ class DiffusionService:
                   f"restoration_strength={request.restoration_strength}, face_upscale={request.face_upscale}, {neg_info}")
             return self._generate_single(request)
 
-    @modal.fastapi_endpoint(method="GET")
-    def health(self) -> HealthResponse:
-        """Health check endpoint"""
-        models = self._get_models_list()
-        model_names = [m["name"] for m in models]
-
-        return HealthResponse(
-            status="healthy",
-            model=self.current_model or "flux-dev",
-            gpu=DEFAULT_GPU,
-            container_ready=self.pipeline is not None,
-            available_models=model_names,
-            current_loras=self.current_loras if self.current_loras else None,
-        )
-
-    @modal.fastapi_endpoint(method="GET", label="models")
-    def models_endpoint(self) -> ModelsResponse:
-        """List available models endpoint"""
-        return ModelsResponse(models=self._get_models_list())
-
     def _get_loras_list(self) -> List[Dict[str, Any]]:
         """Internal helper to get list of available LoRA files"""
         loras = []
@@ -1559,17 +1530,20 @@ class DiffusionService:
 
         return loras
 
-    @modal.fastapi_endpoint(method="GET", label="loras")
-    def loras_endpoint(self) -> LorasResponse:
-        """List available LoRA files"""
-        return LorasResponse(loras=self._get_loras_list())
-
-    @modal.fastapi_endpoint(method="GET", label="lora-status")
-    def lora_status(self) -> LoraStatusResponse:
-        """Get current LoRA status"""
-        return LoraStatusResponse(
-            loaded=len(self.current_loras) > 0,
-            current_loras=self.current_loras,
+    @modal.fastapi_endpoint(method="GET", label="models")
+    def info(self) -> InfoResponse:
+        """Combined health + models + loras info endpoint"""
+        models = self._get_models_list()
+        return InfoResponse(
+            status="healthy",
+            model=self.current_model or "flux-dev",
+            gpu=DEFAULT_GPU,
+            container_ready=self.pipeline is not None,
+            available_models=[m["name"] for m in models],
+            models=models,
+            current_loras=self.current_loras if self.current_loras else None,
+            loras=self._get_loras_list(),
+            loras_loaded=len(self.current_loras) > 0,
         )
 
 

@@ -1004,7 +1004,7 @@ function updateModalModelDefaults() {
 
   // Apply refiner defaults and show/hide refiner section for Chroma models
   const isChroma = (modalModelDefaultsFromAPI[selectedModel]?.pipeline === 'chroma') ||
-    selectedModel.includes('chroma') || selectedModel.includes('custom');
+    selectedModel.includes('chroma');
   const refinerSection = document.getElementById('modalRefinerSection');
   if (refinerSection) refinerSection.style.display = isChroma ? 'block' : 'none';
 
@@ -1076,7 +1076,7 @@ function loadModalSettings() {
 
   // Show/hide refiner section based on loaded model
   const loadedModel = model;
-  const isChroma = loadedModel.includes('chroma') || loadedModel.includes('custom') ||
+  const isChroma = loadedModel.includes('chroma') ||
     (modalModelDefaultsFromAPI[loadedModel]?.pipeline === 'chroma');
   const refinerSection = document.getElementById('modalRefinerSection');
   if (refinerSection) refinerSection.style.display = isChroma ? 'block' : 'none';
