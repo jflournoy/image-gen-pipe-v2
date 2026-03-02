@@ -30,6 +30,8 @@ const LocalVLMProvider = require('../providers/local-vlm-provider');
 const BFLImageProvider = require('../providers/bfl-image-provider');
 const ModalImageProvider = require('../providers/modal-image-provider');
 const ModalVideoProvider = require('../providers/modal-video-provider');
+const ReplicateImageProvider = require('../providers/replicate-image-provider');
+const NovitaImageProvider = require('../providers/novita-image-provider');
 
 // Services
 const CritiqueGenerator = require('../services/critique-generator');
@@ -156,6 +158,26 @@ function createImageProvider(options = {}) {
         model: options.model || config.modal?.model || 'flux-dev',
         generation: options.generation || config.modal?.generation,
         timeout: options.timeout || config.modal?.timeout,
+        sessionId: options.sessionId,
+        outputDir: options.outputDir
+      });
+    }
+
+    case 'replicate': {
+      return new ReplicateImageProvider({
+        apiKey: options.apiKey || config.replicate?.apiKey,
+        model: options.model || config.replicate?.model || 'black-forest-labs/flux-schnell',
+        generation: options.generation || config.replicate?.generation,
+        sessionId: options.sessionId,
+        outputDir: options.outputDir
+      });
+    }
+
+    case 'novita': {
+      return new NovitaImageProvider({
+        apiKey: options.apiKey || config.novita?.apiKey,
+        model: options.model || config.novita?.model || 'flux2-dev',
+        generation: options.generation || config.novita?.generation,
         sessionId: options.sessionId,
         outputDir: options.outputDir
       });

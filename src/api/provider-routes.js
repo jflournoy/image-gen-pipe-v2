@@ -126,7 +126,9 @@ router.get('/status', async (req, res) => {
       localVision: await checkLocalVisionHealth(),
       vlm: await checkVLMHealth(),
       bfl: await checkBFLHealth(),
-      modal: await checkModalHealth()
+      modal: await checkModalHealth(),
+      replicate: await checkReplicateHealth(),
+      novita: await checkNovitaHealth()
     };
 
     // Determine environment
@@ -138,7 +140,7 @@ router.get('/status', async (req, res) => {
       active,
       available: {
         llm: ['openai', 'local-llm'],
-        image: ['openai', 'flux', 'bfl', 'modal'],
+        image: ['openai', 'flux', 'bfl', 'modal', 'replicate', 'novita'],
         vision: ['openai', 'local']
       },
       health,
@@ -177,9 +179,16 @@ router.post('/switch', async (req, res) => {
     console.log('[Provider Switch] Request received:', { llm, image, vision });
     console.log('[Provider Switch] Current state:', { ...runtimeProviders });
 
+    // In production (cloud/Linode), only OpenAI providers are allowed
+    if (providerConfig.isProduction) {
+      if ((llm && llm !== 'openai') || (image && image !== 'openai') || (vision && vision !== 'openai')) {
+        return res.status(403).json({ error: 'Cloud mode: only OpenAI providers are available' });
+      }
+    }
+
     // Validate provider names
     const validLLM = ['openai', 'local-llm'];
-    const validImage = ['openai', 'flux', 'bfl', 'modal'];
+    const validImage = ['openai', 'flux', 'bfl', 'modal', 'replicate', 'novita'];
     const validVision = ['openai', 'local'];
 
     if (llm && !validLLM.includes(llm)) {
@@ -463,6 +472,58 @@ async function _doModalHealthCheck() {
       status: 'unavailable',
       error: error.message,
       url: providerConfig.modal?.apiUrl
+    };
+  }
+}
+
+/**
+ * Helper: Check Replicate API health
+ */
+async function checkReplicateHealth() {
+  try {
+    const ReplicateImageProvider = require('../providers/replicate-image-provider.js');
+    const provider = new ReplicateImageProvider({
+      apiKey: providerConfig.replicate?.apiKey,
+      model: providerConfig.replicate?.model || 'black-forest-labs/flux-schnell'
+    });
+    const health = await provider.healthCheck();
+    return {
+      available: health.available,
+      status: health.status,
+      model: health.model,
+      message: health.message
+    };
+  } catch (error) {
+    return {
+      available: false,
+      status: 'unavailable',
+      error: error.message
+    };
+  }
+}
+
+/**
+ * Helper: Check Novita AI health
+ */
+async function checkNovitaHealth() {
+  try {
+    const NovitaImageProvider = require('../providers/novita-image-provider.js');
+    const provider = new NovitaImageProvider({
+      apiKey: providerConfig.novita?.apiKey,
+      model: providerConfig.novita?.model || 'flux2-dev'
+    });
+    const health = await provider.healthCheck();
+    return {
+      available: health.available,
+      status: health.status,
+      model: health.model,
+      message: health.message
+    };
+  } catch (error) {
+    return {
+      available: false,
+      status: 'unavailable',
+      error: error.message
     };
   }
 }
@@ -1640,6 +1701,11 @@ router.get('/modal/models', async (_req, res) => {
       });
     }
 
+    // Persist to disk cache so testing-routes can read it without a live fetch
+    modalModelsCache.models = result.models;
+    modalModelsCache.timestamp = Date.now();
+    saveModalModelsCache();
+
     res.json({
       models: result.models,
       endpoint: result.endpoint
@@ -1686,7 +1752,7 @@ router.post('/configure', (req, res) => {
     }
 
     if (image) {
-      const validImageProviders = ['openai', 'flux', 'bfl', 'modal'];
+      const validImageProviders = ['openai', 'flux', 'bfl', 'modal', 'replicate', 'novita'];
       if (validImageProviders.includes(image)) {
         runtimeProviders.image = image;
       } else {

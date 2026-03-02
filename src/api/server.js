@@ -17,6 +17,8 @@ import serviceRouter from './service-routes.js';
 import configRouter from './config-routes.js';
 import videoRouter from './video-routes.js';
 import resampleRouter from './resample-routes.js';
+import upscaleRouter from './upscale-routes.js';
+import testingRouter from './testing-routes.js';
 
 const require = createRequire(import.meta.url);
 const rateLimitConfig = require('../config/rate-limits.js');
@@ -521,6 +523,18 @@ export function createApp() {
     }
   });
 
+  // Testing ground page
+  app.get('/testing', async (req, res) => {
+    try {
+      const testingPath = join(process.cwd(), 'public', 'testing.html');
+      const html = await readFile(testingPath, 'utf-8');
+      res.status(200).send(html);
+    } catch (error) {
+      console.error('Error serving testing page:', error);
+      res.status(500).json({ error: 'Failed to serve testing page' });
+    }
+  });
+
   // Comparison page (human vs AI rankings)
   app.get('/comparison', async (req, res) => {
     try {
@@ -553,6 +567,12 @@ export function createApp() {
 
   // Register resample routes (img2img two-stage cartoon→photoreal)
   app.use('/api/resample', resampleRouter);
+
+  // Register upscale routes (standalone image upscaling via Remacri/RealESRGAN)
+  app.use('/api/upscale', upscaleRouter);
+
+  // Register testing ground routes (direct provider access for prompt testing)
+  app.use('/api/testing', testingRouter);
 
   return app;
 }
