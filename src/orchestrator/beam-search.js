@@ -761,7 +761,9 @@ async function processCandidateStream(
         gpu: options.modalOptions.gpu,
         sampler: options.modalOptions.sampler,
         scheduler: options.modalOptions.scheduler,
-        clip_skip: options.modalOptions.clip_skip
+        clip_skip: options.modalOptions.clip_skip,
+        use_refiner: options.modalOptions.use_refiner,
+        refiner_switch: options.modalOptions.refiner_switch
       }),
       // Flatten loraOptions so they're available for the Flux provider
       ...(options.loraOptions && {

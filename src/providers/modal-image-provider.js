@@ -103,6 +103,9 @@ class ModalImageProvider {
 
     if (options.inputImage) payload.input_image = options.inputImage;
     if (options.denoiseStrength !== undefined) payload.denoise_strength = options.denoiseStrength;
+    // Chroma two-pass refiner controls (custom workflow workflow stage 2)
+    if (options.use_refiner !== undefined) payload.use_refiner = options.use_refiner;
+    if (options.refiner_switch !== undefined) payload.refiner_switch = options.refiner_switch;
     if (options.sampler) payload.sampler = options.sampler;
     if (options.scheduler) payload.scheduler = options.scheduler;
     if (options.clip_skip !== undefined) payload.clip_skip = options.clip_skip;
