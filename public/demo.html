@@ -1890,21 +1890,21 @@
                 <div style="display: flex; gap: 8px; margin-bottom: 6px;">
                   <div style="flex: 1;">
                     <label style="display: block; color: #666; margin-bottom: 2px;">Steps</label>
-                    <input type="number" id="chromaSteps" value="20" min="10" max="50" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <input type="number" id="chromaSteps" value="10" min="1" max="50" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                   <div style="flex: 1;">
                     <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
-                    <input type="number" id="chromaGuidance" value="7.5" min="1" max="15" step="0.5" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <input type="number" id="chromaGuidance" value="1.0" min="0" max="15" step="0.5" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                 </div>
                 <div style="display: flex; gap: 8px; margin-bottom: 6px;">
                   <div style="flex: 1;">
                     <label style="display: block; color: #666; margin-bottom: 2px;">Width</label>
-                    <input type="number" id="chromaWidth" value="768" min="512" max="1024" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <input type="number" id="chromaWidth" value="1024" min="512" max="2048" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                   <div style="flex: 1;">
                     <label style="display: block; color: #666; margin-bottom: 2px;">Height</label>
-                    <input type="number" id="chromaHeight" value="768" min="512" max="1024" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+                    <input type="number" id="chromaHeight" value="1536" min="512" max="2048" step="64" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
                   </div>
                 </div>
                 <div style="margin-bottom: 6px;">
@@ -2074,6 +2074,21 @@
                     <input type="range" id="modalFlowShift" min="0.5" max="12" step="0.1" value="1.0" onchange="document.getElementById('modalFlowShiftVal').textContent = this.value; saveModalSettings()" style="width: 100%;">
                     <small style="color: #888; font-size: 9px;">sdxl_flow only</small>
                   </div>
+                </div>
+                <div id="modalRefinerSection" style="display: none; margin-bottom: 6px; padding: 6px; background: #f0f7ff; border-radius: 4px; border: 1px solid #b3d4f5;">
+                  <div style="font-size: 10px; font-weight: bold; color: #1565c0; margin-bottom: 4px;">🔄 Chroma Refiner Pass</div>
+                  <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 4px;">
+                    <label style="display: flex; align-items: center; gap: 4px; cursor: pointer; color: #555; font-size: 10px;">
+                      <input type="checkbox" id="modalUseRefiner" onchange="saveModalSettings()" style="margin: 0;">
+                      Enable LCM/Karras img2img refiner pass
+                    </label>
+                  </div>
+                  <div style="display: flex; gap: 8px; align-items: center;">
+                    <label style="color: #666; white-space: nowrap; font-size: 10px;">Switch at</label>
+                    <input type="range" id="modalRefinerSwitch" min="0.5" max="0.95" step="0.05" value="0.8" onchange="document.getElementById('modalRefinerSwitchVal').textContent = parseFloat(this.value).toFixed(2); saveModalSettings()" style="flex: 1;">
+                    <span id="modalRefinerSwitchVal" style="font-weight: bold; min-width: 28px; font-size: 10px;">0.80</span>
+                  </div>
+                  <small style="color: #888; font-size: 9px;">Chroma pipeline only — ignored for other models</small>
                 </div>
                 <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
                   <strong>MODAL_ENDPOINT:</strong> <span id="modalEndpointStatus">Not configured</span>

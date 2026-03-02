@@ -802,6 +802,8 @@ function saveModalSettings() {
   const sampler = document.getElementById('modalSampler')?.value;
   const scheduler = document.getElementById('modalScheduler')?.value;
   const clipSkip = document.getElementById('modalClipSkip')?.value;
+  const useRefiner = document.getElementById('modalUseRefiner')?.checked;
+  const refinerSwitch = document.getElementById('modalRefinerSwitch')?.value;
 
   if (model) localStorage.setItem('modalModel', model);
   if (width) localStorage.setItem('modalWidth', width);
@@ -814,6 +816,8 @@ function saveModalSettings() {
   if (sampler !== undefined) localStorage.setItem('modalSampler', sampler);
   if (scheduler !== undefined) localStorage.setItem('modalScheduler', scheduler);
   if (clipSkip !== undefined) localStorage.setItem('modalClipSkip', clipSkip);
+  if (useRefiner !== undefined) localStorage.setItem('modalUseRefiner', useRefiner ? 'true' : 'false');
+  if (refinerSwitch !== undefined) localStorage.setItem('modalRefinerSwitch', refinerSwitch);
 }
 
 /**
@@ -930,7 +934,8 @@ function saveModalModelAsDefault() {
     guidance: parseFloat(document.getElementById('modalGuidance')?.value || '3.5'),
     scheduler: document.getElementById('modalSampler')?.value || null,
     clip_skip: document.getElementById('modalClipSkip')?.value || null,
-    use_refiner: false,
+    use_refiner: document.getElementById('modalUseRefiner')?.checked || false,
+    refiner_switch: parseFloat(document.getElementById('modalRefinerSwitch')?.value || '0.8'),
     touchup_strength: 0.0,
   };
   localStorage.setItem('modalModelOverrides', JSON.stringify(overrides));
@@ -987,6 +992,33 @@ function updateModalModelDefaults() {
     if (clipSkipEl) clipSkipEl.value = String(defaults.clip_skip);
   }
 
+  // Apply model-specific width/height if provided
+  if (defaults.default_width) {
+    const widthEl = document.getElementById('modalWidth');
+    if (widthEl) widthEl.value = defaults.default_width;
+  }
+  if (defaults.default_height) {
+    const heightEl = document.getElementById('modalHeight');
+    if (heightEl) heightEl.value = defaults.default_height;
+  }
+
+  // Apply refiner defaults and show/hide refiner section for Chroma models
+  const isChroma = (modalModelDefaultsFromAPI[selectedModel]?.pipeline === 'chroma') ||
+    selectedModel.includes('chroma') || selectedModel.includes('custom');
+  const refinerSection = document.getElementById('modalRefinerSection');
+  if (refinerSection) refinerSection.style.display = isChroma ? 'block' : 'none';
+
+  const useRefinerEl = document.getElementById('modalUseRefiner');
+  if (useRefinerEl && defaults.use_refiner !== undefined) {
+    useRefinerEl.checked = !!defaults.use_refiner;
+  }
+  const refinerSwitchEl = document.getElementById('modalRefinerSwitch');
+  if (refinerSwitchEl && defaults.refiner_switch !== undefined) {
+    refinerSwitchEl.value = defaults.refiner_switch;
+    const valDisplay = document.getElementById('modalRefinerSwitchVal');
+    if (valDisplay) valDisplay.textContent = parseFloat(defaults.refiner_switch).toFixed(2);
+  }
+
   // Save updated settings
   saveModalSettings();
 }
@@ -1032,6 +1064,22 @@ function loadModalSettings() {
 
   const clipSkip = localStorage.getItem('modalClipSkip') || '';
   if (document.getElementById('modalClipSkip')) document.getElementById('modalClipSkip').value = clipSkip;
+
+  const useRefiner = localStorage.getItem('modalUseRefiner') === 'true';
+  const refinerSwitch = localStorage.getItem('modalRefinerSwitch') || '0.8';
+  if (document.getElementById('modalUseRefiner')) document.getElementById('modalUseRefiner').checked = useRefiner;
+  if (document.getElementById('modalRefinerSwitch')) {
+    document.getElementById('modalRefinerSwitch').value = refinerSwitch;
+    const valDisplay = document.getElementById('modalRefinerSwitchVal');
+    if (valDisplay) valDisplay.textContent = parseFloat(refinerSwitch).toFixed(2);
+  }
+
+  // Show/hide refiner section based on loaded model
+  const loadedModel = model;
+  const isChroma = loadedModel.includes('chroma') || loadedModel.includes('custom') ||
+    (modalModelDefaultsFromAPI[loadedModel]?.pipeline === 'chroma');
+  const refinerSection = document.getElementById('modalRefinerSection');
+  if (refinerSection) refinerSection.style.display = isChroma ? 'block' : 'none';
 }
 
 /**
@@ -1070,6 +1118,9 @@ async function loadModalModels() {
         use_refiner: model.use_refiner || false,
         refiner_switch: model.refiner_switch || 0.8,
         touchup_strength: model.touchup_strength || 0.0,
+        pipeline: model.pipeline || null,
+        default_width: model.default_width || null,
+        default_height: model.default_height || null,
       };
     });
     // Merge any localStorage overrides on top of API defaults

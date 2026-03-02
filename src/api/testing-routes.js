@@ -149,6 +149,8 @@ router.post('/image', async (req, res) => {
     clipSkip,
     flowShift,
     loras,
+    use_refiner,
+    refiner_switch,
     openaiApiKey
   } = req.body;
 
@@ -191,6 +193,8 @@ router.post('/image', async (req, res) => {
     if (clipSkip !== undefined && clipSkip !== '') genOptions.clip_skip = parseInt(clipSkip, 10);
     if (flowShift !== undefined) genOptions.flow_shift = flowShift;
     if (loras && Array.isArray(loras) && loras.length > 0) genOptions.loras = loras;
+    if (use_refiner !== undefined) genOptions.use_refiner = use_refiner;
+    if (refiner_switch !== undefined) genOptions.refiner_switch = refiner_switch;
 
     const result = await imageProvider.generateImage(prompt, genOptions);
 

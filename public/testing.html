@@ -331,6 +331,18 @@
             <input id="img-loras" type="text" placeholder='[{"path":"my-lora.safetensors","scale":0.8}]'>
           </div>
         </div>
+        <div class="form-grid">
+          <div>
+            <label>
+              <input type="checkbox" id="img-use-refiner" style="vertical-align: middle;">
+              Use Refiner <span class="param-note">(Chroma/chroma-custom)</span>
+            </label>
+          </div>
+          <div>
+            <label>Refiner Switch <span class="param-note">(0.5–0.95)</span></label>
+            <input id="img-refiner-switch" type="number" min="0.5" max="0.95" step="0.05" placeholder="0.8">
+          </div>
+        </div>
       </div>
 
       <button class="generate-btn" id="img-generate-btn">&#9654; Generate</button>

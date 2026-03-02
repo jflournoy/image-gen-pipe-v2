@@ -9,6 +9,26 @@ const LS_LLM_PROVIDER = 'testing_llm_provider';
 const LS_IMG_MODEL = 'testing_img_model';
 const LS_LLM_MODEL = 'testing_llm_model';
 
+// All fields to auto-save/restore via localStorage (id → key)
+const LS_FIELDS = {
+  'img-prompt':          'testing_img_prompt',
+  'img-steps':           'testing_img_steps',
+  'img-guidance':        'testing_img_guidance',
+  'img-seed':            'testing_img_seed',
+  'img-width':           'testing_img_width',
+  'img-height':          'testing_img_height',
+  'img-negative':        'testing_img_negative',
+  'img-sampler':         'testing_img_sampler',
+  'img-scheduler':       'testing_img_scheduler',
+  'img-clipskip':        'testing_img_clipskip',
+  'img-flowshift':       'testing_img_flowshift',
+  'img-loras':           'testing_img_loras',
+  'img-refiner-switch':  'testing_img_refiner_switch',
+  'llm-system':          'testing_llm_system',
+  'llm-user':            'testing_llm_user',
+  'llm-temperature':     'testing_llm_temperature',
+};
+
 // Cached model lists from /api/testing/models
 let modelCache = null;
 
@@ -99,11 +119,16 @@ async function loadModels() {
 // ── Restore saved values ───────────────────────────────────────────────────
 
 function restoreFromStorage() {
-  const imgApiKey = localStorage.getItem(LS_IMG_APIKEY);
-  if (imgApiKey) document.getElementById('img-apikey').value = imgApiKey;
+  const restoreOne = (id, key) => {
+    const v = localStorage.getItem(key);
+    if (v !== null) {
+      const el = document.getElementById(id);
+      if (el) el.value = v;
+    }
+  };
 
-  const llmApiKey = localStorage.getItem(LS_LLM_APIKEY);
-  if (llmApiKey) document.getElementById('llm-apikey').value = llmApiKey;
+  restoreOne('img-apikey', LS_IMG_APIKEY);
+  restoreOne('llm-apikey', LS_LLM_APIKEY);
 
   const imgProvider = localStorage.getItem(LS_IMG_PROVIDER);
   if (imgProvider) document.getElementById('img-provider').value = imgProvider;
@@ -111,29 +136,30 @@ function restoreFromStorage() {
   const llmProvider = localStorage.getItem(LS_LLM_PROVIDER);
   if (llmProvider) document.getElementById('llm-provider').value = llmProvider;
 
-  // Advanced image params
-  const restore = (id, key) => {
-    const v = localStorage.getItem(key);
-    if (v !== null) document.getElementById(id).value = v;
-  };
-  restore('img-width', 'testing_img_width');
-  restore('img-height', 'testing_img_height');
-  restore('img-negative', 'testing_img_negative');
-  restore('img-sampler', 'testing_img_sampler');
-  restore('img-scheduler', 'testing_img_scheduler');
-  restore('img-clipskip', 'testing_img_clipskip');
-  restore('img-flowshift', 'testing_img_flowshift');
-  restore('img-loras', 'testing_img_loras');
+  Object.entries(LS_FIELDS).forEach(([id, key]) => restoreOne(id, key));
 }
 
-// Save advanced params to localStorage on change
-['img-width', 'img-height', 'img-negative', 'img-sampler', 'img-scheduler',
- 'img-clipskip', 'img-flowshift', 'img-loras'].forEach(id => {
+// Auto-save all tracked fields on change
+Object.entries(LS_FIELDS).forEach(([id, key]) => {
   const el = document.getElementById(id);
-  if (el) el.addEventListener('change', () => localStorage.setItem('testing_' + id.replace(/-/g, '_'), el.value));
+  if (el) el.addEventListener('change', () => localStorage.setItem(key, el.value));
 });
 
+// Auto-save checkbox fields separately (value doesn't capture checked state)
+const refinerCheckbox = document.getElementById('img-use-refiner');
+if (refinerCheckbox) {
+  refinerCheckbox.addEventListener('change', () => {
+    localStorage.setItem('testing_img_use_refiner', refinerCheckbox.checked ? 'true' : 'false');
+  });
+}
+
 restoreFromStorage();
+
+// Restore checkbox state
+const savedUseRefiner = localStorage.getItem('testing_img_use_refiner');
+if (savedUseRefiner !== null && refinerCheckbox) {
+  refinerCheckbox.checked = savedUseRefiner === 'true';
+}
 
 // ── Show/hide API key fields based on provider ──────────────────────────────
 
@@ -199,6 +225,8 @@ document.getElementById('img-generate-btn').addEventListener('click', async () =
   const scheduler = isAdvanced ? document.getElementById('img-scheduler').value || undefined : undefined;
   const clipSkip = isAdvanced ? document.getElementById('img-clipskip').value || undefined : undefined;
   const flowShift = isAdvanced ? parseOptionalFloat('img-flowshift') : undefined;
+  const useRefiner = isAdvanced ? document.getElementById('img-use-refiner')?.checked || false : undefined;
+  const refinerSwitch = isAdvanced ? parseOptionalFloat('img-refiner-switch') : undefined;
   let loras;
   if (isAdvanced) {
     const lorasRaw = document.getElementById('img-loras').value.trim();
@@ -241,6 +269,8 @@ document.getElementById('img-generate-btn').addEventListener('click', async () =
     if (clipSkip) body.clipSkip = clipSkip;
     if (flowShift !== undefined) body.flowShift = flowShift;
     if (loras) body.loras = loras;
+    if (useRefiner !== undefined) body.use_refiner = useRefiner;
+    if (refinerSwitch !== undefined) body.refiner_switch = refinerSwitch;
 
     const resp = await fetch('/api/testing/image', {
       method: 'POST',
