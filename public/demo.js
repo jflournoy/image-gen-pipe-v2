@@ -205,6 +205,8 @@ function updateImageProviderSettings() {
   const fluxSettings = document.getElementById('fluxSettings');
   const chromaSettings = document.getElementById('chromaSettings');
   const dalleSettings = document.getElementById('dalleSettings');
+  const replicateSettings = document.getElementById('replicateSettings');
+  const novitaSettings = document.getElementById('novitaSettings');
 
   // Toggle DALL-E settings visibility
   if (dalleSettings) {
@@ -229,6 +231,16 @@ function updateImageProviderSettings() {
   // Toggle Chroma (local) settings visibility
   if (chromaSettings) {
     chromaSettings.style.display = provider === 'chroma' ? 'block' : 'none';
+  }
+
+  // Toggle Replicate settings visibility
+  if (replicateSettings) {
+    replicateSettings.style.display = provider === 'replicate' ? 'block' : 'none';
+  }
+
+  // Toggle Novita settings visibility
+  if (novitaSettings) {
+    novitaSettings.style.display = provider === 'novita' ? 'block' : 'none';
   }
 
   // Toggle Face Fixing settings visibility (supported by Modal, Flux, and Chroma)
@@ -336,6 +348,32 @@ async function updateSidebarApiStatus() {
       } else {
         modalEndpointStatus.textContent = 'Not configured';
         modalEndpointStatus.style.color = '#888';
+      }
+    }
+
+    // Update Replicate key status
+    const replicateKeyStatus = document.getElementById('replicateKeyStatus');
+    if (replicateKeyStatus) {
+      const replicateHealthy = data.health?.replicate?.available;
+      if (replicateHealthy) {
+        replicateKeyStatus.textContent = '✓ Configured';
+        replicateKeyStatus.style.color = '#4CAF50';
+      } else {
+        replicateKeyStatus.textContent = 'Not configured';
+        replicateKeyStatus.style.color = '#888';
+      }
+    }
+
+    // Update Novita key status
+    const novitaKeyStatus = document.getElementById('novitaKeyStatus');
+    if (novitaKeyStatus) {
+      const novitaHealthy = data.health?.novita?.available;
+      if (novitaHealthy) {
+        novitaKeyStatus.textContent = '✓ Configured';
+        novitaKeyStatus.style.color = '#4CAF50';
+      } else {
+        novitaKeyStatus.textContent = 'Not configured';
+        novitaKeyStatus.style.color = '#888';
       }
     }
 
@@ -718,10 +756,10 @@ function saveChromaSettings() {
  * Load Chroma settings from localStorage
  */
 function loadChromaSettings() {
-  const steps = localStorage.getItem('chromaSteps') || '20';
-  const guidance = localStorage.getItem('chromaGuidance') || '7.5';
-  const width = localStorage.getItem('chromaWidth') || '768';
-  const height = localStorage.getItem('chromaHeight') || '768';
+  const steps = localStorage.getItem('chromaSteps') || '10';
+  const guidance = localStorage.getItem('chromaGuidance') || '1.0';
+  const width = localStorage.getItem('chromaWidth') || '1024';
+  const height = localStorage.getItem('chromaHeight') || '1536';
 
   if (document.getElementById('chromaSteps')) {
     document.getElementById('chromaSteps').value = steps;
@@ -867,36 +905,86 @@ const MODAL_MODEL_DEFAULTS = {
 let modalModelDefaultsFromAPI = {};
 
 /**
- * Update steps and guidance when Modal model changes
- * Automatically sets optimal values for the selected model
- * Uses API-provided defaults first, falls back to hardcoded defaults
+ * Get user-saved local overrides for Modal model defaults
+ * Stored in localStorage as JSON keyed by model name
+ */
+function getModalModelOverrides() {
+  try {
+    return JSON.parse(localStorage.getItem('modalModelOverrides') || '{}');
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Save current Modal settings as defaults for the currently selected model
+ */
+function saveModalModelAsDefault() {
+  const modelSelect = document.getElementById('modalModel');
+  if (!modelSelect) return;
+  const model = modelSelect.value;
+
+  const overrides = getModalModelOverrides();
+  overrides[model] = {
+    steps: parseInt(document.getElementById('modalSteps')?.value || '25', 10),
+    guidance: parseFloat(document.getElementById('modalGuidance')?.value || '3.5'),
+    scheduler: document.getElementById('modalSampler')?.value || null,
+    clip_skip: document.getElementById('modalClipSkip')?.value || null,
+    use_refiner: false,
+    touchup_strength: 0.0,
+  };
+  localStorage.setItem('modalModelOverrides', JSON.stringify(overrides));
+
+  // Merge into live defaults so switching away and back picks them up
+  modalModelDefaultsFromAPI[model] = { ...(modalModelDefaultsFromAPI[model] || {}), ...overrides[model] };
+
+  console.log(`[Modal Defaults] Saved local defaults for ${model}:`, overrides[model]);
+
+  // Brief visual feedback on the button
+  const btn = document.getElementById('modalSaveDefaultsBtn');
+  if (btn) {
+    btn.textContent = '✓ Saved';
+    btn.style.background = '#4caf50';
+    setTimeout(() => { btn.textContent = '💾 Save as defaults'; btn.style.background = '#888'; }, 1500);
+  }
+}
+
+/**
+ * Update all Modal parameters when model changes
+ * Applies steps, guidance, sampler, scheduler, clip_skip from API defaults,
+ * with localStorage overrides taking priority
  */
 function updateModalModelDefaults() {
   const modelSelect = document.getElementById('modalModel');
   if (!modelSelect) return;
 
   const selectedModel = modelSelect.value;
-  // Prefer API-provided defaults, fall back to hardcoded defaults
-  const defaults = modalModelDefaultsFromAPI[selectedModel]
+  // Priority: localStorage overrides > API defaults > hardcoded fallbacks
+  const apiDefaults = modalModelDefaultsFromAPI[selectedModel]
     || MODAL_MODEL_DEFAULTS[selectedModel]
     || { steps: 25, guidance: 3.5 };
+  const localOverrides = getModalModelOverrides()[selectedModel] || {};
+  const defaults = { ...apiDefaults, ...localOverrides };
 
   console.log(`[Modal Defaults] Applying defaults for ${selectedModel}:`, defaults);
 
-  // Update steps slider and display
-  const stepsSlider = document.getElementById('modalSteps');
-  const stepsValue = document.getElementById('modalStepsValue');
-  if (stepsSlider && stepsValue) {
-    stepsSlider.value = defaults.steps;
-    stepsValue.textContent = defaults.steps;
+  const stepsEl = document.getElementById('modalSteps');
+  const stepsValueEl = document.getElementById('modalStepsValue');
+  if (stepsEl) { stepsEl.value = defaults.steps; if (stepsValueEl) stepsValueEl.textContent = defaults.steps; }
+
+  const guidanceEl = document.getElementById('modalGuidance');
+  const guidanceValueEl = document.getElementById('modalGuidanceValue');
+  if (guidanceEl) { guidanceEl.value = defaults.guidance; if (guidanceValueEl) guidanceValueEl.textContent = defaults.guidance; }
+
+  // scheduler field in the API/cache stores a sampler name (e.g. "lcm", "karras")
+  if (defaults.scheduler !== undefined && defaults.scheduler !== null) {
+    const samplerEl = document.getElementById('modalSampler');
+    if (samplerEl) samplerEl.value = defaults.scheduler;
   }
 
-  // Update guidance slider and display
-  const guidanceSlider = document.getElementById('modalGuidance');
-  const guidanceValue = document.getElementById('modalGuidanceValue');
-  if (guidanceSlider && guidanceValue) {
-    guidanceSlider.value = defaults.guidance;
-    guidanceValue.textContent = defaults.guidance;
+  if (defaults.clip_skip !== undefined && defaults.clip_skip !== null) {
+    const clipSkipEl = document.getElementById('modalClipSkip');
+    if (clipSkipEl) clipSkipEl.value = String(defaults.clip_skip);
   }
 
   // Save updated settings
@@ -983,6 +1071,13 @@ async function loadModalModels() {
         refiner_switch: model.refiner_switch || 0.8,
         touchup_strength: model.touchup_strength || 0.0,
       };
+    });
+    // Merge any localStorage overrides on top of API defaults
+    const localOverrides = getModalModelOverrides();
+    Object.entries(localOverrides).forEach(([name, overrides]) => {
+      if (modalModelDefaultsFromAPI[name]) {
+        modalModelDefaultsFromAPI[name] = { ...modalModelDefaultsFromAPI[name], ...overrides };
+      }
     });
     console.log('[Modal Models] Loaded defaults for', Object.keys(modalModelDefaultsFromAPI).length, 'models');
 
@@ -1079,6 +1174,66 @@ function formatModelName(name) {
   return modelInfo[name] || name.split('-').map(word =>
     word.charAt(0).toUpperCase() + word.slice(1)
   ).join(' ');
+}
+
+// ─── Replicate settings ────────────────────────────────────────────────────
+
+function saveReplicateSettings() {
+  const model = document.getElementById('replicateModel')?.value;
+  const width = document.getElementById('replicateWidth')?.value;
+  const height = document.getElementById('replicateHeight')?.value;
+  const steps = document.getElementById('replicateSteps')?.value;
+  const guidance = document.getElementById('replicateGuidance')?.value;
+
+  if (model !== undefined) localStorage.setItem('replicateModel', model);
+  if (width) localStorage.setItem('replicateWidth', width);
+  if (height) localStorage.setItem('replicateHeight', height);
+  localStorage.setItem('replicateSteps', steps || '');
+  localStorage.setItem('replicateGuidance', guidance || '');
+}
+
+function loadReplicateSettings() {
+  const model = localStorage.getItem('replicateModel') || 'black-forest-labs/flux-schnell';
+  const width = localStorage.getItem('replicateWidth') || '1024';
+  const height = localStorage.getItem('replicateHeight') || '1024';
+  const steps = localStorage.getItem('replicateSteps') || '';
+  const guidance = localStorage.getItem('replicateGuidance') || '';
+
+  if (document.getElementById('replicateModel')) document.getElementById('replicateModel').value = model;
+  if (document.getElementById('replicateWidth')) document.getElementById('replicateWidth').value = width;
+  if (document.getElementById('replicateHeight')) document.getElementById('replicateHeight').value = height;
+  if (document.getElementById('replicateSteps')) document.getElementById('replicateSteps').value = steps;
+  if (document.getElementById('replicateGuidance')) document.getElementById('replicateGuidance').value = guidance;
+}
+
+// ─── Novita settings ───────────────────────────────────────────────────────
+
+function saveNovitaSettings() {
+  const model = document.getElementById('novitaModel')?.value;
+  const width = document.getElementById('novitaWidth')?.value;
+  const height = document.getElementById('novitaHeight')?.value;
+  const steps = document.getElementById('novitaSteps')?.value;
+  const guidance = document.getElementById('novitaGuidance')?.value;
+
+  if (model !== undefined) localStorage.setItem('novitaModel', model);
+  if (width) localStorage.setItem('novitaWidth', width);
+  if (height) localStorage.setItem('novitaHeight', height);
+  if (steps) localStorage.setItem('novitaSteps', steps);
+  if (guidance) localStorage.setItem('novitaGuidance', guidance);
+}
+
+function loadNovitaSettings() {
+  const model = localStorage.getItem('novitaModel') || 'flux2-dev';
+  const width = localStorage.getItem('novitaWidth') || '1024';
+  const height = localStorage.getItem('novitaHeight') || '1024';
+  const steps = localStorage.getItem('novitaSteps') || '20';
+  const guidance = localStorage.getItem('novitaGuidance') || '7.5';
+
+  if (document.getElementById('novitaModel')) document.getElementById('novitaModel').value = model;
+  if (document.getElementById('novitaWidth')) document.getElementById('novitaWidth').value = width;
+  if (document.getElementById('novitaHeight')) document.getElementById('novitaHeight').value = height;
+  if (document.getElementById('novitaSteps')) document.getElementById('novitaSteps').value = steps;
+  if (document.getElementById('novitaGuidance')) document.getElementById('novitaGuidance').value = guidance;
 }
 
 /**
@@ -1296,6 +1451,14 @@ let currentResampleImageData = null;
 let currentResampleImageId = null;
 let resampleGenerating = false;
 let resampleElapsedTimer = null;
+
+/**
+ * Upscale Panel State
+ */
+let currentUpscaleImageData = null;
+let currentUpscaleImageId = null;
+let upscaleGenerating = false;
+let upscaleElapsedTimer = null;
 
 // Model metadata for defaults and capabilities
 const VIDEO_MODEL_DEFAULTS = {
@@ -1769,6 +1932,159 @@ window.downloadResampledImage = function() {
 };
 
 /**
+ * Upscale Panel Functions
+ */
+window.openUpscalePanel = function(imageUrl, imageId) {
+  currentUpscaleImageId = imageId;
+
+  const modal = document.getElementById('upscalePanelModal');
+  const preview = document.getElementById('upscaleSourcePreview');
+  const info = document.getElementById('upscaleSourceInfo');
+  const progress = document.getElementById('upscaleProgress');
+  const result = document.getElementById('upscaleResult');
+
+  // Reset state
+  progress.classList.remove('active');
+  result.classList.remove('active');
+  document.getElementById('upscaleGenerateBtn').disabled = false;
+  document.getElementById('upscaleGenerateBtn').textContent = '🔍 Upscale Image';
+  document.getElementById('upscaleElapsedTime').textContent = '0s';
+  document.getElementById('upscaleMetadata').textContent = '';
+  if (upscaleElapsedTimer) { clearInterval(upscaleElapsedTimer); upscaleElapsedTimer = null; }
+  upscaleGenerating = false;
+
+  // Restore last-used model from localStorage
+  const savedModel = localStorage.getItem('upscaleModel');
+  if (savedModel) {
+    const sel = document.getElementById('upscaleModel');
+    if (sel) sel.value = savedModel;
+  }
+
+  if (imageUrl) {
+    const img = document.createElement('img');
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.naturalWidth;
+      canvas.height = img.naturalHeight;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0);
+      try {
+        currentUpscaleImageData = canvas.toDataURL('image/png').split(',')[1];
+      } catch (_e) {
+        fetch(imageUrl)
+          .then(r => r.blob())
+          .then(blob => {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              currentUpscaleImageData = reader.result.split(',')[1];
+            };
+            reader.readAsDataURL(blob);
+          })
+          .catch(() => { currentUpscaleImageData = null; });
+      }
+      preview.src = imageUrl;
+      preview.style.display = 'block';
+      info.textContent = `Source: ${img.naturalWidth}x${img.naturalHeight}`;
+    };
+    img.src = imageUrl;
+  } else {
+    currentUpscaleImageData = null;
+    preview.style.display = 'none';
+    info.textContent = '';
+  }
+
+  modal.classList.add('active');
+};
+
+window.closeUpscalePanel = function() {
+  document.getElementById('upscalePanelModal').classList.remove('active');
+  if (upscaleElapsedTimer) { clearInterval(upscaleElapsedTimer); upscaleElapsedTimer = null; }
+  upscaleGenerating = false;
+};
+
+window.submitUpscale = async function() {
+  if (upscaleGenerating) return;
+
+  const imageData = currentUpscaleImageData;
+  if (!imageData) {
+    alert('Please select an image first.');
+    return;
+  }
+
+  const model = document.getElementById('upscaleModel').value;
+
+  // Save model preference
+  localStorage.setItem('upscaleModel', model);
+
+  upscaleGenerating = true;
+  document.getElementById('upscaleGenerateBtn').disabled = true;
+  document.getElementById('upscaleGenerateBtn').textContent = 'Upscaling...';
+  document.getElementById('upscaleProgress').classList.add('active');
+  document.getElementById('upscaleResult').classList.remove('active');
+  document.getElementById('upscaleElapsedTime').textContent = '0s';
+
+  const startTime = Date.now();
+  if (upscaleElapsedTimer) clearInterval(upscaleElapsedTimer);
+  upscaleElapsedTimer = setInterval(() => {
+    const elapsed = Math.floor((Date.now() - startTime) / 1000);
+    document.getElementById('upscaleElapsedTime').textContent = `${elapsed}s`;
+  }, 1000);
+
+  try {
+    const response = await fetch('/api/upscale', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        imageBase64: imageData,
+        model,
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(data.error || `Server error ${response.status}`);
+    }
+
+    if (data.imageBase64) {
+      const resultImg = document.getElementById('upscaleResultImg');
+      resultImg.src = `data:image/png;base64,${data.imageBase64}`;
+      resultImg.style.display = 'block';
+
+      const meta = data.metadata || {};
+      const metaParts = [];
+      if (meta.model) metaParts.push(`Model: ${meta.model}`);
+      if (meta.scale) metaParts.push(`Scale: ${meta.scale}x`);
+      if (data.width && data.height) metaParts.push(`Output: ${data.width}x${data.height}`);
+      if (meta.time) metaParts.push(`Time: ${meta.time}s`);
+      document.getElementById('upscaleMetadata').textContent = metaParts.join(' · ');
+
+      document.getElementById('upscaleResult').classList.add('active');
+    } else {
+      throw new Error(data.error || 'Upscale failed');
+    }
+  } catch (err) {
+    alert(`Upscale failed: ${err.message}`);
+  } finally {
+    upscaleGenerating = false;
+    document.getElementById('upscaleGenerateBtn').disabled = false;
+    document.getElementById('upscaleGenerateBtn').textContent = '🔍 Upscale Image';
+    document.getElementById('upscaleProgress').classList.remove('active');
+    if (upscaleElapsedTimer) { clearInterval(upscaleElapsedTimer); upscaleElapsedTimer = null; }
+  }
+};
+
+window.downloadUpscaledImage = function() {
+  const img = document.getElementById('upscaleResultImg');
+  if (!img.src) return;
+  const link = document.createElement('a');
+  link.href = img.src;
+  link.download = `upscaled-${currentUpscaleImageId || 'image'}-${Date.now()}.png`;
+  link.click();
+};
+
+/**
  * Two-Stage Settings Helpers
  */
 window.toggleTwoStageControls = function() {
@@ -2216,11 +2532,13 @@ document.addEventListener('DOMContentLoaded', () => {
   // Initialize Flux model dropdown
   // initializeFluxModelDropdown(); // Function not defined
 
-  // Initialize BFL, Modal, Flux, and Chroma settings on page load
+  // Initialize BFL, Modal, Flux, Chroma, Replicate, and Novita settings on page load
   loadBFLSettings();
   loadModalModels().then(() => loadModalSettings()); // Load models first, then restore settings
   loadFluxSettings();
   loadChromaSettings();
+  loadReplicateSettings();
+  loadNovitaSettings();
   loadFaceFixingSettings();
   fetchAvailableLoras(); // Fetch LoRAs from discovery API for dropdown
   updateImageProviderSettings();
@@ -2244,6 +2562,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
       loadFluxSettings();
       loadChromaSettings();
+      loadReplicateSettings();
+      loadNovitaSettings();
       loadFaceFixingSettings();
     });
   }
@@ -3116,9 +3436,20 @@ function addImageThumbnail(iteration, candidateId, imageUrl, baseImageUrl = null
     window.openResamplePanel(imageUrl, `i${iteration}c${candidateId}`);
   };
 
+  // Add upscale button
+  const upscaleBtn = document.createElement('button');
+  upscaleBtn.className = 'upscale-btn';
+  upscaleBtn.textContent = '🔍';
+  upscaleBtn.title = 'Upscale this image (4x)';
+  upscaleBtn.onclick = (e) => {
+    e.stopPropagation();
+    window.openUpscalePanel(imageUrl, `i${iteration}c${candidateId}`);
+  };
+
   card.appendChild(img);
   card.appendChild(videoBtn);
   card.appendChild(resampleBtn);
+  card.appendChild(upscaleBtn);
 
   const label = document.createElement('div');
   label.className = 'image-card-label';
@@ -3225,6 +3556,8 @@ async function startBeamSearch() {
       const modalScheduler = localStorage.getItem('modalScheduler');
       const modalClipSkip = localStorage.getItem('modalClipSkip');
 
+      const modalUseRefiner = localStorage.getItem('modalUseRefiner');
+      const modalRefinerSwitch = localStorage.getItem('modalRefinerSwitch');
       params.modalOptions = {
         ...(modalModel && { model: modalModel }),
         ...(modalWidth && { width: parseInt(modalWidth, 10) }),
@@ -3236,7 +3569,9 @@ async function startBeamSearch() {
         ...(modalFlowShift && { flow_shift: parseFloat(modalFlowShift) }),
         ...(modalSampler && { sampler: modalSampler }),
         ...(modalScheduler && modalScheduler !== 'normal' && { scheduler: modalScheduler }),
-        ...(modalClipSkip && { clip_skip: parseInt(modalClipSkip, 10) })
+        ...(modalClipSkip && { clip_skip: parseInt(modalClipSkip, 10) }),
+        ...(modalUseRefiner !== null && { use_refiner: modalUseRefiner === 'true' }),
+        ...(modalRefinerSwitch && { refiner_switch: parseFloat(modalRefinerSwitch) })
       };
     }
 
@@ -5220,6 +5555,7 @@ async function loadProviderStatus() {
       envStatus.innerHTML = '<strong style="color: #4CAF50;">Local Development</strong> - Local providers available';
     } else {
       envStatus.innerHTML = '<strong style="color: #0066cc;">Linode Server</strong> - Using OpenAI providers';
+      applyCloudMode();
     }
 
     // Update provider dropdowns
@@ -5285,6 +5621,41 @@ function updateHealthIndicator(elementId, health) {
     element.textContent = '✗ Unavailable';
     element.style.background = '#ffebee';
     element.style.color = '#c62828';
+  }
+}
+
+/**
+ * Lock the UI to OpenAI-only when running in cloud/Linode mode.
+ * Strips non-OpenAI options from provider dropdowns, disables switching,
+ * hides local service sections, and makes the API key field prominent.
+ */
+function applyCloudMode() {
+  // Lock each provider dropdown to OpenAI only
+  const dropdownLocks = [
+    { id: 'llmProvider', value: 'openai' },
+    { id: 'imageProvider', value: 'openai' },
+    { id: 'visionProvider', value: 'openai' },
+  ];
+  for (const { id, value } of dropdownLocks) {
+    const select = document.getElementById(id);
+    if (!select) continue;
+    Array.from(select.options).forEach(opt => { if (opt.value !== value) opt.remove(); });
+    select.value = value;
+    select.disabled = true;
+    select.title = 'Cloud mode: OpenAI only';
+  }
+
+  // Hide local/cloud-third-party service sections
+  for (const id of ['localLLMSettings', 'fluxSettings', 'chromaSettings', 'bflSettings', 'modalSettings', 'localVisionSettings']) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = 'none';
+  }
+
+  // Make API key input visually required
+  const apiKeyInput = document.getElementById('apiKey');
+  if (apiKeyInput) {
+    apiKeyInput.style.border = '2px solid #0066cc';
+    apiKeyInput.placeholder = 'sk-... (required)';
   }
 }
 

@@ -1001,6 +1001,31 @@
       background: rgba(0, 0, 0, 0.9);
     }
 
+    /* Upscale Button on Image Cards */
+    .upscale-btn {
+      position: absolute;
+      bottom: 5px;
+      right: 65px;
+      background: rgba(56, 142, 60, 0.8);
+      color: white;
+      border: none;
+      padding: 5px 8px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 14px;
+      opacity: 0;
+      transition: opacity 0.2s ease;
+      z-index: 5;
+    }
+
+    .image-card:hover .upscale-btn {
+      opacity: 1;
+    }
+
+    .upscale-btn:hover {
+      background: rgba(56, 142, 60, 1.0);
+    }
+
     /* Resample Button on Image Cards */
     .resample-btn {
       position: absolute;
@@ -1748,6 +1773,8 @@
             <option value="chroma">Chroma (Local GPU)</option>
             <option value="bfl">BFL API (Cloud Flux)</option>
             <option value="modal">Modal (Cloud GPU)</option>
+            <option value="replicate">Replicate (Cloud API)</option>
+            <option value="novita">Novita AI (Cloud API)</option>
           </select>
 
           <!-- DALL-E Settings -->
@@ -1981,6 +2008,7 @@
                     <option value="flux-schnell">Flux Schnell (4 steps)</option>
                     <option value="sdxl-turbo">SDXL Turbo (4 steps)</option>
                   </select>
+                  <button id="modalSaveDefaultsBtn" onclick="saveModalModelAsDefault()" title="Save current settings as defaults for this model" style="margin-top: 4px; width: 100%; padding: 3px 6px; font-size: 10px; background: #888; color: #fff; border: none; border-radius: 3px; cursor: pointer;">💾 Save as defaults</button>
                 </div>
                 <div style="margin-bottom: 6px;">
                   <label style="display: block; color: #666; margin-bottom: 2px;">GPU</label>
@@ -2051,6 +2079,118 @@
                   <strong>MODAL_ENDPOINT:</strong> <span id="modalEndpointStatus">Not configured</span>
                 </div>
               </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Replicate Settings -->
+        <section id="replicateSettings" style="margin-bottom: 15px; padding: 12px; background: #f5f0ff; border-radius: 6px; border: 1px solid #c4a8f5; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              🔁 Replicate Settings
+            </label>
+            <span id="replicateKeyStatus" style="font-size: 11px; color: #888;">Not configured</span>
+          </div>
+          <div style="font-size: 11px;">
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; color: #666; margin-bottom: 2px;">Model</label>
+              <input type="text" id="replicateModel" value="black-forest-labs/flux-schnell"
+                     oninput="saveReplicateSettings()"
+                     placeholder="e.g. black-forest-labs/flux-schnell"
+                     style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; box-sizing: border-box;">
+              <small style="color: #888; font-size: 10px;">
+                owner/name or owner/name:version — e.g.
+                black-forest-labs/flux-schnell (~$0.003),
+                black-forest-labs/flux-dev (~$0.03),
+                black-forest-labs/flux-1.1-pro (~$0.055)
+              </small>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Width</label>
+                <input type="number" id="replicateWidth" value="1024" min="256" max="2048" step="64"
+                       onchange="saveReplicateSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Height</label>
+                <input type="number" id="replicateHeight" value="1024" min="256" max="2048" step="64"
+                       onchange="saveReplicateSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Steps <small style="color:#aaa;">(blank=model default)</small></label>
+                <input type="number" id="replicateSteps" value="" min="1" max="100"
+                       onchange="saveReplicateSettings()"
+                       placeholder="default"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Guidance <small style="color:#aaa;">(blank=default)</small></label>
+                <input type="number" id="replicateGuidance" value="" min="1" max="20" step="0.5"
+                       onchange="saveReplicateSettings()"
+                       placeholder="default"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+            </div>
+            <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
+              Set <strong>REPLICATE_API_KEY</strong> in .env — <a href="https://replicate.com/account/api-tokens" target="_blank" style="color: #7c4dff;">get token</a>
+            </div>
+          </div>
+        </section>
+
+        <!-- Novita Settings -->
+        <section id="novitaSettings" style="margin-bottom: 15px; padding: 12px; background: #f0fff4; border-radius: 6px; border: 1px solid #86e8ad; display: none;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+            <label style="font-weight: bold; color: #333; font-size: 13px; margin: 0;">
+              ✨ Novita AI Settings
+            </label>
+            <span id="novitaKeyStatus" style="font-size: 11px; color: #888;">Not configured</span>
+          </div>
+          <div style="font-size: 11px;">
+            <div style="margin-bottom: 8px;">
+              <label style="display: block; color: #666; margin-bottom: 2px;">Model</label>
+              <input type="text" id="novitaModel" value="flux2-dev"
+                     oninput="saveNovitaSettings()"
+                     placeholder="e.g. flux2-dev"
+                     style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; box-sizing: border-box;">
+              <small style="color: #888; font-size: 10px;">
+                Model name string — e.g. flux2-dev (recommended), flux-schnell, flux-dev.
+                Full list: <a href="https://novita.ai/models" target="_blank" style="color: #2e7d32;">novita.ai/models</a>
+              </small>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Width</label>
+                <input type="number" id="novitaWidth" value="1024" min="256" max="2048" step="64"
+                       onchange="saveNovitaSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Height</label>
+                <input type="number" id="novitaHeight" value="1024" min="256" max="2048" step="64"
+                       onchange="saveNovitaSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 6px;">
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Steps</label>
+                <input type="number" id="novitaSteps" value="20" min="1" max="100"
+                       onchange="saveNovitaSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+              <div style="flex: 1;">
+                <label style="display: block; color: #666; margin-bottom: 2px;">Guidance</label>
+                <input type="number" id="novitaGuidance" value="7.5" min="1" max="20" step="0.5"
+                       onchange="saveNovitaSettings()"
+                       style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd;">
+              </div>
+            </div>
+            <div style="font-size: 10px; color: #888; padding: 4px; background: #f5f5f5; border-radius: 3px;">
+              Set <strong>NOVITA_API_KEY</strong> in .env — <a href="https://novita.ai" target="_blank" style="color: #2e7d32;">novita.ai dashboard</a>
             </div>
           </div>
         </section>
@@ -2954,6 +3094,54 @@
             ⬇️ Download Image
           </button>
           <p id="resampleMetadata" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Upscale Panel Modal -->
+  <div id="upscalePanelModal" class="video-panel-modal" onclick="if(event.target === this) closeUpscalePanel()">
+    <div class="video-panel-content">
+      <div class="video-panel-header">
+        <h2>🔍 Upscale Image</h2>
+        <button class="video-panel-close" onclick="closeUpscalePanel()">&times;</button>
+      </div>
+
+      <div class="video-panel-body">
+        <!-- Source Image Preview -->
+        <img id="upscaleSourcePreview" class="video-source-preview" alt="Selected image" style="display: none;">
+        <p id="upscaleSourceInfo" style="color: #666; font-size: 13px; margin-bottom: 16px;"></p>
+
+        <!-- Model Selector -->
+        <div class="video-form-group">
+          <label>Upscaler Model</label>
+          <select id="upscaleModel" style="width: 100%; padding: 8px; border-radius: 4px; border: 1px solid #ddd; font-size: 14px;">
+            <option value="remacri">Remacri 4x (Recommended)</option>
+            <option value="remacri-smooth">Remacri ExtraSmoother 4x</option>
+            <option value="realesrgan-x4">RealESRGAN 4x</option>
+            <option value="realesrgan-x2">RealESRGAN 2x</option>
+          </select>
+        </div>
+
+        <!-- Upscale Button -->
+        <button id="upscaleGenerateBtn" class="video-generate-btn" onclick="submitUpscale()">
+          🔍 Upscale Image
+        </button>
+
+        <!-- Progress Section -->
+        <div id="upscaleProgress" class="video-progress">
+          <div class="video-progress-spinner"></div>
+          <div class="video-progress-text">Upscaling image... <span id="upscaleElapsedTime">0s</span></div>
+        </div>
+
+        <!-- Result Section -->
+        <div id="upscaleResult" class="video-result">
+          <h3 style="margin-top: 0; color: #2e7d32;">Upscaled!</h3>
+          <img id="upscaleResultImg" style="max-width: 100%; border-radius: 4px; display: block; margin: 0 auto 12px;" alt="Upscaled image">
+          <button id="upscaleDownloadBtn" class="video-download-btn" onclick="downloadUpscaledImage()">
+            Download Image
+          </button>
+          <p id="upscaleMetadata" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
         </div>
       </div>
     </div>
