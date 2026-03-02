@@ -124,16 +124,19 @@ const providerConfig = {
     supportedSchedulers: ['euler', 'dpmsolver', 'ddim', 'pndm']
   },
 
-  // Chroma1-HD Image Generation Configuration (local or Modal)
+  // Chroma Image Generation Configuration (local or Modal)
+  // Defaults tuned for custom workflow Chroma Refiner v11 workflow:
+  //   Stage 1: Euler/Beta, 10 steps, CFG 1.0, 1024x1536
+  //   Stage 2: LCM/Karras refiner, 4-12 steps, denoise 0.25-0.40 (auto via model config)
   chroma: {
     apiUrl: process.env.CHROMA_API_URL || 'http://localhost:8004',
-    model: process.env.CHROMA_MODEL || 'chroma-1-hd',
+    model: process.env.CHROMA_MODEL || 'chroma-custom',
     // Generation settings - can be overridden per-request or via environment variables
     generation: {
-      steps: parseInt(process.env.CHROMA_STEPS || '20', 10),       // Inference steps (recommended 15-30)
-      guidance: parseFloat(process.env.CHROMA_GUIDANCE || '7.5'),  // Guidance scale (recommended 7.0-8.5)
-      width: parseInt(process.env.CHROMA_WIDTH || '768', 10),      // Image width (512-1024 recommended)
-      height: parseInt(process.env.CHROMA_HEIGHT || '768', 10)     // Image height (512-1024 recommended)
+      steps: parseInt(process.env.CHROMA_STEPS || '10', 10),      // Base pass steps (workflow: 10)
+      guidance: parseFloat(process.env.CHROMA_GUIDANCE || '1.0'), // CFG scale (DMD model: 1.0)
+      width: parseInt(process.env.CHROMA_WIDTH || '1024', 10),    // Image width (workflow native)
+      height: parseInt(process.env.CHROMA_HEIGHT || '1536', 10)   // Image height (2:3 portrait)
     }
   },
 
@@ -188,6 +191,33 @@ const providerConfig = {
     // Extended timeout for Modal cold starts and video generation
     timeout: parseInt(process.env.MODAL_TIMEOUT || '300000', 10),  // 5 minutes for images
     videoTimeout: parseInt(process.env.MODAL_VIDEO_TIMEOUT || '600000', 10)  // 10 minutes for videos
+  },
+
+  // Replicate API Configuration
+  // https://replicate.com/docs/reference/http
+  replicate: {
+    apiKey: process.env.REPLICATE_API_KEY,
+    model: process.env.REPLICATE_MODEL || 'black-forest-labs/flux-schnell',
+    generation: {
+      width: parseInt(process.env.REPLICATE_WIDTH || '1024', 10),
+      height: parseInt(process.env.REPLICATE_HEIGHT || '1024', 10),
+      steps: process.env.REPLICATE_STEPS ? parseInt(process.env.REPLICATE_STEPS, 10) : null,
+      guidance: process.env.REPLICATE_GUIDANCE ? parseFloat(process.env.REPLICATE_GUIDANCE) : null
+    }
+  },
+
+  // Novita AI API Configuration
+  // https://novita.ai/docs/api-reference/model-apis-text-to-image
+  novita: {
+    apiKey: process.env.NOVITA_API_KEY,
+    model: process.env.NOVITA_MODEL || 'flux2-dev',
+    generation: {
+      width: parseInt(process.env.NOVITA_WIDTH || '1024', 10),
+      height: parseInt(process.env.NOVITA_HEIGHT || '1024', 10),
+      steps: parseInt(process.env.NOVITA_STEPS || '20', 10),
+      guidance: parseFloat(process.env.NOVITA_GUIDANCE || '7.5'),
+      sampler: process.env.NOVITA_SAMPLER || 'euler'
+    }
   },
 
   // Video Provider Configuration

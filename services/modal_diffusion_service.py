@@ -114,6 +114,25 @@ SUPPORTED_MODELS: Dict[str, Dict[str, Any]] = {
         "default_guidance": 7.0,
         "requires_auth": True,
     },
+    # custom workflow Chroma Refiner v11 workflow settings
+    # Two-pass: Euler/Beta base (10 steps, CFG 1.0) + LCM/Karras refiner (4-12 steps, denoise 0.25-0.40)
+    "chroma-custom": {
+        "custom": True,
+        "path": "custom-model-v60.safetensors",
+        "pipeline": "chroma",
+        "base_model": "lodestones/Chroma1-HD",
+        "default_steps": 10,
+        "default_guidance": 1.0,
+        "default_width": 1024,
+        "default_height": 1536,
+        # Refiner pass settings (img2img second pass)
+        "chroma_refiner": True,
+        "refiner_steps": 8,
+        "refiner_guidance": 1.0,
+        "refiner_sampler": "lcm",
+        "refiner_schedule": "karras",
+        "refiner_denoise": 0.30,  # 0.25-0.40 range; 0.30 is a safe midpoint
+    },
 }
 
 # Create Modal app
@@ -137,6 +156,7 @@ diffusion_image = (
     .add_local_file("../pyproject.toml", "/tmp/project/pyproject.toml", copy=True)
     .add_local_file("../uv.lock", "/tmp/project/uv.lock", copy=True)
     .add_local_python_source("face_fixing", copy=True)
+    .add_local_python_source("upscaler", copy=True)
     .run_commands(
         "cd /tmp/project && uv pip install --system --no-cache .",
         "echo 'Dependencies installed from uv.lock (Python 3.10): 2026-02-19'"
@@ -293,6 +313,7 @@ except Exception:
     image=diffusion_image,
     gpu=DEFAULT_GPU,
     scaledown_window=300,  # Keep warm for 5 minutes
+    max_containers=1,  # Prevent duplicate containers for same batch request
     secrets=_secrets,
     volumes={MODELS_DIR: model_volume},  # Mount persistent volume
 )
@@ -305,6 +326,8 @@ class DiffusionService:
     img2img_pipeline: Any = None  # For two-stage cartoon→photoreal img2img refinement
     compel: Any = None  # For long prompt handling in SDXL
     face_fixer: Any = None  # For face fixing via CodeFormer (lazy-loaded)
+    _upscaler_fn: Any = None  # For standalone upscaling (lazy-loaded)
+    _upscaler_models_dir: str = None
     current_model: str = None
     device: str = "cuda"
     custom_models: Dict[str, Dict[str, Any]] = {}
@@ -353,6 +376,18 @@ class DiffusionService:
             traceback.print_exc()
             self.face_fixer = None
             self._face_fixing_models_dir = None
+
+        # Initialize standalone upscaler (lazy-loaded on first use)
+        UPSCALER_DIR = f"{MODELS_DIR}/upscaler"
+        try:
+            from upscaler import get_upscaler
+            self._upscaler_fn = get_upscaler
+            self._upscaler_models_dir = UPSCALER_DIR
+            print(f"[Modal Diffusion] Upscaler pipeline ready (models_dir={UPSCALER_DIR})")
+        except ImportError as e:
+            print(f"[Modal Diffusion] Warning: Upscaler not available (ImportError: {e})")
+            self._upscaler_fn = None
+            self._upscaler_models_dir = None
 
         # Pre-load default model for faster first inference
         self._load_pipeline("flux-dev")
@@ -420,6 +455,12 @@ class DiffusionService:
         # is 1.0 (no-op multiplication on initial noise).
         if not hasattr(self.pipeline.scheduler, 'init_noise_sigma'):
             self.pipeline.scheduler.init_noise_sigma = 1.0
+        # Compatibility: StableDiffusionXLPipeline.__call__() calls
+        # scheduler.scale_model_input() at each denoising step. For flow
+        # matching schedulers this method doesn't exist — it's a no-op
+        # (returns sample unchanged) in all standard DDPM-style schedulers.
+        if not hasattr(self.pipeline.scheduler, 'scale_model_input'):
+            self.pipeline.scheduler.scale_model_input = lambda sample, timestep: sample
         print(f"[Modal Diffusion] Applied FlowMatchEulerDiscreteScheduler(shift={shift})")
 
     def _load_pipeline(self, model_name: str):
@@ -595,7 +636,7 @@ class DiffusionService:
                     torch_dtype=torch.float16,
                     cache_dir=CACHE_DIR,
                 )
-            self.pipeline.to(self.device)
+            self.pipeline.enable_sequential_cpu_offload()
 
         else:
             raise ValueError(
@@ -987,9 +1028,16 @@ class DiffusionService:
             guidance = model_config.get("default_guidance", 3.5)
 
         # Apply sampler + schedule (new split approach) or legacy scheduler
+        # Skip for pipeline types that manage their own schedulers internally
+        pipeline_type = model_config.get("pipeline", "flux")
         effective_sampler = sampler or model_config.get("sampler")
         effective_schedule = scheduler or model_config.get("schedule")
-        if effective_sampler:
+        if pipeline_type in ("flux", "chroma"):
+            # Flux and Chroma use flow-matching schedulers that are incompatible
+            # with standard DDPM sampler/schedule swapping — skip entirely
+            if effective_sampler or effective_schedule:
+                print(f"[Modal Diffusion] Ignoring sampler/schedule for {pipeline_type} pipeline (not supported)")
+        elif effective_sampler:
             # New approach: separate sampler and schedule
             self._apply_sampler_and_schedule(effective_sampler, effective_schedule)
         elif effective_schedule and effective_schedule in SUPPORTED_SCHEDULERS:
@@ -997,7 +1045,6 @@ class DiffusionService:
             self._set_scheduler(effective_schedule)
 
         # Apply flow matching shift for sdxl_flow models
-        pipeline_type = model_config.get("pipeline", "flux")
         if pipeline_type == "sdxl_flow":
             effective_shift = flow_shift or model_config.get("default_flow_shift", 1.0)
             self._apply_flow_matching_scheduler(effective_shift)
@@ -1170,6 +1217,62 @@ class DiffusionService:
         if result is not None:
             image = result.images[0]
 
+        # Chroma two-pass refiner (custom workflow workflow stage 2)
+        # Runs a light img2img pass with LCM sampler + Karras schedule for detail refinement.
+        # Mirrors ComfyUI: base Euler/Beta → refiner LCM/Karras at low denoise (0.25-0.40).
+        chroma_refiner_info = None
+        use_chroma_refiner = (
+            pipeline_type == "chroma"
+            and input_image is None  # skip if already doing img2img
+            and (use_refiner or model_config.get("chroma_refiner", False))
+        )
+        if use_chroma_refiner:
+            from diffusers import AutoPipelineForImage2Image, LCMScheduler
+
+            r_steps = model_config.get("refiner_steps", 8)
+            r_guidance = model_config.get("refiner_guidance", 1.0)
+            r_denoise = denoise_strength if use_refiner else model_config.get("refiner_denoise", 0.30)
+            r_sampler = model_config.get("refiner_sampler", "lcm")
+            r_schedule = model_config.get("refiner_schedule", "karras")
+
+            print(f"[Modal Diffusion] Chroma refiner pass: sampler={r_sampler}, schedule={r_schedule}, steps={r_steps}, denoise={r_denoise}, guidance={r_guidance}")
+            refiner_start = time.time()
+
+            # Build img2img pipeline from the loaded Chroma pipeline (shares weights, no reload)
+            chroma_i2i = AutoPipelineForImage2Image.from_pipe(self.pipeline)
+
+            # Swap to LCM scheduler with Karras sigmas
+            chroma_i2i.scheduler = LCMScheduler.from_config(
+                chroma_i2i.scheduler.config,
+                use_karras_sigmas=(r_schedule == "karras"),
+            )
+
+            refiner_kwargs = {
+                "prompt": prompt,
+                "image": image,
+                "strength": r_denoise,
+                "num_inference_steps": r_steps,
+                "guidance_scale": r_guidance,
+                "generator": torch.Generator(device="cuda").manual_seed(seed),
+            }
+            if negative_prompt:
+                refiner_kwargs["negative_prompt"] = negative_prompt
+
+            refiner_result = chroma_i2i(**refiner_kwargs)
+            image = refiner_result.images[0]
+            refiner_time = time.time() - refiner_start
+            inference_time += refiner_time
+            print(f"[Modal Diffusion] Chroma refiner completed in {refiner_time:.1f}s")
+            chroma_refiner_info = {
+                "applied": True,
+                "sampler": r_sampler,
+                "schedule": r_schedule,
+                "steps": r_steps,
+                "denoise": r_denoise,
+                "guidance": r_guidance,
+                "time": refiner_time,
+            }
+
         # Apply img2img touchup if requested (for artifact cleanup)
         touchup_info = None
         effective_touchup = touchup_strength or model_config.get("touchup_strength", 0.0)
@@ -1278,6 +1381,7 @@ class DiffusionService:
                 "scheduler": effective_schedule,
                 "clip_skip": effective_clip_skip,
                 "refiner": refiner_info,
+                "chroma_refiner": chroma_refiner_info,
                 "touchup": touchup_info,
                 "face_fixing": face_fix_info,
             }
@@ -1467,6 +1571,56 @@ class DiffusionService:
             loaded=len(self.current_loras) > 0,
             current_loras=self.current_loras,
         )
+
+
+    @modal.fastapi_endpoint(method="POST", label="upscale")
+    def upscale_endpoint(self, body: dict) -> dict:
+        """Upscale an image using standalone upscaler (Remacri, RealESRGAN, etc.)"""
+        import base64
+        from io import BytesIO
+        from PIL import Image
+
+        image_b64 = body.get("imageBase64")
+        model_name = body.get("model", "remacri")
+
+        if not image_b64:
+            return {"error": "imageBase64 is required"}, 400
+
+        if not self._upscaler_fn:
+            return {"error": "Upscaler not available"}, 503
+
+        try:
+            # Decode input image
+            image_data = base64.b64decode(image_b64)
+            input_image = Image.open(BytesIO(image_data)).convert('RGB')
+
+            # Get or initialize upscaler
+            upscaler = self._upscaler_fn(
+                device=self.device,
+                models_dir=self._upscaler_models_dir,
+            )
+            result_image, metadata = upscaler.upscale(input_image, model_name=model_name)
+
+            # Encode result to PNG base64
+            buffer = BytesIO()
+            result_image.save(buffer, format='PNG')
+            result_b64 = base64.b64encode(buffer.getvalue()).decode('utf-8')
+
+            return {
+                "imageBase64": result_b64,
+                "width": metadata["output_size"][0],
+                "height": metadata["output_size"][1],
+                "metadata": metadata,
+            }
+        except ValueError as e:
+            return {"error": str(e)}, 400
+        except FileNotFoundError as e:
+            return {"error": str(e)}, 404
+        except Exception as e:
+            print(f"[Modal Diffusion] Upscale error: {e}")
+            import traceback
+            traceback.print_exc()
+            return {"error": str(e)}, 500
 
 
 # Entrypoint for modal serve/run
