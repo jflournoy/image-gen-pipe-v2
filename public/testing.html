@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🧪 Testing Ground</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: monospace;
+      margin: 0;
+      padding: 20px;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    h1 {
+      margin: 0 0 20px;
+      font-size: 20px;
+    }
+
+    h1 a {
+      font-size: 13px;
+      color: #666;
+      text-decoration: none;
+      margin-left: 12px;
+      font-weight: normal;
+    }
+
+    h1 a:hover { color: #333; }
+
+    .tabs {
+      display: flex;
+      gap: 0;
+      margin-bottom: 20px;
+      border-bottom: 2px solid #ddd;
+    }
+
+    .tab-btn {
+      padding: 8px 20px;
+      background: none;
+      border: none;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -2px;
+      cursor: pointer;
+      font-family: monospace;
+      font-size: 14px;
+      color: #666;
+    }
+
+    .tab-btn.active {
+      color: #333;
+      border-bottom-color: #333;
+      font-weight: bold;
+    }
+
+    .tab-pane { display: none; }
+    .tab-pane.active { display: block; }
+
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .form-grid.full { grid-template-columns: 1fr; }
+
+    label {
+      display: block;
+      font-size: 12px;
+      color: #555;
+      margin-bottom: 4px;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      font-family: monospace;
+      font-size: 13px;
+      padding: 7px 10px;
+      border: 1px solid #ccc;
+      border-radius: 4px;
+      background: white;
+    }
+
+    textarea {
+      resize: vertical;
+      min-height: 90px;
+    }
+
+    input[type=password] { letter-spacing: 1px; }
+
+    .generate-btn {
+      padding: 10px 24px;
+      background: #333;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    .generate-btn:hover { background: #555; }
+    .generate-btn:disabled { background: #999; cursor: not-allowed; }
+
+    .result-area {
+      margin-top: 20px;
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 16px;
+      min-height: 60px;
+    }
+
+    .result-area.hidden { display: none; }
+
+    #image-result img {
+      max-width: 100%;
+      max-height: 600px;
+      display: block;
+      border-radius: 4px;
+      margin-bottom: 10px;
+    }
+
+    .download-btn {
+      padding: 6px 14px;
+      background: #4caf50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    .download-btn:hover { background: #388e3c; }
+
+    #llm-text-output {
+      white-space: pre-wrap;
+      background: #1e1e1e;
+      color: #d4d4d4;
+      padding: 14px;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.5;
+      max-height: 500px;
+      overflow-y: auto;
+      word-break: break-word;
+    }
+
+    .meta {
+      margin-top: 10px;
+      font-size: 11px;
+      color: #888;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ccc;
+      border-top-color: #333;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .error-msg {
+      color: #c62828;
+      font-size: 13px;
+      margin-top: 8px;
+    }
+
+    .card {
+      background: white;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      padding: 20px;
+      max-width: 700px;
+    }
+
+    .api-key-note {
+      font-size: 11px;
+      color: #888;
+      margin-top: 4px;
+    }
+
+    .param-note {
+      font-size: 10px;
+      color: #aaa;
+      font-weight: normal;
+    }
+
+    #img-advanced {
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px dashed #ddd;
+    }
+  </style>
+</head>
+<body>
+  <h1>🧪 Testing Ground <a href="/">← back to beam search</a></h1>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-tab="image">Image Gen</button>
+    <button class="tab-btn" data-tab="llm">LLM</button>
+  </div>
+
+  <!-- IMAGE GEN TAB -->
+  <div id="tab-image" class="tab-pane active">
+    <div class="card">
+      <div class="form-grid">
+        <div>
+          <label>Provider</label>
+          <select id="img-provider">
+            <option value="modal">Modal</option>
+            <option value="flux">Flux (local)</option>
+            <option value="chroma">Chroma (local)</option>
+            <option value="bfl">BFL</option>
+            <option value="replicate">Replicate</option>
+            <option value="novita">Novita AI</option>
+            <option value="openai">OpenAI (DALL-E / gpt-image)</option>
+          </select>
+        </div>
+        <div>
+          <label>Model</label>
+          <select id="img-model">
+            <option value="">— loading models... —</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="img-apikey-row" class="form-grid full">
+        <div>
+          <label>OpenAI API Key</label>
+          <input id="img-apikey" type="password" placeholder="sk-...">
+          <div class="api-key-note">Saved to localStorage.</div>
+        </div>
+      </div>
+
+      <div class="form-grid full">
+        <div>
+          <label>Prompt</label>
+          <textarea id="img-prompt" placeholder="A photorealistic portrait of a fox wearing a top hat..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label>Steps (optional)</label>
+          <input id="img-steps" type="number" min="1" max="150" placeholder="provider default">
+        </div>
+        <div>
+          <label>Guidance (optional)</label>
+          <input id="img-guidance" type="number" min="0" max="20" step="0.5" placeholder="provider default">
+        </div>
+        <div>
+          <label>Seed (optional)</label>
+          <input id="img-seed" type="number" placeholder="random">
+        </div>
+        <div>
+          <label>Width</label>
+          <input id="img-width" type="number" min="256" max="2048" step="64" placeholder="1024">
+        </div>
+        <div>
+          <label>Height</label>
+          <input id="img-height" type="number" min="256" max="2048" step="64" placeholder="1024">
+        </div>
+      </div>
+
+      <!-- Advanced params — shown only for providers that support them -->
+      <div id="img-advanced" style="display:none">
+        <div class="form-grid full">
+          <div>
+            <label>Negative Prompt <span class="param-note">(SDXL / SD3)</span></label>
+            <textarea id="img-negative" placeholder="blurry, low quality, watermark..." style="min-height:50px"></textarea>
+          </div>
+        </div>
+        <div class="form-grid">
+          <div>
+            <label>Sampler</label>
+            <select id="img-sampler">
+              <option value="">Default</option>
+              <option value="euler">Euler</option>
+              <option value="euler_a">Euler Ancestral</option>
+              <option value="heun">Heun</option>
+              <option value="dpmpp_2m">DPM++ 2M</option>
+              <option value="dpmpp_2m_sde">DPM++ 2M SDE</option>
+              <option value="dpmpp_sde">DPM++ SDE</option>
+              <option value="dpm2">DPM2</option>
+              <option value="dpm2_a">DPM2 Ancestral</option>
+              <option value="unipc">UniPC</option>
+              <option value="deis">DEIS</option>
+              <option value="lms">LMS</option>
+              <option value="pndm">PNDM</option>
+              <option value="ddim">DDIM</option>
+              <option value="lcm">LCM</option>
+            </select>
+          </div>
+          <div>
+            <label>Scheduler</label>
+            <select id="img-scheduler">
+              <option value="">Default / Normal</option>
+              <option value="karras">Karras</option>
+              <option value="exponential">Exponential</option>
+            </select>
+          </div>
+          <div>
+            <label>Clip Skip</label>
+            <select id="img-clipskip">
+              <option value="">None</option>
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+          <div>
+            <label>Flow Shift <span class="param-note">(sdxl_flow)</span></label>
+            <input id="img-flowshift" type="number" min="0.5" max="12" step="0.1" placeholder="1.0">
+          </div>
+        </div>
+        <div class="form-grid full">
+          <div>
+            <label>LoRAs <span class="param-note">(JSON: [{"path":"file.safetensors","scale":0.8}])</span></label>
+            <input id="img-loras" type="text" placeholder='[{"path":"my-lora.safetensors","scale":0.8}]'>
+          </div>
+        </div>
+      </div>
+
+      <button class="generate-btn" id="img-generate-btn">&#9654; Generate</button>
+      <span id="img-spinner" style="display:none"><span class="spinner"></span>generating...</span>
+      <div id="img-error" class="error-msg"></div>
+    </div>
+
+    <div class="result-area hidden" id="image-result">
+      <img id="img-output" src="" alt="generated image">
+      <a class="download-btn" id="img-download" download="generated.png">⬇ Download</a>
+      <div class="meta" id="img-meta"></div>
+    </div>
+  </div>
+
+  <!-- LLM TAB -->
+  <div id="tab-llm" class="tab-pane">
+    <div class="card">
+      <div class="form-grid">
+        <div>
+          <label>Provider</label>
+          <select id="llm-provider">
+            <option value="local-llm">Local LLM</option>
+            <option value="openai">OpenAI</option>
+          </select>
+        </div>
+        <div>
+          <label>Model</label>
+          <select id="llm-model">
+            <option value="">— loading models... —</option>
+          </select>
+        </div>
+      </div>
+
+      <div id="llm-apikey-row" class="form-grid full" style="display:none">
+        <div>
+          <label>OpenAI API Key</label>
+          <input id="llm-apikey" type="password" placeholder="sk-...">
+          <div class="api-key-note">Saved to localStorage.</div>
+        </div>
+      </div>
+
+      <div class="form-grid full">
+        <div>
+          <label>System prompt (optional)</label>
+          <textarea id="llm-system" placeholder="You are a helpful assistant." style="min-height:50px"></textarea>
+        </div>
+      </div>
+
+      <div class="form-grid full">
+        <div>
+          <label>User message</label>
+          <textarea id="llm-user" placeholder="Write a haiku about neural networks..."></textarea>
+        </div>
+      </div>
+
+      <div class="form-grid">
+        <div>
+          <label>Temperature</label>
+          <input id="llm-temperature" type="number" min="0" max="2" step="0.05" value="0.7">
+        </div>
+      </div>
+
+      <button class="generate-btn" id="llm-generate-btn">&#9654; Send</button>
+      <span id="llm-spinner" style="display:none"><span class="spinner"></span>waiting...</span>
+      <div id="llm-error" class="error-msg"></div>
+    </div>
+
+    <div class="result-area hidden" id="llm-result">
+      <div id="llm-text-output"></div>
+      <div class="meta" id="llm-meta"></div>
+    </div>
+  </div>
+
+  <script src="testing.js"></script>
+</body>
+</html>
