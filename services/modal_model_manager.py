@@ -40,11 +40,9 @@ Pipeline types:
         - wan_i2v: WAN2.2 image-to-video
 """
 
-import argparse
 import json
 import os
 import re
-import sys
 from pathlib import Path
 from typing import Optional, Dict, Any
 
@@ -358,11 +356,8 @@ def get_volume_usage() -> Dict[str, Any]:
     }
 
 
-@app.local_entrypoint()
-def main():
-    """CLI for model management"""
-    # Load environment variables from parent directory's .env file
-    from pathlib import Path
+def _load_env():
+    """Load .env from parent directory"""
     env_path = Path(__file__).parent.parent / ".env"
     if env_path.exists():
         with open(env_path) as f:
@@ -372,105 +367,104 @@ def main():
                     key, value = line.split("=", 1)
                     os.environ.setdefault(key.strip(), value.strip())
 
-    parser = argparse.ArgumentParser(description="Modal Model Manager")
-    subparsers = parser.add_subparsers(dest="command", help="Commands")
 
-    # Upload command
-    upload_parser = subparsers.add_parser("upload", help="Upload a local model")
-    upload_parser.add_argument("path", help="Path to model file")
-    upload_parser.add_argument("--name", required=True, help="Name for the model")
-    upload_parser.add_argument(
-        "--pipeline",
-        default="sdxl",
-        choices=["flux", "sdxl", "sdxl_flow", "sd3", "chroma", "wan_i2v"],
-        help="Pipeline type (image: flux/sdxl/sdxl_flow/sd3/chroma, video: wan_i2v)"
+@app.local_entrypoint()
+def cmd_upload(
+    path: str,
+    name: str,
+    pipeline: str = "sdxl",
+    base_model: str = "",
+    steps: int = 25,
+    guidance: float = 7.5,
+):
+    """Upload a local model file to the Modal volume.
+
+    Usage: modal run modal_model_manager.py::cmd_upload --path /path/to/model.safetensors --name my-model --pipeline chroma
+    """
+    _load_env()
+    result = upload_model.remote(
+        local_path=path,
+        name=name,
+        pipeline=pipeline,
+        base_model=base_model if base_model else None,
+        default_steps=steps,
+        default_guidance=guidance,
     )
-    upload_parser.add_argument("--base-model", help="Base model for custom weights")
-    upload_parser.add_argument("--steps", type=int, default=25, help="Default inference steps")
-    upload_parser.add_argument("--guidance", type=float, default=7.5, help="Default guidance scale")
+    print(json.dumps(result, indent=2))
 
-    # model hub download command
-    model-hub_parser = subparsers.add_parser("download-model-hub", help="Download from model hub")
-    model-hub_parser.add_argument("url", help="model hub model URL or download URL")
-    model-hub_parser.add_argument("--name", required=True, help="Name for the model")
-    model-hub_parser.add_argument(
-        "--pipeline",
-        default="sdxl",
-        choices=["flux", "sdxl", "sdxl_flow", "sd3", "chroma", "wan_i2v"],
-        help="Pipeline type (image: flux/sdxl/sdxl_flow/sd3/chroma, video: wan_i2v)"
+
+@app.local_entrypoint()
+def cmd_download_model-hub(
+    url: str,
+    name: str,
+    pipeline: str = "sdxl",
+    base_model: str = "",
+    steps: int = 25,
+    guidance: float = 7.5,
+    api_key: str = "",
+):
+    """Download a model from model hub to the Modal volume.
+
+    Usage: modal run modal_model_manager.py::cmd_download_model-hub --url "https://example.com/..." --name my-model --pipeline chroma
+    """
+    _load_env()
+    resolved_api_key = api_key if api_key else os.getenv("CHECKPOINT_API_KEY")
+    result = download_from_model-hub.remote(
+        url=url,
+        name=name,
+        pipeline=pipeline,
+        base_model=base_model if base_model else None,
+        default_steps=steps,
+        default_guidance=guidance,
+        api_key=resolved_api_key,
     )
-    model-hub_parser.add_argument("--base-model", help="Base model for custom weights")
-    model-hub_parser.add_argument("--steps", type=int, default=25, help="Default inference steps")
-    model-hub_parser.add_argument("--guidance", type=float, default=7.5, help="Default guidance scale")
-    model-hub_parser.add_argument("--api-key", default=os.getenv("CHECKPOINT_API_KEY"), help="model hub API key (defaults to CHECKPOINT_API_KEY env var)")
+    print(json.dumps(result, indent=2))
 
-    # List command
-    subparsers.add_parser("list", help="List models in volume")
 
-    # Delete command
-    delete_parser = subparsers.add_parser("delete", help="Delete a model")
-    delete_parser.add_argument("name", help="Name of model to delete")
+@app.local_entrypoint()
+def cmd_list():
+    """List all models in the Modal volume.
 
-    # Usage command
-    subparsers.add_parser("usage", help="Show volume usage")
+    Usage: modal run modal_model_manager.py::cmd_list
+    """
+    _load_env()
+    result = list_models.remote()
+    print("\n=== Custom Models ===")
+    for name, config in result["custom_models"].items():
+        print(f"  {name}: {config['pipeline']} ({config['path']})")
 
-    args = parser.parse_args()
+    print("\n=== Model Files ===")
+    for f in result["files"]:
+        print(f"  {f['name']}: {f['size_gb']:.2f} GB")
 
-    if args.command == "upload":
-        result = upload_model.remote(
-            local_path=args.path,
-            name=args.name,
-            pipeline=args.pipeline,
-            base_model=args.base_model,
-            default_steps=args.steps,
-            default_guidance=args.guidance,
-        )
-        print(json.dumps(result, indent=2))
+    print("\n=== HuggingFace Cache ===")
+    print(f"  Size: {result.get('cache_size_gb', 0):.2f} GB")
 
-    elif args.command == "download-model-hub":
-        result = download_from_model-hub.remote(
-            url=args.url,
-            name=args.name,
-            pipeline=args.pipeline,
-            base_model=args.base_model,
-            default_steps=args.steps,
-            default_guidance=args.guidance,
-            api_key=args.api_key,
-        )
-        print(json.dumps(result, indent=2))
 
-    elif args.command == "list":
-        result = list_models.remote()
-        print("\n=== Custom Models ===")
-        for name, config in result["custom_models"].items():
-            print(f"  {name}: {config['pipeline']} ({config['path']})")
+@app.local_entrypoint()
+def cmd_delete(name: str):
+    """Delete a custom model from the Modal volume.
 
-        print("\n=== Model Files ===")
-        for f in result["files"]:
-            print(f"  {f['name']}: {f['size_gb']:.2f} GB")
-
-        print(f"\n=== HuggingFace Cache ===")
-        print(f"  Size: {result.get('cache_size_gb', 0):.2f} GB")
-
-    elif args.command == "delete":
-        result = delete_model.remote(args.name)
-        if "error" in result:
-            print(f"Error: {result['error']}")
-        else:
-            print(f"Deleted: {result['deleted']}")
-
-    elif args.command == "usage":
-        result = get_volume_usage.remote()
-        print(f"\n=== Volume Usage ===")
-        print(f"Total: {result['total_size_gb']:.2f} GB ({result['file_count']} files)")
-        print("\nBreakdown:")
-        for name, info in result["breakdown"].items():
-            print(f"  {name}: {info['size_gb']:.2f} GB ({info['files']} files)")
-
+    Usage: modal run modal_model_manager.py::cmd_delete --name my-model
+    """
+    _load_env()
+    result = delete_model.remote(name)
+    if "error" in result:
+        print(f"Error: {result['error']}")
     else:
-        parser.print_help()
+        print(f"Deleted: {result['deleted']}")
 
 
-if __name__ == "__main__":
-    with app.run():
-        main()
+@app.local_entrypoint()
+def cmd_usage():
+    """Show Modal volume usage statistics.
+
+    Usage: modal run modal_model_manager.py::cmd_usage
+    """
+    _load_env()
+    result = get_volume_usage.remote()
+    print(f"\n=== Volume Usage ===")
+    print(f"Total: {result['total_size_gb']:.2f} GB ({result['file_count']} files)")
+    print("\nBreakdown:")
+    for name, info in result["breakdown"].items():
+        print(f"  {name}: {info['size_gb']:.2f} GB ({info['files']} files)")
