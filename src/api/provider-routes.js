@@ -568,7 +568,7 @@ async function fetchModalModels() {
         'Modal-Key': providerConfig.modal?.tokenId || '',
         'Modal-Secret': providerConfig.modal?.tokenSecret || ''
       },
-      timeout: 5000
+      timeout: 120000 // 2 min — Modal cold start can be slow
     });
 
     console.log('[Modal Models] Received:', response.data);
@@ -719,7 +719,7 @@ router.post('/models/download', async (req, res) => {
 
 /**
  * POST /api/providers/flux/model-path
- * Configure custom Flux model path (for locally downloaded models like model hub)
+ * Configure custom Flux model path (for locally downloaded custom models)
  */
 router.post('/flux/model-path', async (req, res) => {
   const { modelPath } = req.body;
@@ -2027,11 +2027,6 @@ function generatePresets(models, _encodersDir) {
 
   // Smart presets: match model names to encoder patterns
   const presetPatterns = [
-    {
-      name: 'Custom-Flux',
-      pattern: /custom-flux/i,
-      description: 'Custom-Flux fine-tuned Flux model'
-    },
     {
       name: 'Flux Dev',
       pattern: /flux.*dev|flux\.1.*dev/i,

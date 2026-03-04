@@ -14,10 +14,10 @@ Usage:
     python modal_model_manager.py upload /path/to/wan-custom.safetensors \
         --name my-custom-video --pipeline wan_i2v --steps 30 --guidance 4.0
 
-    # Download from model hub (specify pipeline type)
-    python modal_model_manager.py download-model-hub \
+    # Download a checkpoint from a URL (supports authenticated downloads)
+    python modal_model_manager.py download \
         https://example.com/api/download/models/12345 \
-        --name model-hub-chroma --pipeline chroma
+        --name my-chroma --pipeline chroma
 
     # List all models
     python modal_model_manager.py list
@@ -63,16 +63,22 @@ app = modal.App("model-manager")
 manager_image = modal.Image.debian_slim(python_version="3.11").pip_install(
     "requests>=2.31.0",
     "tqdm>=4.66.0",
+    "safetensors>=0.4.0",
+    "numpy>=1.24.0",
 )
 
 
-def parse_model-hub_url(url: str) -> Dict[str, Any]:
-    """Parse model hub URL to extract model info"""
-    # Pattern: https://example.com/api/download/models/{modelVersionId}
-    # Or: https://example.com/models/{modelId}?modelVersionId={versionId}
+def parse_checkpoint_url(url: str) -> Dict[str, Any]:
+    """Parse a checkpoint download URL, normalizing model page URLs to direct download URLs.
 
-    api_pattern = r"model-hub\.com/api/download/models/(\d+)"
-    page_pattern = r"model-hub\.com/models/(\d+)"
+    Supports:
+    - Direct download URLs (returned as-is)
+    - Model page URLs with version IDs (converted to direct download URLs)
+    """
+    # Pattern: .../api/download/models/{modelVersionId}  (direct download)
+    api_pattern = r"/api/download/models/(\d+)"
+    # Pattern: .../models/{modelId}?modelVersionId={versionId}  (page URL)
+    page_pattern = r"/models/(\d+)"
     version_pattern = r"modelVersionId=(\d+)"
 
     api_match = re.search(api_pattern, url)
@@ -88,13 +94,17 @@ def parse_model-hub_url(url: str) -> Dict[str, Any]:
     if page_match:
         model_id = page_match.group(1)
         version_id = version_match.group(1) if version_match else None
+        # Reconstruct direct download URL using the same base
+        base_url = re.match(r"(https?://[^/]+)", url)
+        base = base_url.group(1) if base_url else ""
         return {
             "model_id": model_id,
             "version_id": version_id,
-            "download_url": f"https://example.com/api/download/models/{version_id}" if version_id else None,
+            "download_url": f"{base}/api/download/models/{version_id}" if version_id else None,
         }
 
-    return {"url": url}
+    # Bare URL — use as-is
+    return {"download_url": url}
 
 
 @app.function(
@@ -162,7 +172,7 @@ def upload_model(
     volumes={MODELS_DIR: volume},
     timeout=7200,  # 2 hours for large downloads
 )
-def download_from_model-hub(
+def download_checkpoint(
     url: str,
     name: str,
     pipeline: str = "sdxl",
@@ -171,16 +181,19 @@ def download_from_model-hub(
     default_guidance: float = 7.5,
     api_key: Optional[str] = None,
 ) -> Dict[str, Any]:
-    """Download a model from model hub and store in volume"""
+    """Download a checkpoint from a URL and store in the Modal volume.
+
+    Supports any direct download URL. Pass api_key for authenticated downloads.
+    """
     import requests
     from tqdm import tqdm
 
-    # Parse URL
-    parsed = parse_model-hub_url(url)
+    # Parse URL (normalizes page URLs to direct download URLs)
+    parsed = parse_checkpoint_url(url)
     download_url = parsed.get("download_url", url)
 
     if not download_url:
-        raise ValueError(f"Could not parse model hub URL: {url}")
+        raise ValueError(f"Could not resolve download URL from: {url}")
 
     print(f"Downloading from: {download_url}")
 
@@ -229,8 +242,8 @@ def download_from_model-hub(
         "custom": True,
         "default_steps": default_steps,
         "default_guidance": default_guidance,
-        "source": "model-hub",
-        "source_url": url,
+        "source": "url",
+        "download_url": url,
     }
 
     if base_model:
@@ -394,7 +407,7 @@ def cmd_upload(
 
 
 @app.local_entrypoint()
-def cmd_download_model-hub(
+def cmd_download(
     url: str,
     name: str,
     pipeline: str = "sdxl",
@@ -403,13 +416,16 @@ def cmd_download_model-hub(
     guidance: float = 7.5,
     api_key: str = "",
 ):
-    """Download a model from model hub to the Modal volume.
+    """Download a checkpoint from a URL to the Modal volume.
 
-    Usage: modal run modal_model_manager.py::cmd_download_model-hub --url "https://example.com/..." --name my-model --pipeline chroma
+    Supports direct download URLs and model page URLs with version IDs.
+    Set CHECKPOINT_API_KEY in .env for authenticated downloads.
+
+    Usage: modal run modal_model_manager.py::cmd_download --url "https://..." --name my-model --pipeline chroma
     """
     _load_env()
     resolved_api_key = api_key if api_key else os.getenv("CHECKPOINT_API_KEY")
-    result = download_from_model-hub.remote(
+    result = download_checkpoint.remote(
         url=url,
         name=name,
         pipeline=pipeline,
@@ -453,6 +469,36 @@ def cmd_delete(name: str):
         print(f"Error: {result['error']}")
     else:
         print(f"Deleted: {result['deleted']}")
+
+
+@app.function(
+    image=manager_image,
+    volumes={MODELS_DIR: volume},
+)
+def inspect_model_keys(filename: str) -> dict:
+    """Inspect the top-level key patterns in a safetensors file."""
+    from safetensors import safe_open
+    path = Path(CUSTOM_MODELS_DIR) / filename
+    with safe_open(str(path), framework="numpy") as f:
+        keys = list(f.keys())
+    markers = ["double_blocks", "single_blocks", "model.diffusion_model",
+               "distilled_guidance", "input_blocks", "output_blocks", "middle_block"]
+    return {
+        "total_keys": len(keys),
+        "first_10": keys[:10],
+        "markers": {m: sum(1 for k in keys if m in k) for m in markers},
+    }
+
+
+@app.local_entrypoint()
+def cmd_inspect(filename: str):
+    """Inspect key patterns in a model file on the volume.
+
+    Usage: modal run services/modal_model_manager.py::cmd_inspect --filename model.safetensors
+    """
+    import json
+    result = inspect_model_keys.remote(filename)
+    print(json.dumps(result, indent=2))
 
 
 @app.local_entrypoint()

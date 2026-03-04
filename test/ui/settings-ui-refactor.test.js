@@ -315,17 +315,10 @@ describe('🔴 RED: Settings UI Refactor - Phase 2 (Flux Integration)', () => {
       }
     });
 
-    it('should have model hub link visible and helpful', () => {
+    it('should have model download link visible and helpful', () => {
       const content = fs.readFileSync(demoHtmlPath, 'utf8');
 
-      // model hub link should be present
-      assert.match(
-        content,
-        /model-hub\.com/i,
-        'Should have link to model hub for downloading custom models'
-      );
-
-      // Should have helpful text
+      // Should have helpful text about downloading custom models
       assert.match(
         content,
         /download.*model|custom.*model/i,

@@ -1,6 +1,6 @@
 /**
  * @file Flux Custom Model Support Tests (TDD RED)
- * Tests for pointing to locally downloaded model hub Flux models
+ * Tests for pointing to locally downloaded custom Flux models
  */
 
 const { describe, it } = require('node:test');
@@ -128,15 +128,15 @@ describe('🔴 RED: Flux Custom Model Support', () => {
       );
     });
 
-    it('should explain where to find model hub models', () => {
+    it('should explain where to find custom models', () => {
       const demoHtmlPath = path.join(__dirname, '../../public/demo.html');
       const content = fs.readFileSync(demoHtmlPath, 'utf8');
 
-      // Should have helper text mentioning model hub
+      // Should have helper text mentioning custom models
       assert.match(
         content,
-        /model hub|model-hub\.com|custom.*model|local.*model/i,
-        'Should mention model hub or custom models in help text'
+        /custom.*model|local.*model|download.*model/i,
+        'Should mention custom models in help text'
       );
     });
 
@@ -205,7 +205,7 @@ describe('🔴 RED: Flux Custom Model Support', () => {
       // README should explain how to use custom models
       assert.match(
         content,
-        /custom.*model|model hub|local.*model|FLUX_MODEL_PATH/i,
+        /custom.*model|local.*model|FLUX_MODEL_PATH/i,
         'README should document custom model setup'
       );
     });

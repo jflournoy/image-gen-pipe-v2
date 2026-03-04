@@ -31,7 +31,7 @@ from encoder_loading import load_text_encoders, load_vae_with_fallback
 PORT = int(os.getenv('FLUX_PORT', '8001'))
 
 # Model source: Local path or HuggingFace repo
-# FLUX_MODEL_PATH takes precedence for locally downloaded models (e.g., from model hub)
+# FLUX_MODEL_PATH takes precedence for locally downloaded custom models
 # FLUX_MODEL is used for HuggingFace repos
 FLUX_MODEL_PATH = os.getenv('FLUX_MODEL_PATH')  # e.g., /path/to/model.safetensors
 MODEL_NAME = os.getenv('FLUX_MODEL', 'black-forest-labs/FLUX.1-dev')
@@ -60,7 +60,7 @@ SUPPORTED_SCHEDULES = ['normal', 'karras', 'exponential']
 SUPPORTED_SCHEDULERS = SUPPORTED_SAMPLERS
 DEFAULT_SCHEDULER = os.getenv('FLUX_SCHEDULER')  # Optional default scheduler override
 
-# Custom encoder paths (for models like custom-flux that require specific encoders)
+# Custom encoder paths (for fine-tuned models that require specific encoders)
 FLUX_TEXT_ENCODER_PATH = os.getenv('FLUX_TEXT_ENCODER_PATH')  # Local CLIP-L encoder
 FLUX_TEXT_ENCODER_2_PATH = os.getenv('FLUX_TEXT_ENCODER_2_PATH')  # Local T5-XXL encoder
 FLUX_VAE_PATH = os.getenv('FLUX_VAE_PATH')  # Local VAE encoder

@@ -1837,6 +1837,7 @@
                       <option value="normal">Normal</option>
                       <option value="karras">Karras</option>
                       <option value="exponential">Exponential</option>
+                      <option value="beta">Beta</option>
                     </select>
                   </div>
                 </div>
@@ -1856,7 +1857,7 @@
                   <div id="fluxLocalPathSection" style="display: none; margin-top: 4px;">
                     <input type="text" id="fluxCustomPath" placeholder="/path/to/model.safetensors" onchange="saveFluxSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; font-size: 10px;">
                     <small style="display: block; color: #888; font-size: 9px; margin-top: 2px;">
-                      Download custom checkpoints from <a href="https://example.com" target="_blank" style="color: #1976d2;">model hub</a>
+                      Download custom checkpoints and place in services/checkpoints/
                     </small>
                   </div>
                 </div>
@@ -1867,7 +1868,7 @@
                     <button id="addFluxLora" onclick="addFluxLora()" style="padding: 2px 8px; font-size: 9px; cursor: pointer; background: #e0e0e0; border: 1px solid #ccc; border-radius: 3px;">+ Add</button>
                   </div>
                   <div id="fluxLoraList" style="max-height: 100px; overflow-y: auto;"></div>
-                  <small style="display: block; color: #888; font-size: 9px;">Add LoRAs from <a href="https://example.com" target="_blank" style="color: #1976d2;">model hub</a>. Place .safetensors files in services/loras/</small>
+                  <small style="display: block; color: #888; font-size: 9px;">Add custom LoRAs. Place .safetensors files in services/loras/</small>
                 </div>
               </div>
             </div>
@@ -1923,7 +1924,7 @@
                   <div id="chromaLocalPathSection" style="display: none; margin-top: 4px;">
                     <input type="text" id="chromaCustomPath" placeholder="/path/to/checkpoint.safetensors" onchange="saveChromaSettings()" style="width: 100%; padding: 4px; border-radius: 3px; border: 1px solid #ddd; font-size: 10px;">
                     <small style="display: block; color: #888; font-size: 9px; margin-top: 2px;">
-                      Download Chroma checkpoints from <a href="https://example.com" target="_blank" style="color: #1976d2;">model hub</a>
+                      Download Chroma checkpoints and place in services/checkpoints/
                     </small>
                   </div>
                 </div>
@@ -2055,6 +2056,7 @@
                       <option value="normal">Normal</option>
                       <option value="karras">Karras</option>
                       <option value="exponential">Exponential</option>
+                      <option value="beta">Beta</option>
                     </select>
                   </div>
                 </div>

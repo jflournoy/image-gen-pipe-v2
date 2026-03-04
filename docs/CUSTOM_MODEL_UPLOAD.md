@@ -30,14 +30,14 @@ python modal_model_manager.py upload /path/to/wan-custom.safetensors \
   --guidance 4.0
 ```
 
-### 2. Download from model hub
+### 2. Download from a URL
 
 ```bash
-python modal_model_manager.py download-model-hub \
+python modal_model_manager.py download \
   https://example.com/api/download/models/12345 \
-  --name my-model-hub-model \
+  --name my-custom-model \
   --pipeline chroma \
-  --api-key YOUR_CHECKPOINT_API_KEY
+  --api-key YOUR_API_KEY
 ```
 
 ### 3. List Uploaded Models
@@ -65,8 +65,7 @@ Output:
 ### From Local File
 
 ```bash
-# Download model from model hub first
-# https://example.com/search/models?baseModel=Chroma%201
+# Download model first
 
 python modal_model_manager.py upload ~/Downloads/chroma-custom.safetensors \
   --name chroma-photorealistic \
@@ -75,15 +74,15 @@ python modal_model_manager.py upload ~/Downloads/chroma-custom.safetensors \
   --guidance 7.5
 ```
 
-### From model hub URL
+### From a Download URL
 
-Get the model's download URL from model hub:
-1. Go to model page (e.g., https://example.com/models/...)
+Get the model's direct download URL:
+1. Get the direct download URL for the model
 2. Click "Download"
 3. Copy the download link
 
 ```bash
-python modal_model_manager.py download-model-hub \
+python modal_model_manager.py download \
   https://example.com/api/download/models/12345 \
   --name chroma-anime \
   --pipeline chroma \
@@ -215,7 +214,7 @@ The `models.json` file contains metadata for all custom models:
     "custom": true,
     "default_steps": 20,
     "default_guidance": 7.5,
-    "source": "model-hub",
+    "source": "url",
     "source_url": "https://..."
   },
   "my-video": {
@@ -224,7 +223,7 @@ The `models.json` file contains metadata for all custom models:
     "custom": true,
     "default_steps": 30,
     "default_guidance": 4.0,
-    "source": "model-hub",
+    "source": "url",
     "source_url": "https://..."
   }
 }
@@ -291,11 +290,11 @@ python modal_model_manager.py delete my-chroma
 
 This removes the model file and config entry.
 
-## model hub Integration
+## Authenticated Downloads
 
 ### Getting API Key
 
-1. Go to https://example.com/user/account
+1. Get your API key from the model host
 2. Create API token
 3. Set environment variable:
    ```bash
@@ -304,14 +303,14 @@ This removes the model file and config entry.
 
 ### Finding Model URLs
 
-On model hub:
+On the model host:
 1. Find model (e.g., Chroma variant)
 2. Click "Download"
 3. Copy API URL (should end with `/download/models/123456`)
 
 Example:
 ```bash
-python modal_model_manager.py download-model-hub \
+python modal_model_manager.py download \
   https://example.com/api/download/models/298765 \
   --name chroma-vibrant \
   --pipeline chroma
@@ -330,7 +329,7 @@ python modal_model_manager.py upload /home/user/models/my-model.safetensors ...
 python modal_model_manager.py upload ~/models/my-model.safetensors ...
 ```
 
-### "Failed to download from model hub"
+### "Failed to download checkpoint"
 
 1. Verify URL is correct (should have `/api/download/models/`)
 2. Check if API key is needed and provided
@@ -373,8 +372,8 @@ python modal_model_manager.py usage
 
 2. **Document sources**:
    ```bash
-   # Save model hub URL for reference
-   python modal_model_manager.py download-model-hub https://... \
+   # Save download URL for reference
+   python modal_model_manager.py download https://... \
      --name my-model  # Check source_url in models.json
    ```
 
@@ -399,7 +398,6 @@ python modal_model_manager.py usage
 ## See Also
 
 - [Modal Documentation](https://modal.com/docs)
-- [model hub](https://example.com)
 - [WAN Model Card](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B)
 - [Chroma Model Card](https://huggingface.co/digiplay/Chroma-1-HD)
 - [WAN Video Setup](./WAN_VIDEO_SETUP.md)

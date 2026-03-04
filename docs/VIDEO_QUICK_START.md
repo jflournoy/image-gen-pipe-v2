@@ -34,8 +34,8 @@ MODAL_TOKEN_SECRET=secret_xxx
 Upload Chroma image models or custom WAN video models:
 
 ```bash
-# Chroma from model hub
-python modal_model_manager.py download-model-hub \
+# Download a custom Chroma checkpoint
+python modal_model_manager.py download \
   https://example.com/api/download/models/12345 \
   --name my-chroma \
   --pipeline chroma
@@ -120,7 +120,7 @@ node examples/video-generation-example.js
 - Configuration UI for generation settings
 
 ✅ **Custom Models:**
-- Upload Chroma image models from model hub
+- Upload custom Chroma image models
 - Upload WAN video models from local files
 - Manage models with modal_model_manager.py
 
@@ -284,5 +284,4 @@ modal deploy wan_video_service.py
 
 - [WAN Model Card](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B)
 - [Modal Docs](https://modal.com/docs)
-- [model hub Models](https://example.com)
 - [Diffusers WAN Pipeline](https://github.com/huggingface/diffusers/blob/main/src/diffusers/pipelines/wan/)

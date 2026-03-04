@@ -94,11 +94,11 @@ export FLUX_PORT=8001  # Default port
 export FLUX_MODEL=black-forest-labs/FLUX.1-dev  # Model ID (dev-fp8 or standard dev)
 ```
 
-**Using Custom Flux Models (model hub, etc.)**:
+**Using Custom Flux Models**:
 
 You can use locally downloaded Flux models instead of HuggingFace repositories:
 
-1. **Download a model** from [model hub](https://example.com/search/models?baseModel=Flux.1%20D) or elsewhere
+1. **Download a model** from a model repository or community platform
 2. **Set the path** using `FLUX_MODEL_PATH` environment variable:
 
 ```bash
@@ -109,7 +109,7 @@ export FLUX_MODEL_PATH=/path/to/your/flux-model.safetensors
 python3 services/flux_service.py
 ```
 
-**Example: Using a model hub Model**
+**Example: Using a Custom Model**
 ```bash
 # 1. Download model to your preferred location
 #    Example: ~/models/flux/custom-style-flux.safetensors

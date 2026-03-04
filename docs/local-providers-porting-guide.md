@@ -386,7 +386,7 @@ OLLAMA_MODEL=capybarahermes-2.5-mistral-7b
 # Flux/Image config
 FLUX_API_URL=http://localhost:8001
 FLUX_MODEL=custom-model-v30
-FLUX_LORAS='[{"path":"models/lora/custom-lora.safetensors","trigger":"custom-lora, frazetta style","weights":[0.3,0.7]}]'
+FLUX_LORAS='[{"path":"models/lora/custom-lora.safetensors","trigger":"custom style","weights":[0.3,0.7]}]'
 
 # Local vision config
 LOCAL_VISION_API_URL=http://localhost:8002

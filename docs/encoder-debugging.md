@@ -2,7 +2,7 @@
 
 ## Problem: Matrix Multiplication Errors with Custom Checkpoints
 
-When using custom local checkpoints (e.g., from model hub), you may see errors like:
+When using custom local checkpoints (e.g., custom checkpoints), you may see errors like:
 ```
 mat1 and mat2 shapes cannot be multiplied (512x768 and 4096x3072)
 ```
@@ -78,7 +78,7 @@ You need three encoder files that match your checkpoint:
 3. **VAE** (`ae.safetensors`) - ~335MB
 
 **Where to get them:**
-- From the same source as your checkpoint (model hub, HuggingFace)
+- From the same source as your checkpoint (model repositories, HuggingFace)
 - From the checkpoint's documentation/requirements
 - Extract from another Flux model that works with your checkpoint
 
@@ -148,7 +148,7 @@ curl http://localhost:8001/health
 
 ### Why No Fallback for Local Checkpoints?
 
-Custom checkpoints (especially from model hub) often have:
+Custom checkpoints often have:
 - Different hidden dimensions
 - Custom attention mechanisms
 - Modified architectures

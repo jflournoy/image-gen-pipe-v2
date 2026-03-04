@@ -2,7 +2,7 @@
 """
 Modal Diffusion Service
 A flexible Modal-based service for running diffusion models on cloud GPUs.
-Supports Flux, SDXL, SD3, and custom models from model hub or local files.
+Supports Flux, SDXL, SD3, and custom checkpoint files.
 
 Usage:
     # Deploy to Modal
@@ -118,7 +118,8 @@ SUPPORTED_MODELS: Dict[str, Dict[str, Any]] = {
     # Two-pass: Euler/Beta base (10 steps, CFG 1.0) + LCM/Karras refiner (4-12 steps, denoise 0.25-0.40)
     "chroma-custom": {
         "custom": True,
-        "path": "chroma-custom.safetensors",
+        "path": "chroma-custom-unet.safetensors",
+        # download_url: set in volume models.json (not committed — see services/README.md)
         "pipeline": "chroma",
         "base_model": "lodestones/Chroma1-HD",
         "default_steps": 10,
@@ -199,6 +200,8 @@ class GenerateRequest(BaseModel):
     negative_prompt: Optional[str] = Field(default=None, description="Negative prompt (things to avoid in generation)")
     # Flow matching shift parameter (for sdxl_flow models with Flow Matching schedule)
     flow_shift: Optional[float] = Field(default=None, ge=0.1, le=20.0, description="Flow matching shift parameter (1.0=balanced/Beta, 6.0=structural/Normal). Only used for sdxl_flow models.")
+    # PAG (Perturbed Attention Guidance) for sdxl_flow models (e.g. bigASP v2.5)
+    pag_scale: float = Field(default=0.0, ge=0.0, le=5.0, description="Perturbed Attention Guidance scale (0=disabled, ~2.0 recommended). When enabled, lower CFG to 2.0-5.0. Only used for sdxl_flow models.")
     # Face fixing support (CodeFormer enhancement)
     fix_faces: bool = Field(default=False, description="Enable face fixing via GFPGAN v1.4 enhancement")
     restoration_strength: float = Field(default=0.5, ge=0.0, le=1.0, description="GFPGAN restoration strength (0.0=preserve original, 1.0=full restoration)")
@@ -316,6 +319,7 @@ class DiffusionService:
     _upscaler_fn: Any = None  # For standalone upscaling (lazy-loaded)
     _upscaler_models_dir: str = None
     current_model: str = None
+    _pag_scale: float = 0.0  # PAG scale active when current model was loaded
     device: str = "cuda"
     custom_models: Dict[str, Dict[str, Any]] = {}
     current_loras: List[Dict[str, Any]] = []  # Currently loaded LoRAs
@@ -380,20 +384,19 @@ class DiffusionService:
         self._load_pipeline("flux-dev")
 
     def _get_model_config(self, model_name: str) -> Dict[str, Any]:
-        """Get model configuration from built-in or custom models"""
-        if model_name in SUPPORTED_MODELS:
-            return SUPPORTED_MODELS[model_name]
-        elif model_name in self.custom_models:
-            return self.custom_models[model_name]
-        else:
-            # Reload custom models in case new ones were added
+        """Get model configuration, merging volume overrides on top of built-in defaults."""
+        if model_name not in SUPPORTED_MODELS and model_name not in self.custom_models:
+            # Reload in case new models were added to volume
             self.custom_models = load_custom_models_config()
-            if model_name in self.custom_models:
-                return self.custom_models[model_name]
+        if model_name not in SUPPORTED_MODELS and model_name not in self.custom_models:
             raise ValueError(
                 f"Unknown model: {model_name}. "
                 f"Available: {list(SUPPORTED_MODELS.keys()) + list(self.custom_models.keys())}"
             )
+        # Start from built-in defaults, then let volume config override/extend
+        config = dict(SUPPORTED_MODELS.get(model_name, {}))
+        config.update(self.custom_models.get(model_name, {}))
+        return config
 
     def _init_compel_for_sdxl(self):
         """Initialize Compel for long prompt handling in SDXL"""
@@ -450,7 +453,34 @@ class DiffusionService:
             self.pipeline.scheduler.scale_model_input = lambda sample, timestep: sample
         print(f"[Modal Diffusion] Applied FlowMatchEulerDiscreteScheduler(shift={shift})")
 
-    def _load_pipeline(self, model_name: str):
+    def _download_model(self, dest_path: Path, url: str):
+        """Download a model file from a URL to the volume, then commit."""
+        import requests
+
+        dest_path.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint_api_key = os.environ.get("CHECKPOINT_API_KEY")
+        headers = {}
+        if checkpoint_api_key:
+            headers["Authorization"] = f"Bearer {checkpoint_api_key}"
+
+        print(f"[Modal Diffusion] Downloading {dest_path.name}...")
+        start = time.time()
+        response = requests.get(url, headers=headers, stream=True)
+        response.raise_for_status()
+        total = int(response.headers.get("content-length", 0))
+        downloaded = 0
+        with open(dest_path, "wb") as f:
+            for chunk in response.iter_content(chunk_size=1024 * 1024):
+                f.write(chunk)
+                downloaded += len(chunk)
+                if total:
+                    pct = downloaded / total * 100
+                    print(f"[Modal Diffusion] {dest_path.name}: {pct:.0f}% ({downloaded/1e9:.2f}/{total/1e9:.2f} GB)", flush=True)
+        elapsed = time.time() - start
+        print(f"[Modal Diffusion] Downloaded {dest_path.name} in {elapsed:.0f}s")
+        model_volume.commit()
+
+    def _load_pipeline(self, model_name: str, pag_scale: float = 0.0):
         """Load a diffusion pipeline for the specified model"""
         import torch
         from diffusers import FluxPipeline, StableDiffusionXLPipeline, StableDiffusion3Pipeline
@@ -458,9 +488,12 @@ class DiffusionService:
 
         model_config = self._get_model_config(model_name)
 
-        if self.current_model == model_name and self.pipeline is not None:
+        pag_mode_changed = (pag_scale > 0) != (self._pag_scale > 0)
+        if self.current_model == model_name and self.pipeline is not None and not pag_mode_changed:
             print(f"[Modal Diffusion] Model {model_name} already loaded")
             return
+
+        self._pag_scale = pag_scale
 
         # Authenticate with HuggingFace if needed
         if model_config.get("requires_auth"):
@@ -485,6 +518,15 @@ class DiffusionService:
         if is_custom:
             # Load custom model from volume
             model_path = Path(CUSTOM_MODELS_DIR) / model_config["path"]
+            if not model_path.exists():
+                download_url = model_config.get("download_url")
+                if not download_url:
+                    raise FileNotFoundError(
+                        f"Model file not found: {model_path}. "
+                        f"Add a 'download_url' to the model config or upload manually."
+                    )
+                print(f"[Modal Diffusion] Model not found, downloading from {download_url}")
+                self._download_model(model_path, download_url)
             print(f"[Modal Diffusion] Loading custom model from {model_path}")
             self._load_custom_pipeline(model_path, model_config, torch)
         else:
@@ -578,20 +620,39 @@ class DiffusionService:
 
         elif pipeline_type == "sdxl_flow":
             # SDXL architecture + Flow Matching schedule (e.g., bigASP v2.5)
-            # Load as standard SDXL, then swap scheduler for Flow Matching
-            print(f"[Modal Diffusion] Loading sdxl_flow model: {model_path}")
-            if model_path.suffix == ".safetensors":
-                self.pipeline = StableDiffusionXLPipeline.from_single_file(
-                    str(model_path),
-                    torch_dtype=torch.float16,
-                    cache_dir=CACHE_DIR,
-                )
+            # Use PAGPipeline when pag_scale > 0, otherwise standard SDXL
+            use_pag = self._pag_scale > 0
+            if use_pag:
+                from diffusers import StableDiffusionXLPAGPipeline
+                print(f"[Modal Diffusion] Loading sdxl_flow model with PAG (scale={self._pag_scale}): {model_path}")
+                if model_path.suffix == ".safetensors":
+                    self.pipeline = StableDiffusionXLPAGPipeline.from_single_file(
+                        str(model_path),
+                        torch_dtype=torch.float16,
+                        cache_dir=CACHE_DIR,
+                        pag_applied_layers=["mid"],
+                    )
+                else:
+                    self.pipeline = StableDiffusionXLPAGPipeline.from_pretrained(
+                        str(model_path),
+                        torch_dtype=torch.float16,
+                        cache_dir=CACHE_DIR,
+                        pag_applied_layers=["mid"],
+                    )
             else:
-                self.pipeline = StableDiffusionXLPipeline.from_pretrained(
-                    str(model_path),
-                    torch_dtype=torch.float16,
-                    cache_dir=CACHE_DIR,
-                )
+                print(f"[Modal Diffusion] Loading sdxl_flow model: {model_path}")
+                if model_path.suffix == ".safetensors":
+                    self.pipeline = StableDiffusionXLPipeline.from_single_file(
+                        str(model_path),
+                        torch_dtype=torch.float16,
+                        cache_dir=CACHE_DIR,
+                    )
+                else:
+                    self.pipeline = StableDiffusionXLPipeline.from_pretrained(
+                        str(model_path),
+                        torch_dtype=torch.float16,
+                        cache_dir=CACHE_DIR,
+                    )
             # Apply flow matching scheduler (default shift=1.0 at load time)
             default_shift = model_config.get("default_flow_shift", 1.0)
             self._apply_flow_matching_scheduler(default_shift)
@@ -600,7 +661,7 @@ class DiffusionService:
             self._init_compel_for_sdxl()
 
         elif pipeline_type == "chroma":
-            # Chroma1-HD and Chroma-based model hub models
+            # Chroma1-HD and Chroma-based custom models
             from diffusers import ChromaTransformer2DModel, ChromaPipeline
             chroma_base = model_config.get("base_model", "lodestones/Chroma1-HD")
             print(f"[Modal Diffusion] Loading chroma model: {model_path}")
@@ -691,6 +752,8 @@ class DiffusionService:
             schedule_kwargs["use_karras_sigmas"] = True
         elif schedule_name == "exponential":
             schedule_kwargs["use_exponential_sigmas"] = True
+        elif schedule_name == "beta":
+            schedule_kwargs["use_beta_sigmas"] = True
 
         # Apply sampler
         if sampler_name == "lcm":
@@ -993,6 +1056,7 @@ class DiffusionService:
         touchup_strength: float = 0.0,
         negative_prompt: Optional[str] = None,
         flow_shift: Optional[float] = None,
+        pag_scale: float = 0.0,
         fix_faces: bool = False,
         restoration_strength: float = 0.5,
         face_upscale: Optional[int] = None,
@@ -1004,8 +1068,8 @@ class DiffusionService:
         """Generate an image from a text prompt (or resample via img2img when input_image is provided)"""
         import torch
 
-        # Load model if different from current
-        self._load_pipeline(model)
+        # Load model if different from current (also reloads if PAG mode changes)
+        self._load_pipeline(model, pag_scale=pag_scale)
 
         # Load LoRAs if specified
         lora_info = self._load_loras(loras)
@@ -1107,6 +1171,7 @@ class DiffusionService:
             # Load refiner if not already loaded
             self._load_refiner_pipeline(model_config)
 
+            _pag_kwargs = {"pag_scale": self._pag_scale} if pipeline_type == "sdxl_flow" and self._pag_scale > 0 else {}
             if self.compel is not None:
                 conditioning, pooled = self.compel(prompt)
                 # Process negative prompt with Compel if provided
@@ -1124,6 +1189,7 @@ class DiffusionService:
                     generator=generator,
                     denoising_end=effective_refiner_switch,
                     output_type="latent",
+                    **_pag_kwargs,
                 )
                 # Refiner pass - use Compel embeddings for consistency
                 result = self.refiner_pipeline(
@@ -1148,6 +1214,7 @@ class DiffusionService:
                     generator=generator,
                     denoising_end=effective_refiner_switch,
                     output_type="latent",
+                    **_pag_kwargs,
                 )
                 # Refiner pass - continues from refiner_switch point
                 result = self.refiner_pipeline(
@@ -1171,6 +1238,7 @@ class DiffusionService:
             conditioning, pooled = self.compel(prompt)
             # Process negative prompt with Compel if provided
             negative_conditioning, negative_pooled = self._process_negative_prompt_with_compel(negative_prompt)
+            _pag_kwargs = {"pag_scale": self._pag_scale} if pipeline_type == "sdxl_flow" and self._pag_scale > 0 else {}
             result = self.pipeline(
                 prompt_embeds=conditioning,
                 pooled_prompt_embeds=pooled,
@@ -1182,6 +1250,7 @@ class DiffusionService:
                 guidance_scale=guidance,
                 generator=generator,
                 clip_skip=effective_clip_skip,
+                **_pag_kwargs,
             )
         else:
             # Standard generation for non-SDXL models or if Compel not available
@@ -1199,6 +1268,8 @@ class DiffusionService:
                 print(f"[Modal Diffusion] Applied negative_prompt to {pipeline_type} pipeline")
             elif negative_prompt:
                 print(f"[Modal Diffusion] WARNING: negative_prompt provided but pipeline_type={pipeline_type} - NOT applied (only sdxl/sdxl_flow/chroma support negative prompts)")
+            if pipeline_type == "sdxl_flow" and self._pag_scale > 0:
+                pipeline_kwargs["pag_scale"] = self._pag_scale
             result = self.pipeline(**pipeline_kwargs)
 
         inference_time = time.time() - start_time
@@ -1367,6 +1438,7 @@ class DiffusionService:
                 "height": height,
                 "negative_prompt": negative_prompt,
                 "flow_shift": flow_shift if pipeline_type == "sdxl_flow" else None,
+                "pag_scale": pag_scale if pipeline_type == "sdxl_flow" and pag_scale > 0 else None,
                 "loras": lora_info if lora_info else None,
                 "sampler": effective_sampler,
                 "scheduler": effective_schedule,
@@ -1455,6 +1527,7 @@ class DiffusionService:
             touchup_strength=request.touchup_strength,
             negative_prompt=request.negative_prompt,
             flow_shift=request.flow_shift,
+            pag_scale=request.pag_scale,
             fix_faces=request.fix_faces,
             restoration_strength=request.restoration_strength,
             face_upscale=request.face_upscale,
